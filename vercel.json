@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/update-social-media",
+      "schedule": "0 0 */14 * *"
+    }
+  ]
+}
+

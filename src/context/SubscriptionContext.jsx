@@ -1,0 +1,182 @@
+import { createContext, useState, useContext, useEffect } from 'react';
+import { getUserTier, getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS } from '../config/supabase';
+import { useToast } from './ToastContext';
+
+export const SubscriptionContext = createContext();
+
+export function SubscriptionProvider({ children }) {
+  const { addToast: showToast } = useToast();
+  const [userTier, setUserTier] = useState(TIERS.FREE);
+  const [usage, setUsage] = useState({});
+  const [storageUsage, setStorageUsage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
+  // Mock user ID - replace with actual auth user ID from AuthContext
+  const userId = '00000000-0000-0000-0000-000000000001';
+
+  useEffect(() => {
+    loadUserTier();
+    refreshStorageUsage();
+  }, []);
+
+  const loadUserTier = async () => {
+    try {
+      const { success, tier } = await getUserTier(userId);
+      if (success) {
+        setUserTier(tier);
+      }
+    } catch (error) {
+      console.error('Error loading tier:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkFeatureAccess = (feature) => {
+    return hasFeatureAccess(userTier, feature);
+  };
+
+  const getFeatureLimit = (feature) => {
+    return TIER_LIMITS[userTier]?.[feature] || 0;
+  };
+
+  const checkAndTrackUsage = async (feature, metadata = {}) => {
+    // Check if feature is available for tier
+    if (!checkFeatureAccess(feature)) {
+      showToast(`This feature requires ${userTier === TIERS.FREE ? 'Essentials' : 'Pro'} plan. Upgrade to unlock!`, 'warning');
+      return { allowed: false, reason: 'tier' };
+    }
+
+    // Get remaining usage
+    const remaining = await getRemainingUsage(userId, feature, userTier);
+    
+    if (remaining === Infinity) {
+      // Unlimited - track and allow
+      await trackUsage(userId, feature, metadata);
+      return { allowed: true, remaining: Infinity };
+    }
+
+    if (remaining <= 0) {
+      showToast(`You've reached your monthly limit for this feature. Upgrade for more!`, 'warning');
+      return { allowed: false, reason: 'limit', remaining: 0 };
+    }
+
+    // Has usage left - track and allow
+    await trackUsage(userId, feature, metadata);
+    
+    // Show warning if running low
+    if (remaining <= 3 && remaining > 0) {
+      showToast(`Only ${remaining - 1} ${feature} generations left this month`, 'info');
+    }
+
+    return { allowed: true, remaining: remaining - 1 };
+  };
+
+  const refreshUsage = async (feature) => {
+    const remaining = await getRemainingUsage(userId, feature, userTier);
+    setUsage((prev) => ({ ...prev, [feature]: remaining }));
+    return remaining;
+  };
+
+  const getTierDisplayName = (tier) => {
+    const names = {
+      [TIERS.FREE]: 'Free',
+      [TIERS.ESSENTIALS]: 'Essentials',
+      [TIERS.PRO]: 'Pro',
+    };
+    return names[tier] || 'Free';
+  };
+
+  const getTierColor = (tier) => {
+    const colors = {
+      [TIERS.FREE]: 'text-gray-600',
+      [TIERS.ESSENTIALS]: 'text-blue-600',
+      [TIERS.PRO]: 'text-purple-600',
+    };
+    return colors[tier] || 'text-gray-600';
+  };
+
+  const canAccessFeature = (feature) => {
+    const limit = getFeatureLimit(feature);
+    if (limit === -1) return true; // Unlimited
+    if (limit === 0) return false; // Not available
+    if (typeof limit === 'boolean') return limit;
+    
+    // Has limit - need to check actual usage
+    return usage[feature] !== undefined ? usage[feature] > 0 : true;
+  };
+
+  const getStorageLimit = () => {
+    return TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
+  };
+
+  const getStorageUsage = () => {
+    return storageUsage;
+  };
+
+  const refreshStorageUsage = async () => {
+    try {
+      const result = await getSupabaseStorageUsage(userId);
+      if (result.success) {
+        setStorageUsage(result.usageBytes);
+        return result.usageBytes;
+      }
+    } catch (error) {
+      console.error('Error refreshing storage usage:', error);
+    }
+    return storageUsage;
+  };
+
+  const canUploadFile = (fileSize) => {
+    const limit = getStorageLimit();
+    const currentUsage = getStorageUsage();
+    return (currentUsage + fileSize) <= limit;
+  };
+
+  const getUpgradeMessage = () => {
+    if (userTier === TIERS.FREE) {
+      return 'Upgrade to Essentials or Pro to unlock this feature!';
+    }
+    if (userTier === TIERS.ESSENTIALS) {
+      return 'Upgrade to Pro for unlimited access!';
+    }
+    return '';
+  };
+
+  return (
+    <SubscriptionContext.Provider
+      value={{
+        userTier,
+        userId,
+        usage,
+        loading,
+        checkFeatureAccess,
+        getFeatureLimit,
+        checkAndTrackUsage,
+        refreshUsage,
+        getTierDisplayName,
+        getTierColor,
+        canAccessFeature,
+        getStorageLimit,
+        getStorageUsage,
+        refreshStorageUsage,
+        canUploadFile,
+        getUpgradeMessage,
+        TIERS,
+        TIER_LIMITS,
+      }}
+    >
+      {children}
+    </SubscriptionContext.Provider>
+  );
+}
+
+// Custom hook
+export function useSubscription() {
+  const context = useContext(SubscriptionContext);
+  if (!context) {
+    throw new Error('useSubscription must be used within a SubscriptionProvider');
+  }
+  return context;
+}
+
