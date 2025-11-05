@@ -17,7 +17,8 @@ import {
   ArrowUp,
   ArrowDown,
   Filter,
-  Download
+  Download,
+  Lightbulb
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import Tooltip from '../components/Tooltip';
