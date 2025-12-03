@@ -4,7 +4,15 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+
+  // Safety check
+  if (!authContext) {
+    console.error('AuthContext not available in ProtectedRoute');
+    return <Navigate to="/login" replace />;
+  }
+
+  const { user, loading } = authContext;
 
   if (loading) {
     return <LoadingSpinner />;

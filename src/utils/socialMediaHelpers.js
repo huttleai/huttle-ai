@@ -104,24 +104,6 @@ export const openTwitter = (post) => {
 };
 
 /**
- * Open LinkedIn with pre-filled post
- */
-export const openLinkedIn = (post) => {
-  const content = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
-  
-  // LinkedIn sharing URL
-  const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://www.linkedin.com')}&summary=${encodeURIComponent(content)}`;
-  
-  window.open(linkedinUrl, '_blank', 'width=600,height=400');
-  
-  return {
-    success: true,
-    message: 'Opening LinkedIn...',
-    platform: 'LinkedIn'
-  };
-};
-
-/**
  * Open TikTok app and copy content
  */
 export const openTikTok = async (post) => {
@@ -197,8 +179,6 @@ export const openInSocialMedia = async (post, platform) => {
     case 'twitter':
     case 'x':
       return openTwitter(post);
-    case 'linkedin':
-      return openLinkedIn(post);
     case 'tiktok':
       return openTikTok(post);
     case 'youtube':

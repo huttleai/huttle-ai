@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Lightbulb, Copy, Check, Sparkles, ArrowRight, Instagram, Linkedin as LinkedIn, Music } from 'lucide-react';
+import { Lightbulb, Copy, Check, Sparkles, ArrowRight, Instagram, Music, Youtube, MessageSquare } from 'lucide-react';
+import { FacebookIcon, TwitterXIcon, YouTubeIcon } from './SocialIcons';
 
 /**
  * RemixContentDisplay Component
@@ -27,10 +28,13 @@ export default function RemixContentDisplay({ content, onCopy, copiedIdea, onCle
         const concept = conceptMatch ? conceptMatch[1].trim() : '';
         
         // Extract platform variations
+        // Note: Only supported platforms are included (Instagram, TikTok, YouTube, X/Twitter, Facebook)
+        // LinkedIn was removed from supported platforms - do not include in regex patterns
         const variations = [];
         
-        // Instagram
-        const instagramMatch = ideaBlock.match(/\*\*Instagram.*?\*\*:(.*?)(?=\*\*LinkedIn|\*\*TikTok|\n\n|$)/s);
+        // Instagram - matches until next platform marker or end of content
+        // Note: LinkedIn is NOT in the lookahead pattern
+        const instagramMatch = ideaBlock.match(/\*\*Instagram.*?\*\*:(.*?)(?=\*\*TikTok|\*\*YouTube|\*\*X|\*\*Twitter|\*\*Facebook|\n\n|$)/s);
         if (instagramMatch) {
           variations.push({
             platform: 'Instagram',
@@ -39,23 +43,43 @@ export default function RemixContentDisplay({ content, onCopy, copiedIdea, onCle
           });
         }
         
-        // LinkedIn
-        const linkedinMatch = ideaBlock.match(/\*\*LinkedIn.*?\*\*:(.*?)(?=\*\*Instagram|\*\*TikTok|\n\n|$)/s);
-        if (linkedinMatch) {
-          variations.push({
-            platform: 'LinkedIn',
-            icon: LinkedIn,
-            content: linkedinMatch[1].trim()
-          });
-        }
-        
-        // TikTok
-        const tiktokMatch = ideaBlock.match(/\*\*TikTok.*?\*\*:(.*?)(?=\*\*Instagram|\*\*LinkedIn|\n\n|$)/s);
+        // TikTok - matches until next platform marker or end of content
+        const tiktokMatch = ideaBlock.match(/\*\*TikTok.*?\*\*:(.*?)(?=\*\*Instagram|\*\*YouTube|\*\*X|\*\*Twitter|\*\*Facebook|\n\n|$)/s);
         if (tiktokMatch) {
           variations.push({
             platform: 'TikTok',
             icon: Music,
             content: tiktokMatch[1].trim()
+          });
+        }
+        
+        // YouTube - matches until next platform marker or end of content
+        const youtubeMatch = ideaBlock.match(/\*\*YouTube.*?\*\*:(.*?)(?=\*\*Instagram|\*\*TikTok|\*\*X|\*\*Twitter|\*\*Facebook|\n\n|$)/s);
+        if (youtubeMatch) {
+          variations.push({
+            platform: 'YouTube',
+            icon: ({ className }) => <YouTubeIcon className={className} />,
+            content: youtubeMatch[1].trim()
+          });
+        }
+        
+        // X/Twitter - matches until next platform marker or end of content
+        const twitterMatch = ideaBlock.match(/\*\*(?:X|Twitter).*?\*\*:(.*?)(?=\*\*Instagram|\*\*TikTok|\*\*YouTube|\*\*Facebook|\n\n|$)/s);
+        if (twitterMatch) {
+          variations.push({
+            platform: 'X',
+            icon: ({ className }) => <TwitterXIcon className={className} />,
+            content: twitterMatch[1].trim()
+          });
+        }
+        
+        // Facebook - matches until next platform marker or end of content
+        const facebookMatch = ideaBlock.match(/\*\*Facebook.*?\*\*:(.*?)(?=\*\*Instagram|\*\*TikTok|\*\*YouTube|\*\*X|\*\*Twitter|\n\n|$)/s);
+        if (facebookMatch) {
+          variations.push({
+            platform: 'Facebook',
+            icon: ({ className }) => <FacebookIcon className={className} />,
+            content: facebookMatch[1].trim()
           });
         }
         
@@ -95,8 +119,10 @@ export default function RemixContentDisplay({ content, onCopy, copiedIdea, onCle
   const getPlatformColor = (platform) => {
     const colors = {
       'Instagram': 'from-pink-500 to-purple-500',
-      'LinkedIn': 'from-blue-600 to-blue-700',
-      'TikTok': 'from-black to-cyan-500'
+      'TikTok': 'from-black to-cyan-500',
+      'YouTube': 'from-red-600 to-red-700',
+      'X': 'from-black to-gray-800',
+      'Facebook': 'from-blue-600 to-blue-700'
     };
     return colors[platform] || 'from-gray-500 to-gray-600';
   };
@@ -104,8 +130,10 @@ export default function RemixContentDisplay({ content, onCopy, copiedIdea, onCle
   const getPlatformBadgeColor = (platform) => {
     const colors = {
       'Instagram': 'bg-gradient-to-r from-pink-500 to-purple-500',
-      'LinkedIn': 'bg-blue-600',
-      'TikTok': 'bg-black'
+      'TikTok': 'bg-black',
+      'YouTube': 'bg-red-600',
+      'X': 'bg-black',
+      'Facebook': 'bg-blue-600'
     };
     return colors[platform] || 'bg-gray-600';
   };
@@ -178,7 +206,7 @@ export default function RemixContentDisplay({ content, onCopy, copiedIdea, onCle
                       >
                         <div className="flex items-center gap-2 mb-3">
                           <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${getPlatformColor(variation.platform)} flex items-center justify-center`}>
-                            <Icon className="w-4 h-4 text-white" />
+                            {typeof Icon === 'function' ? <Icon className="w-4 h-4 text-white" /> : <Icon />}
                           </div>
                           <span className={`text-xs font-bold text-white px-3 py-1 rounded-full ${getPlatformBadgeColor(variation.platform)}`}>
                             {variation.platform}

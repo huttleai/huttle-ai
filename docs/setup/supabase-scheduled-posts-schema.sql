@@ -43,14 +43,17 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_posts_timezone ON public.scheduled_post
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_post_status_change()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   IF OLD.status IS DISTINCT FROM NEW.status THEN
     NEW.last_status_change = NOW();
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trigger_update_post_status_change ON public.scheduled_posts;
 CREATE TRIGGER trigger_update_post_status_change
@@ -94,12 +97,15 @@ CREATE POLICY "Users can update own preferences" ON public.user_preferences
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_user_preferences_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trigger_update_user_preferences_timestamp ON public.user_preferences;
 CREATE TRIGGER trigger_update_user_preferences_timestamp

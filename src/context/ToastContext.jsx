@@ -1,5 +1,5 @@
 import { createContext, useState, useContext } from 'react';
-import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, X, AlertTriangle, Sparkles } from 'lucide-react';
 
 const ToastContext = createContext();
 
@@ -14,14 +14,45 @@ export function ToastProvider({ children }) {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
     
-    // Auto remove after 3 seconds
+    // Auto remove after 4 seconds
     setTimeout(() => {
       removeToast(id);
-    }, 3000);
+    }, 4000);
   };
 
   const removeToast = (id) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  const getToastConfig = (type) => {
+    const configs = {
+      success: {
+        icon: CheckCircle,
+        bgClass: 'bg-gradient-to-r from-green-500 to-emerald-500',
+        iconBgClass: 'bg-white/20',
+      },
+      error: {
+        icon: AlertCircle,
+        bgClass: 'bg-gradient-to-r from-red-500 to-rose-500',
+        iconBgClass: 'bg-white/20',
+      },
+      warning: {
+        icon: AlertTriangle,
+        bgClass: 'bg-gradient-to-r from-amber-500 to-orange-500',
+        iconBgClass: 'bg-white/20',
+      },
+      info: {
+        icon: Info,
+        bgClass: 'bg-gradient-to-r from-blue-500 to-cyan-500',
+        iconBgClass: 'bg-white/20',
+      },
+      ai: {
+        icon: Sparkles,
+        bgClass: 'bg-gradient-to-r from-purple-500 to-pink-500',
+        iconBgClass: 'bg-white/20',
+      },
+    };
+    return configs[type] || configs.info;
   };
 
   return (
@@ -29,47 +60,43 @@ export function ToastProvider({ children }) {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed bottom-6 right-6 z-[100] space-y-3">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl min-w-[300px] max-w-md animate-slide-in ${
-              toast.type === 'success' ? 'bg-green-500 text-white' :
-              toast.type === 'error' ? 'bg-red-500 text-white' :
-              toast.type === 'info' ? 'bg-blue-500 text-white' :
-              'bg-gray-800 text-white'
-            }`}
-            style={{
-              animation: 'slideIn 0.3s ease-out'
-            }}
-          >
-            {toast.type === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0" />}
-            {toast.type === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-            {toast.type === 'info' && <Info className="w-5 h-5 flex-shrink-0" />}
-            <span className="flex-1 font-medium text-sm">{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="hover:opacity-70 transition-opacity"
+      <div className="fixed bottom-6 right-6 z-[100] space-y-3 pointer-events-none">
+        {toasts.map((toast, index) => {
+          const config = getToastConfig(toast.type);
+          const Icon = config.icon;
+          
+          return (
+            <div
+              key={toast.id}
+              className={`
+                pointer-events-auto flex items-center gap-3 px-4 py-3.5 rounded-2xl 
+                shadow-2xl min-w-[320px] max-w-md text-white
+                ${config.bgClass}
+                animate-slideInRight
+              `}
+              style={{
+                animationDelay: `${index * 50}ms`,
+              }}
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+              {/* Icon */}
+              <div className={`w-8 h-8 rounded-xl ${config.iconBgClass} flex items-center justify-center flex-shrink-0`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              
+              {/* Message */}
+              <span className="flex-1 font-medium text-sm leading-snug">{toast.message}</span>
+              
+              {/* Close button */}
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="w-6 h-6 rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        })}
       </div>
-
-      <style>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(400px);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </ToastContext.Provider>
   );
 }
-

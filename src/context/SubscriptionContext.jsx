@@ -1,23 +1,35 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import { getUserTier, getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS } from '../config/supabase';
+import { getUserTier, getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { useToast } from './ToastContext';
+import { AuthContext } from './AuthContext';
 
 export const SubscriptionContext = createContext();
 
 export function SubscriptionProvider({ children }) {
   const { addToast: showToast } = useToast();
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user || null;
+  
   const [userTier, setUserTier] = useState(TIERS.FREE);
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  // Mock user ID - replace with actual auth user ID from AuthContext
-  const userId = '00000000-0000-0000-0000-000000000001';
+  // Get actual user ID from AuthContext
+  const userId = user?.id || null;
 
   useEffect(() => {
-    loadUserTier();
-    refreshStorageUsage();
-  }, []);
+    if (userId) {
+      loadUserTier();
+      refreshStorageUsage();
+    } else {
+      // No user logged in, reset to defaults
+      setUserTier(TIERS.FREE);
+      setUsage({});
+      setStorageUsage(0);
+      setLoading(false);
+    }
+  }, [userId]);
 
   const loadUserTier = async () => {
     try {
@@ -96,16 +108,6 @@ export function SubscriptionProvider({ children }) {
     return colors[tier] || 'text-gray-600';
   };
 
-  const canAccessFeature = (feature) => {
-    const limit = getFeatureLimit(feature);
-    if (limit === -1) return true; // Unlimited
-    if (limit === 0) return false; // Not available
-    if (typeof limit === 'boolean') return limit;
-    
-    // Has limit - need to check actual usage
-    return usage[feature] !== undefined ? usage[feature] > 0 : true;
-  };
-
   const getStorageLimit = () => {
     return TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
   };
@@ -143,6 +145,10 @@ export function SubscriptionProvider({ children }) {
     return '';
   };
 
+  const canAccessFeatureByName = (featureName) => {
+    return canTierAccessFeature(featureName, userTier);
+  };
+
   return (
     <SubscriptionContext.Provider
       value={{
@@ -156,7 +162,7 @@ export function SubscriptionProvider({ children }) {
         refreshUsage,
         getTierDisplayName,
         getTierColor,
-        canAccessFeature,
+        canAccessFeature: canAccessFeatureByName,
         getStorageLimit,
         getStorageUsage,
         refreshStorageUsage,
@@ -164,6 +170,7 @@ export function SubscriptionProvider({ children }) {
         getUpgradeMessage,
         TIERS,
         TIER_LIMITS,
+        FEATURES,
       }}
     >
       {children}

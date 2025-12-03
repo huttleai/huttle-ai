@@ -1,0 +1,125 @@
+/**
+ * Subscription Status API Endpoint
+ * 
+ * Returns the current user's subscription status.
+ * 
+ * Required environment variables:
+ * - STRIPE_SECRET_KEY: Your Stripe secret key
+ */
+
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// Initialize Supabase client for user lookup
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // Get user from Authorization header
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !supabase) {
+      // Return free tier status for unauthenticated users
+      return res.status(200).json({
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null,
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return res.status(200).json({
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null,
+      });
+    }
+
+    // Get user's Stripe customer ID from profile
+    const { data: profile } = await supabase
+      .from('user_profile')
+      .select('stripe_customer_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!profile?.stripe_customer_id) {
+      return res.status(200).json({
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null,
+      });
+    }
+
+    // Get active subscriptions from Stripe
+    const subscriptions = await stripe.subscriptions.list({
+      customer: profile.stripe_customer_id,
+      status: 'active',
+      limit: 1,
+    });
+
+    if (subscriptions.data.length === 0) {
+      // Check for canceled subscriptions that are still active
+      const canceledSubs = await stripe.subscriptions.list({
+        customer: profile.stripe_customer_id,
+        status: 'canceled',
+        limit: 1,
+      });
+
+      if (canceledSubs.data.length > 0) {
+        const sub = canceledSubs.data[0];
+        return res.status(200).json({
+          subscription: sub.id,
+          plan: sub.metadata?.planId || 'freemium',
+          status: 'canceled',
+          currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+        });
+      }
+
+      return res.status(200).json({
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null,
+      });
+    }
+
+    const subscription = subscriptions.data[0];
+    
+    return res.status(200).json({
+      subscription: subscription.id,
+      plan: subscription.metadata?.planId || 'essentials',
+      status: subscription.status,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    });
+  } catch (error) {
+    console.error('Subscription Status Error:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to get subscription status',
+    });
+  }
+}
+

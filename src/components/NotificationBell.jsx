@@ -1,25 +1,31 @@
+import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 
 export default function NotificationBell() {
   const { unreadCount, setShowNotificationPanel } = useNotifications();
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <button
       onClick={() => setShowNotificationPanel(true)}
-      className="relative p-2.5 hover:bg-gray-100 rounded-lg transition-all group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative p-2.5 hover:bg-gray-50 rounded-lg transition-all duration-150 group"
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
     >
-      <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? 'text-huttle-primary' : 'text-gray-700'}`} />
+      <Bell 
+        className={`w-5 h-5 transition-all duration-150 ${
+          unreadCount > 0 
+            ? 'text-huttle-blue' 
+            : 'text-gray-500 group-hover:text-gray-700'
+        } ${isHovered ? 'scale-110' : ''} ${unreadCount > 0 && isHovered ? 'bell-wiggle' : ''}`} 
+      />
       {unreadCount > 0 && (
-        <>
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse ring-2 ring-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-          <span className="absolute inset-0 rounded-lg bg-red-500 opacity-0 group-hover:opacity-10 transition-opacity"></span>
-        </>
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center ring-2 ring-white">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
       )}
     </button>
   );
 }
-

@@ -14,7 +14,59 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// Validate Supabase configuration
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('⚠️ Supabase configuration missing. Some features may not work.');
+  console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Test Supabase connection
+ */
+export async function testSupabaseConnection() {
+  try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { 
+        success: false, 
+        error: 'Supabase credentials not configured',
+        details: { url: !!supabaseUrl, key: !!supabaseAnonKey }
+      };
+    }
+
+    // Try a simple query to test connection
+    const { data, error } = await supabase.from('scheduled_posts').select('id').limit(1);
+    
+    if (error) {
+      // Check if it's an auth error (expected for unauthenticated requests)
+      if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+        return { 
+          success: true, 
+          message: 'Supabase connection OK (auth required)',
+          authenticated: false
+        };
+      }
+      return { 
+        success: false, 
+        error: error.message,
+        code: error.code
+      };
+    }
+
+    return { 
+      success: true, 
+      message: 'Supabase connection successful',
+      authenticated: true
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error.message || 'Unknown error',
+      type: 'network_error'
+    };
+  }
+}
 
 // Table names
 export const TABLES = {
@@ -27,6 +79,8 @@ export const TABLES = {
   SUBSCRIPTIONS: 'subscriptions',
   SCHEDULED_POSTS: 'scheduled_posts',
   SOCIAL_UPDATES: 'social_updates',
+  JOBS: 'jobs',
+  JOB_NOTIFICATIONS: 'job_notifications',
 };
 
 // Subscription tiers
@@ -36,47 +90,74 @@ export const TIERS = {
   PRO: 'pro',
 };
 
-// Tier limits
+// Tier limits based on Huttle AI Plans
+// Freemium: $0 - 20 AI gens, 250MB storage
+// Essentials: $9/mo ($90/yr) - 200 AI gens, 5GB storage
+// Pro: $19/mo ($190/yr) - 800 AI gens, 25GB storage
 export const TIER_LIMITS = {
   [TIERS.FREE]: {
     aiGenerations: 20,
-    trendForecasts: 0, // Not available
-    captionGenerator: 20,
-    hashtagGenerator: 5,
-    hookBuilder: 10,
-    ctaSuggester: 10,
-    qualityScorer: 5,
-    contentGapAnalysis: 0, // Not available
-    burnoutGauge: true, // Available to all
-    huttleAgent: 0, // Not available
-    storageLimit: 100 * 1024 * 1024, // 100MB in bytes
+    captionGenerator: true,
+    hashtagGenerator: true,
+    hookBuilder: true,
+    ctaSuggester: true,
+    qualityScorer: true,
+    visualBrainstormer: true,
+    contentRepurposer: false, // Pro only
+    huttleAgent: false, // Pro only
+    trendForecaster: false, // Pro only
+    trendLab: false, // Essentials+ only
+    aiPlanBuilderDays: 7, // 7 days only for free
+    storageLimit: 250 * 1024 * 1024, // 250MB in bytes
+    scheduledPostsLimit: 10,
   },
   [TIERS.ESSENTIALS]: {
-    aiGenerations: 100,
-    trendForecasts: 4, // Per week
-    captionGenerator: 100,
-    hashtagGenerator: 50,
-    hookBuilder: 50,
-    ctaSuggester: 50,
-    qualityScorer: 50,
-    contentGapAnalysis: 2, // Per week
-    burnoutGauge: true,
-    huttleAgent: 10, // Per month
-    storageLimit: 250 * 1024 * 1024, // 250MB in bytes
+    aiGenerations: 200,
+    captionGenerator: true,
+    hashtagGenerator: true,
+    hookBuilder: true,
+    ctaSuggester: true,
+    qualityScorer: true,
+    visualBrainstormer: true,
+    contentRepurposer: false, // Pro only
+    huttleAgent: false, // Pro only
+    trendForecaster: false, // Pro only
+    trendLab: true, // Full access
+    aiPlanBuilderDays: 14, // 7 or 14 days
+    storageLimit: 5 * 1024 * 1024 * 1024, // 5GB in bytes
+    scheduledPostsLimit: 50,
   },
   [TIERS.PRO]: {
-    aiGenerations: -1, // Unlimited
-    trendForecasts: -1, // Unlimited
-    captionGenerator: -1,
-    hashtagGenerator: -1,
-    hookBuilder: -1,
-    ctaSuggester: -1,
-    qualityScorer: -1,
-    contentGapAnalysis: -1,
-    burnoutGauge: true,
-    huttleAgent: -1, // Unlimited
-    storageLimit: 500 * 1024 * 1024, // 500MB in bytes
+    aiGenerations: 800,
+    captionGenerator: true,
+    hashtagGenerator: true,
+    hookBuilder: true,
+    ctaSuggester: true,
+    qualityScorer: true,
+    visualBrainstormer: true,
+    contentRepurposer: true, // Pro feature
+    huttleAgent: true, // Pro feature
+    trendForecaster: true, // Pro feature
+    trendLab: true, // Full access
+    aiPlanBuilderDays: 14, // 7 or 14 days
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
+    scheduledPostsLimit: -1, // Unlimited
   },
+};
+
+// Feature access mapping
+export const FEATURES = {
+  'caption-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'hashtag-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'hook-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'cta-suggester': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'quality-scorer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'visual-brainstormer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
+  'content-repurposer': [TIERS.PRO],
+  'huttle-agent': [TIERS.PRO],
+  'trend-forecaster': [TIERS.PRO],
+  'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO],
+  'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO], // All tiers, but different day limits
 };
 
 /**
@@ -92,6 +173,17 @@ export function hasFeatureAccess(userTier, feature) {
   if (typeof limit === 'boolean') return limit;
   
   return true; // Has some limit, check usage separately
+}
+
+/**
+ * Check if user tier can access a feature by feature name
+ */
+export function canAccessFeature(featureName, userTier) {
+  const tier = userTier || TIERS.FREE;
+  const allowedTiers = FEATURES[featureName];
+  
+  if (!allowedTiers) return false;
+  return allowedTiers.includes(tier);
 }
 
 /**

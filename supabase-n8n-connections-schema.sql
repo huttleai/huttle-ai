@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS public.social_connections (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-  platform TEXT NOT NULL CHECK (platform IN ('instagram', 'facebook', 'twitter', 'linkedin', 'tiktok', 'youtube')),
+  platform TEXT NOT NULL CHECK (platform IN ('instagram', 'facebook', 'twitter', 'tiktok', 'youtube')),
   is_connected BOOLEAN NOT NULL DEFAULT false,
   n8n_credential_id TEXT, -- n8n internal credential reference
   platform_username TEXT, -- User's username on the platform
@@ -75,12 +75,15 @@ CREATE POLICY "Service can manage post queue" ON public.n8n_post_queue
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$;
 
 -- Drop existing triggers if they exist (to allow re-running this script)
 DROP TRIGGER IF EXISTS update_social_connections_updated_at ON public.social_connections;
@@ -100,6 +103,7 @@ CREATE OR REPLACE FUNCTION get_connected_platforms(user_uuid UUID)
 RETURNS TABLE(platform TEXT, username TEXT, connected_at TIMESTAMP WITH TIME ZONE)
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT
     sc.platform,
@@ -116,6 +120,7 @@ CREATE OR REPLACE FUNCTION is_platform_connected(user_uuid UUID, platform_name T
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT EXISTS(
     SELECT 1 FROM public.social_connections

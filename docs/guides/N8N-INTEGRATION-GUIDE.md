@@ -5,7 +5,7 @@ This guide walks you through setting up automated social media posting using n8n
 ## 🎯 What This Enables
 
 - **Automated Posting**: Posts go directly to social platforms without manual copying/pasting
-- **Multi-Platform**: Post to Instagram, Facebook, Twitter, LinkedIn, TikTok, and YouTube simultaneously
+- **Multi-Platform**: Post to Instagram, Facebook, Twitter (X), TikTok, and YouTube simultaneously
 - **Real OAuth**: Secure authentication instead of simulation
 - **Connection Management**: Track which platforms are connected per user
 - **Error Handling**: Automatic retry and failure notifications
@@ -32,7 +32,6 @@ You'll need developer access for each platform you want to automate:
 
 - **Meta (Instagram & Facebook)**: https://developers.facebook.com
 - **Twitter/X**: https://developer.twitter.com
-- **LinkedIn**: https://www.linkedin.com/developers
 - **TikTok**: https://developers.tiktok.com
 - **YouTube**: https://console.cloud.google.com (Google Cloud)
 
@@ -95,7 +94,6 @@ VITE_API_BASE_URL=https://your-app.vercel.app/api
    - Instagram Business
    - Facebook Pages
    - Twitter
-   - LinkedIn
    - TikTok
    - YouTube
 
@@ -133,7 +131,6 @@ VITE_API_BASE_URL=https://your-app.vercel.app/api
      instagram: !!this.getCredentials('instagramBusinessApi'),
      facebook: !!this.getCredentials('facebookGraphApi'),
      twitter: !!this.getCredentials('twitterOAuth2'),
-     linkedin: !!this.getCredentials('linkedInOAuth2'),
      tiktok: !!this.getCredentials('tikTokForBusiness'),
      youtube: !!this.getCredentials('youTubeOAuth2')
    };
@@ -189,20 +186,6 @@ VITE_API_BASE_URL=https://your-app.vercel.app/api
 3. **n8n Configuration**
    - Add Twitter node
    - Use OAuth 2.0 flow
-
-#### LinkedIn
-
-1. **Create App**
-   - Go to https://www.linkedin.com/developers
-   - Create new app
-
-2. **Configure Permissions**
-   - `w_member_social` (write posts)
-   - `r_liteprofile` (read profile)
-
-3. **n8n Configuration**
-   - Add LinkedIn node
-   - Configure OAuth credentials
 
 #### TikTok
 

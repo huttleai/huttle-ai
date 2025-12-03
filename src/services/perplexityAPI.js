@@ -6,13 +6,27 @@
  * - Semantic trend pulls and keyword analysis
  * - Competitor analysis and market research
  * - Forward-looking queries for trend forecasting
+ * 
+ * All functions now accept optional brandData for brand-aligned results
  */
+
+import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
 
 const PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY_API_KEY || '';
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
-export async function scanTrendingTopics(niche, platform = 'all') {
+/**
+ * Scan trending topics in a niche
+ * @param {Object} brandData - Brand data from BrandContext
+ * @param {string} platform - Platform to scan (default: 'all')
+ * @returns {Promise<Object>} Trending topics
+ */
+export async function scanTrendingTopics(brandData, platform = 'all') {
   try {
+    const niche = getNiche(brandData);
+    const audience = getTargetAudience(brandData);
+    const brandContext = buildBrandContext(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -24,11 +38,23 @@ export async function scanTrendingTopics(niche, platform = 'all') {
         messages: [
           {
             role: 'system',
-            content: 'You are a trend analysis expert. Provide real-time, data-backed trend insights with metrics.'
+            content: 'You are a trend analysis expert. Provide real-time, data-backed trend insights with metrics. Prioritize trends that would resonate with the specified brand and audience.'
           },
           {
             role: 'user',
-            content: `What are the top 10 trending topics in ${niche} ${platform !== 'all' ? `on ${platform}` : 'across social media platforms'} right now? Include engagement metrics and velocity indicators.`
+            content: `What are the top 10 trending topics in ${niche} ${platform !== 'all' ? `on ${platform}` : 'across social media platforms'} right now?
+
+Target Audience: ${audience}
+
+Brand Context:
+${brandContext}
+
+Include:
+- Engagement metrics and velocity indicators
+- Relevance score for the target audience
+- Suggested content angles that match the brand voice
+
+Prioritize trends that align with the brand profile.`
           }
         ],
         temperature: 0.2,
@@ -51,8 +77,17 @@ export async function scanTrendingTopics(niche, platform = 'all') {
   }
 }
 
-export async function getKeywordsOfTheDay(niche) {
+/**
+ * Get trending keywords for the day
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Trending keywords
+ */
+export async function getKeywordsOfTheDay(brandData) {
   try {
+    const niche = getNiche(brandData);
+    const audience = getTargetAudience(brandData);
+    const brandVoice = getBrandVoice(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -64,11 +99,20 @@ export async function getKeywordsOfTheDay(niche) {
         messages: [
           {
             role: 'system',
-            content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords.'
+            content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.'
           },
           {
             role: 'user',
-            content: `What are 5-7 high-engagement keywords and hashtags trending today in the ${niche} industry? Include estimated virality scores and usage tips.`
+            content: `What are 5-7 high-engagement keywords and hashtags trending today in the ${niche} industry?
+
+Target Audience: ${audience}
+Brand Voice: ${brandVoice}
+
+Include:
+- Estimated virality scores
+- Usage tips specific to the brand voice
+- Relevance to the target audience
+- Platform recommendations for each keyword`
           }
         ],
         temperature: 0.2,
@@ -91,8 +135,17 @@ export async function getKeywordsOfTheDay(niche) {
   }
 }
 
-export async function analyzeCompetitors(niche, competitorNames = []) {
+/**
+ * Analyze competitors in the niche
+ * @param {Object} brandData - Brand data from BrandContext
+ * @param {Array} competitorNames - Optional list of competitor names
+ * @returns {Promise<Object>} Competitor analysis
+ */
+export async function analyzeCompetitors(brandData, competitorNames = []) {
   try {
+    const niche = getNiche(brandData);
+    const brandContext = buildBrandContext(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -104,11 +157,21 @@ export async function analyzeCompetitors(niche, competitorNames = []) {
         messages: [
           {
             role: 'system',
-            content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis.'
+            content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.'
           },
           {
             role: 'user',
-            content: `Analyze content strategies of top performers in ${niche} ${competitorNames.length ? `including ${competitorNames.join(', ')}` : ''}. What content formats, topics, and engagement tactics are they using successfully?`
+            content: `Analyze content strategies of top performers in ${niche} ${competitorNames.length ? `including ${competitorNames.join(', ')}` : ''}.
+
+My Brand Profile:
+${brandContext}
+
+Analyze:
+- Content formats and topics they use successfully
+- Engagement tactics and patterns
+- Gaps in their strategy that my brand could fill
+- How to differentiate while maintaining my brand voice
+- Specific opportunities based on my target audience`
           }
         ],
         temperature: 0.2,
@@ -131,8 +194,18 @@ export async function analyzeCompetitors(niche, competitorNames = []) {
   }
 }
 
-export async function forecastTrends(niche, timeframe = '7 days') {
+/**
+ * Forecast upcoming trends
+ * @param {Object} brandData - Brand data from BrandContext
+ * @param {string} timeframe - Forecast timeframe (default: '7 days')
+ * @returns {Promise<Object>} Trend forecast
+ */
+export async function forecastTrends(brandData, timeframe = '7 days') {
   try {
+    const niche = getNiche(brandData);
+    const audience = getTargetAudience(brandData);
+    const brandVoice = getBrandVoice(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -144,11 +217,20 @@ export async function forecastTrends(niche, timeframe = '7 days') {
         messages: [
           {
             role: 'system',
-            content: 'You are a trend forecasting expert. Use current data to predict future trends.'
+            content: 'You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.'
           },
           {
             role: 'user',
-            content: `Based on current data, what trends are likely to emerge in ${niche} over the next ${timeframe}? Include confidence levels and timing predictions.`
+            content: `Based on current data, what trends are likely to emerge in ${niche} over the next ${timeframe}?
+
+Target Audience: ${audience}
+Brand Voice: ${brandVoice}
+
+Include:
+- Confidence levels and timing predictions
+- How each trend relates to the target audience
+- Content angle suggestions that match the brand voice
+- Early-mover advantage opportunities`
           }
         ],
         temperature: 0.3,
@@ -171,8 +253,18 @@ export async function forecastTrends(niche, timeframe = '7 days') {
   }
 }
 
-export async function getAudienceInsights(niche, demographics) {
+/**
+ * Get audience insights
+ * @param {Object} brandData - Brand data from BrandContext
+ * @param {string} demographics - Optional specific demographics to analyze
+ * @returns {Promise<Object>} Audience insights
+ */
+export async function getAudienceInsights(brandData, demographics = null) {
   try {
+    const niche = getNiche(brandData);
+    const audience = demographics || getTargetAudience(brandData);
+    const brandContext = buildBrandContext(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -184,11 +276,22 @@ export async function getAudienceInsights(niche, demographics) {
         messages: [
           {
             role: 'system',
-            content: 'You are an audience research specialist. Provide deep insights into audience behavior and preferences.'
+            content: 'You are an audience research specialist. Provide deep insights into audience behavior and preferences that help brands connect authentically.'
           },
           {
             role: 'user',
-            content: `What are the key preferences, behaviors, and content consumption patterns for ${demographics} in the ${niche} space? Include platform preferences and engagement times.`
+            content: `What are the key preferences, behaviors, and content consumption patterns for ${audience} in the ${niche} space?
+
+Brand Profile:
+${brandContext}
+
+Include:
+- Platform preferences and engagement times
+- Content format preferences
+- Pain points and aspirations
+- Language and tone that resonates
+- Topics they actively seek out
+- How to build trust with this audience`
           }
         ],
         temperature: 0.2,
@@ -211,8 +314,17 @@ export async function getAudienceInsights(niche, demographics) {
   }
 }
 
-export async function getTrendingHashtags(keyword, niche) {
+/**
+ * Get trending hashtags for a keyword
+ * @param {string} keyword - Keyword to find hashtags for
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Trending hashtags
+ */
+export async function getTrendingHashtags(keyword, brandData) {
   try {
+    const niche = getNiche(brandData);
+    const audience = getTargetAudience(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -224,11 +336,19 @@ export async function getTrendingHashtags(keyword, niche) {
         messages: [
           {
             role: 'system',
-            content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics.'
+            content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.'
           },
           {
             role: 'user',
-            content: `Suggest trending hashtags for "${keyword}" in ${niche} right now, including engagement scores and estimated post counts. Focus on hashtags that have good reach but aren't oversaturated.`
+            content: `Suggest trending hashtags for "${keyword}" in ${niche} right now.
+
+Target Audience: ${audience}
+
+Include:
+- Engagement scores and estimated post counts
+- Hashtags with good reach but not oversaturated
+- Mix of broad and niche-specific tags
+- Which hashtags work best for reaching the target audience`
           }
         ],
         temperature: 0.2,
@@ -251,8 +371,18 @@ export async function getTrendingHashtags(keyword, niche) {
   }
 }
 
-export async function getCaptionExamples(topic, niche) {
+/**
+ * Get caption examples for a topic
+ * @param {string} topic - Topic for captions
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Caption examples
+ */
+export async function getCaptionExamples(topic, brandData) {
   try {
+    const niche = getNiche(brandData);
+    const brandVoice = getBrandVoice(brandData);
+    const audience = getTargetAudience(brandData);
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -264,11 +394,20 @@ export async function getCaptionExamples(topic, niche) {
         messages: [
           {
             role: 'system',
-            content: 'You are a content style analyst. Provide examples of popular caption styles and formats.'
+            content: 'You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.'
           },
           {
             role: 'user',
-            content: `What caption styles are currently popular for ${topic} content in the ${niche} niche? Include examples of high-engagement captions and their common patterns.`
+            content: `What caption styles are currently popular for ${topic} content in the ${niche} niche?
+
+Brand Voice: ${brandVoice}
+Target Audience: ${audience}
+
+Include:
+- Examples of high-engagement captions
+- Common patterns and structures
+- How to adapt these styles to match a ${brandVoice} brand voice
+- What makes these captions resonate with ${audience}`
           }
         ],
         temperature: 0.3,
@@ -291,8 +430,18 @@ export async function getCaptionExamples(topic, niche) {
   }
 }
 
-export async function getBestCTAPractices(platform, goal) {
+/**
+ * Get best CTA practices
+ * @param {string} platform - Platform for CTAs
+ * @param {string} goal - Goal of the CTA
+ * @param {Object} brandData - Optional brand data
+ * @returns {Promise<Object>} CTA best practices
+ */
+export async function getBestCTAPractices(platform, goal, brandData = null) {
   try {
+    const brandVoice = brandData ? getBrandVoice(brandData) : 'professional';
+    const audience = brandData ? getTargetAudience(brandData) : 'general audience';
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -304,11 +453,20 @@ export async function getBestCTAPractices(platform, goal) {
         messages: [
           {
             role: 'system',
-            content: 'You are a conversion optimization expert. Provide current best practices for CTAs.'
+            content: 'You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.'
           },
           {
             role: 'user',
-            content: `What are the most effective call-to-action formats for ${goal} on ${platform} in 2025? Include specific examples and engagement metrics.`
+            content: `What are the most effective call-to-action formats for ${goal} on ${platform} in 2025?
+
+Brand Voice: ${brandVoice}
+Target Audience: ${audience}
+
+Include:
+- Specific examples and engagement metrics
+- How to make CTAs feel natural for a ${brandVoice} voice
+- What CTAs resonate best with ${audience}
+- Platform-specific formatting tips`
           }
         ],
         temperature: 0.2,
@@ -331,6 +489,11 @@ export async function getBestCTAPractices(platform, goal) {
   }
 }
 
+/**
+ * Get social media platform updates
+ * @param {number} months - Number of months to look back
+ * @returns {Promise<Object>} Social media updates
+ */
 export async function getSocialMediaUpdates(months = 12) {
   try {
     const currentDate = new Date();
@@ -348,11 +511,11 @@ export async function getSocialMediaUpdates(months = 12) {
         messages: [
           {
             role: 'system',
-            content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), LinkedIn, and YouTube. DO NOT include updates from Threads, Snapchat, or any other platforms.'
+            content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
           },
           {
             role: 'user',
-            content: `Provide the latest social media platform updates from the past ${months} months (from ${currentMonth} ${currentYear} going back to ${months} months ago). ONLY include updates from these platforms: Facebook, Instagram, TikTok, X (Twitter), LinkedIn, and YouTube. EXCLUDE Threads and Snapchat completely. Return ONLY a valid JSON array, starting with [ and ending with ]. Each update object must have: platform (must be one of: Facebook, Instagram, TikTok, X, LinkedIn, YouTube), date (format "Month YYYY"), title, description, impact ("high"/"medium"/"low"), keyTakeaways (array), actionItems (array), affectedUsers, timeline, link. Sort by date descending (most recent first).`
+            content: `Provide the latest social media platform updates from the past ${months} months (from ${currentMonth} ${currentYear} going back to ${months} months ago). ONLY include updates from these platforms: Facebook, Instagram, TikTok, X (Twitter), and YouTube. EXCLUDE LinkedIn, Threads and Snapchat completely. Return ONLY a valid JSON array, starting with [ and ending with ]. Each update object must have: platform (must be one of: Facebook, Instagram, TikTok, X, YouTube), date (format "Month YYYY"), title, description, impact ("high"/"medium"/"low"), keyTakeaways (array), actionItems (array), affectedUsers, timeline, link. Sort by date descending (most recent first).`
           }
         ],
         temperature: 0.2,
@@ -419,7 +582,7 @@ export async function getSocialMediaUpdates(months = 12) {
       // This is a last resort - ideally the API should return valid JSON
       try {
         // Look for platform patterns in the text
-        const platformMatches = content.match(/(Instagram|Facebook|TikTok|Twitter|X|LinkedIn|YouTube)/gi);
+        const platformMatches = content.match(/(Instagram|Facebook|TikTok|Twitter|X|YouTube)/gi);
         if (platformMatches && platformMatches.length > 0) {
           console.warn('Found platform mentions but could not parse as JSON. Returning empty array.');
         }
@@ -450,4 +613,3 @@ export async function getSocialMediaUpdates(months = 12) {
     };
   }
 }
-

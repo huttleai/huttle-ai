@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
-import { Waves, Save, Sparkles } from 'lucide-react';
+import { Mic2, Save, Sparkles } from 'lucide-react';
 
 export default function BrandVoice() {
   const { brandData, updateBrandData } = useContext(BrandContext);
@@ -36,18 +36,25 @@ export default function BrandVoice() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-          Brand Voice
-        </h1>
-        <p className="text-gray-600">
-          Customize all AI features to your brand, niche, and industry
-        </p>
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      <div className="mb-6 md:mb-8">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+            <Mic2 className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+              Brand Voice
+            </h1>
+            <p className="text-sm md:text-base text-gray-500">
+              Customize all AI features to your brand, niche, and industry
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="max-w-3xl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="card p-5 md:p-6 mb-6">
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -119,7 +126,7 @@ export default function BrandVoice() {
                 Primary Platforms
               </label>
               <div className="flex flex-wrap gap-3">
-                {['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn', 'Twitter'].map(platform => (
+                {['Instagram', 'TikTok', 'YouTube', 'Facebook', 'X (Twitter)'].map(platform => (
                   <label key={platform} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -149,24 +156,24 @@ export default function BrandVoice() {
             </div>
           </div>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <button 
               onClick={handleSave}
-              className="flex items-center gap-2 px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-sm"
+              className="btn-primary"
             >
               <Save className="w-4 h-4" />
               Save Brand Voice
             </button>
             <button 
               onClick={handleReset}
-              className="px-6 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+              className="btn-secondary"
             >
               Reset
             </button>
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-huttle-primary/10 to-huttle-primary-light/10 rounded-xl border border-huttle-primary/20 p-6">
+        <div className="bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 rounded-xl border border-huttle-primary/20 p-5 md:p-6">
           <div className="flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-1" />
             <div>

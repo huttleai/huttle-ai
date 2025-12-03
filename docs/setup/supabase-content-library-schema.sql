@@ -71,12 +71,15 @@ CREATE POLICY "Users can delete own content library" ON public.content_library
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_content_library_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 CREATE TRIGGER update_content_library_timestamp
   BEFORE UPDATE ON public.content_library
@@ -89,7 +92,10 @@ CREATE TRIGGER update_content_library_timestamp
 
 -- Function to update user's storage_used_bytes when content is added
 CREATE OR REPLACE FUNCTION update_storage_on_insert()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
   -- Only count storage for files (images/videos), not text content
   IF NEW.type != 'text' AND NEW.size_bytes > 0 THEN
@@ -99,11 +105,14 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Function to update user's storage_used_bytes when content is deleted
 CREATE OR REPLACE FUNCTION update_storage_on_delete()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
   -- Only subtract storage for files (images/videos), not text content
   IF OLD.type != 'text' AND OLD.size_bytes > 0 THEN
@@ -113,11 +122,14 @@ BEGIN
   END IF;
   RETURN OLD;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Function to update user's storage_used_bytes when content size changes
 CREATE OR REPLACE FUNCTION update_storage_on_update()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 DECLARE
   size_diff BIGINT;
 BEGIN
@@ -134,7 +146,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Create triggers
 DROP TRIGGER IF EXISTS trigger_update_storage_on_insert ON public.content_library;

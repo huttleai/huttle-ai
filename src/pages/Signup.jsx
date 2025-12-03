@@ -1,8 +1,8 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { UserPlus, Mail, Lock, Loader } from 'lucide-react';
+import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -12,6 +12,23 @@ export default function Signup() {
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  // Password strength calculation
+  const passwordStrength = useMemo(() => {
+    if (!password) return { score: 0, label: '', color: '' };
+    
+    let score = 0;
+    if (password.length >= 6) score += 1;
+    if (password.length >= 8) score += 1;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+    if (/[0-9]/.test(password)) score += 1;
+    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+    
+    const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent'];
+    const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
+    
+    return { score, label: labels[score], color: colors[score] };
+  }, [password]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,38 +53,115 @@ export default function Signup() {
     setLoading(false);
 
     if (result.success) {
-      addToast('Account created! Please check your email to verify your account.', 'success');
+      addToast('Account created! Please check your email to verify.', 'success');
       navigate('/login');
     } else {
       addToast(result.error || 'Failed to create account', 'error');
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-huttle-primary-light via-white to-huttle-primary/10 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        {/* Logo/Brand */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Huttle AI</h1>
-          <p className="text-gray-600">Create your account to get started.</p>
-        </div>
+  const features = [
+    { icon: Sparkles, text: 'AI-powered content generation' },
+    { icon: Calendar, text: 'Smart scheduling & planning' },
+    { icon: TrendingUp, text: 'Trend analysis & forecasting' },
+    { icon: Zap, text: 'Boost engagement instantly' },
+  ];
 
-        {/* Signup Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
+  return (
+    <div className="min-h-screen flex">
+      {/* Left Panel - Branding */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gray-900">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-huttle-blue/10 via-transparent to-huttle-cyan/10" />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16 w-full">
+          {/* Logo */}
+          <div className="mb-12">
+            <img 
+              src="/huttle-logo.png" 
+              alt="Huttle AI" 
+              className="h-9 w-auto brightness-0 invert"
+            />
+          </div>
+
+          {/* Headline */}
+          <div className="mb-12">
+            <h1 className="text-4xl font-semibold text-white mb-4 leading-tight">
+              Start creating
+              <br />
+              <span className="text-huttle-cyan">amazing content</span>
+            </h1>
+            <p className="text-gray-400 max-w-md">
+              Join thousands of creators using AI to supercharge their content strategy.
+            </p>
+          </div>
+
+          {/* Features */}
+          <div className="space-y-4">
+            {features.map((feature, index) => (
+              <div 
+                key={index}
+                className="flex items-center gap-4 stagger-item"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                  <feature.icon className="w-4 h-4 text-huttle-cyan" />
+                </div>
+                <span className="text-gray-300 text-sm font-medium">{feature.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div className="mt-16 pt-8 border-t border-white/10 grid grid-cols-3 gap-8">
+            <div>
+              <p className="text-2xl font-semibold text-white">10K+</p>
+              <p className="text-gray-500 text-xs">Active Users</p>
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-white">500K+</p>
+              <p className="text-gray-500 text-xs">Posts Created</p>
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-white">98%</p>
+              <p className="text-gray-500 text-xs">Satisfaction</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel - Signup Form */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-white">
+        <div className="w-full max-w-sm">
+          {/* Mobile Logo */}
+          <div className="lg:hidden text-center mb-8">
+            <img src="/huttle-logo.png" alt="Huttle AI" className="h-8 w-auto mx-auto" />
+          </div>
+
+          {/* Welcome Text */}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Create your account</h2>
+            <p className="text-gray-500 text-sm">Start your free trial today</p>
+          </div>
+
+          {/* Signup Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Mail className="w-4 h-4" />
+                </div>
                 <input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none transition-all"
+                  className="input pl-10"
                   placeholder="you@example.com"
                   required
                   disabled={loading}
@@ -77,83 +171,120 @@ export default function Signup() {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Lock className="w-4 h-4" />
+                </div>
                 <input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none transition-all"
+                  className="input pl-10"
                   placeholder="At least 6 characters"
                   required
                   disabled={loading}
                   minLength={6}
                 />
               </div>
+              {/* Password strength indicator */}
+              {password && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div 
+                        key={level}
+                        className={`h-1 flex-1 rounded-full transition-colors ${
+                          level <= passwordStrength.score ? passwordStrength.color : 'bg-gray-100'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`text-[10px] font-medium ${
+                    passwordStrength.score <= 2 ? 'text-red-600' : 
+                    passwordStrength.score <= 3 ? 'text-yellow-600' : 'text-green-600'
+                  }`}>
+                    {passwordStrength.label}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Confirm Password Field */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Lock className="w-4 h-4" />
+                </div>
                 <input
                   id="confirmPassword"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none transition-all"
+                  className="input pl-10 pr-10"
                   placeholder="Confirm your password"
                   required
                   disabled={loading}
                   minLength={6}
                 />
+                {confirmPassword && (
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    {password === confirmPassword ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <X className="w-4 h-4 text-red-500" />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-huttle-primary text-white py-3 rounded-lg font-semibold hover:bg-huttle-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-            >
+            <button type="submit" disabled={loading} className="w-full btn-primary py-3 mt-2">
               {loading ? (
                 <>
-                  <Loader className="w-5 h-5 animate-spin" />
+                  <Loader className="w-4 h-4 animate-spin" />
                   Creating account...
                 </>
               ) : (
                 <>
-                  <UserPlus className="w-5 h-5" />
+                  <UserPlus className="w-4 h-4" />
                   Create Account
                 </>
               )}
             </button>
           </form>
 
-          {/* Login Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Already have an account?{' '}
-              <Link to="/login" className="text-huttle-primary hover:text-huttle-primary-dark font-semibold">
-                Sign in
-              </Link>
-            </p>
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-100"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3 bg-white text-gray-400">Already have an account?</span>
+            </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <p className="text-center text-gray-500 text-sm mt-6">
-          By creating an account, you agree to our Terms of Service and Privacy Policy
-        </p>
+          {/* Login Link */}
+          <Link to="/login" className="block w-full btn-secondary py-2.5 text-center text-sm">
+            Sign in instead
+          </Link>
+
+          {/* Footer */}
+          <p className="text-center text-gray-400 text-xs mt-6">
+            By creating an account, you agree to our{' '}
+            <a href="#" className="text-huttle-blue hover:underline">Terms</a>
+            {' '}and{' '}
+            <a href="#" className="text-huttle-blue hover:underline">Privacy Policy</a>
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-

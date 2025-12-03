@@ -21,18 +21,25 @@ export default function Profile() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-          Profile
-        </h1>
-        <p className="text-gray-600">
-          Manage your account settings and preferences
-        </p>
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      <div className="mb-6 md:mb-8">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+            <User className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+              Profile
+            </h1>
+            <p className="text-sm md:text-base text-gray-500">
+              Manage your account settings and preferences
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="max-w-3xl">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="card p-5 md:p-6 mb-6">
           <div className="flex items-center gap-6 mb-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-huttle-primary to-huttle-primary-dark flex items-center justify-center text-white text-2xl font-bold">
               {user?.name?.[0] || 'Z'}
@@ -99,10 +106,10 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <button 
               onClick={handleSave}
-              className="flex items-center gap-2 px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-sm"
+              className="btn-primary"
             >
               <Save className="w-4 h-4" />
               Save Changes
@@ -114,7 +121,7 @@ export default function Profile() {
                 phone: '',
                 location: ''
               })}
-              className="px-6 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+              className="btn-secondary"
             >
               Cancel
             </button>

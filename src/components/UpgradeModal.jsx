@@ -13,13 +13,13 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
       description: 'Store more content with increased storage limits for your growing library.',
       preview: '"Upload more photos and videos without hitting limits"',
       benefits: [
-        'Increased storage capacity',
+        '25 GB storage capacity',
         'Upload more images and videos',
         'Automatic file compression',
         'Organize content in projects',
-        'Share content across campaigns'
+        'Unlimited scheduled posts'
       ],
-      tier: 'Essentials or Pro'
+      tier: 'Pro'
     },
     trendForecasts: {
       title: 'Unlock Trend Forecaster',
@@ -31,6 +31,30 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
         'Platform-specific remix ideas',
         'Priority trend alerts'
       ],
+      tier: 'Pro'
+    },
+    competitorInspiration: {
+      title: 'Unlock Competitor Content Inspiration',
+      description: 'Discover trending content patterns in any niche and get AI-powered ideas tailored for your brand.',
+      preview: '"Get 5 unique content ideas inspired by trending patterns in your competitor space"',
+      benefits: [
+        'Analyze trending content in any niche',
+        'AI-generated content ideas tailored to your brand',
+        'Platform-specific recommendations',
+        'One-click copy and remix options'
+      ],
+      tier: 'Essentials or Pro'
+    },
+    calendarTemplates: {
+      title: 'Unlock Content Calendar Templates',
+      description: 'Start with pre-built templates and let AI generate a customized content plan for your brand.',
+      preview: '"Product Launch Week template: 7 days of strategic content ready to schedule"',
+      benefits: [
+        '6 pre-built calendar templates',
+        'AI-generated content based on your brand voice',
+        'One-click scheduling to your calendar',
+        'Customizable post selection'
+      ],
       tier: 'Essentials or Pro'
     },
     default: {
@@ -38,11 +62,11 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
       description: 'Unlock premium features to supercharge your content strategy.',
       preview: 'Get access to advanced AI tools and insights',
       benefits: [
-        'Unlimited AI generations',
+        '800 AI generations per month',
         'Advanced trend forecasting',
-        'Priority support',
-        'Custom brand insights',
-        'Export capabilities'
+        'Content Repurposer',
+        'Huttle Agent',
+        '25 GB storage'
       ],
       tier: 'Pro'
     }

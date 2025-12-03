@@ -74,7 +74,6 @@ import LoadingSpinner from './components/LoadingSpinner';
 
 // Lazy load page components
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Analytics = lazy(() => import('./pages/Analytics'));
 const SmartCalendar = lazy(() => import('./pages/SmartCalendar'));
 const ContentLibrary = lazy(() => import('./pages/ContentLibrary'));
 const AIPlanBuilder = lazy(() => import('./pages/AIPlanBuilder'));

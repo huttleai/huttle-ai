@@ -1,94 +1,13 @@
-import { checkConnectionStatus } from '../services/n8nAPI';
-
 /**
- * Check if social media accounts are connected (async version)
- * Queries Supabase for real connection status, with fallback to localStorage
+ * Post Validation Utilities
+ * 
+ * NOTE: Connection checking is NOT needed for deep linking.
+ * Huttle AI uses deep links to open native apps - no OAuth required.
+ * 
+ * This file provides:
+ * - Post validation before publishing
+ * - Platform-specific content requirements checking
  */
-export const checkSocialConnections = async (userId = null) => {
-  try {
-    // If no userId provided, fallback to localStorage for demo/testing
-    if (!userId) {
-      return getLocalStorageConnections();
-    }
-
-    // Try n8n API first (which queries Supabase)
-    const statusResult = await checkConnectionStatus(userId);
-
-    if (statusResult.success && statusResult.connections) {
-      // Convert from API format to legacy format for backward compatibility
-      const connections = {
-        Instagram: statusResult.connections.Instagram?.connected || false,
-        Facebook: statusResult.connections.Facebook?.connected || false,
-        Twitter: statusResult.connections.Twitter?.connected || false,
-        X: statusResult.connections.Twitter?.connected || false, // X is Twitter
-        LinkedIn: statusResult.connections.LinkedIn?.connected || false,
-        TikTok: statusResult.connections.TikTok?.connected || false,
-        YouTube: statusResult.connections.YouTube?.connected || false,
-      };
-      return connections;
-    }
-
-    // Fallback to localStorage if API fails
-    console.warn('Connection check failed, falling back to localStorage');
-    return getLocalStorageConnections();
-
-  } catch (error) {
-    console.error('Error checking social connections:', error);
-    // Fallback to localStorage on error
-    return getLocalStorageConnections();
-  }
-};
-
-/**
- * Get connections from localStorage (fallback for demo/testing)
- */
-const getLocalStorageConnections = () => {
-  try {
-    const stored = localStorage.getItem('socialConnections');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Convert to expected format
-      return {
-        Instagram: parsed.instagram || false,
-        Facebook: parsed.facebook || false,
-        Twitter: parsed.twitter || false,
-        X: parsed.twitter || false, // X is Twitter
-        LinkedIn: parsed.linkedin || false,
-        TikTok: parsed.tiktok || false,
-        YouTube: parsed.youtube || false,
-      };
-    }
-  } catch (error) {
-    console.warn('Error reading localStorage connections:', error);
-  }
-  return getEmptyConnectionState();
-};
-
-/**
- * Set connection status for a platform (localStorage fallback)
- * Note: This is a fallback method for when n8n is not configured.
- * In production with n8n, use n8nAPI.updateConnectionStatus() instead.
- */
-export const setSocialConnection = (platform, isConnected) => {
-  // LocalStorage fallback for demo/testing when n8n is not configured
-  const connections = JSON.parse(localStorage.getItem('socialConnections') || '{}');
-  const platformKey = platform.toLowerCase();
-  connections[platformKey] = isConnected;
-  localStorage.setItem('socialConnections', JSON.stringify(connections));
-};
-
-/**
- * Helper function to return empty connection state
- */
-const getEmptyConnectionState = () => ({
-  Instagram: false,
-  Facebook: false,
-  Twitter: false,
-  X: false,
-  LinkedIn: false,
-  TikTok: false,
-  YouTube: false,
-});
 
 /**
  * Validate post before attempting to publish
@@ -173,24 +92,43 @@ export const validatePost = (post) => {
 };
 
 /**
- * Check if platforms are connected before posting (async version)
+ * DEPRECATED: Check platform connections
+ * Deep linking doesn't require OAuth connections - always returns true
+ * Kept for backward compatibility
  */
 export const checkPlatformConnections = async (post, userId = null) => {
-  const connections = await checkSocialConnections(userId);
-  const unconnected = [];
-
-  if (post.platforms) {
-    post.platforms.forEach(platform => {
-      if (!connections[platform]) {
-        unconnected.push(platform);
-      }
-    });
-  }
-
+  // Deep linking doesn't require connections
+  // Users open the app directly and post manually
   return {
-    allConnected: unconnected.length === 0,
-    unconnected,
+    allConnected: true,
+    unconnected: [],
   };
 };
 
+/**
+ * DEPRECATED: Check social connections
+ * Deep linking doesn't require OAuth connections
+ * Kept for backward compatibility
+ */
+export const checkSocialConnections = async (userId = null) => {
+  // Deep linking doesn't require connections
+  // Return empty state to indicate no connections needed
+  return {
+    Instagram: false,
+    Facebook: false,
+    Twitter: false,
+    X: false,
+    TikTok: false,
+    YouTube: false,
+  };
+};
 
+/**
+ * DEPRECATED: Set social connection
+ * Deep linking doesn't require OAuth connections
+ * Kept for backward compatibility
+ */
+export const setSocialConnection = (platform, isConnected) => {
+  // No-op - deep linking doesn't require connections
+  console.log(`[Info] setSocialConnection called for ${platform}. Deep linking doesn't require OAuth connections.`);
+};

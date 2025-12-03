@@ -12,8 +12,14 @@ import {
 export const ContentContext = createContext();
 
 export function ContentProvider({ children }) {
-  const { user } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
   const { addToast } = useToast();
+  const skipAuth =
+    import.meta.env.VITE_SKIP_AUTH === 'true' ||
+    (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
+  
+  // Safety check for AuthContext
+  const user = authContext?.user || null;
   
   const [savedContent, setSavedContent] = useState([]);
   const [scheduledPosts, setScheduledPosts] = useState([]);
@@ -22,8 +28,82 @@ export function ContentProvider({ children }) {
   const [syncing, setSyncing] = useState(false);
   const [userTimezone, setUserTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+  // Seed demo posts for dev mode (defined early so it can be used in useEffect)
+  // Note: Only supported platforms should be used (Instagram, Facebook, TikTok, YouTube, X/Twitter)
+  // LinkedIn was removed from supported platforms - do not add it back
+  const seedDevModeScheduledPosts = () => {
+    const demoPosts = [
+      {
+        id: 'demo-post-1',
+        title: 'Vitamin C Carousel',
+        caption: 'Swipe to learn how Vitamin C brightens skin ✨ #GlowSkin',
+        hashtags: '#skincare #vitaminc',
+        keywords: 'vitamin c, skincare tips',
+        platforms: ['Instagram', 'Facebook'],
+        contentType: 'Image Carousel',
+        imagePrompt: 'Bright orange serum flatlay',
+        videoPrompt: '',
+        media: [],
+        scheduledDate: '2024-02-06',
+        scheduledTime: '09:30',
+        status: 'scheduled',
+        createdAt: '2024-02-01T10:00:00.000Z',
+        updatedAt: '2024-02-01T10:00:00.000Z',
+        timezone: 'America/New_York',
+      },
+      {
+        id: 'demo-post-2',
+        title: 'Clinic BTS Reel',
+        caption: 'Behind the scenes of a Hydrafacial appointment 💧',
+        hashtags: '#behindthescenes #hydrafacial',
+        keywords: 'hydrafacial, bts',
+        platforms: ['Instagram', 'TikTok'],
+        contentType: 'Video Reel',
+        imagePrompt: '',
+        videoPrompt: 'Short clips of treatment steps',
+        media: [],
+        scheduledDate: '2024-02-07',
+        scheduledTime: '14:00',
+        status: 'scheduled',
+        createdAt: '2024-02-02T12:00:00.000Z',
+        updatedAt: '2024-02-02T12:00:00.000Z',
+        timezone: 'America/New_York',
+      },
+      {
+        id: 'demo-post-3',
+        title: 'Email Teaser',
+        caption: 'Subject: 3 ways to keep your glow between treatments ✨',
+        hashtags: '#emailmarketing',
+        keywords: 'email teaser',
+        platforms: ['X'],
+        contentType: 'Text',
+        imagePrompt: '',
+        videoPrompt: '',
+        media: [],
+        scheduledDate: '2024-02-08',
+        scheduledTime: '11:15',
+        status: 'scheduled',
+        createdAt: '2024-02-03T08:30:00.000Z',
+        updatedAt: '2024-02-03T08:30:00.000Z',
+        timezone: 'America/New_York',
+      },
+    ];
+
+    setScheduledPosts(demoPosts);
+    setLoading(false);
+  };
+
   // Load on mount and when user changes
   useEffect(() => {
+    if (skipAuth) {
+      seedDevModeScheduledPosts();
+      setUserTimezone('America/New_York');
+      loadSavedContent();
+      setLoading(false);
+      setSyncing(false);
+      return;
+    }
+
     if (user?.id) {
       loadScheduledPosts();
       loadUserPreferences();
@@ -33,10 +113,11 @@ export function ContentProvider({ children }) {
     }
     // Load saved content regardless of user (from localStorage)
     loadSavedContent();
-  }, [user]);
+  }, [user, skipAuth]);
 
   // Load user preferences (timezone, etc.)
   const loadUserPreferences = async () => {
+    if (skipAuth) return;
     if (!user?.id) return;
 
     const result = await getUserPreferences(user.id);
@@ -45,10 +126,32 @@ export function ContentProvider({ children }) {
     }
   };
 
-  // Load scheduled posts from Supabase
+  // Load scheduled posts from Supabase (with localStorage fallback)
   const loadScheduledPosts = async () => {
-    if (!user?.id) return;
+    // If skipAuth is enabled, seed demo posts instead
+    if (skipAuth) {
+      seedDevModeScheduledPosts();
+      return;
+    }
 
+    if (!user?.id) {
+      // Try loading from localStorage if no user
+      const localPosts = localStorage.getItem('scheduledPosts');
+      if (localPosts) {
+        try {
+          const posts = JSON.parse(localPosts);
+          setScheduledPosts(posts || []);
+        } catch (e) {
+          console.error('Error parsing localStorage posts:', e);
+        }
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Check if this is a dev/mock user
+    const isDevUser = user.id === 'dev-user-123' || user.email === 'dev@huttle.ai';
+    
     try {
       setLoading(true);
       const result = await getScheduledPosts(user.id);
@@ -75,12 +178,58 @@ export function ContentProvider({ children }) {
         }));
 
         setScheduledPosts(transformed);
+        
+        // Also save to localStorage as backup
+        localStorage.setItem('scheduledPosts', JSON.stringify(transformed));
       } else {
-        addToast('Failed to load scheduled posts', 'error');
+        // Supabase failed - try localStorage fallback
+        console.warn('Supabase query failed, trying localStorage fallback:', result.error);
+        const localPosts = localStorage.getItem('scheduledPosts');
+        if (localPosts) {
+          try {
+            const posts = JSON.parse(localPosts);
+            setScheduledPosts(posts || []);
+            if (!isDevUser) {
+              addToast('Using offline data. Some features may be limited.', 'warning');
+            }
+          } catch (e) {
+            console.error('Error parsing localStorage posts:', e);
+            setScheduledPosts([]);
+            if (!isDevUser) {
+              addToast('Failed to load scheduled posts', 'error');
+            }
+          }
+        } else {
+          setScheduledPosts([]);
+          if (!isDevUser && result.error) {
+            console.error('Supabase error:', result.error);
+            // Don't show error toast for dev users
+            if (!result.error.includes('JWT') && !result.error.includes('auth')) {
+              addToast('Failed to load scheduled posts. Using offline mode.', 'warning');
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading posts:', error);
-      addToast('Error loading scheduled posts', 'error');
+      // Try localStorage fallback
+      const localPosts = localStorage.getItem('scheduledPosts');
+      if (localPosts) {
+        try {
+          const posts = JSON.parse(localPosts);
+          setScheduledPosts(posts || []);
+          if (!isDevUser) {
+            addToast('Using offline data. Some features may be limited.', 'warning');
+          }
+        } catch (e) {
+          setScheduledPosts([]);
+        }
+      } else {
+        setScheduledPosts([]);
+      }
+      if (!isDevUser) {
+        addToast('Error loading scheduled posts', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -88,6 +237,7 @@ export function ContentProvider({ children }) {
 
   // Migrate existing localStorage data to Supabase (one-time)
   const migrateLocalStorageData = async () => {
+    if (skipAuth) return;
     if (!user?.id) return;
 
     const migrationKey = `migrated_posts_${user.id}`;
@@ -130,6 +280,22 @@ export function ContentProvider({ children }) {
 
   // Schedule a post with optimistic update
   const schedulePost = async (postData) => {
+    if (skipAuth) {
+      const tempId = `dev_${Date.now()}`;
+      const newPost = {
+        id: tempId,
+        ...postData,
+        scheduledDate: postData.scheduledDate || new Date().toISOString().split('T')[0],
+        scheduledTime: postData.scheduledTime || '09:00',
+        createdAt: new Date().toISOString(),
+        status: 'scheduled',
+        timezone: userTimezone,
+      };
+      setScheduledPosts(prev => [newPost, ...prev]);
+      addToast('Post scheduled (dev mode)', 'success');
+      return tempId;
+    }
+
     if (!user?.id) {
       addToast('Please log in to schedule posts', 'error');
       return null;
@@ -178,6 +344,16 @@ export function ContentProvider({ children }) {
 
   // Update scheduled post with optimistic update
   const updateScheduledPost = async (id, updates) => {
+    if (skipAuth) {
+      setScheduledPosts(prev =>
+        prev.map(post =>
+          post.id === id ? { ...post, ...updates, updatedAt: new Date().toISOString() } : post
+        )
+      );
+      addToast('Post updated (dev mode)', 'success');
+      return;
+    }
+
     if (!user?.id) return;
 
     // Optimistic update
@@ -207,6 +383,12 @@ export function ContentProvider({ children }) {
 
   // Delete scheduled post with optimistic update
   const deleteScheduledPost = async (id) => {
+    if (skipAuth) {
+      setScheduledPosts(prev => prev.filter(post => post.id !== id));
+      addToast('Post deleted (dev mode)', 'success');
+      return;
+    }
+
     if (!user?.id) return;
 
     // Store for potential rollback

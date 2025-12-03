@@ -1,30 +1,35 @@
-import { useState, useContext, useEffect } from 'react';
-import { FolderOpen, Upload, Search, Filter, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus } from 'lucide-react';
+import { useState, useContext, useEffect, useMemo } from 'react';
+import { FolderOpen, Upload, Search, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus, Play, Sparkles, ArrowUpRight, CloudUpload } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import UpgradeModal from '../components/UpgradeModal';
 import CreateProjectModal from '../components/CreateProjectModal';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
-import { getContentLibraryItems, getStorageUsage, checkStorageLimit, uploadFileToStorage, saveContentLibraryItem, updateContentLibraryItem, deleteContentLibraryItem, getSignedUrl, getProjects, createProject, updateProject, deleteProject, getProjectContentCounts } from '../config/supabase';
+import { getContentLibraryItems, getStorageUsage, checkStorageLimit, uploadFileToStorage, saveContentLibraryItem, updateContentLibraryItem, deleteContentLibraryItem, getSignedUrl, getProjects, createProject, updateProject, deleteProject, TIERS } from '../config/supabase';
 import { compressImage, formatFileSize } from '../utils/imageCompression';
+import { Link } from 'react-router-dom';
 
 export default function ContentLibrary() {
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
-  const { userTier, getStorageLimit } = useSubscription();
+  const { userTier, getStorageLimit, getTierDisplayName } = useSubscription();
+  const skipAuth =
+    import.meta.env.VITE_SKIP_AUTH === 'true' ||
+    (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
 
   // UI state
   const [viewMode, setViewMode] = useState('grid');
   const [activeTab, setActiveTab] = useState('all');
   const [activeProject, setActiveProject] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAddToProjectModal, setShowAddToProjectModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'content'|'project', id, name }
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -39,14 +44,45 @@ export default function ContentLibrary() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [signedUrlCache, setSignedUrlCache] = useState({}); // Cache signed URLs: { storagePath: { url, expiresAt } }
+  const [signedUrlCache, setSignedUrlCache] = useState({});
+  const [selectedItems, setSelectedItems] = useState([]);
 
   // Calculate storage values
   const storageLimit = getStorageLimit();
-  const storagePercent = storageLimit > 0 ? (storageUsed / storageLimit) * 100 : 0;
+  const storageLimitMB = storageLimit / (1024 * 1024);
+  const storageLimitDisplay = storageLimitMB >= 1024 
+    ? `${(storageLimitMB / 1024).toFixed(storageLimitMB >= 10240 ? 0 : 1)} GB`
+    : `${storageLimitMB.toFixed(0)} MB`;
+  const storageUsedDisplay = storageUsed >= 1024 
+    ? `${(storageUsed / 1024).toFixed(2)} GB`
+    : `${storageUsed.toFixed(1)} MB`;
+  const storagePercent = storageLimit > 0 ? (storageUsed / storageLimitMB) * 100 : 0;
+
+  // Content type counts for sidebar
+  const contentCounts = useMemo(() => {
+    const counts = { images: 0, videos: 0, text: 0 };
+    contentItems.forEach(item => {
+      if (item.type === 'image') counts.images++;
+      else if (item.type === 'video') counts.videos++;
+      else if (item.type === 'text') counts.text++;
+    });
+    return counts;
+  }, [contentItems]);
+
+  // Tier storage info for upgrade CTA - Always suggest Pro for best value
+  const tierStorageInfo = {
+    [TIERS.FREE]: { limit: '250 MB', next: 'Pro', nextLimit: '25 GB' },
+    [TIERS.ESSENTIALS]: { limit: '5 GB', next: 'Pro', nextLimit: '25 GB' },
+    [TIERS.PRO]: { limit: '25 GB', next: null, nextLimit: null },
+  };
 
   // Load data on mount and when user changes
   useEffect(() => {
+    if (skipAuth) {
+      seedDevModeData();
+      return;
+    }
+
     if (user?.id) {
       loadProjects();
       loadContent();
@@ -58,21 +94,25 @@ export default function ContentLibrary() {
 
   // Load projects from Supabase
   const loadProjects = async () => {
-    if (!user?.id) return;
+    if (skipAuth) return;
+    if (!user?.id) {
+      setProjects([{ id: 'all', name: 'All Content', count: 0, color: '#6366f1' }]);
+      return;
+    }
+
+    const isDevUser = user.id === 'dev-user-123' || user.email === 'dev@huttle.ai';
 
     try {
       const result = await getProjects(user.id);
       
       if (result.success) {
-        // Always include "All Content" project
         const allProjects = [
           { id: 'all', name: 'All Content', count: 0, color: '#6366f1' },
           ...result.data
         ];
         setProjects(allProjects);
       } else {
-        console.error('Failed to load projects:', result.error);
-        // Still set "All Content" as fallback
+        console.warn('Failed to load projects:', result.error);
         setProjects([{ id: 'all', name: 'All Content', count: 0, color: '#6366f1' }]);
       }
     } catch (error) {
@@ -83,31 +123,35 @@ export default function ContentLibrary() {
 
   // Load content from Supabase
   const loadContent = async () => {
-    if (!user?.id) return;
+    if (skipAuth) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    const isDevUser = user.id === 'dev-user-123' || user.email === 'dev@huttle.ai';
 
     try {
       setLoading(true);
       const result = await getContentLibraryItems(user.id);
 
       if (result.success) {
-        // Transform data for component compatibility
         const transformedItems = result.data.map(item => ({
           id: item.id,
           type: item.type,
           name: item.name,
-          url: item.url, // May be null for private bucket files
-          storage_path: item.storage_path, // Needed for signed URL generation
+          url: item.url,
+          storage_path: item.storage_path,
           content: item.content,
           date: new Date(item.created_at).toISOString().split('T')[0],
           size: item.size_bytes > 0 ? formatFileSize(item.size_bytes) : null,
+          sizeBytes: item.size_bytes || 0,
           project: item.project_id,
           description: item.description,
         }));
 
         setContentItems(transformedItems);
 
-        // Pre-generate signed URLs for images/videos (async, non-blocking)
-        // URLs will be cached and images will load once URLs are ready
         transformedItems.forEach(item => {
           if (item.type !== 'text' && item.storage_path) {
             getFileUrl(item).catch(err => {
@@ -116,15 +160,17 @@ export default function ContentLibrary() {
           }
         });
 
-        // Update projects count
         updateProjectCounts(transformedItems);
       } else {
-        console.error('Failed to load content:', result.error);
-        handleSupabaseError(result.error, 'load content');
+        console.warn('Supabase query failed for content library:', result.error);
+        setContentItems([]);
+        if (!isDevUser && !result.error?.includes('JWT') && !result.error?.includes('auth')) {
+          handleSupabaseError(result.error, 'load content');
+        }
       }
     } catch (error) {
       console.error('Error loading content:', error);
-      handleSupabaseError(error, 'load content');
+      setContentItems([]);
     } finally {
       setLoading(false);
     }
@@ -132,31 +178,27 @@ export default function ContentLibrary() {
 
   // Load storage usage from Supabase
   const loadStorageUsage = async () => {
+    if (skipAuth) return;
     if (!user?.id) return;
 
     try {
       const result = await getStorageUsage(user.id);
       if (result.success) {
-        setStorageUsed(result.usageBytes / (1024 * 1024)); // Convert to MB for display
-      } else {
-        handleSupabaseError(result.error, 'load storage usage');
+        setStorageUsed(result.usageBytes / (1024 * 1024));
       }
     } catch (error) {
       console.error('Error loading storage usage:', error);
-      handleSupabaseError(error, 'load storage usage');
     }
   };
 
-  // Update project counts based on content
+  // Update project counts
   const updateProjectCounts = (items) => {
     const projectCounts = { all: items.length };
-
     items.forEach(item => {
       if (item.project) {
         projectCounts[item.project] = (projectCounts[item.project] || 0) + 1;
       }
     });
-
     setProjects(prev => prev.map(project => ({
       ...project,
       count: projectCounts[project.id] || 0
@@ -165,22 +207,18 @@ export default function ContentLibrary() {
 
   // Get signed URL for private bucket files
   const getFileUrl = async (item) => {
-    // Text content doesn't need URLs
     if (item.type === 'text' || !item.storage_path) {
       return item.url || null;
     }
 
-    // Check cache first
     const cached = signedUrlCache[item.storage_path];
     if (cached && cached.expiresAt > new Date()) {
       return cached.url;
     }
 
-    // Generate new signed URL (expires in 1 hour)
     try {
       const result = await getSignedUrl(item.storage_path, 3600);
       if (result.success) {
-        // Cache the signed URL
         setSignedUrlCache(prev => ({
           ...prev,
           [item.storage_path]: {
@@ -193,80 +231,132 @@ export default function ContentLibrary() {
     } catch (error) {
       console.error('Error generating signed URL:', error);
     }
-
     return null;
   };
 
-  // Get display URL for an item (sync - uses cache)
+  // Get display URL for an item
   const getDisplayUrl = (item) => {
-    // Text content doesn't need URLs
-    if (item.type === 'text') {
-      return null;
-    }
+    if (item.type === 'text') return null;
+    if (item.url) return item.url;
 
-    // If there's a stored URL (legacy), use it
-    if (item.url) {
-      return item.url;
-    }
-
-    // Otherwise, check cache for signed URL
     if (item.storage_path) {
       const cached = signedUrlCache[item.storage_path];
       if (cached && cached.expiresAt > new Date()) {
         return cached.url;
       }
-      // If not in cache, trigger async generation (for next render)
       getFileUrl(item);
     }
-
-    return null; // Return null while generating
+    return null;
   };
 
-  // Handle Supabase errors with user-friendly messages
+  // Handle Supabase errors
   const handleSupabaseError = (error, action) => {
     console.error(`Supabase error during ${action}:`, error);
-
     let message = `Failed to ${action}. Please try again.`;
 
     if (typeof error === 'string') {
-      // Handle specific error messages
       if (error.includes('JWT') || error.includes('auth')) {
         message = 'Authentication error. Please log in again.';
-      } else if (error.includes('RLS') || error.includes('policy')) {
-        message = 'Permission denied. You may not have access to this feature.';
-      } else if (error.includes('network') || error.includes('fetch')) {
-        message = 'Network error. Please check your connection and try again.';
       } else if (error.includes('storage') || error.includes('quota')) {
-        message = 'Storage limit exceeded. Consider upgrading your plan.';
-      } else if (error.includes('duplicate') || error.includes('unique')) {
-        message = 'This item already exists.';
-      } else if (error.includes('not found') || error.includes('does not exist')) {
-        message = 'The requested item was not found.';
-      }
-    } else if (error?.message) {
-      // Handle error objects
-      const errorMsg = error.message.toLowerCase();
-      if (errorMsg.includes('jwt') || errorMsg.includes('auth')) {
-        message = 'Authentication error. Please log in again.';
-      } else if (errorMsg.includes('rls') || errorMsg.includes('policy')) {
-        message = 'Permission denied. You may not have access to this feature.';
-      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
-        message = 'Network error. Please check your connection and try again.';
-      } else if (errorMsg.includes('storage') || errorMsg.includes('quota')) {
         message = 'Storage limit exceeded. Consider upgrading your plan.';
       }
     }
-
     addToast(message, 'error');
   };
 
-  const [selectedItems, setSelectedItems] = useState([]);
+  // Seed dev mode data
+  const seedDevModeData = () => {
+    const demoProjects = [
+      { id: 'all', name: 'All Content', count: 5, color: '#6366f1' },
+      { id: 'proj-1', name: 'Spring Campaign', count: 2, color: '#EC4899' },
+      { id: 'proj-2', name: 'Evergreen Tips', count: 3, color: '#10B981' },
+    ];
 
-  const filteredItems = contentItems.filter(item => {
-    const matchesTab = activeTab === 'all' || item.type === activeTab;
-    const matchesProject = activeProject === 'all' || item.project === activeProject;
-    return matchesTab && matchesProject;
-  });
+    const demoItems = [
+      {
+        id: 'demo-1',
+        type: 'image',
+        name: 'Glow Serum Carousel',
+        url: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=300&fit=crop',
+        storage_path: '',
+        content: 'Swipe-through carousel covering the top 5 benefits of our Glow Serum with CTA on the last slide.',
+        date: '2024-02-05',
+        size: '2.4 MB',
+        sizeBytes: 2516582,
+        project: 'proj-1',
+        description: 'High-performing content for IG carousel slots.',
+      },
+      {
+        id: 'demo-2',
+        type: 'video',
+        name: 'Behind the Scenes Reel',
+        url: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=400&h=300&fit=crop',
+        storage_path: '',
+        content: 'Vertical clip showing a 10-sec BTS shot in the studio.',
+        date: '2024-02-04',
+        size: '18.1 MB',
+        sizeBytes: 18979635,
+        project: 'proj-1',
+        description: 'Use for TikTok and IG Reels.',
+      },
+      {
+        id: 'demo-3',
+        type: 'text',
+        name: 'Newsletter Hook Ideas',
+        url: null,
+        storage_path: '',
+        content: 'Three newsletter openers about skincare myths vs facts:\n\n1. "Think you know everything about SPF? Think again..."\n2. "The 5-minute morning routine that changed my skin"\n3. "Why your expensive serum might be doing nothing"',
+        date: '2024-02-01',
+        size: null,
+        sizeBytes: 0,
+        project: 'proj-2',
+        description: 'Copy snippets for the February campaign.',
+      },
+      {
+        id: 'demo-4',
+        type: 'image',
+        name: 'UGC Testimonial Graphic',
+        url: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=300&fit=crop',
+        storage_path: '',
+        content: 'Template PSD with editable testimonial quote and CTA button.',
+        date: '2024-01-28',
+        size: '4.7 MB',
+        sizeBytes: 4927693,
+        project: 'proj-2',
+        description: 'Use as template for testimonials.',
+      },
+      {
+        id: 'demo-5',
+        type: 'text',
+        name: 'Instagram Caption Templates',
+        url: null,
+        storage_path: '',
+        content: 'Caption template for product launches:\n\nIntroducing [PRODUCT NAME] ✨\n\nWe spent [X months] perfecting this formula because you deserve nothing but the best.\n\n🌟 Key benefits:\n• Benefit 1\n• Benefit 2\n• Benefit 3\n\nTap the link in bio to shop now! 🛒',
+        date: '2024-01-25',
+        size: null,
+        sizeBytes: 0,
+        project: 'proj-2',
+        description: 'Reusable caption templates.',
+      },
+    ];
+
+    setProjects(demoProjects);
+    setContentItems(demoItems);
+    setStorageUsed(32);
+    setLoading(false);
+  };
+
+  // Filter items based on search, tab, and project
+  const filteredItems = useMemo(() => {
+    return contentItems.filter(item => {
+      const matchesTab = activeTab === 'all' || item.type === activeTab;
+      const matchesProject = activeProject === 'all' || item.project === activeProject;
+      const matchesSearch = !searchQuery || 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.content && item.content.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchesTab && matchesProject && matchesSearch;
+    });
+  }, [contentItems, activeTab, activeProject, searchQuery]);
 
   const handleItemClick = async (item) => {
     setSelectedItem(item);
@@ -274,7 +364,6 @@ export default function ContentLibrary() {
     setShowDetailModal(true);
     setEditMode(false);
     
-    // Generate signed URL if needed (for images/videos)
     if (item.type !== 'text' && item.storage_path) {
       await getFileUrl(item);
     }
@@ -291,7 +380,6 @@ export default function ContentLibrary() {
     if (!selectedItem) return;
 
     try {
-      // For text content, download as text file
       if (selectedItem.type === 'text') {
         const blob = new Blob([selectedItem.content || ''], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -302,11 +390,10 @@ export default function ContentLibrary() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    addToast('Download started!', 'success');
+        addToast('Download started!', 'success');
         return;
       }
 
-      // For images/videos, get signed URL and download
       const fileUrl = await getFileUrl(selectedItem);
       if (!fileUrl) {
         addToast('Failed to generate download link', 'error');
@@ -319,7 +406,6 @@ export default function ContentLibrary() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      
       addToast('Download started!', 'success');
     } catch (error) {
       console.error('Download error:', error);
@@ -342,15 +428,11 @@ export default function ContentLibrary() {
       const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
 
       if (result.success) {
-        // Update local state
         setContentItems(prev => prev.map(item =>
-          item.id === selectedItem.id
-            ? { ...item, content: editContent }
-            : item
+          item.id === selectedItem.id ? { ...item, content: editContent } : item
         ));
-
-    addToast('Content saved successfully!', 'success');
-    setEditMode(false);
+        addToast('Content saved successfully!', 'success');
+        setEditMode(false);
       } else {
         handleSupabaseError(result.error, 'save content changes');
       }
@@ -371,33 +453,29 @@ export default function ContentLibrary() {
     setUploading(true);
 
     try {
-    // Get form data
-    const formData = new FormData(e.target);
-    const name = formData.get('name');
+      const formData = new FormData(e.target);
+      const name = formData.get('name');
       const textContent = formData.get('content');
-      const fileInput = formData.get('file'); // For file uploads
+      const fileInput = formData.get('file');
 
       const contentName = name || `New ${uploadType}`;
     
-    if (uploadType === 'text') {
-        // Handle text content upload
+      if (uploadType === 'text') {
         await handleTextUpload(contentName, textContent);
-    } else {
-        // Handle file upload (images/videos)
-        if (!fileInput) {
+      } else {
+        if (!fileInput || fileInput.size === 0) {
           addToast('Please select a file to upload', 'error');
+          setUploading(false);
           return;
         }
         await handleFileUpload(fileInput, contentName);
       }
 
-      // Reload content and storage usage
       await loadContent();
       await loadStorageUsage();
     
-    addToast('Content uploaded successfully!', 'success');
-    setShowUploadModal(false);
-
+      addToast('Content uploaded successfully!', 'success');
+      setShowUploadModal(false);
     } catch (error) {
       console.error('Upload failed:', error);
       handleSupabaseError(error, 'upload file');
@@ -411,7 +489,7 @@ export default function ContentLibrary() {
       name,
       type: 'text',
       content: content || '',
-      size_bytes: 0, // Text doesn't count toward storage
+      size_bytes: 0,
       project_id: uploadProject === 'all' ? null : uploadProject,
     };
 
@@ -422,13 +500,11 @@ export default function ContentLibrary() {
   };
 
   const handleFileUpload = async (file, name) => {
-    // Step 1: Compress image if needed
     let processedFile = file;
     let compressionResult = null;
 
     if (uploadType === 'image') {
       addToast('Compressing image...', 'info');
-
       const compression = await compressImage(file, userTier);
       processedFile = compression.compressedFile;
       compressionResult = compression;
@@ -438,15 +514,12 @@ export default function ContentLibrary() {
       }
     }
 
-    // Step 2: Check storage limit
     const storageCheck = await checkStorageLimit(user.id, processedFile.size, userTier);
     if (!storageCheck.allowed) {
-      // Show upgrade modal instead of throwing error
       setShowUpgradeModal(true);
-      return; // Exit upload process
+      return;
     }
 
-    // Step 3: Upload file to Supabase Storage
     addToast('Uploading file...', 'info');
 
     const uploadResult = await uploadFileToStorage(user.id, processedFile, uploadType);
@@ -454,13 +527,11 @@ export default function ContentLibrary() {
       throw new Error(uploadResult.error);
     }
 
-    // Step 4: Save metadata to database
-    // Note: url is null for private bucket - signed URLs generated on-demand
     const itemData = {
       name,
       type: uploadType,
       storage_path: uploadResult.storagePath,
-      url: null, // Private bucket - URLs generated via signed URLs
+      url: null,
       size_bytes: uploadResult.sizeBytes,
       project_id: uploadProject === 'all' ? null : uploadProject,
       description: `Uploaded ${uploadType}`,
@@ -469,7 +540,6 @@ export default function ContentLibrary() {
         compressedSize: compressionResult.compressedSize,
         savingsMB: compressionResult.savingsMB,
         savingsPercent: compressionResult.savingsPercent,
-        compressionSettings: compressionResult.settings,
       } : null,
     };
 
@@ -491,12 +561,10 @@ export default function ContentLibrary() {
       const result = await deleteContentLibraryItem(deleteTarget.id, user.id);
 
       if (result.success) {
-        // Reload content and storage usage
         await loadContent();
         await loadStorageUsage();
-
-      addToast('Content deleted successfully', 'success');
-      setShowDetailModal(false);
+        addToast('Content deleted successfully', 'success');
+        setShowDetailModal(false);
         setShowDeleteConfirmation(false);
         setDeleteTarget(null);
       } else {
@@ -511,10 +579,7 @@ export default function ContentLibrary() {
   };
 
   const handleDeleteProject = async () => {
-    if (!user?.id || !deleteTarget || deleteTarget.type !== 'project') {
-      return;
-    }
-
+    if (!user?.id || !deleteTarget || deleteTarget.type !== 'project') return;
     if (deleteTarget.id === 'all') return;
 
     setIsDeleting(true);
@@ -523,15 +588,14 @@ export default function ContentLibrary() {
       const result = await deleteProject(deleteTarget.id, user.id);
 
       if (result.success) {
-        // Reload projects and content
         await loadProjects();
         await loadContent();
 
         if (activeProject === deleteTarget.id) {
-        setActiveProject('all');
-      }
+          setActiveProject('all');
+        }
 
-      addToast('Project deleted successfully', 'success');
+        addToast('Project deleted successfully', 'success');
         setShowDeleteConfirmation(false);
         setDeleteTarget(null);
       } else {
@@ -560,12 +624,10 @@ export default function ContentLibrary() {
       const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
 
       if (result.success) {
-        // Update local state
-      setContentItems(prev => prev.map(item =>
+        setContentItems(prev => prev.map(item =>
           item.id === selectedItem.id ? { ...item, project: projectId === 'remove' ? null : projectId } : item
-      ));
+        ));
 
-        // Update project counts
         updateProjectCounts(contentItems.map(item =>
           item.id === selectedItem.id ? { ...item, project: projectId === 'remove' ? null : projectId } : item
         ));
@@ -575,7 +637,7 @@ export default function ContentLibrary() {
           : projects.find(p => p.id === projectId)?.name || 'project';
 
         addToast(`Added to ${projectName}`, 'success');
-      setShowAddToProjectModal(false);
+        setShowAddToProjectModal(false);
       } else {
         handleSupabaseError(result.error, 'update project assignment');
       }
@@ -600,14 +662,10 @@ export default function ContentLibrary() {
       const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
 
       if (result.success) {
-        // Update local state
         setContentItems(prev => prev.map(item =>
           item.id === selectedItem.id ? { ...item, project: null } : item
         ));
-
-        // Reload to update counts
         await loadContent();
-
         addToast('Removed from project', 'success');
       } else {
         handleSupabaseError(result.error, 'remove from project');
@@ -626,7 +684,6 @@ export default function ContentLibrary() {
 
     try {
       if (editingProject) {
-        // Update existing project
         const result = await updateProject(editingProject.id, projectData, user.id);
         
         if (result.success) {
@@ -637,14 +694,12 @@ export default function ContentLibrary() {
           handleSupabaseError(result.error, 'update project');
         }
       } else {
-        // Create new project
         const result = await createProject(user.id, projectData);
         
         if (result.success) {
           await loadProjects();
           addToast('Project created successfully', 'success');
           
-          // If we're in upload modal, auto-select the new project
           if (showUploadModal && result.data?.id) {
             setUploadProject(result.data.id);
           }
@@ -669,20 +724,12 @@ export default function ContentLibrary() {
   };
 
   const confirmDeleteContent = (item) => {
-    setDeleteTarget({
-      type: 'content',
-      id: item.id,
-      name: item.name
-    });
+    setDeleteTarget({ type: 'content', id: item.id, name: item.name });
     setShowDeleteConfirmation(true);
   };
 
   const confirmDeleteProject = (project) => {
-    setDeleteTarget({
-      type: 'project',
-      id: project.id,
-      name: project.name
-    });
+    setDeleteTarget({ type: 'project', id: project.id, name: project.name });
     setShowDeleteConfirmation(true);
   };
 
@@ -694,353 +741,592 @@ export default function ContentLibrary() {
     }
   };
 
+  // Render thumbnail based on content type
+  const renderThumbnail = (item, size = 'normal') => {
+    const heightClass = size === 'large' ? 'h-44' : 'h-36';
+    
+    if (item.type === 'text') {
+      return (
+        <div className={`${heightClass} bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 p-3 rounded-t-xl overflow-hidden relative`}>
+          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200/80 flex items-center justify-center">
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+          </div>
+          <p className="text-xs text-gray-600 leading-relaxed line-clamp-5 font-mono">
+            {item.content?.slice(0, 150) || 'No content preview available'}
+            {item.content?.length > 150 && '...'}
+          </p>
+        </div>
+      );
+    }
+
+    if (item.type === 'video') {
+      const videoUrl = getDisplayUrl(item);
+      return (
+        <div className={`${heightClass} relative bg-gray-900 rounded-t-xl overflow-hidden`}>
+          {videoUrl ? (
+            <img 
+              src={videoUrl} 
+              alt={item.name}
+              className="w-full h-full object-cover opacity-90"
+              onError={(e) => {
+                if (item.storage_path) {
+                  getFileUrl(item).then(url => {
+                    if (url) e.target.src = url;
+                  });
+                }
+              }}
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+              <Video className="w-10 h-10 text-gray-600" />
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+              <Play className="w-5 h-5 text-gray-900 ml-0.5" />
+            </div>
+          </div>
+          {item.size && (
+            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded font-medium">
+              {item.size}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Image type
+    const imageUrl = getDisplayUrl(item);
+    return (
+      <div className={`${heightClass} relative bg-gray-100 rounded-t-xl overflow-hidden`}>
+        {imageUrl ? (
+          <img 
+            src={imageUrl} 
+            alt={item.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              if (item.storage_path) {
+                getFileUrl(item).then(url => {
+                  if (url) e.target.src = url;
+                });
+              }
+            }}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+            <Image className="w-10 h-10 text-gray-400" />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-6">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-          Content Library
-        </h1>
-        <p className="text-gray-600">
-          Your centralized hub for all content assets
-        </p>
+    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-2 sm:px-4 md:px-8 pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full">
+      <div className="max-w-full">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+            Content Library
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600">
+            Your centralized hub for all content assets
+          </p>
+        </div>
+
+        {/* Main Layout: Content + Sidebar */}
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 w-full max-w-full">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0 w-full max-w-full">
+            {/* Search Bar */}
+            <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search your content..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none transition-all text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Projects Filter */}
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+            <button
+              onClick={() => setShowCreateProjectModal(true)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm bg-gradient-to-r from-huttle-primary to-indigo-600 text-white hover:shadow-md"
+            >
+              <FolderPlus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+              New Project
+            </button>
+
+            {projects.map((project) => (
+              <div key={project.id} className="relative group">
+                <button
+                  onClick={() => setActiveProject(project.id)}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm ${
+                    activeProject === project.id
+                      ? 'text-white shadow-md'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                  style={{
+                    backgroundColor: activeProject === project.id ? project.color : undefined
+                  }}
+                >
+                  <Folder className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                  <span className="hidden sm:inline">{project.name}</span>
+                  <span className="sm:hidden">{project.name.length > 12 ? project.name.substring(0, 12) + '...' : project.name}</span>
+                  <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded ${
+                    activeProject === project.id ? 'bg-white/20' : 'bg-gray-100'
+                  }`}>
+                    {project.count}
+                  </span>
+                </button>
+                {project.id !== 'all' && (
+                  <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
+                      className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center hover:bg-blue-600 shadow-lg"
+                      title="Edit project"
+                    >
+                      <Edit2 className="w-2.5 h-2.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); confirmDeleteProject(project); }}
+                      className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-lg"
+                      title="Delete project"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Tabs & Controls */}
+          <div className="flex flex-col gap-2 sm:gap-3 mb-4">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+              {[
+                { key: 'all', label: 'All', icon: FolderOpen },
+                { key: 'image', label: 'Images', icon: Image },
+                { key: 'video', label: 'Videos', icon: Video },
+                { key: 'text', label: 'Text', icon: FileText }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm ${
+                    activeTab === tab.key
+                      ? 'bg-huttle-primary text-white'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <tab.icon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex gap-2">
+              <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <Grid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <button 
+                onClick={() => setShowUploadModal(true)}
+                disabled={storagePercent >= 100}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg transition-all shadow-sm text-xs sm:text-sm font-medium ${
+                  storagePercent >= 100
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                    : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
+                }`}
+              >
+                <Upload className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+                {storagePercent >= 100 ? 'Storage Full' : 'Upload'}
+              </button>
+            </div>
+          </div>
+
+          {/* Selected Items Actions */}
+          {selectedItems.length > 0 && (
+            <div className="bg-huttle-primary text-white rounded-xl p-3 mb-4 flex items-center justify-between text-sm">
+              <span className="font-medium">{selectedItems.length} item(s) selected</span>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    addToast('Media added to post! Open Create Post modal to see them.', 'success');
+                    setSelectedItems([]);
+                  }}
+                  className="px-3 py-1.5 bg-white text-huttle-primary rounded-lg hover:bg-gray-100 transition-all font-medium text-sm"
+                >
+                  Add to Post
+                </button>
+                <button 
+                  onClick={() => {
+                    if (window.confirm(`Delete ${selectedItems.length} item(s)?`)) {
+                      setContentItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
+                      addToast(`${selectedItems.length} item(s) deleted`, 'success');
+                      setSelectedItems([]);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-medium text-sm"
+                >
+                  Delete
+                </button>
+                <button 
+                  onClick={() => setSelectedItems([])}
+                  className="px-3 py-1.5 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all font-medium text-sm"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Content Loading State */}
+          {loading && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+              <div className="animate-spin w-12 h-12 border-4 border-huttle-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading your content...</h3>
+              <p className="text-gray-600">Please wait while we fetch your content library</p>
+            </div>
+          )}
+
+          {/* Content Grid/List */}
+          {!loading && (
+            <>
+              <div className={viewMode === 'grid' 
+                ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4' 
+                : 'space-y-3'
+              }>
+
+                {filteredItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    onClick={() => handleItemClick(item)}
+                    className={`bg-white rounded-xl shadow-sm border-2 transition-all hover:shadow-lg cursor-pointer relative group ${
+                      selectedItems.includes(item.id) ? 'border-huttle-primary ring-2 ring-huttle-primary/20' : 'border-gray-100 hover:border-gray-200'
+                    }`}
+                  >
+                    {viewMode === 'grid' ? (
+                      <>
+                        {/* Thumbnail */}
+                        <div className="relative">
+                          {renderThumbnail(item)}
+                          
+                          {/* Selection checkbox */}
+                          <button
+                            onClick={(e) => handleSelectItem(item.id, e)}
+                            className={`absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                              selectedItems.includes(item.id)
+                                ? 'bg-huttle-primary text-white'
+                                : 'bg-white/90 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-white'
+                            } shadow-md`}
+                          >
+                            {selectedItems.includes(item.id) && <Check className="w-4 h-4" />}
+                          </button>
+                          
+                          {/* Type badge */}
+                          <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 text-white text-[10px] rounded-full flex items-center gap-1 font-medium">
+                            {item.type === 'image' && <Image className="w-2.5 h-2.5" />}
+                            {item.type === 'video' && <Video className="w-2.5 h-2.5" />}
+                            {item.type === 'text' && <FileText className="w-2.5 h-2.5" />}
+                            <span className="capitalize">{item.type}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Info */}
+                        <div className="p-3">
+                          <h3 className="font-semibold text-sm text-gray-900 truncate mb-1">{item.name}</h3>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-500">{item.date}</p>
+                            {item.size && <p className="text-xs text-gray-400">{item.size}</p>}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-4 p-3">
+                        {/* List view thumbnail */}
+                        <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                          {item.type === 'text' ? (
+                            <div className="w-full h-full bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-2">
+                              <p className="text-[10px] text-gray-500 line-clamp-3">{item.content?.slice(0, 60)}</p>
+                            </div>
+                          ) : item.type === 'video' ? (
+                            <div className="w-full h-full relative">
+                              <img 
+                                src={getDisplayUrl(item) || ''} 
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <Play className="w-6 h-6 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <img 
+                              src={getDisplayUrl(item) || ''} 
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">{item.name}</h3>
+                          <p className="text-sm text-gray-500 mt-0.5">{item.date} {item.size && `• ${item.size}`}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full capitalize">{item.type}</span>
+                            {item.project && (
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full">
+                                {projects.find(p => p.id === item.project)?.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={(e) => handleSelectItem(item.id, e)}
+                          className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            selectedItems.includes(item.id)
+                              ? 'bg-huttle-primary border-huttle-primary text-white'
+                              : 'border-gray-300 hover:border-huttle-primary'
+                          }`}
+                        >
+                          {selectedItems.includes(item.id) && <Check className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Empty State */}
+              {filteredItems.length === 0 && !loading && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+                  {contentItems.length === 0 ? (
+                    <>
+                      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-huttle-primary/10 to-indigo-100 flex items-center justify-center">
+                        <CloudUpload className="w-10 h-10 text-huttle-primary" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">Start building your library</h3>
+                      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                        Upload images, videos, and text content to keep all your creative assets organized in one place.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button 
+                          onClick={() => setShowUploadModal(true)}
+                          disabled={storagePercent >= 100}
+                          className="px-6 py-3 bg-huttle-primary text-white rounded-xl font-medium hover:bg-huttle-primary-dark transition-all shadow-md inline-flex items-center justify-center gap-2"
+                        >
+                          <Upload className="w-5 h-5" />
+                          Upload Your First Asset
+                        </button>
+                        <button 
+                          onClick={() => setShowCreateProjectModal(true)}
+                          className="px-6 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-2"
+                        >
+                          <FolderPlus className="w-5 h-5" />
+                          Create a Project
+                        </button>
+                      </div>
+                      <div className="mt-8 pt-6 border-t border-gray-100">
+                        <p className="text-sm text-gray-500 mb-3">What you can store:</p>
+                        <div className="flex justify-center gap-6 text-sm">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Image className="w-4 h-4 text-pink-500" />
+                            <span>Images</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Video className="w-4 h-4 text-purple-500" />
+                            <span>Videos</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <FileText className="w-4 h-4 text-blue-500" />
+                            <span>Text & Captions</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No content found</h3>
+                      <p className="text-gray-600 mb-4">
+                        {searchQuery 
+                          ? `No results for "${searchQuery}"`
+                          : 'Try adjusting your filters'
+                        }
+                      </p>
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="text-huttle-primary font-medium hover:underline"
+                        >
+                          Clear search
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Storage Sidebar - Desktop only, appears on right */}
+        <div className="hidden lg:block lg:w-56 flex-shrink-0">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-24">
+            {/* Storage Header - Compact */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                storagePercent >= 90 ? 'bg-red-100' : storagePercent >= 70 ? 'bg-amber-100' : 'bg-huttle-primary/10'
+              }`}>
+                <HardDrive className={`w-4 h-4 ${
+                  storagePercent >= 90 ? 'text-red-600' : storagePercent >= 70 ? 'text-amber-600' : 'text-huttle-primary'
+                }`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-lg font-bold text-gray-900">{storageUsedDisplay}</span>
+                  <span className="text-xs text-gray-500">/ {storageLimitDisplay}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Bar - Compact */}
+            <div className="mb-3">
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    storagePercent >= 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+                    storagePercent >= 70 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                    'bg-gradient-to-r from-huttle-primary to-indigo-500'
+                  }`}
+                  style={{ width: `${Math.min(storagePercent, 100)}%` }}
+                />
+              </div>
+              <p className={`text-xs mt-1 ${
+                storagePercent >= 90 ? 'text-red-600 font-medium' : 'text-gray-500'
+              }`}>
+                {storagePercent >= 100 
+                  ? 'Storage full'
+                  : `${(100 - storagePercent).toFixed(0)}% available`
+                }
+              </p>
+            </div>
+
+            {/* Content Breakdown */}
+            <div className="flex flex-col gap-1.5 mb-3 border-t border-gray-100 pt-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-pink-500" />
+                <span className="text-xs text-gray-600">{contentCounts.images} img</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-purple-500" />
+                <span className="text-xs text-gray-600">{contentCounts.videos} vid</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-xs text-gray-600">{contentCounts.text} txt</span>
+              </div>
+            </div>
+
+            {/* Upgrade CTA - Compact */}
+            {tierStorageInfo[userTier]?.next && (
+              <Link
+                to="/subscription"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-huttle-primary to-indigo-600 text-white text-sm font-medium rounded-lg hover:shadow-md transition-all"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Upgrade to Pro
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+
+            {/* Pro badge for Pro users - Compact */}
+            {userTier === TIERS.PRO && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                  <Sparkles className="w-3 h-3 text-white" />
+                </div>
+                <span className="text-xs font-semibold text-gray-900">Pro Storage Unlocked</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Header with Storage Meter */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex-1">
-          {/* Storage moved to top right - see below */}
-        </div>
-        
-        {/* Compact Storage Meter - Top Right */}
-        <div className={`bg-white rounded-lg shadow-sm border p-2 flex items-center gap-2 w-48 ${
-          storagePercent >= 100 ? 'border-red-300 bg-red-50' :
-          storagePercent >= 90 ? 'border-yellow-300 bg-yellow-50' :
-          'border-gray-200'
-        }`}>
-          <HardDrive className={`w-3 h-3 flex-shrink-0 ${
-            storagePercent >= 100 ? 'text-red-600' :
-            storagePercent >= 90 ? 'text-yellow-600' :
-            'text-gray-600'
-          }`} />
-          <div className="flex-1">
+      {/* Mobile Storage Bar - Fixed at bottom, ultra compact */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-2 z-40 shadow-lg">
+        <div className="flex items-center gap-2">
+          {/* Storage icon */}
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            storagePercent >= 90 ? 'bg-red-100' : storagePercent >= 70 ? 'bg-amber-100' : 'bg-huttle-primary/10'
+          }`}>
+            <HardDrive className={`w-3.5 h-3.5 ${
+              storagePercent >= 90 ? 'text-red-600' : storagePercent >= 70 ? 'text-amber-600' : 'text-huttle-primary'
+            }`} />
+          </div>
+          
+          {/* Storage text and progress bar combined */}
+          <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[10px] font-medium text-gray-700">Storage</span>
-              <span className={`text-[10px] font-semibold ${
-                storagePercent >= 100 ? 'text-red-600' :
-                storagePercent >= 90 ? 'text-yellow-600' :
-                'text-huttle-primary'
-              }`}>
-                {storageUsed.toFixed(0)}/{storageLimit} MB
-              </span>
+              <span className="text-xs font-semibold text-gray-900">{storageUsedDisplay} / {storageLimitDisplay}</span>
+              <span className="text-xs text-gray-500">{contentCounts.images + contentCounts.videos + contentCounts.text} items</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+            <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
               <div 
-                className={`h-1 rounded-full transition-all ${
-                  storagePercent >= 100 ? 'bg-red-500' :
-                  storagePercent >= 90 ? 'bg-yellow-500' :
+                className={`h-1 rounded-full transition-all duration-500 ${
+                  storagePercent >= 90 ? 'bg-red-500' :
+                  storagePercent >= 70 ? 'bg-amber-500' :
                   'bg-huttle-primary'
                 }`}
                 style={{ width: `${Math.min(storagePercent, 100)}%` }}
-              ></div>
+              />
             </div>
-            {storagePercent >= 90 && (
-              <div className="text-[9px] mt-0.5 text-center">
-                {storagePercent >= 100 ? (
-                  <span className="text-red-600 font-medium">Storage limit reached</span>
-                ) : (
-                  <span className="text-yellow-600 font-medium">
-                    {storageLimit - storageUsed.toFixed(0)} MB remaining
-                  </span>
-                )}
-              </div>
-            )}
           </div>
-        </div>
-      </div>
 
-      {/* Projects Filter with Create Button */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-        {/* Create Project Button */}
-        <button
-          onClick={() => setShowCreateProjectModal(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-sm bg-gradient-to-r from-huttle-primary to-indigo-700 text-white hover:shadow-md"
-        >
-          <FolderPlus className="w-3.5 h-3.5" />
-          New Project
-        </button>
-
-        {/* Project Filter Buttons */}
-        {projects.map((project) => (
-          <div key={project.id} className="relative group">
-            <button
-              onClick={() => setActiveProject(project.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-sm ${
-                activeProject === project.id
-                  ? 'text-white shadow-md'
-                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-              style={{
-                backgroundColor: activeProject === project.id ? project.color : undefined
-              }}
+          {/* Upgrade button */}
+          {tierStorageInfo[userTier]?.next && (
+            <Link
+              to="/subscription"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-huttle-primary to-indigo-600 text-white text-xs font-medium rounded-lg flex-shrink-0 hover:shadow-md transition-shadow"
             >
-              <Folder className="w-3.5 h-3.5" />
-              {project.name}
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                activeProject === project.id ? 'bg-white bg-opacity-20' : 'bg-gray-100'
-              }`}>
-                {project.count}
-              </span>
-            </button>
-            {project.id !== 'all' && (
-              <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditProject(project);
-                  }}
-                  className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center hover:bg-blue-600 shadow-lg"
-                  title="Edit project"
-                >
-                  <Edit2 className="w-2.5 h-2.5" />
-              </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    confirmDeleteProject(project);
-                  }}
-                  className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-lg"
-                  title="Delete project"
-                >
-                  <Trash2 className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs & Controls */}
-      <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <div className="flex gap-2 overflow-x-auto">
-          {[
-            { key: 'all', label: 'All', icon: FolderOpen },
-            { key: 'image', label: 'Images', icon: Image },
-            { key: 'video', label: 'Videos', icon: Video },
-            { key: 'text', label: 'Text', icon: FileText }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-sm ${
-                activeTab === tab.key
-                  ? 'bg-huttle-primary text-white'
-                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex gap-2 ml-auto">
-          <div className="flex gap-1 bg-white border border-gray-300 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-            >
-              <Grid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <button 
-            onClick={() => setShowUploadModal(true)}
-            disabled={storagePercent >= 100}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all shadow-sm text-sm ${
-              storagePercent >= 100
-                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
-            }`}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {storagePercent >= 100 ? 'Storage Full' : 'Upload'}
-          </button>
-        </div>
-      </div>
-
-      {/* Selected Items Actions */}
-      {selectedItems.length > 0 && (
-        <div className="bg-huttle-primary text-white rounded-lg p-3 mb-4 flex items-center justify-between text-sm">
-          <span className="font-medium">{selectedItems.length} item(s) selected</span>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => {
-                // Future enhancement: Integrate with CreatePostModal to add selected media
-                // This will allow users to directly add library items to new posts
-                addToast('Media added to post! Open Create Post modal to see them.', 'success');
-                setSelectedItems([]);
-              }}
-              className="px-3 py-1.5 bg-white text-huttle-primary rounded-lg hover:bg-gray-100 transition-all font-medium text-sm"
-            >
-              Add to Post
-            </button>
-            <button 
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
-                  setContentItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
-                  addToast(`${selectedItems.length} item(s) deleted successfully`, 'success');
-                  setSelectedItems([]);
-                }
-              }}
-              className="px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-all font-medium text-sm"
-            >
-              Delete
-            </button>
-            <button 
-              onClick={() => setSelectedItems([])}
-              className="px-3 py-1.5 bg-huttle-primary-dark text-white rounded-lg hover:bg-opacity-80 transition-all font-medium text-sm"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Content Loading State */}
-      {loading && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-huttle-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading your content...</h3>
-          <p className="text-gray-600">Please wait while we fetch your content library</p>
-        </div>
-      )}
-
-      {/* Compact Content Grid/List */}
-      {!loading && (
-        <>
-      <div className={viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-5 lg:grid-cols-8 gap-2' : 'space-y-2'}>
-        {filteredItems.map((item) => (
-          <div 
-            key={item.id}
-            onClick={() => handleItemClick(item)}
-            className={`bg-white rounded-lg shadow-sm border-2 transition-all hover:shadow-md cursor-pointer relative ${
-              selectedItems.includes(item.id) ? 'border-huttle-primary' : 'border-gray-200'
-            }`}
-          >
-            {viewMode === 'grid' ? (
-              <>
-                <div className="relative">
-                  {item.type === 'text' ? (
-                    <div className="h-20 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center rounded-t-lg">
-                      <FileText className="w-6 h-6 text-gray-400" />
-                    </div>
-                  ) : (
-                    <img 
-                      src={getDisplayUrl(item) || '/placeholder-image.png'} 
-                      alt={item.name}
-                      className="w-full h-20 object-cover rounded-t-lg"
-                      onError={(e) => {
-                        // If signed URL fails, try to regenerate
-                        if (item.storage_path) {
-                          getFileUrl(item).then(url => {
-                            if (url) e.target.src = url;
-                          });
-                        }
-                      }}
-                    />
-                  )}
-                  <button
-                    onClick={(e) => handleSelectItem(item.id, e)}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded bg-white shadow-md flex items-center justify-center hover:scale-110 transition-transform"
-                  >
-                    {selectedItems.includes(item.id) && <Check className="w-2.5 h-2.5 text-huttle-primary" />}
-                  </button>
-                  <div className="absolute top-0.5 left-0.5 px-1 py-0.5 bg-black bg-opacity-60 text-white text-[10px] rounded flex items-center gap-0.5">
-                    {item.type === 'image' && <Image className="w-2 h-2" />}
-                    {item.type === 'video' && <Video className="w-2 h-2" />}
-                    {item.type === 'text' && <FileText className="w-2 h-2" />}
-                  </div>
-                </div>
-                <div className="p-1">
-                  <h3 className="font-semibold text-[10px] text-gray-900 truncate leading-tight">{item.name}</h3>
-                  <p className="text-[9px] text-gray-400">{item.date}</p>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 p-2">
-                {item.type === 'text' ? (
-                  <div className="w-12 h-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-6 h-6 text-gray-400" />
-                  </div>
-                ) : (
-                  <img 
-                    src={getDisplayUrl(item) || '/placeholder-image.png'} 
-                    alt={item.name}
-                    className="w-12 h-12 object-cover rounded flex-shrink-0"
-                    onError={(e) => {
-                      if (item.storage_path) {
-                        getFileUrl(item).then(url => {
-                          if (url) e.target.src = url;
-                        });
-                      }
-                    }}
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm text-gray-900 truncate">{item.name}</h3>
-                  <p className="text-xs text-gray-500">{item.date} • {item.size || 'Text Content'}</p>
-                </div>
-                <button
-                  onClick={(e) => handleSelectItem(item.id, e)}
-                  className="w-5 h-5 rounded border-2 border-gray-300 flex items-center justify-center flex-shrink-0 hover:border-huttle-primary transition-colors"
-                >
-                  {selectedItems.includes(item.id) && <Check className="w-3.5 h-3.5 text-huttle-primary" />}
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-          {filteredItems.length === 0 && !loading && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {contentItems.length === 0 ? 'No content yet' : 'No content found'}
-              </h3>
-          <p className="text-gray-600 mb-6">
-                {contentItems.length === 0
-                  ? 'Upload your first content to get started with your content library'
-                  : 'Try adjusting your filters or upload new content'
-                }
-          </p>
-          <button 
-            onClick={() => setShowUploadModal(true)}
-            disabled={storagePercent >= 100}
-            className={`px-6 py-3 rounded-lg transition-all shadow-md ${
-              storagePercent >= 100
-                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
-            }`}
-          >
-            {storagePercent >= 100 ? 'Storage Full' : (contentItems.length === 0 ? 'Upload Your First Asset' : 'Upload New Content')}
-          </button>
-        </div>
+              <ArrowUpRight className="w-3 h-3" />
+              <span>Pro</span>
+            </Link>
           )}
-        </>
-      )}
+        </div>
+      </div>
 
       {/* Detail Modal */}
       {showDetailModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-2xl font-bold text-gray-900">Content Details</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-2xl">
+              <h2 className="text-xl font-bold text-gray-900">Content Details</h2>
               <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1055,53 +1341,57 @@ export default function ContentLibrary() {
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
                       rows="10"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none font-mono text-sm"
                     />
                   ) : (
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 whitespace-pre-wrap">
-                      {selectedItem.content}
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 whitespace-pre-wrap font-mono text-sm">
+                      {selectedItem.content || 'No content'}
                     </div>
                   )}
                 </div>
               ) : (
-                <img 
-                  src={getDisplayUrl(selectedItem) || '/placeholder-image.png'} 
-                  alt={selectedItem.name}
-                  className="w-full rounded-lg mb-6"
-                  onError={(e) => {
-                    if (selectedItem.storage_path) {
-                      getFileUrl(selectedItem).then(url => {
-                        if (url) e.target.src = url;
-                      });
-                    }
-                  }}
-                />
+                <div className="mb-6 rounded-xl overflow-hidden bg-gray-100">
+                  {selectedItem.type === 'video' ? (
+                    <div className="relative">
+                      <img 
+                        src={getDisplayUrl(selectedItem) || ''} 
+                        alt={selectedItem.name}
+                        className="w-full"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                          <Play className="w-7 h-7 text-gray-900 ml-1" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={getDisplayUrl(selectedItem) || ''} 
+                      alt={selectedItem.name}
+                      className="w-full"
+                    />
+                  )}
+                </div>
               )}
 
               {/* Details */}
-              <div className="space-y-3 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">Name</label>
-                  <p className="text-gray-900">{selectedItem.name}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
+                  <p className="text-gray-900 font-medium mt-1">{selectedItem.name}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">Type</label>
-                  <p className="text-gray-900 capitalize">{selectedItem.type}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Type</label>
+                  <p className="text-gray-900 capitalize mt-1">{selectedItem.type}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700">Date Added</label>
-                  <p className="text-gray-900">{selectedItem.date}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date Added</label>
+                  <p className="text-gray-900 mt-1">{selectedItem.date}</p>
                 </div>
                 {selectedItem.size && (
                   <div>
-                    <label className="text-sm font-semibold text-gray-700">File Size</label>
-                    <p className="text-gray-900">{selectedItem.size}</p>
-                  </div>
-                )}
-                {selectedItem.description && (
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700">Description</label>
-                    <p className="text-gray-900">{selectedItem.description}</p>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">File Size</label>
+                    <p className="text-gray-900 mt-1">{selectedItem.size}</p>
                   </div>
                 )}
               </div>
@@ -1109,89 +1399,77 @@ export default function ContentLibrary() {
               {/* Actions */}
               <div className="flex flex-col gap-3">
                 <div className="flex gap-3">
-                  {selectedItem.type === 'text' && (
-                    <>
-                      {editMode ? (
-                        <>
-                          <button
-                            onClick={handleSaveEdit}
-                            className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md"
-                          >
-                            Save Changes
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditMode(false);
-                              setEditContent(selectedItem.content || '');
-                            }}
-                            className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => setEditMode(true)}
-                            className="flex-1 px-6 py-3 bg-white border-2 border-huttle-primary text-huttle-primary rounded-lg hover:bg-huttle-primary hover:text-white transition-all font-medium flex items-center justify-center gap-2"
-                          >
-                            <Edit className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={handleDownload}
-                            className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
-                          >
-                            <Download className="w-4 h-4" />
-                            Download
-                          </button>
-                        </>
-                      )}
-                    </>
-                  )}
-                  {!selectedItem.type === 'text' && (
+                  {selectedItem.type === 'text' ? (
+                    editMode ? (
+                      <>
+                        <button
+                          onClick={handleSaveEdit}
+                          className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md"
+                        >
+                          Save Changes
+                        </button>
+                        <button
+                          onClick={() => { setEditMode(false); setEditContent(selectedItem.content || ''); }}
+                          className="flex-1 px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setEditMode(true)}
+                          className="flex-1 px-6 py-3 border-2 border-huttle-primary text-huttle-primary rounded-xl hover:bg-huttle-primary hover:text-white transition-all font-medium flex items-center justify-center gap-2"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={handleDownload}
+                          className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download
+                        </button>
+                      </>
+                    )
+                  ) : (
                     <button
                       onClick={handleDownload}
-                      className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
+                      className="flex-1 px-6 py-3 bg-huttle-primary text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
                       Download
                     </button>
                   )}
                 </div>
-                {/* Project and Delete Actions */}
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Project Actions Row */}
+                
                 <div className="flex gap-3">
                   <button
-                    onClick={() => {
-                      setShowAddToProjectModal(true);
-                    }}
-                    className="flex-1 px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
+                    onClick={() => setShowAddToProjectModal(true)}
+                    className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
                   >
                     <Folder className="w-4 h-4" />
-                      {selectedItem.project ? 'Change Project' : 'Add to Project'}
+                    {selectedItem.project ? 'Change Project' : 'Add to Project'}
                   </button>
-                    {selectedItem.project && (
-                  <button
-                        onClick={handleRemoveFromProject}
-                        className="flex-1 px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                        Remove from Project
-                  </button>
-                    )}
-                  </div>
-                  
-                  {/* Delete Button Row */}
-                  <button
-                    onClick={() => confirmDeleteContent(selectedItem)}
-                    className="w-full px-6 py-3 bg-red-50 border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-100 transition-all font-semibold flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete Permanently
-                  </button>
+                  {selectedItem.project && (
+                    <button
+                      onClick={handleRemoveFromProject}
+                      className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      Remove from Project
+                    </button>
+                  )}
                 </div>
+                
+                <button
+                  onClick={() => confirmDeleteContent(selectedItem)}
+                  className="w-full px-6 py-3 bg-red-50 border-2 border-red-200 text-red-600 rounded-xl hover:bg-red-100 transition-all font-semibold flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Permanently
+                </button>
               </div>
             </div>
           </div>
@@ -1200,55 +1478,43 @@ export default function ContentLibrary() {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto">
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">Upload Content</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Upload Content</h2>
               <button onClick={() => setShowUploadModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Plus className="w-5 h-5 rotate-45" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleUpload} className="p-6 space-y-6">
+            <form onSubmit={handleUpload} className="p-6 space-y-5">
+              {/* Content Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">Content Type</label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { key: 'image', label: 'Image', icon: Image },
-                    { key: 'video', label: 'Video', icon: Video },
-                    { key: 'text', label: 'Text Idea', icon: FileText }
+                    { key: 'image', label: 'Image', icon: Image, color: 'pink' },
+                    { key: 'video', label: 'Video', icon: Video, color: 'purple' },
+                    { key: 'text', label: 'Text', icon: FileText, color: 'blue' }
                   ].map((type) => (
                     <button
                       key={type.key}
                       type="button"
                       onClick={() => setUploadType(type.key)}
-                      className={`flex flex-col items-center gap-2 px-4 py-4 rounded-lg border-2 transition-all ${
+                      className={`flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
                         uploadType === type.key
-                          ? 'border-huttle-primary bg-huttle-primary/10'
+                          ? 'border-huttle-primary bg-huttle-primary/5'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <type.icon className="w-6 h-6" />
-                      <span className="font-medium text-sm">{type.label}</span>
+                      <type.icon className={`w-6 h-6 ${uploadType === type.key ? 'text-huttle-primary' : 'text-gray-400'}`} />
+                      <span className={`font-medium text-sm ${uploadType === type.key ? 'text-huttle-primary' : 'text-gray-600'}`}>{type.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Assign to Project</label>
-                <select
-                  value={uploadProject}
-                  onChange={(e) => setUploadProject(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-                >
-                  <option value="all">General Content (No Project)</option>
-                  {projects.filter(p => p.id !== 'all').map((project) => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              </div>
-
+              {/* File Upload or Text Input */}
               {uploadType === 'text' ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Text Content</label>
@@ -1256,7 +1522,7 @@ export default function ContentLibrary() {
                     name="content"
                     rows="6"
                     placeholder="Enter captions, titles, descriptions, or any text ideas..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
                   />
                 </div>
               ) : (
@@ -1264,7 +1530,7 @@ export default function ContentLibrary() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Upload {uploadType === 'image' ? 'Image' : 'Video'} File
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-huttle-primary transition-all">
+                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-huttle-primary transition-all bg-gray-50/50">
                     <input
                       type="file"
                       name="file"
@@ -1274,30 +1540,28 @@ export default function ContentLibrary() {
                       disabled={uploading}
                     />
                     <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">
-                        {uploading ? 'Uploading...' : 'Click to select or drag and drop'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
-                    </p>
-                      {uploading && (
-                        <div className="mt-2">
-                          <div className="animate-spin w-6 h-6 border-2 border-huttle-primary border-t-transparent rounded-full mx-auto"></div>
-                        </div>
-                      )}
+                      <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-huttle-primary/10 flex items-center justify-center">
+                        <Upload className="w-7 h-7 text-huttle-primary" />
+                      </div>
+                      <p className="text-gray-700 font-medium mb-1">
+                        {uploading ? 'Uploading...' : 'Click to select file'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        or drag and drop • {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
+                      </p>
                     </label>
                   </div>
                 </div>
               )}
 
+              {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
                 <input
                   type="text"
                   name="name"
                   placeholder="Give this content a memorable name..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
                 />
               </div>
 
@@ -1310,38 +1574,36 @@ export default function ContentLibrary() {
                   <select
                     value={uploadProject}
                     onChange={(e) => setUploadProject(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
                   >
                     <option value="all">No Project</option>
                     {projects.filter(p => p.id !== 'all').map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
+                      <option key={project.id} value={project.id}>{project.name}</option>
                     ))}
                   </select>
                   <button
                     type="button"
                     onClick={() => setShowCreateProjectModal(true)}
-                    className="px-4 py-2 bg-gradient-to-r from-huttle-primary to-indigo-700 text-white rounded-lg hover:shadow-md transition-all flex items-center gap-2 font-medium"
+                    className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all flex items-center gap-2 font-medium"
                   >
                     <FolderPlus className="w-4 h-4" />
-                    New
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* Submit */}
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
-                  className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium shadow-md flex items-center justify-center gap-2 ${
+                  className={`flex-1 px-6 py-3 rounded-xl font-medium shadow-md flex items-center justify-center gap-2 ${
                     uploading
                       ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                       : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
@@ -1353,7 +1615,10 @@ export default function ContentLibrary() {
                       Uploading...
                     </>
                   ) : (
-                    'Upload'
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Upload
+                    </>
                   )}
                 </button>
               </div>
@@ -1362,20 +1627,12 @@ export default function ContentLibrary() {
         </div>
       )}
 
-      {/* Upgrade Modal */}
-      <UpgradeModal
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        feature="storage"
-        featureName="Increased Storage"
-      />
-
       {/* Add to Project Modal */}
       {showAddToProjectModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Add to Project</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Add to Project</h2>
               <button onClick={() => setShowAddToProjectModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1383,21 +1640,23 @@ export default function ContentLibrary() {
 
             <div className="p-6">
               <p className="text-sm text-gray-600 mb-4">
-                Select a project to add "{selectedItem.name}" to:
+                Select a project for "{selectedItem.name}":
               </p>
               <div className="space-y-2">
                 {projects.filter(p => p.id !== 'all').map((project) => (
                   <button
                     key={project.id}
                     onClick={() => handleAddToProject(project.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg border-2 transition-all ${
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
                       selectedItem.project === project.id
-                        ? 'border-huttle-primary bg-huttle-primary/10'
+                        ? 'border-huttle-primary bg-huttle-primary/5'
                         : 'border-gray-200 hover:border-huttle-primary hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Folder className="w-4 h-4 text-huttle-primary" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: project.color + '20' }}>
+                        <Folder className="w-4 h-4" style={{ color: project.color }} />
+                      </div>
                       <span className="font-medium">{project.name}</span>
                     </div>
                     {selectedItem.project === project.id && (
@@ -1406,12 +1665,28 @@ export default function ContentLibrary() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => handleAddToProject('remove')}
-                className="w-full mt-3 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-              >
-                Remove from all projects
-              </button>
+              {projects.filter(p => p.id !== 'all').length === 0 && (
+                <div className="text-center py-6">
+                  <p className="text-gray-500 mb-3">No projects yet</p>
+                  <button
+                    onClick={() => {
+                      setShowAddToProjectModal(false);
+                      setShowCreateProjectModal(true);
+                    }}
+                    className="text-huttle-primary font-medium hover:underline"
+                  >
+                    Create your first project
+                  </button>
+                </div>
+              )}
+              {selectedItem.project && (
+                <button
+                  onClick={() => handleAddToProject('remove')}
+                  className="w-full mt-3 px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+                >
+                  Remove from all projects
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1429,15 +1704,12 @@ export default function ContentLibrary() {
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         isOpen={showDeleteConfirmation}
-        onClose={() => {
-          setShowDeleteConfirmation(false);
-          setDeleteTarget(null);
-        }}
+        onClose={() => { setShowDeleteConfirmation(false); setDeleteTarget(null); }}
         onConfirm={handleConfirmDelete}
         title={deleteTarget?.type === 'project' ? 'Delete Project' : 'Delete Content'}
         message={
           deleteTarget?.type === 'project'
-            ? 'Are you sure you want to delete this project?'
+            ? 'Are you sure you want to delete this project? Content will be moved to "All Content".'
             : 'This will permanently delete this content from your library.'
         }
         itemName={deleteTarget?.name}
@@ -1446,13 +1718,13 @@ export default function ContentLibrary() {
       />
 
       {/* Upgrade Modal */}
-      {showUpgradeModal && (
-        <UpgradeModal
-          isOpen={showUpgradeModal}
-          onClose={() => setShowUpgradeModal(false)}
-          feature="storage"
-        />
-      )}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="storage"
+        featureName="Increased Storage"
+      />
+      </div>
     </div>
   );
 }

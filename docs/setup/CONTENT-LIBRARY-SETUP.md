@@ -219,15 +219,15 @@ Storage limits are configured in `src/config/supabase.js`:
 ```javascript
 export const TIER_LIMITS = {
   free: {
-    storageLimit: 100 * 1024 * 1024, // 100MB
-    // ... other limits
-  },
-  essentials: {
     storageLimit: 250 * 1024 * 1024, // 250MB
     // ... other limits
   },
+  essentials: {
+    storageLimit: 5 * 1024 * 1024 * 1024, // 5GB
+    // ... other limits
+  },
   pro: {
-    storageLimit: 500 * 1024 * 1024, // 500MB
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB
     // ... other limits
   },
 };

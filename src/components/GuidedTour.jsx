@@ -1,22 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { supabase } from '../config/supabase';
 
 export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour' }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isActive, setIsActive] = useState(false);
+  const { user } = useContext(AuthContext);
 
   useEffect(() => {
-    // Check if tour has been completed
-    const completed = localStorage.getItem(storageKey);
-    if (!completed) {
-      // Delay showing tour slightly for better UX
-      const timer = setTimeout(() => {
-        setIsActive(true);
-      }, 500);
+    // Only show tour to authenticated users who just completed onboarding
+    // and haven't seen the tour yet
+    let timer = null;
+    let isMounted = true;
+    
+    const checkTourStatus = async () => {
+      if (!user) return;
       
-      return () => clearTimeout(timer);
-    }
-  }, [storageKey]);
+      // Check if user has already seen the tour (stored in user_profile)
+      try {
+        const { data, error } = await supabase
+          .from('user_profile')
+          .select('has_seen_tour')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error checking tour status:', error);
+          return;
+        }
+        
+        // Only show tour if user has NOT seen it yet
+        // Also check localStorage as fallback for existing users
+        const localCompleted = localStorage.getItem(storageKey);
+        const dbCompleted = data?.has_seen_tour;
+        
+        if (!dbCompleted && !localCompleted && isMounted) {
+          // Delay showing tour slightly for better UX
+          timer = setTimeout(() => {
+            if (isMounted) {
+              setIsActive(true);
+            }
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error in tour status check:', error);
+      }
+    };
+    
+    checkTourStatus();
+    
+    // Cleanup function - clear timeout if component unmounts
+    return () => {
+      isMounted = false;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [storageKey, user]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -32,14 +73,31 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
     }
   };
 
-  const handleComplete = () => {
+  const markTourComplete = async () => {
+    // Mark tour as complete in localStorage (fallback)
     localStorage.setItem(storageKey, 'true');
+    
+    // Also mark in Supabase for persistence across devices
+    if (user) {
+      try {
+        await supabase
+          .from('user_profile')
+          .update({ has_seen_tour: true })
+          .eq('user_id', user.id);
+      } catch (error) {
+        console.error('Error saving tour completion to database:', error);
+      }
+    }
+  };
+
+  const handleComplete = async () => {
+    await markTourComplete();
     setIsActive(false);
     if (onComplete) onComplete();
   };
 
-  const handleSkip = () => {
-    localStorage.setItem(storageKey, 'true');
+  const handleSkip = async () => {
+    await markTourComplete();
     setIsActive(false);
   };
 

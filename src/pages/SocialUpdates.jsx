@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Newspaper, ExternalLink, X, AlertCircle, TrendingUp, Users, Clock } from 'lucide-react';
 import { socialUpdates as staticSocialUpdates } from '../data/socialUpdates';
 import { getSocialUpdates } from '../config/supabase';
-import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, LinkedInIcon, YouTubeIcon } from '../components/SocialIcons';
+import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function SocialUpdates() {
@@ -18,7 +18,6 @@ export default function SocialUpdates() {
     'TikTok': { icon: TikTokIcon, color: 'bg-black' },
     'X': { icon: TwitterXIcon, color: 'bg-black' },
     'Twitter': { icon: TwitterXIcon, color: 'bg-black' },
-    'LinkedIn': { icon: LinkedInIcon, color: 'bg-blue-700' },
     'YouTube': { icon: YouTubeIcon, color: 'bg-red-600' }
   };
   
@@ -115,7 +114,7 @@ export default function SocialUpdates() {
   };
 
   // Allowed platforms only
-  const allowedPlatforms = ['Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'LinkedIn', 'YouTube'];
+  const allowedPlatforms = ['Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'YouTube'];
   
   // Filter out Threads, Snapchat, and any other platforms not in our service list
   const filterAllowedPlatforms = (updates) => {
@@ -418,16 +417,10 @@ export default function SocialUpdates() {
 
 
       {/* Footer Notes */}
-      <div className="mt-8 space-y-4">
+      <div className="mt-8">
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <p className="text-sm text-blue-900">
             <strong>Note:</strong> These updates are curated to help you stay informed about platform changes that might affect your content strategy. Links are provided for detailed information from official sources.
-          </p>
-        </div>
-        
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="text-sm text-purple-900">
-            <strong>📅 Update Schedule:</strong> This database is updated biweekly with the latest social media platform changes. Our team uses advanced research tools to gather the most relevant updates, ensuring all users have access to the same high-quality information.
           </p>
         </div>
       </div>

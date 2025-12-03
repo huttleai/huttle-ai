@@ -3,61 +3,99 @@
  * 
  * Used for:
  * - Subscription management (Freemium, Essentials, Pro)
- * - Payment processing
- * - Billing and invoicing
+ * - Payment processing via Stripe Checkout
+ * - Billing management via Stripe Customer Portal
  * - Usage tracking for AI generations
  */
+
+import { supabase } from '../config/supabase';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
 // Note: Most Stripe operations should happen on your backend for security
-// This file provides client-side helpers for Stripe Checkout and Elements
+// This file provides client-side helpers for Stripe Checkout and Portal
+
+/**
+ * Get auth headers for API requests
+ */
+async function getAuthHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (e) {
+    console.warn('Could not get auth session:', e);
+  }
+  
+  return headers;
+}
 
 export const SUBSCRIPTION_PLANS = {
   FREEMIUM: {
     id: 'freemium',
     name: 'Freemium',
-    price: 0,
+    monthlyPrice: 0,
+    annualPrice: 0,
     priceId: null, // No Stripe price ID for free tier
+    annualPriceId: null,
     features: {
-      aiGenerations: 5,
-      platforms: 1,
-      features: ['Basic Trend Radar', 'Basic Insights', 'Email Support']
+      aiGenerations: 20,
+      storageGB: 0.25, // 250MB
+      features: [
+        'Smart Calendar',
+        'Content Library (250MB)',
+        'Trending Now',
+        'Hashtags of the Day',
+        'All AI Power Tools',
+        'Daily Alerts',
+        'AI-Powered Insights',
+        'AI Plan Builder (7 days)'
+      ]
     }
   },
   ESSENTIALS: {
     id: 'essentials',
     name: 'Essentials',
-    price: 9,
-    priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS || '',
+    monthlyPrice: 9,
+    annualPrice: 90,
+    priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || '',
+    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || '',
     features: {
-      aiGenerations: 50,
-      platforms: 5,
+      aiGenerations: 200,
+      storageGB: 5,
       features: [
-        'Full Trend Lab',
-        'Smart Calendar',
-        'Content Library',
-        'AI Plan Builder',
-        'Priority Support'
+        'Everything in Freemium',
+        '200 AI generations/month',
+        '5GB storage',
+        'AI Plan Builder (7 & 14 days)',
+        'Full Trend Lab access',
+        'Email Support'
       ]
     }
   },
   PRO: {
     id: 'pro',
     name: 'Pro',
-    price: 19,
-    priceId: import.meta.env.VITE_STRIPE_PRICE_PRO || '',
+    monthlyPrice: 19,
+    annualPrice: 190,
+    priceId: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || '',
+    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {
-      aiGenerations: Infinity,
-      platforms: Infinity,
+      aiGenerations: 800,
+      storageGB: 25,
       features: [
-        'Unlimited AI Generations',
-        'Custom Trend Filters & Alerts',
-        'Huttle Agent (Beta)',
-        'Advanced Analytics',
-        'Auto-Publishing',
-        '1-on-1 Onboarding',
-        '24/7 Priority Support'
+        'Everything in Essentials',
+        '800 AI generations/month',
+        '25GB storage',
+        'Content Repurposer',
+        'Trend Forecaster',
+        'Huttle Agent (Coming Soon)',
+        'Priority Email Support'
       ]
     }
   }
@@ -65,27 +103,42 @@ export const SUBSCRIPTION_PLANS = {
 
 /**
  * Initialize Stripe Checkout Session
- * This should call your backend endpoint that creates a Stripe Checkout session
+ * This calls your backend endpoint that creates a Stripe Checkout session
+ * 
+ * @param {string} planId - The plan ID (essentials or pro)
+ * @param {string} billingCycle - 'monthly' or 'annual'
  */
-export async function createCheckoutSession(planId) {
+export async function createCheckoutSession(planId, billingCycle = 'monthly') {
   try {
     const plan = Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId);
     
-    if (!plan || !plan.priceId) {
+    if (!plan) {
       throw new Error('Invalid plan selected');
     }
 
+    // Get the correct price ID based on billing cycle
+    const priceId = billingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
+    
+    if (!priceId) {
+      throw new Error('Price not configured for this plan. Please contact support.');
+    }
+
     // Call your backend API to create a checkout session
+    const headers = await getAuthHeaders();
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
-        priceId: plan.priceId,
+        priceId,
         planId: plan.id,
+        billingCycle,
       }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create checkout session');
+    }
 
     const data = await response.json();
     
@@ -110,15 +163,24 @@ export async function createCheckoutSession(planId) {
 
 /**
  * Create Portal Session for managing subscription
+ * Opens Stripe Customer Portal where users can:
+ * - Update payment method
+ * - View invoices
+ * - Cancel subscription
+ * - Change plan
  */
 export async function createPortalSession() {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch('/api/create-portal-session', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create portal session');
+    }
 
     const data = await response.json();
     
@@ -144,12 +206,22 @@ export async function createPortalSession() {
  */
 export async function getSubscriptionStatus() {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch('/api/subscription-status', {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
+
+    if (!response.ok) {
+      // Return default free status if endpoint not available
+      return {
+        success: true,
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null
+      };
+    }
 
     const data = await response.json();
     
@@ -162,9 +234,13 @@ export async function getSubscriptionStatus() {
     };
   } catch (error) {
     console.error('Subscription Status Error:', error);
+    // Return default free status on error
     return {
-      success: false,
-      error: error.message
+      success: true,
+      subscription: null,
+      plan: 'freemium',
+      status: 'active',
+      currentPeriodEnd: null
     };
   }
 }
@@ -206,16 +282,30 @@ export function canGenerateContent(currentPlan = 'freemium') {
   const plan = SUBSCRIPTION_PLANS[currentPlan.toUpperCase()];
   const currentUsage = getAIGenerationCount();
   
-  if (plan.features.aiGenerations === Infinity) {
-    return { allowed: true, remaining: Infinity };
+  if (!plan) {
+    return { allowed: false, remaining: 0, limit: 0 };
   }
   
-  const remaining = plan.features.aiGenerations - currentUsage;
+  const limit = plan.features.aiGenerations;
+  const remaining = limit - currentUsage;
   
   return {
     allowed: remaining > 0,
     remaining: Math.max(0, remaining),
-    limit: plan.features.aiGenerations
+    limit
   };
 }
 
+/**
+ * Get plan by ID
+ */
+export function getPlanById(planId) {
+  return Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId) || SUBSCRIPTION_PLANS.FREEMIUM;
+}
+
+/**
+ * Check if Stripe is configured
+ */
+export function isStripeConfigured() {
+  return !!STRIPE_PUBLISHABLE_KEY;
+}

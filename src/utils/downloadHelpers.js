@@ -177,14 +177,6 @@ export const downloadForPlatform = (post, platform) => {
       break;
     }
       
-    case 'linkedin':
-      content += `${post.caption || ''}\n\n`;
-      if (post.keywords) {
-        content += `Keywords: ${post.keywords}\n\n`;
-      }
-      content += `${post.hashtags || ''}\n`;
-      break;
-      
     case 'facebook':
       content += `${post.caption || ''}\n\n`;
       content += `${post.hashtags || ''}\n`;

@@ -155,9 +155,9 @@ Configured in `src/config/supabase.js`:
 
 | Tier | Storage Limit | Bytes |
 |------|--------------|-------|
-| Free | 100 MB | 104,857,600 |
-| Essentials | 250 MB | 262,144,000 |
-| Pro | 500 MB | 524,288,000 |
+| Free | 250 MB | 262,144,000 |
+| Essentials | 5 GB | 5,368,709,120 |
+| Pro | 25 GB | 26,843,545,600 |
 
 **Compression Settings:**
 

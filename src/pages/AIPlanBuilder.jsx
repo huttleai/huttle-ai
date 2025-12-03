@@ -1,18 +1,82 @@
-import { useState } from 'react';
-import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useContent } from '../context/ContentContext';
+import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
+import { createPlanBuilderJob, subscribeToJob, getJobStatus } from '../services/planBuilderAPI';
+import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
 export default function AIPlanBuilder() {
   const { showToast } = useToast();
   const { schedulePost } = useContent();
+  const { brandProfile } = useBrand();
+  const { platforms: preferredPlatforms } = usePreferredPlatforms();
   const [selectedGoal, setSelectedGoal] = useState('Grow followers');
   const [selectedPeriod, setSelectedPeriod] = useState('7 days');
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [generatedPlan, setGeneratedPlan] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState(null);
+  const [jobStatus, setJobStatus] = useState(null);
+  const [progress, setProgress] = useState(0);
+
+  // Subscribe to job updates when a job is created
+  useEffect(() => {
+    if (!currentJobId) return;
+
+    // Subscribe to realtime updates
+    const unsubscribe = subscribeToJob(currentJobId, (updatedJob) => {
+      setJobStatus(updatedJob.status);
+      
+      if (updatedJob.status === 'completed') {
+        setGeneratedPlan(updatedJob.result);
+        setIsGenerating(false);
+        setProgress(100);
+        showToast('AI Plan generated successfully!', 'success');
+        setCurrentJobId(null);
+      } else if (updatedJob.status === 'failed') {
+        setIsGenerating(false);
+        setProgress(0);
+        showToast(updatedJob.error || 'Failed to generate plan', 'error');
+        setCurrentJobId(null);
+      } else if (updatedJob.status === 'running') {
+        setProgress(50); // Indicate processing
+      }
+    });
+
+    // Fallback polling every 3 seconds
+    const pollInterval = setInterval(async () => {
+      const result = await getJobStatus(currentJobId);
+      if (result.success && result.job) {
+        const job = result.job;
+        setJobStatus(job.status);
+        
+        if (job.status === 'completed') {
+          setGeneratedPlan(job.result);
+          setIsGenerating(false);
+          setProgress(100);
+          showToast('AI Plan generated successfully!', 'success');
+          setCurrentJobId(null);
+          clearInterval(pollInterval);
+        } else if (job.status === 'failed') {
+          setIsGenerating(false);
+          setProgress(0);
+          showToast(job.error || 'Failed to generate plan', 'error');
+          setCurrentJobId(null);
+          clearInterval(pollInterval);
+        } else if (job.status === 'running') {
+          setProgress(50);
+        }
+      }
+    }, 3000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(pollInterval);
+    };
+  }, [currentJobId, showToast]);
 
   const handlePlatformToggle = (platform) => {
     setSelectedPlatforms(prev => 
@@ -22,36 +86,33 @@ export default function AIPlanBuilder() {
     );
   };
 
-  const handleGeneratePlan = () => {
+  const handleGeneratePlan = async () => {
     if (selectedPlatforms.length === 0) {
       showToast('Please select at least one platform', 'error');
       return;
     }
 
     setIsGenerating(true);
+    setProgress(10);
     
-    // Simulate AI generation
-    setTimeout(() => {
-      const days = parseInt(selectedPeriod);
-      const postsPerDay = selectedGoal.includes('followers') ? 2 : 1;
-      
-      const mockPlan = {
-        goal: selectedGoal,
-        period: selectedPeriod,
-        platforms: selectedPlatforms,
-        totalPosts: days * postsPerDay,
-        contentMix: {
-          educational: 60,
-          entertaining: 30,
-          promotional: 10
-        },
-        schedule: generateSchedule(days, postsPerDay, selectedPlatforms)
-      };
-      
-      setGeneratedPlan(mockPlan);
+    // Call the backend API to create job
+    const result = await createPlanBuilderJob({
+      goal: selectedGoal,
+      period: selectedPeriod,
+      platforms: selectedPlatforms,
+      niche: brandProfile?.niche || 'general',
+      brandVoiceId: brandProfile?.brandVoice || null // This is a string, not an ID, but API accepts it
+    });
+
+    if (result.success) {
+      setCurrentJobId(result.jobId);
+      setProgress(25);
+      showToast('Your AI plan is being generated...', 'info');
+    } else {
       setIsGenerating(false);
-      showToast('AI Plan generated successfully!', 'success');
-    }, 2000);
+      setProgress(0);
+      showToast(result.error || 'Failed to start plan generation', 'error');
+    }
   };
 
   const generateSchedule = (days, postsPerDay, platforms) => {
@@ -77,18 +138,25 @@ export default function AIPlanBuilder() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-          AI Plan Builder
-        </h1>
-        <p className="text-gray-600">
-          Generate strategic 7-14 day content calendars powered by AI
-        </p>
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      <div className="mb-6 md:mb-8">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+            <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+              AI Plan Builder
+            </h1>
+            <p className="text-sm md:text-base text-gray-500">
+              Generate strategic 7-14 day content calendars powered by AI
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="card p-5 md:p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Target className="w-5 h-5 text-huttle-primary" />
             Set Your Goal
@@ -121,17 +189,17 @@ export default function AIPlanBuilder() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Platform Focus</label>
               <div className="flex flex-wrap gap-2">
-                {['TikTok', 'Instagram', 'YouTube', 'LinkedIn', 'Twitter', 'Facebook'].map(platform => (
+                {preferredPlatforms.map(platform => (
                   <button
-                    key={platform}
-                    onClick={() => handlePlatformToggle(platform)}
+                    key={platform.id}
+                    onClick={() => handlePlatformToggle(platform.displayName || platform.name)}
                     className={`px-3 py-1.5 border rounded-lg text-sm transition-all ${
-                      selectedPlatforms.includes(platform)
+                      selectedPlatforms.includes(platform.displayName || platform.name)
                         ? 'border-huttle-primary bg-huttle-primary text-white'
                         : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
                     }`}
                   >
-                    {platform}
+                    {platform.displayName || platform.name}
                   </button>
                 ))}
               </div>
@@ -139,7 +207,7 @@ export default function AIPlanBuilder() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-huttle-primary/10 to-huttle-primary-light/10 rounded-xl border border-huttle-primary/20 p-6">
+        <div className="bg-gradient-to-br from-huttle-50/50 to-cyan-50/50 rounded-xl border border-huttle-primary/20 p-5 md:p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-huttle-primary" />
             AI Recommendations
@@ -170,16 +238,42 @@ export default function AIPlanBuilder() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-        <Wand2 className="w-16 h-16 text-huttle-primary mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Build Your Plan?</h3>
-        <p className="text-gray-600 mb-6">
-          AI will generate a complete content calendar based on your goals and preferences
+      <div className="card p-6 md:p-8 text-center">
+        <div className="w-14 h-14 md:w-16 md:h-16 bg-huttle-cyan-light rounded-2xl flex items-center justify-center mx-auto mb-4">
+          {isGenerating ? (
+            <Loader className="w-7 h-7 md:w-8 md:h-8 text-huttle-primary animate-spin" />
+          ) : (
+            <Wand2 className="w-7 h-7 md:w-8 md:h-8 text-huttle-primary" />
+          )}
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          {isGenerating ? 'Generating Your Plan...' : 'Ready to Build Your Plan?'}
+        </h3>
+        <p className="text-gray-600 mb-6 text-sm md:text-base">
+          {isGenerating 
+            ? 'Our AI is analyzing trends and creating your personalized content strategy'
+            : 'AI will generate a complete content calendar based on your goals and preferences'
+          }
         </p>
+        
+        {isGenerating && (
+          <div className="mb-6 max-w-md mx-auto">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-huttle-primary h-2 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              {jobStatus === 'running' ? 'Processing with AI...' : jobStatus === 'queued' ? 'Queued for processing...' : 'Starting...'}
+            </p>
+          </div>
+        )}
+        
         <button 
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="px-8 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-primary px-6 md:px-8 py-2.5 md:py-3 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isGenerating ? 'Generating...' : 'Generate AI Plan'}
         </button>

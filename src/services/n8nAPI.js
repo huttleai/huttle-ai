@@ -1,248 +1,28 @@
-import { supabase } from '../config/supabase';
+/**
+ * n8n API Service (OPTIONAL)
+ * 
+ * NOTE: n8n is NOT used for posting to social media.
+ * Huttle AI uses deep linking instead (see PublishModal.jsx and socialMediaHelpers.js).
+ * 
+ * n8n can be optionally used for:
+ * - Analytics fetching (requires user OAuth)
+ * - Notifications and reminders
+ * - Content analysis
+ * - Trend monitoring
+ * 
+ * If you don't need these features, you can safely ignore this file.
+ */
 
 // API endpoints (these will be Vercel serverless functions)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
- * Check connection status for a user
- */
-export const checkConnectionStatus = async (userId) => {
-  try {
-    // First try the API endpoint
-    const response = await fetch(`${API_BASE_URL}/check-connection-status?userId=${userId}`);
-    const data = await response.json();
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        connections: data.connections,
-        summary: data.summary,
-        n8nAvailable: data.n8nStatus === 'available'
-      };
-    }
-
-    // Fallback to direct Supabase query
-    console.warn('API check failed, falling back to Supabase');
-    return await checkConnectionStatusFallback(userId);
-
-  } catch (error) {
-    console.error('Connection status check error:', error);
-    return await checkConnectionStatusFallback(userId);
-  }
-};
-
-/**
- * Fallback connection check using direct Supabase
- */
-const checkConnectionStatusFallback = async (userId) => {
-  try {
-    const { data: connections, error } = await supabase
-      .from('social_connections')
-      .select('platform, is_connected, platform_username, last_verified, connected_at')
-      .eq('user_id', userId)
-      .eq('is_connected', true);
-
-    if (error) throw error;
-
-    // Format response
-    const connectionStatus = {};
-    const platforms = ['instagram', 'facebook', 'twitter', 'linkedin', 'tiktok', 'youtube'];
-
-    platforms.forEach(platform => {
-      const connection = connections?.find(c => c.platform === platform);
-      const capitalizedPlatform = platform.charAt(0).toUpperCase() + platform.slice(1);
-
-      connectionStatus[capitalizedPlatform] = {
-        connected: !!connection,
-        username: connection?.platform_username || null,
-        connectedAt: connection?.connected_at || null,
-        lastVerified: connection?.last_verified || null
-      };
-    });
-
-    const connectedCount = Object.values(connectionStatus).filter(s => s.connected).length;
-
-    return {
-      success: true,
-      connections: connectionStatus,
-      summary: {
-        connectedCount,
-        totalPlatforms: platforms.length,
-        connectionRate: Math.round((connectedCount / platforms.length) * 100)
-      },
-      n8nAvailable: false // fallback mode
-    };
-
-  } catch (error) {
-    console.error('Fallback connection check error:', error);
-    return {
-      success: false,
-      error: error.message,
-      connections: {},
-      summary: { connectedCount: 0, totalPlatforms: 6, connectionRate: 0 },
-      n8nAvailable: false
-    };
-  }
-};
-
-/**
- * Send a post to n8n for processing
- */
-export const sendPostToN8n = async (postData, userId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/post-to-social`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        postData,
-        userId
-      })
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        queueId: data.queueId,
-        platforms: data.platforms,
-        message: data.message,
-        n8nResponse: data.n8nResponse
-      };
-    } else {
-      throw new Error(data.error || 'Failed to send post to n8n');
-    }
-
-  } catch (error) {
-    console.error('Send post to n8n error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-/**
- * Update connection status (called by n8n webhook)
- */
-export const updateConnectionStatus = async (userId, platform, action, connectionData = {}) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/update-connection`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        userId,
-        platform,
-        action,
-        ...connectionData
-      })
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        message: data.message,
-        platform: data.platform,
-        action: data.action
-      };
-    } else {
-      throw new Error(data.error || 'Failed to update connection');
-    }
-
-  } catch (error) {
-    console.error('Update connection status error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-/**
- * Get pending posts from queue
- */
-export const getQueuedPosts = async (userId, status = 'queued') => {
-  try {
-    const { data: posts, error } = await supabase
-      .from('n8n_post_queue')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', status)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      posts: posts || []
-    };
-
-  } catch (error) {
-    console.error('Get queued posts error:', error);
-    return {
-      success: false,
-      error: error.message,
-      posts: []
-    };
-  }
-};
-
-/**
- * Retry a failed post
- */
-export const retryPost = async (queueId, userId) => {
-  try {
-    // Get the post data
-    const { data: post, error: fetchError } = await supabase
-      .from('n8n_post_queue')
-      .select('*')
-      .eq('id', queueId)
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchError || !post) {
-      throw new Error('Post not found');
-    }
-
-    // Reset status and increment retry count
-    const { error: updateError } = await supabase
-      .from('n8n_post_queue')
-      .update({
-        status: 'queued',
-        retry_count: (post.retry_count || 0) + 1,
-        error_message: null,
-        n8n_response: null,
-        updated_at: new Date()
-      })
-      .eq('id', queueId);
-
-    if (updateError) throw updateError;
-
-    // Send to n8n again
-    return await sendPostToN8n(post.post_data.post, userId);
-
-  } catch (error) {
-    console.error('Retry post error:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-/**
- * Check if n8n integration is configured
+ * Check if n8n integration is configured (for optional features)
  */
 export const isN8nConfigured = () => {
   return !!(
     import.meta.env.VITE_N8N_WEBHOOK_URL ||
-    import.meta.env.VITE_N8N_CONNECTION_WEBHOOK_URL
+    import.meta.env.VITE_N8N_ANALYTICS_WEBHOOK_URL
   );
 };
 
@@ -251,12 +31,154 @@ export const isN8nConfigured = () => {
  */
 export const getN8nStatus = () => {
   const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
-  const connectionWebhookUrl = import.meta.env.VITE_N8N_CONNECTION_WEBHOOK_URL;
+  const analyticsWebhookUrl = import.meta.env.VITE_N8N_ANALYTICS_WEBHOOK_URL;
 
   return {
-    configured: !!(webhookUrl && connectionWebhookUrl),
+    configured: !!(webhookUrl || analyticsWebhookUrl),
     webhookUrl: !!webhookUrl,
-    connectionWebhookUrl: !!connectionWebhookUrl,
+    analyticsWebhookUrl: !!analyticsWebhookUrl,
     apiBaseUrl: API_BASE_URL
+  };
+};
+
+/**
+ * OPTIONAL: Fetch analytics from platforms via n8n
+ * Requires user to grant OAuth access to platforms
+ */
+export const fetchAnalyticsViaN8n = async (userId, platforms, dateRange = '7d') => {
+  const analyticsWebhookUrl = import.meta.env.VITE_N8N_ANALYTICS_WEBHOOK_URL;
+  
+  if (!analyticsWebhookUrl) {
+    return {
+      success: false,
+      error: 'Analytics webhook not configured'
+    };
+  }
+
+  try {
+    const response = await fetch(analyticsWebhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId,
+        platforms,
+        dateRange,
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        analytics: data.analytics
+      };
+    } else {
+      throw new Error(data.error || 'Failed to fetch analytics');
+    }
+
+  } catch (error) {
+    console.error('Fetch analytics error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+/**
+ * OPTIONAL: Trigger notification workflow
+ */
+export const triggerNotification = async (userId, notificationType, data) => {
+  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+  
+  if (!webhookUrl) {
+    return {
+      success: false,
+      error: 'Notification webhook not configured'
+    };
+  }
+
+  try {
+    const response = await fetch(`${webhookUrl}/notifications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId,
+        type: notificationType,
+        data,
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      return {
+        success: true,
+        data: result
+      };
+    } else {
+      throw new Error(result.error || 'Failed to trigger notification');
+    }
+
+  } catch (error) {
+    console.error('Notification error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+/**
+ * DEPRECATED: These functions are no longer used since we use deep linking
+ * Kept for backward compatibility but will return mock responses
+ */
+
+export const sendPostToN8n = async () => {
+  console.warn('[Deprecated] sendPostToN8n is no longer used. Huttle AI uses deep linking for posting.');
+  return {
+    success: false,
+    error: 'n8n posting is deprecated. Use deep linking via PublishModal instead.'
+  };
+};
+
+export const checkConnectionStatus = async () => {
+  console.warn('[Deprecated] checkConnectionStatus is no longer used. Deep linking does not require connections.');
+  return {
+    success: true,
+    connections: {},
+    summary: { connectedCount: 0, totalPlatforms: 5, connectionRate: 0 },
+    n8nAvailable: false
+  };
+};
+
+export const updateConnectionStatus = async () => {
+  console.warn('[Deprecated] updateConnectionStatus is no longer used. Deep linking does not require connections.');
+  return {
+    success: true,
+    message: 'Connection management is deprecated. Deep linking does not require connections.'
+  };
+};
+
+export const getQueuedPosts = async () => {
+  console.warn('[Deprecated] getQueuedPosts is no longer used. Posts are not queued for n8n.');
+  return {
+    success: true,
+    posts: []
+  };
+};
+
+export const retryPost = async () => {
+  console.warn('[Deprecated] retryPost is no longer used. Use deep linking via PublishModal instead.');
+  return {
+    success: false,
+    error: 'Post retry is deprecated. Use deep linking via PublishModal instead.'
   };
 };

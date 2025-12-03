@@ -1,19 +1,26 @@
-import { useState } from 'react';
-import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload } from 'lucide-react';
-import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, LinkedInIcon, YouTubeIcon } from './SocialIcons';
+import { useState, useContext, useEffect } from 'react';
+import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
+import { BrandContext } from '../context/BrandContext';
 import { generate12HourTimeOptions } from '../utils/timeFormatter';
+import { generateCaption, generateHashtags, generateVisualIdeas, generateCaptionVariations } from '../services/grokAPI';
+import EngagementPredictor from './EngagementPredictor';
+import VoiceInput from './VoiceInput';
+import SmartTimeSuggestion from './SmartTimeSuggestion';
+import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
-export default function CreatePostModal({ isOpen, onClose }) {
+export default function CreatePostModal({ isOpen, onClose, preselectedDate = null }) {
   const { schedulePost } = useContent();
   const { showToast } = useToast();
+  const { brandData } = useContext(BrandContext);
+  const { platforms } = usePreferredPlatforms();
   const [useAI, setUseAI] = useState(false);
   const [postData, setPostData] = useState({
     title: '',
     platforms: [],
     contentType: '',
-    scheduledDate: '',
+    scheduledDate: preselectedDate || '',
     scheduledTime: '',
     caption: '',
     hashtags: '',
@@ -22,20 +29,21 @@ export default function CreatePostModal({ isOpen, onClose }) {
     videoPrompt: '',
     media: []
   });
+
+  // Update scheduledDate when preselectedDate changes
+  useEffect(() => {
+    if (preselectedDate && isOpen) {
+      setPostData(prev => ({ ...prev, scheduledDate: preselectedDate }));
+    }
+  }, [preselectedDate, isOpen]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
   const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
+  const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
+  const [captionVariations, setCaptionVariations] = useState([]);
+  const [showVariations, setShowVariations] = useState(false);
 
   if (!isOpen) return null;
-
-  const platforms = [
-    { name: 'Instagram', icon: InstagramIcon, color: 'bg-pink-500' },
-    { name: 'Facebook', icon: FacebookIcon, color: 'bg-blue-600' },
-    { name: 'TikTok', icon: TikTokIcon, color: 'bg-black' },
-    { name: 'YouTube', icon: YouTubeIcon, color: 'bg-red-600' },
-    { name: 'X', icon: TwitterXIcon, color: 'bg-black' },
-    { name: 'LinkedIn', icon: LinkedInIcon, color: 'bg-blue-700' }
-  ];
 
   const contentTypes = [
     { name: 'Text Post', icon: Type },
@@ -72,20 +80,53 @@ export default function CreatePostModal({ isOpen, onClose }) {
     
     setIsGenerating(true);
     
-    // Note: Currently using simulated AI generation for demo purposes
-    // In production, this should call grokAPI.generateCaption() with proper context
-    setTimeout(() => {
+    try {
+      // Generate caption with brand context
+      const platform = postData.platforms.length > 0 ? postData.platforms[0] : 'social media';
+      const captionResult = await generateCaption(
+        { topic: postData.title, platform },
+        brandData
+      );
+
+      // Generate hashtags with brand context
+      const hashtagResult = await generateHashtags(postData.title, brandData);
+
+      // Generate visual ideas with brand context
+      const visualResult = await generateVisualIdeas(postData.title, brandData);
+
+      // Parse visual ideas for image and video prompts
+      let imagePrompt = '';
+      let videoPrompt = '';
+      
+      if (visualResult.success && visualResult.ideas) {
+        const ideas = visualResult.ideas;
+        // Extract first idea for image, second for video (if available)
+        const ideaSections = ideas.split(/\d+\./);
+        if (ideaSections.length > 1) {
+          imagePrompt = ideaSections[1]?.trim().substring(0, 500) || '';
+        }
+        if (ideaSections.length > 2) {
+          videoPrompt = ideaSections[2]?.trim().substring(0, 500) || '';
+        }
+      }
+
+      // Update post data with AI-generated content
       setPostData(prev => ({
         ...prev,
-        caption: `Check out this amazing ${prev.title}! 🚀\n\nDiscover how you can elevate your experience with our latest updates. Tap the link in bio to learn more!\n\nWhat are your thoughts? Drop a comment below! 👇`,
-        hashtags: '#innovation #trending #socialmedia #contentcreator #digitalmarketing',
-        keywords: 'trending, viral, engagement, community',
-        imagePrompt: `Create a vibrant, eye-catching image featuring ${prev.title}. Modern design, professional quality.`,
-        videoPrompt: `Short-form video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
+        caption: captionResult.success ? captionResult.caption : `Check out this amazing ${prev.title}! 🚀\n\nDiscover how you can elevate your experience. What are your thoughts? Drop a comment below! 👇`,
+        hashtags: hashtagResult.success ? hashtagResult.hashtags.split('\n')[0] : '#content #socialmedia #engagement',
+        keywords: postData.title.split(' ').slice(0, 5).join(', '),
+        imagePrompt: imagePrompt || `Create a vibrant, eye-catching image featuring ${prev.title}. Modern design, professional quality.`,
+        videoPrompt: videoPrompt || `Short-form video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
       }));
+
+      showToast('AI content generated with your brand voice!', 'success');
+    } catch (error) {
+      console.error('AI generation error:', error);
+      showToast('Failed to generate AI content. Please try again.', 'error');
+    } finally {
       setIsGenerating(false);
-      showToast('AI content generated successfully!', 'success');
-    }, 1500);
+    }
   };
 
   const handleSuggestImagePrompt = async () => {
@@ -96,16 +137,36 @@ export default function CreatePostModal({ isOpen, onClose }) {
     
     setIsGeneratingImagePrompt(true);
     
-    // Note: Currently using simulated AI generation for demo purposes
-    // In production, this should call grokAPI.generateImagePrompt() with proper context
-    setTimeout(() => {
-      setPostData(prev => ({
-        ...prev,
-        imagePrompt: `Create a vibrant, eye-catching image featuring ${prev.title || 'your content'}. Modern design, professional quality, engaging composition. Consider using bold colors, dynamic layouts, and clear focal points that align with ${prev.caption ? 'the caption theme' : 'your brand identity'}.`
-      }));
+    try {
+      const result = await generateVisualIdeas(
+        `Image concept for: ${postData.title}. ${postData.caption ? `Context: ${postData.caption.substring(0, 200)}` : ''}`,
+        brandData
+      );
+
+      if (result.success && result.ideas) {
+        // Extract the first idea
+        const ideas = result.ideas.split(/\d+\./);
+        const firstIdea = ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
+        
+        setPostData(prev => ({
+          ...prev,
+          imagePrompt: firstIdea
+        }));
+        showToast('Image concept generated with your brand style!', 'success');
+      } else {
+        // Fallback
+        setPostData(prev => ({
+          ...prev,
+          imagePrompt: `Create a vibrant, eye-catching image featuring ${prev.title || 'your content'}. Modern design, professional quality, engaging composition that aligns with your brand identity.`
+        }));
+        showToast('Image concept generated!', 'success');
+      }
+    } catch (error) {
+      console.error('Image prompt generation error:', error);
+      showToast('Failed to generate image concept', 'error');
+    } finally {
       setIsGeneratingImagePrompt(false);
-      showToast('Image concept generated successfully!', 'success');
-    }, 1200);
+    }
   };
 
   const handleSuggestVideoPrompt = async () => {
@@ -116,16 +177,86 @@ export default function CreatePostModal({ isOpen, onClose }) {
     
     setIsGeneratingVideoPrompt(true);
     
-    // Note: Currently using simulated AI generation for demo purposes
-    // In production, this should call grokAPI.generateVideoPrompt() with proper context
-    setTimeout(() => {
-      setPostData(prev => ({
-        ...prev,
-        videoPrompt: `Short-form video showcasing ${prev.title || 'your content'}. 15-30 seconds duration, dynamic transitions, upbeat music. Focus on visual storytelling that captures attention quickly, includes engaging motion graphics, and delivers key message within first 3 seconds. Perfect for ${prev.platforms && prev.platforms.length > 0 ? prev.platforms.join(', ') : 'social media'} platforms.`
-      }));
+    try {
+      const result = await generateVisualIdeas(
+        `Video concept for: ${postData.title}. Target platforms: ${postData.platforms.length > 0 ? postData.platforms.join(', ') : 'social media'}. ${postData.caption ? `Context: ${postData.caption.substring(0, 200)}` : ''}`,
+        brandData
+      );
+
+      if (result.success && result.ideas) {
+        // Extract the second idea (or first if only one)
+        const ideas = result.ideas.split(/\d+\./);
+        const videoIdea = ideas[2]?.trim().substring(0, 500) || ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
+        
+        setPostData(prev => ({
+          ...prev,
+          videoPrompt: videoIdea
+        }));
+        showToast('Video concept generated with your brand style!', 'success');
+      } else {
+        // Fallback
+        setPostData(prev => ({
+          ...prev,
+          videoPrompt: `Short-form video showcasing ${prev.title || 'your content'}. 15-30 seconds duration, dynamic transitions, upbeat music. Perfect for ${prev.platforms && prev.platforms.length > 0 ? prev.platforms.join(', ') : 'social media'} platforms.`
+        }));
+        showToast('Video concept generated!', 'success');
+      }
+    } catch (error) {
+      console.error('Video prompt generation error:', error);
+      showToast('Failed to generate video concept', 'error');
+    } finally {
       setIsGeneratingVideoPrompt(false);
-      showToast('Video concept generated successfully!', 'success');
-    }, 1200);
+    }
+  };
+
+  // Handle voice input content
+  const handleVoiceContent = (content) => {
+    setPostData(prev => ({
+      ...prev,
+      caption: content.caption || prev.caption,
+      hashtags: content.hashtags || prev.hashtags
+    }));
+  };
+
+  // Generate A/B caption variations
+  const handleGenerateVariations = async () => {
+    if (!postData.caption || postData.caption.length < 10) {
+      showToast('Please write a caption first (at least 10 characters)', 'error');
+      return;
+    }
+
+    setIsGeneratingVariations(true);
+    setCaptionVariations([]);
+    setShowVariations(true);
+
+    try {
+      const result = await generateCaptionVariations(postData.caption, brandData, 3);
+      
+      if (result.success && result.variations.length > 0) {
+        setCaptionVariations(result.variations);
+        showToast('Generated 3 caption variations!', 'success');
+      } else {
+        showToast('Failed to generate variations', 'error');
+        setShowVariations(false);
+      }
+    } catch (error) {
+      console.error('Variation generation error:', error);
+      showToast('Failed to generate variations', 'error');
+      setShowVariations(false);
+    } finally {
+      setIsGeneratingVariations(false);
+    }
+  };
+
+  // Select a variation
+  const handleSelectVariation = (variation) => {
+    setPostData(prev => ({
+      ...prev,
+      caption: variation.caption
+    }));
+    setShowVariations(false);
+    setCaptionVariations([]);
+    showToast('Caption updated!', 'success');
   };
   
   const handleMediaUpload = (e) => {
@@ -215,8 +346,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
               <div className="flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-huttle-primary" />
                 <div>
-                  <h3 className="font-semibold text-gray-900">AI Assist</h3>
-                  <p className="text-sm text-gray-600">Auto-fill everything with AI</p>
+                  <h3 className="font-semibold text-gray-900">
+                    <span className="mr-1">AI</span>
+                    <span>Assist</span>
+                  </h3>
+                  <p className="text-sm text-gray-600">Auto-fill with your brand voice</p>
                 </div>
               </div>
               <button
@@ -235,7 +369,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Sparkles className="w-4 h-4" />
-                {isGenerating ? 'Generating...' : 'Generate with AI'}
+                {isGenerating ? 'Generating with Brand Voice...' : 'Generate with AI'}
               </button>
             )}
           </div>
@@ -296,6 +430,18 @@ export default function CreatePostModal({ isOpen, onClose }) {
             </div>
           </div>
 
+          {/* Smart Time Suggestions */}
+          {postData.platforms.length > 0 && (
+            <SmartTimeSuggestion
+              platforms={postData.platforms}
+              contentType={postData.contentType}
+              currentTime={postData.scheduledTime}
+              currentDate={postData.scheduledDate}
+              onSelectTime={(time) => setPostData(prev => ({ ...prev, scheduledTime: time }))}
+              onSelectDate={(date) => setPostData(prev => ({ ...prev, scheduledDate: date }))}
+            />
+          )}
+
           {/* Scheduling */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -314,6 +460,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Clock className="w-4 h-4 inline mr-2" />
                 Scheduled Time
+                {postData.scheduledTime && postData.scheduledTime.trim() !== '' && (
+                  <span className="ml-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded animate-fadeIn">
+                    ✓ Auto-filled from suggestion
+                  </span>
+                )}
               </label>
               <select
                 value={postData.scheduledTime}
@@ -399,16 +550,79 @@ export default function CreatePostModal({ isOpen, onClose }) {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Content & Keywords</h3>
             
+            {/* Voice Input */}
+            <VoiceInput
+              onPolishedContent={handleVoiceContent}
+              platform={postData.platforms.length > 0 ? postData.platforms[0] : 'social media'}
+              autoPolish={true}
+            />
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Caption</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">Caption</label>
+                <button
+                  type="button"
+                  onClick={handleGenerateVariations}
+                  disabled={isGeneratingVariations || !postData.caption || postData.caption.length < 10}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {isGeneratingVariations ? 'Generating...' : 'A/B Variations'}
+                </button>
+              </div>
               <textarea
                 value={postData.caption}
                 onChange={(e) => setPostData({ ...postData, caption: e.target.value })}
-                placeholder="Write your caption..."
+                placeholder="Write your caption or use voice input above..."
                 rows="4"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
               />
             </div>
+
+            {/* A/B Variations Display */}
+            {showVariations && (
+              <div className="p-4 bg-purple-50 rounded-xl border border-purple-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-purple-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Caption Variations
+                  </h4>
+                  <button
+                    onClick={() => setShowVariations(false)}
+                    className="text-purple-600 hover:text-purple-800 text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+                
+                {isGeneratingVariations ? (
+                  <div className="flex items-center justify-center gap-2 py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                    <span className="text-sm text-purple-700">Generating variations...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {captionVariations.map((variation) => (
+                      <div
+                        key={variation.id}
+                        className="bg-white p-3 rounded-lg border border-purple-200 hover:border-purple-400 transition-colors cursor-pointer group"
+                        onClick={() => handleSelectVariation(variation)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
+                            {variation.hookType}
+                          </span>
+                          <span className="text-xs text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to use
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800 line-clamp-3">{variation.caption}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Hashtags</label>
@@ -432,6 +646,17 @@ export default function CreatePostModal({ isOpen, onClose }) {
               />
             </div>
           </div>
+
+          {/* Engagement Predictor */}
+          {(postData.caption || postData.title) && (
+            <EngagementPredictor
+              caption={postData.caption}
+              hashtags={postData.hashtags}
+              title={postData.title}
+              platforms={postData.platforms}
+              autoAnalyze={false}
+            />
+          )}
 
           {/* Media Concepts */}
           <div className="space-y-4">
@@ -509,4 +734,3 @@ export default function CreatePostModal({ isOpen, onClose }) {
     </div>
   );
 }
-

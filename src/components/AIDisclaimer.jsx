@@ -202,7 +202,7 @@ export function HowWePredictModal({ isOpen, onClose }) {
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-green-600 font-bold mt-1">•</span>
-                <span><strong>Platform-Specific:</strong> Different algorithms for Instagram, TikTok, LinkedIn, etc.</span>
+                <span><strong>Platform-Specific:</strong> Different algorithms for Instagram, TikTok, X (Twitter), etc.</span>
               </p>
             </div>
           </div>
@@ -229,41 +229,6 @@ export function HowWePredictModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* Best Practices */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-600 font-bold">
-                4
-              </span>
-              Get the Most Out of AI
-            </h3>
-            <div className="ml-10 space-y-2 text-sm text-gray-700">
-              <p className="flex items-start gap-2">
-                <span className="text-purple-600 font-bold">✓</span>
-                <span>Use predictions as inspiration, not gospel. Add your unique spin.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-purple-600 font-bold">✓</span>
-                <span>Test multiple variations. A/B test hooks, CTAs, and posting times.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-purple-600 font-bold">✓</span>
-                <span>Combine AI insights with your industry expertise and audience feedback.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-purple-600 font-bold">✓</span>
-                <span>Update your Brand Voice regularly to improve AI personalization.</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Footer CTA */}
-          <div className="bg-gradient-to-r from-huttle-primary/10 to-blue-100 rounded-lg p-4 border border-huttle-primary/20">
-            <p className="text-sm text-gray-800">
-              <strong>Questions or feedback?</strong> We're constantly improving our AI models. 
-              Reach out to us at <a href="mailto:support@huttle.ai" className="text-huttle-primary hover:underline font-semibold">support@huttle.ai</a>
-            </p>
-          </div>
         </div>
 
         {/* Footer */}

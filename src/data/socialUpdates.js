@@ -8,7 +8,7 @@
  * Last Updated: October 30, 2024
  */
 
-import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, LinkedInIcon, YouTubeIcon } from '../components/SocialIcons';
+import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 
 export const socialUpdates = [
   // October 2024 - Week 4
@@ -36,33 +36,6 @@ export const socialUpdates = [
     ],
     affectedUsers: 'All Instagram creators and businesses',
     timeline: 'Rolling out globally through November 2024'
-  },
-
-  // October 2024 - Week 2
-  {
-    id: 'oct-2024-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'October 2024',
-    title: 'LinkedIn Enhances Creator Mode Features',
-    description: 'New analytics dashboard and content recommendations for creators using Creator Mode.',
-    link: 'https://www.linkedin.com/',
-    impact: 'medium',
-    keyTakeaways: [
-      'Improved analytics showing follower growth patterns',
-      'Content recommendations based on audience interests',
-      'Enhanced newsletter features with better discovery',
-      'New badge highlighting active creators'
-    ],
-    actionItems: [
-      'Enable Creator Mode if not already active',
-      'Review new analytics to identify top-performing content',
-      'Experiment with recommended posting times',
-      'Consider starting a LinkedIn newsletter'
-    ],
-    affectedUsers: 'LinkedIn creators and thought leaders',
-    timeline: 'Available now globally'
   },
 
   // September 2024 - Week 4
@@ -144,33 +117,6 @@ export const socialUpdates = [
     ],
     affectedUsers: 'X Premium subscribers ($8-16/month)',
     timeline: 'Active now, new features rolling out monthly'
-  },
-
-  // August 2024 - Week 2
-  {
-    id: 'aug-2024-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'August 2024',
-    title: 'LinkedIn Launches AI Writing Assistant',
-    description: 'Premium members get access to AI-powered writing suggestions for posts and articles.',
-    link: 'https://www.linkedin.com/business/talent/blog/product-tips/new-ai-powered-features',
-    impact: 'medium',
-    keyTakeaways: [
-      'AI suggests improvements to post engagement',
-      'Tone and style recommendations based on audience',
-      'Automated hashtag suggestions',
-      'Grammar and clarity enhancements'
-    ],
-    actionItems: [
-      'Test AI suggestions on your next post',
-      'Compare engagement before and after using AI',
-      'Use as a starting point, not a replacement',
-      'Maintain your authentic voice'
-    ],
-    affectedUsers: 'LinkedIn Premium subscribers',
-    timeline: 'Available now for Premium members'
   },
 
   // July 2024 - Week 4
@@ -308,33 +254,6 @@ export const socialUpdates = [
     timeline: 'Expansion complete by June 2024'
   },
 
-  // May 2024 - Week 2
-  {
-    id: 'may-2024-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'May 2024',
-    title: 'LinkedIn Introduces Video Carousels',
-    description: 'New format allows multiple videos in a single post for better storytelling.',
-    link: 'https://www.linkedin.com/',
-    impact: 'low',
-    keyTakeaways: [
-      'Up to 5 videos per carousel post',
-      'Great for case studies and testimonials',
-      'Higher engagement than single videos',
-      'Swipeable format familiar from other platforms'
-    ],
-    actionItems: [
-      'Test video carousel for client testimonials',
-      'Create series-based content',
-      'Keep individual videos under 1 minute',
-      'Monitor swipe-through rates'
-    ],
-    affectedUsers: 'All LinkedIn users',
-    timeline: 'Available now'
-  },
-
   // April 2024 - Week 4
   {
     id: 'apr-2024-4',
@@ -440,33 +359,6 @@ export const socialUpdates = [
       'Engage between video uploads'
     ],
     affectedUsers: 'YouTube creators with 500+ subscribers',
-    timeline: 'Available now'
-  },
-
-  // February 2024 - Week 4
-  {
-    id: 'feb-2024-4',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'February 2024',
-    title: 'LinkedIn Introduces Newsletter Growth Tools',
-    description: 'Enhanced discovery and recommendation features for newsletter creators.',
-    link: 'https://www.linkedin.com/business/marketing/blog/content-marketing/newsletter-growth-tools',
-    impact: 'medium',
-    keyTakeaways: [
-      'Newsletters appear in LinkedIn News recommendations',
-      'Improved discovery for new subscribers',
-      'Analytics showing reader engagement',
-      'Integration with LinkedIn articles'
-    ],
-    actionItems: [
-      'Start a LinkedIn newsletter if not already',
-      'Optimize newsletter description for discovery',
-      'Cross-promote newsletter in regular posts',
-      'Analyze reader engagement patterns'
-    ],
-    affectedUsers: 'LinkedIn newsletter creators',
     timeline: 'Available now'
   },
 
@@ -576,33 +468,6 @@ export const socialUpdates = [
     ],
     affectedUsers: 'YouTube creators in YPP',
     timeline: 'Active now globally'
-  },
-
-  // December 2023 - Week 2
-  {
-    id: 'dec-2023-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'December 2023',
-    title: 'LinkedIn Collaborative Articles Feature',
-    description: 'AI-generated articles where experts can contribute insights and earn recognition.',
-    link: 'https://www.linkedin.com/',
-    impact: 'low',
-    keyTakeaways: [
-      'Contribute expertise to AI-generated articles',
-      'Build credibility as subject matter expert',
-      'Earn "Top Voice" badges for contributions',
-      'Increases profile visibility'
-    ],
-    actionItems: [
-      'Find relevant collaborative articles in your niche',
-      'Add valuable insights and expertise',
-      'Aim for Top Voice recognition',
-      'Use as supplementary content strategy'
-    ],
-    affectedUsers: 'All LinkedIn users',
-    timeline: 'Available now'
   },
 
   // November 2023 - Week 4
@@ -740,33 +605,6 @@ export const socialUpdates = [
     timeline: 'Testing phase - gradual rollout'
   },
 
-  // September 2023 - Week 2
-  {
-    id: 'sept-2023-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'September 2023',
-    title: 'LinkedIn Expands Video Upload Length',
-    description: 'Video uploads increased to 30 minutes for all users.',
-    link: 'https://www.linkedin.com/',
-    impact: 'low',
-    keyTakeaways: [
-      'Upload videos up to 30 minutes',
-      'Better for webinars and presentations',
-      'Native video preferred over YouTube links',
-      'Keep most content under 3 minutes for engagement'
-    ],
-    actionItems: [
-      'Upload longer presentations directly',
-      'Repurpose webinar content',
-      'Test native video vs external links',
-      'Monitor completion rates on longer content'
-    ],
-    affectedUsers: 'All LinkedIn users',
-    timeline: 'Available now'
-  },
-
   // August 2023 - Week 4
   {
     id: 'aug-2023-4',
@@ -900,33 +738,6 @@ export const socialUpdates = [
     ],
     affectedUsers: 'All YouTube creators',
     timeline: 'Rolling out globally'
-  },
-
-  // June 2023 - Week 2
-  {
-    id: 'june-2023-2',
-    platform: 'LinkedIn',
-    icon: LinkedInIcon,
-    color: 'bg-blue-700',
-    date: 'June 2023',
-    title: 'LinkedIn Introduces Focused Inbox',
-    description: 'New inbox organization helps users manage messages more effectively.',
-    link: 'https://www.linkedin.com/',
-    impact: 'low',
-    keyTakeaways: [
-      'Messages automatically categorized',
-      'Focus on important conversations',
-      'Reduces inbox clutter',
-      'Similar to Gmail\'s approach'
-    ],
-    actionItems: [
-      'Be strategic with connection requests',
-      'Personalize messages to avoid filtering',
-      'Build genuine relationships',
-      'Focus on quality over quantity in outreach'
-    ],
-    affectedUsers: 'All LinkedIn users',
-    timeline: 'Available now'
   },
 
   // May 2023 - Week 4

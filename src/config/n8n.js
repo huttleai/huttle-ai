@@ -1,19 +1,36 @@
 /**
- * n8n Webhook Integration
+ * n8n Webhook Integration (OPTIONAL)
  * 
- * Used for:
+ * NOTE: n8n is NOT used for posting to social media.
+ * Huttle AI uses deep linking instead (see PublishModal.jsx).
+ * 
+ * These functions are OPTIONAL and can be used for:
  * - Trend alerts and notifications
  * - Burnout warnings
  * - Content gap reminders
  * - Scheduled workflow triggers
+ * 
+ * If you don't need these features, you can safely ignore this file.
  */
 
 const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || '';
 
 /**
- * Send trend alert to n8n
+ * Check if n8n is configured
+ */
+export function isN8nConfigured() {
+  return !!N8N_WEBHOOK_URL;
+}
+
+/**
+ * OPTIONAL: Send trend alert to n8n
  */
 export async function sendTrendAlert(userId, trendData) {
+  if (!N8N_WEBHOOK_URL) {
+    console.log('[n8n] Webhook not configured, skipping trend alert');
+    return { success: false, error: 'n8n webhook not configured' };
+  }
+
   try {
     const response = await fetch(`${N8N_WEBHOOK_URL}/trend-alert`, {
       method: 'POST',
@@ -44,9 +61,14 @@ export async function sendTrendAlert(userId, trendData) {
 }
 
 /**
- * Send burnout warning to n8n
+ * OPTIONAL: Send burnout warning to n8n
  */
 export async function sendBurnoutWarning(userId, burnoutData) {
+  if (!N8N_WEBHOOK_URL) {
+    console.log('[n8n] Webhook not configured, skipping burnout warning');
+    return { success: false, error: 'n8n webhook not configured' };
+  }
+
   try {
     const response = await fetch(`${N8N_WEBHOOK_URL}/burnout-warning`, {
       method: 'POST',
@@ -77,9 +99,14 @@ export async function sendBurnoutWarning(userId, burnoutData) {
 }
 
 /**
- * Set up scheduled trend monitoring
+ * OPTIONAL: Set up scheduled trend monitoring
  */
 export async function scheduleTrendMonitoring(userId, settings) {
+  if (!N8N_WEBHOOK_URL) {
+    console.log('[n8n] Webhook not configured, skipping schedule monitoring');
+    return { success: false, error: 'n8n webhook not configured' };
+  }
+
   try {
     const response = await fetch(`${N8N_WEBHOOK_URL}/schedule-monitoring`, {
       method: 'POST',
@@ -115,9 +142,14 @@ export async function scheduleTrendMonitoring(userId, settings) {
 }
 
 /**
- * Send content gap reminder
+ * OPTIONAL: Send content gap reminder
  */
 export async function sendContentGapReminder(userId, gapData) {
+  if (!N8N_WEBHOOK_URL) {
+    console.log('[n8n] Webhook not configured, skipping content gap reminder');
+    return { success: false, error: 'n8n webhook not configured' };
+  }
+
   try {
     const response = await fetch(`${N8N_WEBHOOK_URL}/content-gap-reminder`, {
       method: 'POST',
@@ -148,9 +180,14 @@ export async function sendContentGapReminder(userId, gapData) {
 }
 
 /**
- * Trigger automated workflow
+ * OPTIONAL: Trigger automated workflow
  */
 export async function triggerWorkflow(workflowId, payload) {
+  if (!N8N_WEBHOOK_URL) {
+    console.log('[n8n] Webhook not configured, skipping workflow trigger');
+    return { success: false, error: 'n8n webhook not configured' };
+  }
+
   try {
     const response = await fetch(`${N8N_WEBHOOK_URL}/trigger/${workflowId}`, {
       method: 'POST',
@@ -177,4 +214,3 @@ export async function triggerWorkflow(workflowId, payload) {
     };
   }
 }
-

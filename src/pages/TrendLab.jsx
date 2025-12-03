@@ -1,7 +1,7 @@
 import { useState, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, Download, TrendingUp, FastForward, Eye, Lightbulb, Users, Shuffle, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Lock, Sparkles, ArrowRight, Zap } from 'lucide-react';
+import { Search, Download, TrendingUp, FastForward, Eye, Lightbulb, Users, Shuffle, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Lock, Sparkles, ArrowRight, Zap, Target, Loader2 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RemixContentDisplay from '../components/RemixContentDisplay';
@@ -14,7 +14,7 @@ import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal, getToastDis
 export default function TrendLab() {
   const { brandData } = useContext(BrandContext);
   const { addToast: showToast } = useToast();
-  const { checkFeatureAccess, getUpgradeMessage, TIERS } = useSubscription();
+  const { checkFeatureAccess, getUpgradeMessage, TIERS, userTier } = useSubscription();
   const [searchQuery, setSearchQuery] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResults, setScanResults] = useState(null);
@@ -44,6 +44,11 @@ export default function TrendLab() {
   const [remixInput, setRemixInput] = useState('');
   const [remixOutput, setRemixOutput] = useState(null);
   
+  // Competitor inspiration states
+  const [competitorTopic, setCompetitorTopic] = useState('');
+  const [competitorInsights, setCompetitorInsights] = useState(null);
+  const [isLoadingCompetitor, setIsLoadingCompetitor] = useState(false);
+  
   // Mobile swipe functionality
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
@@ -58,11 +63,11 @@ export default function TrendLab() {
       setIsScanning(false);
       setScanResults({
         trends: [
-          { name: 'AI-Powered Content Creation', score: 95, velocity: '+125%', platforms: ['LinkedIn', 'X', 'Instagram'] },
-          { name: 'Sustainable Business Practices', score: 88, velocity: '+89%', platforms: ['LinkedIn', 'Facebook'] },
-          { name: 'Remote Team Collaboration', score: 82, velocity: '+67%', platforms: ['LinkedIn', 'YouTube'] },
+          { name: 'AI-Powered Content Creation', score: 95, velocity: '+125%', platforms: ['X', 'Instagram'] },
+          { name: 'Sustainable Business Practices', score: 88, velocity: '+89%', platforms: ['Facebook'] },
+          { name: 'Remote Team Collaboration', score: 82, velocity: '+67%', platforms: ['YouTube'] },
           { name: 'Personal Branding Tips', score: 79, velocity: '+54%', platforms: ['Instagram', 'TikTok', 'X'] },
-          { name: 'Industry Thought Leadership', score: 76, velocity: '+42%', platforms: ['LinkedIn'] },
+          { name: 'Industry Thought Leadership', score: 76, velocity: '+42%', platforms: ['X'] },
         ],
         timestamp: new Date().toLocaleString(),
         niche: brandData?.niche || 'your industry'
@@ -85,10 +90,10 @@ export default function TrendLab() {
 
     setIsLoadingForecaster(true);
     try {
-      // Get trend forecast from Perplexity API
+      // Get trend forecast from Perplexity API with full brand context
       const perplexityResult = await forecastTrends(
-        brandData.niche, 
-        '7 days starting from October 29, 2025'
+        brandData, 
+        '7 days'
       );
 
       if (perplexityResult.success) {
@@ -155,7 +160,7 @@ export default function TrendLab() {
         },
         engagement: {
           peakTimes: ['Weekdays 7-9 PM', 'Weekends 10 AM-12 PM'],
-          bestPlatforms: ['Instagram', 'LinkedIn', 'TikTok'],
+          bestPlatforms: ['Instagram', 'X', 'TikTok'],
           avgEngagementRate: '4.2%',
         },
         preferences: {
@@ -184,7 +189,7 @@ export default function TrendLab() {
       // Use Grok API to remix content
       const result = await generateTrendIdeas(
         brandData,
-        `Remix this trending content for my brand: "${remixInput}". Adapt it to match my ${brandData?.brandVoice || 'engaging'} voice and create 3 variations for different platforms (Instagram, LinkedIn, TikTok).`
+        `Remix this trending content for my brand: "${remixInput}". Adapt it to match my ${brandData?.brandVoice || 'engaging'} voice and create 3 variations for different platforms (Instagram, X (Twitter), TikTok).`
       );
 
       if (result.success) {
@@ -199,6 +204,73 @@ export default function TrendLab() {
     } finally {
       setLoadingStates(prev => ({ ...prev, remixEngine: false }));
     }
+  };
+
+  // Competitor Content Inspiration Handler
+  const handleCompetitorInspiration = async () => {
+    // Check if user has access (Essentials or Pro only)
+    if (userTier === TIERS.FREE) {
+      setUpgradeFeature('competitorInspiration');
+      setShowUpgradeModal(true);
+      showToast('Competitor Content Inspiration is available for Essentials and Pro plans', 'warning');
+      return;
+    }
+
+    if (!competitorTopic.trim()) {
+      showToast('Please enter a topic or competitor niche', 'warning');
+      return;
+    }
+
+    setIsLoadingCompetitor(true);
+    try {
+      // Use Grok API to analyze trends and generate inspired content
+      const result = await generateTrendIdeas(
+        brandData,
+        `Analyze trending content patterns in the "${competitorTopic}" niche/topic. Then create 5 unique content ideas inspired by these trends but tailored for my brand. For each idea include:
+        
+1. Content Angle: What makes it unique
+2. Hook: Attention-grabbing opening
+3. Platform: Best platform for this content
+4. Why It Works: Brief explanation of the trend psychology
+5. My Brand Twist: How to make it authentically mine
+
+Focus on content that's performing well right now and could be adapted without copying.`
+      );
+
+      if (result.success) {
+        // Parse the response into structured insights
+        const ideas = result.ideas.split(/\d+\.\s+/).filter(s => s.trim());
+        setCompetitorInsights({
+          topic: competitorTopic,
+          ideas: ideas.map((idea, index) => ({
+            id: index + 1,
+            content: idea.trim(),
+            platform: extractPlatform(idea),
+          })),
+          rawContent: result.ideas,
+          timestamp: new Date().toLocaleString()
+        });
+        showToast(`Generated ${ideas.length} inspired content ideas! ${getToastDisclaimer('general')}`, 'success');
+      } else {
+        showToast('Failed to generate competitor insights', 'error');
+      }
+    } catch (error) {
+      console.error('Error generating competitor insights:', error);
+      showToast('Error analyzing trends', 'error');
+    } finally {
+      setIsLoadingCompetitor(false);
+    }
+  };
+
+  // Helper to extract platform from idea text
+  const extractPlatform = (text) => {
+    const platforms = ['Instagram', 'TikTok', 'YouTube', 'X', 'Twitter', 'Facebook'];
+    for (const platform of platforms) {
+      if (text.toLowerCase().includes(platform.toLowerCase())) {
+        return platform === 'Twitter' ? 'X' : platform;
+      }
+    }
+    return 'Multi-platform';
   };
 
   // Loading skeleton component
@@ -251,53 +323,66 @@ export default function TrendLab() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-huttle-primary mb-2">
-          Trend Lab
-        </h1>
-        <p className="text-gray-600">
-          Discover, predict, and remix trends tailored to {brandData?.niche || 'your niche'}
-        </p>
-      </div>
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
+      
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-4 mb-2">
+            <div className="w-14 h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-xl shadow-huttle-blue/25">
+              <Lightbulb className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+                Trend Lab
+              </h1>
+              <p className="text-gray-500">
+                Discover, predict, and remix trends tailored to {brandData?.niche || 'your niche'}
+              </p>
+            </div>
+          </div>
+        </div>
 
-      {/* Search & Actions */}
-      <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mb-8">
-        <div className="flex-1 w-full relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search trends, keywords, niches..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent transition-all outline-none"
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600 whitespace-nowrap">
-            <span className="font-semibold">0/20</span> AI Gens Used
+        {/* Search & Actions */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="flex-1 w-full relative">
+            <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search trends, keywords..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 md:pl-12 pr-3 md:pr-4 py-2.5 md:py-3.5 bg-white border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-huttle-primary/10 focus:border-huttle-primary transition-all outline-none text-sm"
+            />
           </div>
-          <button className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
+            <div className="flex-1 md:flex-none px-3 md:px-4 py-2 md:py-2.5 bg-white rounded-xl border border-gray-200 shadow-soft">
+              <span className="text-xs md:text-sm font-semibold text-gray-600">
+                <span className="text-gray-900 font-bold">0/20</span> <span className="hidden xs:inline">AI Gens</span>
+              </span>
+            </div>
+            <button className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 btn-secondary text-sm">
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Main Trend Radar Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-8 mb-6 hover:shadow-md transition-all">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-full bg-cyan-50 flex items-center justify-center flex-shrink-0">
-            <Lightbulb className="w-6 h-6 text-huttle-primary" />
+        {/* Main Trend Radar Section */}
+        <div className="card p-4 md:p-6 lg:p-8 mb-6">
+          <div className="flex items-start gap-3 md:gap-4 mb-4 md:mb-6">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-huttle-primary/20">
+              <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg md:text-xl font-display font-bold text-gray-900 mb-1">Trend Radar</h2>
+              <p className="text-xs md:text-sm text-gray-500">
+                Scan emerging trends in your niche
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold mb-1">Trend Radar</h2>
-            <p className="text-sm text-gray-600">
-              Scan emerging trends in your niche
-            </p>
-          </div>
-        </div>
 
         {isScanning ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -323,27 +408,28 @@ export default function TrendLab() {
             </div>
             <div className="space-y-3">
               {scanResults.trends.map((trend, i) => (
-                <div key={i} className="p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 hover:border-huttle-primary transition-all group">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
+                <div key={i} className="p-3 md:p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 hover:border-huttle-primary transition-all group">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-2">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-1 rounded">
+                        <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-1 rounded flex-shrink-0">
                           #{i + 1}
                         </span>
-                        <h4 className="font-bold text-gray-900">{trend.name}</h4>
+                        <h4 className="font-bold text-gray-900 text-sm md:text-base truncate">{trend.name}</h4>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600 mt-2">
-                        <span className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs text-gray-600 mt-2">
+                        <span className="flex items-center gap-1 whitespace-nowrap">
                           <TrendingUp className="w-3 h-3 text-green-500" />
-                          <span className="font-semibold text-green-600">{trend.velocity}</span>
+                          <span className="font-semibold text-huttle-cyan">{trend.velocity}</span>
                         </span>
-                        <span>Score: <span className="font-semibold">{trend.score}/100</span></span>
-                        <span>Platforms: <span className="font-semibold">{trend.platforms.join(', ')}</span></span>
+                        <span className="whitespace-nowrap">Score: <span className="font-semibold">{trend.score}/100</span></span>
+                        <span className="hidden sm:inline">Platforms: <span className="font-semibold">{trend.platforms.join(', ')}</span></span>
+                        <span className="sm:hidden">📱 <span className="font-semibold">{trend.platforms.length}</span></span>
                       </div>
                     </div>
                     <button
                       onClick={() => showToast('Creating post from trend...', 'info')}
-                      className="px-3 py-1.5 bg-huttle-primary text-white rounded text-xs font-medium hover:bg-huttle-primary-dark transition-all opacity-0 group-hover:opacity-100"
+                      className="px-3 py-1.5 bg-huttle-primary text-white rounded text-xs font-medium hover:bg-huttle-primary-dark transition-all sm:opacity-0 sm:group-hover:opacity-100 self-start sm:self-auto flex-shrink-0"
                     >
                       Use This
                     </button>
@@ -370,6 +456,188 @@ export default function TrendLab() {
         )}
       </div>
 
+      {/* Competitor Content Inspiration Card */}
+      <div className={`bg-white rounded-xl shadow-sm border ${userTier === TIERS.FREE ? 'border-gray-300' : 'border-gray-200'} p-4 md:p-6 lg:p-8 mb-6 hover:shadow-md transition-all ${userTier === TIERS.FREE ? 'opacity-90' : ''}`}>
+        <div className="flex items-start gap-3 md:gap-4 mb-4 md:mb-6">
+          <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br ${userTier === TIERS.FREE ? 'from-gray-400 to-gray-500' : 'huttle-gradient'} flex items-center justify-center flex-shrink-0`}>
+            <Target className="w-5 h-5 md:w-6 md:h-6 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base md:text-xl font-bold mb-1 flex flex-wrap items-center gap-2">
+              <span>Competitor Content Inspiration</span>
+              {userTier === TIERS.FREE ? (
+                <span className="px-2 py-0.5 bg-gradient-to-r from-huttle-primary to-blue-500 text-white text-xs font-bold rounded-full">
+                  PAID
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 bg-huttle-cyan-light text-huttle-blue text-xs font-bold rounded-full">
+                  AI-Powered
+                </span>
+              )}
+            </h2>
+            <p className="text-xs md:text-sm text-gray-600">
+              Enter a topic or competitor niche to discover trending content patterns and get inspired ideas tailored for your brand
+            </p>
+          </div>
+        </div>
+
+        {/* Input Section */}
+        {userTier === TIERS.FREE ? (
+          <div className="mb-6">
+            <div className="bg-huttle-cyan-light rounded-lg p-4 border border-huttle-cyan/20 mb-4">
+              <p className="text-sm text-gray-700 mb-3">
+                <strong>Unlock Competitor Content Inspiration</strong> - Get AI-powered content ideas inspired by trending patterns in any niche or competitor space.
+              </p>
+              <button
+                onClick={() => {
+                  setUpgradeFeature('competitorInspiration');
+                  setShowUpgradeModal(true);
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-huttle-gradient text-white rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg font-semibold"
+              >
+                <Zap className="w-5 h-5" />
+                Upgrade to Unlock
+              </button>
+            </div>
+            <div className="opacity-50 pointer-events-none">
+              <input
+                type="text"
+                placeholder="e.g., fitness influencers, tech startups, sustainable fashion..."
+                className="flex-1 w-full px-4 py-3 border border-gray-300 rounded-lg"
+                disabled
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3 mb-4 md:mb-6">
+            <input
+              type="text"
+              placeholder="e.g., fitness influencers, tech startups..."
+              value={competitorTopic}
+              onChange={(e) => setCompetitorTopic(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCompetitorInspiration()}
+              className="flex-1 px-3 md:px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-cyan focus:border-transparent transition-all outline-none text-sm"
+            />
+            <button
+              onClick={handleCompetitorInspiration}
+              disabled={isLoadingCompetitor || !competitorTopic.trim()}
+              className="flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-huttle-gradient text-white rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+            >
+              {isLoadingCompetitor ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Analyzing...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  <span>Get Inspired</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Results Section */}
+        {competitorInsights && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  Content Ideas Inspired by "{competitorInsights.topic}"
+                </h3>
+                <p className="text-xs text-gray-500">Generated: {competitorInsights.timestamp}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setCompetitorTopic('');
+                  setCompetitorInsights(null);
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
+              {competitorInsights.ideas.slice(0, 4).map((idea) => (
+                <div
+                  key={idea.id}
+                  className="bg-huttle-cyan-light rounded-lg p-3 md:p-4 border border-huttle-cyan/20 hover:border-huttle-cyan transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs font-bold text-violet-600 bg-violet-100 px-2 py-1 rounded">
+                      Idea #{idea.id}
+                    </span>
+                    <span className="text-xs font-medium text-huttle-blue bg-white px-2 py-0.5 rounded">
+                      {idea.platform}
+                    </span>
+                  </div>
+                  <p className="text-xs md:text-sm text-gray-800 whitespace-pre-wrap line-clamp-4">
+                    {idea.content}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleCopyIdea(idea.content, `comp-${idea.id}`)}
+                      className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 text-xs bg-white border border-huttle-cyan/20 rounded-lg hover:bg-violet-50 transition-colors"
+                    >
+                      {copiedIdea === `comp-${idea.id}` ? (
+                        <>
+                          <Check className="w-3 h-3 text-huttle-cyan" />
+                          <span className="text-huttle-cyan">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRemixInput(idea.content.substring(0, 200));
+                        showToast('Added to Remix Engine! Scroll down to remix.', 'success');
+                      }}
+                      className="flex items-center gap-1 px-2.5 md:px-3 py-1.5 text-xs bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
+                    >
+                      <Shuffle className="w-3 h-3" />
+                      <span>Remix</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Copy All Button */}
+            <button
+              onClick={() => handleCopyIdea(competitorInsights.rawContent, 'all-comp')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-huttle-cyan/20 rounded-lg hover:bg-violet-50 transition-colors text-sm font-medium"
+            >
+              {copiedIdea === 'all-comp' ? (
+                <>
+                  <Check className="w-4 h-4 text-huttle-cyan" />
+                  <span className="text-huttle-cyan">All Ideas Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy All Ideas</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!competitorInsights && !isLoadingCompetitor && (
+          <div className="text-center py-6 text-gray-500">
+            <p className="text-sm">
+              Enter a topic above to discover what's working in your industry and get unique content ideas
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Modular Dashboard Cards */}
       <div 
         className="space-y-6 md:space-y-6"
@@ -391,17 +659,17 @@ export default function TrendLab() {
 
         {/* Audience Insight Engine Card - All Tiers */}
         <div className="trend-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-4 flex-1">
-                <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-6 h-6 text-purple-500" />
+              <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-huttle-cyan-light flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5 md:w-6 md:h-6 text-huttle-blue" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <AIDisclaimerTooltip phraseIndex={0} position="right">
-                    <h3 className="text-lg font-bold mb-2">Audience Insight Engine</h3>
+                    <h3 className="text-base md:text-lg font-bold mb-2">Audience Insight Engine</h3>
                   </AIDisclaimerTooltip>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-xs md:text-sm text-gray-600 mb-4">
                     Deep-dive into what resonates with your audience—demographics, preferences, and behaviors.
                   </p>
                   {!audienceData && (
@@ -447,19 +715,19 @@ export default function TrendLab() {
               </div>
             )}
             {audienceData && !collapsedCards.audienceInsight && !loadingStates.audienceInsight && (
-              <div className="mt-6 pt-6 border-t border-gray-200 space-y-4 animate-fadeIn">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-purple-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Demographics</h4>
-                    <div className="space-y-1 text-sm text-gray-700">
+              <div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-200 space-y-3 md:space-y-4 animate-fadeIn">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                  <div className="bg-huttle-cyan-light rounded-lg p-3 md:p-4">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Demographics</h4>
+                    <div className="space-y-1 text-xs md:text-sm text-gray-700">
                       <p><span className="font-medium">Primary Age:</span> {audienceData.demographics.primaryAge}</p>
                       <p><span className="font-medium">Secondary Age:</span> {audienceData.demographics.secondaryAge}</p>
                       <p className="text-xs text-gray-600 mt-2">Top Locations: {audienceData.demographics.topLocations.join(', ')}</p>
                     </div>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Engagement</h4>
-                    <div className="space-y-1 text-sm text-gray-700">
+                  <div className="bg-huttle-cyan-light rounded-lg p-3 md:p-4">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Engagement</h4>
+                    <div className="space-y-1 text-xs md:text-sm text-gray-700">
                       <p><span className="font-medium">Peak Times:</span></p>
                       {audienceData.engagement.peakTimes.map((time, i) => (
                         <p key={i} className="text-xs">• {time}</p>
@@ -467,9 +735,9 @@ export default function TrendLab() {
                       <p className="mt-2"><span className="font-medium">Avg Rate:</span> {audienceData.engagement.avgEngagementRate}</p>
                     </div>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Preferences</h4>
-                    <div className="space-y-1 text-sm text-gray-700">
+                  <div className="bg-gray-50 rounded-lg p-3 md:p-4">
+                    <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Preferences</h4>
+                    <div className="space-y-1 text-xs md:text-sm text-gray-700">
                       <p className="font-medium">Top Topics:</p>
                       {audienceData.preferences.topTopics.slice(0, 2).map((topic, i) => (
                         <p key={i} className="text-xs">• {topic}</p>
@@ -484,32 +752,32 @@ export default function TrendLab() {
 
         {/* Remix Engine Card - All Tiers */}
         <div className="trend-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-4 flex-1">
-                <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                  <Shuffle className="w-6 h-6 text-orange-500" />
+              <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-huttle-cyan-light flex items-center justify-center flex-shrink-0">
+                  <Shuffle className="w-5 h-5 md:w-6 md:h-6 text-huttle-cyan" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <AIDisclaimerTooltip phraseIndex={2} position="right">
-                    <h3 className="text-lg font-bold mb-2">Remix Engine</h3>
+                    <h3 className="text-base md:text-lg font-bold mb-2">Remix Engine</h3>
                   </AIDisclaimerTooltip>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-xs md:text-sm text-gray-600 mb-4">
                     Transform trending content for your brand. Adapt ideas across platforms seamlessly.
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       placeholder="Enter trend or content to remix..."
                       value={remixInput}
                       onChange={(e) => setRemixInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleRemixContent()}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent transition-all outline-none text-sm"
+                      className="flex-1 px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent transition-all outline-none text-sm"
                     />
                     <button
                       onClick={handleRemixContent}
                       disabled={loadingStates.remixEngine}
-                      className="flex items-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {loadingStates.remixEngine ? (
                         <>
@@ -667,7 +935,7 @@ export default function TrendLab() {
                           </span>
                         </div>
                         <h5 className="font-bold text-gray-900 mb-1">{item.trend}</h5>
-                        <p className="text-sm text-green-600 font-semibold">
+                        <p className="text-sm text-huttle-cyan font-semibold">
                           Velocity: {item.velocity}
                         </p>
                       </div>
@@ -763,14 +1031,15 @@ export default function TrendLab() {
         </div>
       </div>
 
-
       {/* Quick Tips Section */}
-      <div className="mt-8 bg-gradient-to-r from-huttle-primary/10 to-huttle-primary-light/10 rounded-xl border border-huttle-primary/20 p-6">
+      <div className="mt-8 card p-6 bg-gradient-to-r from-huttle-50 to-cyan-50 border-huttle-primary/20">
         <div className="flex items-start gap-3">
-          <Lightbulb className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-1" />
+          <div className="w-10 h-10 rounded-xl bg-huttle-primary/10 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-huttle-primary" />
+          </div>
           <div>
-            <h3 className="font-semibold text-gray-900 mb-2">Pro Tip</h3>
-            <p className="text-sm text-gray-700">
+            <h3 className="font-display font-bold text-gray-900 mb-1">Pro Tip</h3>
+            <p className="text-sm text-gray-600">
               Use Trend Radar daily to stay ahead of the curve. Combine it with the Remix Engine to quickly 
               adapt trending content to your brand voice and increase engagement by up to 30%.
             </p>
@@ -793,6 +1062,7 @@ export default function TrendLab() {
         }}
         feature={upgradeFeature}
       />
+    </div>
     </div>
   );
 }

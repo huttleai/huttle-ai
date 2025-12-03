@@ -6,7 +6,7 @@
 - ✅ Removed direct Perplexity API calls from `SocialUpdates.jsx`
 - ✅ Now fetches from Supabase database instead
 - ✅ Falls back to static data if Supabase is empty
-- ✅ Filters to only show supported platforms (Facebook, Instagram, TikTok, X, LinkedIn, YouTube)
+- ✅ Filters to only show supported platforms (Facebook, Instagram, TikTok, X, YouTube)
 - ✅ Excludes Threads and Snapchat
 - ✅ Shows past 12 months of updates in descending order
 

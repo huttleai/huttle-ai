@@ -5,7 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS public.social_updates (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  platform TEXT NOT NULL CHECK (platform IN ('Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'LinkedIn', 'YouTube')),
+  platform TEXT NOT NULL CHECK (platform IN ('Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'YouTube')),
   date_month TEXT NOT NULL, -- Format: "YYYY-MM" (e.g., "2025-10")
   title TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -39,12 +39,15 @@ CREATE POLICY "Service can manage social updates" ON public.social_updates
 
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_social_updates_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Trigger to auto-update updated_at
 CREATE TRIGGER update_social_updates_timestamp

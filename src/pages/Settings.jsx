@@ -1,18 +1,27 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Bell, Smartphone, Globe, Lock, User, CreditCard, Save, Check, X, ExternalLink } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink, Smartphone } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { useNotifications } from '../context/NotificationContext';
-import { checkSocialConnections, setSocialConnection } from '../utils/socialConnectionChecker';
-import { updateConnectionStatus, isN8nConfigured } from '../services/n8nAPI';
-import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, LinkedInIcon, YouTubeIcon } from '../components/SocialIcons';
 import Tooltip from '../components/Tooltip';
 import { AuthContext } from '../context/AuthContext';
+import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
+/**
+ * Settings Page
+ * 
+ * NOTE: Social media connections are NOT required for Huttle AI.
+ * Users publish content via deep linking (opening native apps directly).
+ * The "Preferred Platforms" section is for tracking user preferences only.
+ */
 export default function Settings() {
   const { addToast } = useToast();
-  const { addSuccess, addInfo } = useNotifications();
   const { user } = useContext(AuthContext);
+  const { 
+    preferredPlatforms, 
+    allPlatforms, 
+    togglePlatform, 
+    isPlatformPreferred 
+  } = usePreferredPlatforms();
 
   const [settings, setSettings] = useState({
     // General Settings
@@ -20,172 +29,42 @@ export default function Settings() {
     timezone: 'America/New_York',
   });
 
-  const [socialConnections, setSocialConnectionsState] = useState({
-    Instagram: false,
-    Facebook: false,
-    Twitter: false,
-    X: false,
-    LinkedIn: false,
-    TikTok: false,
-    YouTube: false,
-  });
-
-  const [loadingConnections, setLoadingConnections] = useState(true);
-  const [n8nConfigured, setN8nConfigured] = useState(false);
-
-  // Load connection status on mount
-  useEffect(() => {
-    const loadConnections = async () => {
-      if (user?.id) {
-        try {
-          const connections = await checkSocialConnections(user.id);
-          setSocialConnectionsState(connections);
-        } catch (error) {
-          console.error('Failed to load connections:', error);
-          // Fallback to empty state if database query fails
-          setSocialConnectionsState({
-            Instagram: false,
-            Facebook: false,
-            Twitter: false,
-            X: false,
-            LinkedIn: false,
-            TikTok: false,
-            YouTube: false,
-          });
-        }
-      } else {
-        // No user, use empty state
-        setSocialConnectionsState({
-          Instagram: false,
-          Facebook: false,
-          Twitter: false,
-          X: false,
-          LinkedIn: false,
-          TikTok: false,
-          YouTube: false,
-        });
-      }
-      setLoadingConnections(false);
-    };
-
-    setN8nConfigured(isN8nConfigured());
-    loadConnections();
-  }, [user]);
-
-
   const handleSave = () => {
-    // Note: Settings persistence is handled via context/state management
-    // Backend sync can be added when user preferences API is implemented
+    // Save settings to localStorage (platforms are auto-saved via the hook)
+    localStorage.setItem('userSettings', JSON.stringify(settings));
     addToast('Settings saved successfully!', 'success');
   };
 
-  const handleConnectPlatform = async (platform) => {
-    if (n8nConfigured && user?.id) {
-      // Use n8n for real OAuth flow
-      addInfo(
-        `Connect ${platform}`,
-        `This will open ${platform}'s OAuth flow through n8n. You'll be redirected to authenticate.`,
-        async () => {
-          try {
-            // This would trigger n8n OAuth workflow
-            // For now, simulate the connection update
-            const result = await updateConnectionStatus(user.id, platform, 'connect', {
-              username: `demo_user_${platform.toLowerCase()}` // This would come from n8n
-            });
-
-            if (result.success) {
-              // Refresh connection status
-              const connections = await checkSocialConnections(user.id);
-              setSocialConnectionsState(connections);
-              addSuccess(`${platform} Connected!`, `You can now post directly to ${platform} from Huttle AI.`);
-            } else {
-              addToast(`Failed to connect ${platform}`, 'error');
-            }
-          } catch (error) {
-            console.error('Connection error:', error);
-            addToast(`Failed to connect ${platform}`, 'error');
-          }
-        },
-        'Connect'
-      );
-    } else {
-      // Fallback to simulation
-      addInfo(
-        `Connect ${platform}`,
-        n8nConfigured
-          ? `n8n integration is configured but no user found. Please log in first.`
-          : `n8n integration not configured. This will simulate a connection for testing.`,
-        async () => {
-          // For demo/testing without n8n
-          setSocialConnection(platform, true);
-          // Update state directly for demo mode
-          setSocialConnectionsState(prev => ({
-            ...prev,
-            [platform]: true
-          }));
-          addSuccess(`${platform} Connected!`, `You can now post directly to ${platform} from Huttle AI.`);
-        },
-        'Connect'
-      );
-    }
-  };
-
-  const handleDisconnectPlatform = async (platform) => {
-    if (window.confirm(`Are you sure you want to disconnect ${platform}?`)) {
-      if (n8nConfigured && user?.id) {
-        // Use n8n API
-        try {
-          const result = await updateConnectionStatus(user.id, platform, 'disconnect');
-          if (result.success) {
-            // Refresh connection status
-            const connections = await checkSocialConnections(user.id);
-            setSocialConnectionsState(connections);
-            addToast(`${platform} disconnected`, 'success');
-          } else {
-            addToast(`Failed to disconnect ${platform}`, 'error');
-          }
-        } catch (error) {
-          console.error('Disconnect error:', error);
-          addToast(`Failed to disconnect ${platform}`, 'error');
-        }
-      } else {
-        // Fallback to localStorage for demo/testing
-        setSocialConnection(platform, false);
-        // Update state directly for demo mode
-        setSocialConnectionsState(prev => ({
-          ...prev,
-          [platform]: false
-        }));
-        addToast(`${platform} disconnected`, 'success');
-      }
-    }
-  };
-
-  const socialPlatforms = [
-    { name: 'Instagram', icon: InstagramIcon, color: 'bg-pink-500', description: 'Connect to post photos, reels, and stories' },
-    { name: 'Facebook', icon: FacebookIcon, color: 'bg-blue-600', description: 'Share posts to your Facebook page' },
-    { name: 'Twitter', icon: TwitterXIcon, color: 'bg-black', description: 'Tweet directly from Huttle AI' },
-    { name: 'LinkedIn', icon: LinkedInIcon, color: 'bg-blue-700', description: 'Post professional content to LinkedIn' },
-    { name: 'TikTok', icon: TikTokIcon, color: 'bg-black', description: 'Upload videos to TikTok' },
-    { name: 'YouTube', icon: YouTubeIcon, color: 'bg-red-600', description: 'Upload videos to your YouTube channel' },
-  ];
+  // Transform allPlatforms to the format expected by the UI
+  const socialPlatforms = allPlatforms.map(p => ({
+    name: p.displayName || p.name,
+    icon: p.icon,
+    color: p.id === 'instagram' 
+      ? 'bg-gradient-to-br from-purple-600 to-pink-500' 
+      : p.color,
+    description: p.description
+  }));
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <SettingsIcon className="w-8 h-8 text-huttle-primary" />
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            Settings
-          </h1>
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      <div className="mb-6 md:mb-8">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+            <SettingsIcon className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+              Settings
+            </h1>
+            <p className="text-sm md:text-base text-gray-500">
+              Manage your account preferences and notifications
+            </p>
+          </div>
         </div>
-        <p className="text-gray-600">
-          Manage your account preferences and notifications
-        </p>
       </div>
 
       {/* Quick Settings Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <Link 
           to="/profile"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
@@ -194,131 +73,102 @@ export default function Settings() {
           <h4 className="font-semibold text-gray-900 text-sm mb-1">Profile</h4>
           <p className="text-xs text-gray-600">Update your information</p>
         </Link>
-        <button 
-          onClick={() => addToast('Security settings coming soon!', 'info')}
+        <Link 
+          to="/brand-voice"
+          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
+        >
+          <Smartphone className="w-6 h-6 text-huttle-primary mb-2" />
+          <h4 className="font-semibold text-gray-900 text-sm mb-1">Brand Voice</h4>
+          <p className="text-xs text-gray-600">Customize AI content</p>
+        </Link>
+        <Link 
+          to="/security"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <Lock className="w-6 h-6 text-huttle-primary mb-2" />
           <h4 className="font-semibold text-gray-900 text-sm mb-1">Security</h4>
           <p className="text-xs text-gray-600">Password & authentication</p>
-        </button>
-        <button 
-          onClick={() => addToast('Billing settings coming soon!', 'info')}
+        </Link>
+        <Link 
+          to="/subscription"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <CreditCard className="w-6 h-6 text-huttle-primary mb-2" />
           <h4 className="font-semibold text-gray-900 text-sm mb-1">Billing</h4>
           <p className="text-xs text-gray-600">Plans & payment methods</p>
-        </button>
-        <button 
-          onClick={() => addToast('Integrations coming soon!', 'info')}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
-        >
-          <Globe className="w-6 h-6 text-huttle-primary mb-2" />
-          <h4 className="font-semibold text-gray-900 text-sm mb-1">Integrations</h4>
-          <p className="text-xs text-gray-600">Connect social accounts</p>
-        </button>
+        </Link>
       </div>
 
-      {/* Social Media Connections */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+      {/* Preferred Platforms */}
+      <div className="card p-5 md:p-6 mb-6 md:mb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-huttle-primary bg-opacity-10 flex items-center justify-center">
               <Globe className="w-6 h-6 text-huttle-primary" />
             </div>
             <div>
-              <Tooltip content="Connect your social media accounts to post directly from Huttle AI. You can also download content and post manually.">
-                <h3 className="text-lg font-semibold text-gray-900">Social Media Connections</h3>
+              <Tooltip content="Select your preferred platforms. When you publish, Huttle AI will open the native app on your phone or the website on desktop.">
+                <h3 className="text-lg font-semibold text-gray-900">Preferred Platforms</h3>
               </Tooltip>
-              <p className="text-sm text-gray-600">Manage your connected accounts</p>
+              <p className="text-sm text-gray-600">Select which platforms you use most</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">
-              {loadingConnections ? '...' : `${Object.values(socialConnections).filter(Boolean).length} Connected`}
-            </span>
-            {n8nConfigured && (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
-                n8n Ready
-              </span>
-            )}
-          </div>
+          <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">
+            {preferredPlatforms.length} Selected
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {socialPlatforms.map((platform) => {
-            const isConnected = socialConnections[platform.name];
+            const isSelected = isPlatformPreferred(platform.name);
             return (
-              <div
+              <button
                 key={platform.name}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  isConnected
-                    ? 'border-green-300 bg-green-50'
+                onClick={() => togglePlatform(platform.name)}
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  isSelected
+                    ? 'border-huttle-primary bg-huttle-primary/5'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                 }`}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg ${platform.color} flex items-center justify-center`}>
-                      <platform.icon className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{platform.name}</h4>
-                      {isConnected && (
-                        <span className="text-xs text-green-600 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          Connected
-                        </span>
-                      )}
-                    </div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-10 h-10 rounded-lg ${platform.color} flex items-center justify-center`}>
+                    <platform.icon className="w-6 h-6 text-white" />
                   </div>
-                  {isConnected ? (
-                    <button
-                      onClick={() => handleDisconnectPlatform(platform.name)}
-                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-all"
-                      title="Disconnect"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  ) : null}
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-900">{platform.name}</h4>
+                    <p className="text-xs text-gray-500">{platform.description}</p>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    isSelected ? 'border-huttle-primary bg-huttle-primary' : 'border-gray-300'
+                  }`}>
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{platform.description}</p>
-                {isConnected ? (
-                  <div className="flex items-center gap-2 text-xs text-gray-600">
-                    <Check className="w-4 h-4 text-green-600" />
-                    <span>Ready to post</span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleConnectPlatform(platform.name)}
-                    className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Connect {platform.name}
-                  </button>
-                )}
-              </div>
+              </button>
             );
           })}
         </div>
 
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex gap-3">
-            <Bell className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <ExternalLink className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-blue-900 mb-1">About Connections</h4>
+              <h4 className="font-semibold text-blue-900 mb-1">How Publishing Works</h4>
               <p className="text-sm text-blue-700">
-                Connected accounts allow you to post directly from Huttle AI. You can also download your content and post manually without connecting. Your account credentials are securely stored and never shared.
+                When you click "Publish Now" on a post, Huttle AI opens the native app on your phone (or the website on desktop) with your content ready to paste. No account connection required!
               </p>
             </div>
           </div>
         </div>
       </div>
 
-
       {/* General Settings */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+      <div className="card p-5 md:p-6 mb-6 md:mb-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-full bg-huttle-primary bg-opacity-10 flex items-center justify-center">
             <SettingsIcon className="w-6 h-6 text-huttle-primary" />
@@ -377,13 +227,61 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Notifications Settings */}
+      <div className="card p-5 md:p-6 mb-6 md:mb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-full bg-huttle-primary bg-opacity-10 flex items-center justify-center">
+            <Bell className="w-6 h-6 text-huttle-primary" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+            <p className="text-sm text-gray-600">Manage how you receive updates</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-semibold text-gray-900">Post Reminders</h4>
+              <p className="text-sm text-gray-600">Get notified when it's time to publish</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-huttle-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-huttle-primary"></div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-semibold text-gray-900">Trend Alerts</h4>
+              <p className="text-sm text-gray-600">Get notified about trending topics in your niche</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-huttle-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-huttle-primary"></div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-semibold text-gray-900">AI Usage Alerts</h4>
+              <p className="text-sm text-gray-600">Get notified when approaching usage limits</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-huttle-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-huttle-primary"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
       {/* Save Button */}
-      <div className="sticky bottom-6 flex justify-end">
+      <div className="sticky bottom-4 md:bottom-6 flex justify-center md:justify-end">
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-8 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-lg hover:shadow-xl font-semibold"
+          className="btn-primary px-6 md:px-8 py-2.5 md:py-3 shadow-lg"
         >
-          <Save className="w-5 h-5" />
+          <Save className="w-4 h-4 md:w-5 md:h-5" />
           Save All Settings
         </button>
       </div>

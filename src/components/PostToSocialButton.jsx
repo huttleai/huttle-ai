@@ -1,24 +1,22 @@
-import React, { useState, useContext } from 'react';
-import { ExternalLink, Copy, Loader } from 'lucide-react';
+import React, { useState } from 'react';
+import { ExternalLink, Loader } from 'lucide-react';
 import { openInSocialMedia, openInAllPlatforms } from '../utils/socialMediaHelpers';
 import { useToast } from '../context/ToastContext';
-import { validatePost, checkPlatformConnections } from '../utils/socialConnectionChecker';
+import { validatePost } from '../utils/socialConnectionChecker';
 import { useNotifications } from '../context/NotificationContext';
-import { sendPostToN8n, isN8nConfigured } from '../services/n8nAPI';
-import { AuthContext } from '../context/AuthContext';
 
+/**
+ * PostToSocialButton - Opens social media apps via deep linking
+ * 
+ * NOTE: This component uses deep linking, NOT API posting.
+ * - Mobile: Opens native app with pre-filled content (where supported)
+ * - Desktop: Copies content to clipboard and opens web version
+ */
 export default function PostToSocialButton({ post, platform = null }) {
   const { addToast } = useToast();
-  const { addConnectionWarning, addMissingContentWarning } = useNotifications();
-  const { user } = useContext(AuthContext);
+  const { addMissingContentWarning } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [n8nConfigured, setN8nConfigured] = useState(false);
-
-  // Check n8n configuration on mount
-  React.useEffect(() => {
-    setN8nConfigured(isN8nConfigured());
-  }, []);
 
   const handleQuickPost = async (selectedPlatform) => {
     setLoading(true);
@@ -31,40 +29,17 @@ export default function PostToSocialButton({ post, platform = null }) {
       return;
     }
 
-    // Check if platform is connected (async)
-    const userId = user?.id || 'demo-user-123'; // Fallback for demo
-    const connectionCheck = await checkPlatformConnections(post, userId);
-    if (!connectionCheck.allConnected) {
-      const isThisPlatformConnected = !connectionCheck.unconnected.includes(selectedPlatform);
-      if (!isThisPlatformConnected) {
-        addConnectionWarning(selectedPlatform);
-        setLoading(false);
-        setShowDropdown(false);
-        return;
-      }
-    }
-
     try {
-      // Route through n8n if configured and user is authenticated
-      if (n8nConfigured && user?.id) {
-        const n8nResult = await sendPostToN8n(post, user.id);
-        if (n8nResult.success) {
-          addToast(`Post sent to ${selectedPlatform} via n8n!`, 'success');
-        } else {
-          addToast(n8nResult.error || 'Failed to send post via n8n', 'error');
-        }
+      // Use deep linking to open platform
+      const result = await openInSocialMedia(post, selectedPlatform);
+      if (result.success) {
+        addToast(result.message, 'success');
       } else {
-        // Fallback to manual posting
-        const result = await openInSocialMedia(post, selectedPlatform);
-        if (result.success) {
-          addToast(result.message, 'success');
-        } else {
-          addToast(result.message, 'error');
-        }
+        addToast(result.message, 'error');
       }
     } catch (error) {
       console.error('Posting error:', error);
-      addToast('Failed to post. Please try again.', 'error');
+      addToast('Failed to open platform. Please try again.', 'error');
     } finally {
       setLoading(false);
       setShowDropdown(false);
@@ -82,30 +57,13 @@ export default function PostToSocialButton({ post, platform = null }) {
       return;
     }
 
-    // Check platform connections (async)
-    const userId = user?.id || 'demo-user-123'; // Fallback for demo
-    const connectionCheck = await checkPlatformConnections(post, userId);
-    if (!connectionCheck.allConnected) {
-      addToast(`Some platforms not connected: ${connectionCheck.unconnected.join(', ')}`, 'warning');
-    }
-
     try {
-      // Route through n8n if configured and user is authenticated
-      if (n8nConfigured && user?.id) {
-        const n8nResult = await sendPostToN8n(post, user.id);
-        if (n8nResult.success) {
-          addToast('Post sent to all platforms via n8n!', 'success');
-        } else {
-          addToast(n8nResult.error || 'Failed to send post via n8n', 'error');
-        }
-      } else {
-        // Fallback to manual posting
-        const result = await openInAllPlatforms(post);
-        addToast(result.message, 'success');
-      }
+      // Open all platforms using deep links
+      const result = await openInAllPlatforms(post);
+      addToast(result.message, 'success');
     } catch (error) {
       console.error('Post to all error:', error);
-      addToast('Failed to post to platforms. Please try again.', 'error');
+      addToast('Failed to open platforms. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -196,4 +154,3 @@ export default function PostToSocialButton({ post, platform = null }) {
     </div>
   );
 }
-
