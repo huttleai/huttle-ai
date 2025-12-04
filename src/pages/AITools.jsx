@@ -412,7 +412,7 @@ export default function AITools() {
         {/* Header */}
         <div className="mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl md:rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-xl shadow-huttle-blue/25 flex-shrink-0">
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl md:rounded-2xl bg-huttle-primary flex items-center justify-center shadow-xl shadow-huttle-blue/25 flex-shrink-0">
               <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -448,8 +448,8 @@ export default function AITools() {
               })()}
             </div>
             
-            {/* Gradient Background Layer */}
-            <div className="absolute inset-0 bg-gradient-to-r from-huttle-primary to-huttle-600 rounded-xl shadow-lg shadow-huttle-primary/25" />
+            {/* Solid Blue Background Layer */}
+            <div className="absolute inset-0 bg-huttle-primary rounded-xl shadow-lg shadow-huttle-primary/25" />
             
             {/* Select Element */}
             <select
@@ -483,7 +483,7 @@ export default function AITools() {
                   onClick={() => setActiveTool(tool.id)}
                   className={`group flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all duration-200 whitespace-nowrap snap-start flex-shrink-0 text-sm ${
                     activeTool === tool.id
-                      ? 'bg-gradient-to-r from-huttle-primary to-huttle-600 text-white shadow-lg shadow-huttle-primary/25'
+                      ? 'bg-huttle-primary text-white shadow-lg shadow-huttle-primary/25'
                       : 'bg-white text-gray-600 border-2 border-gray-200 hover:border-huttle-primary/50 hover:text-huttle-primary'
                   }`}
                 >
@@ -503,7 +503,7 @@ export default function AITools() {
             <div>
               <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
                 <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                     <MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-white" />
                   </div>
                   <span className="text-base md:text-lg">Caption Generator</span>
@@ -621,7 +621,7 @@ export default function AITools() {
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-gradient-to-r from-cyan-50/50 to-blue-50/50">
               <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <Hash className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <span className="text-base md:text-lg">Hashtag Generator</span>
@@ -708,7 +708,7 @@ export default function AITools() {
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
               <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <Type className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <span className="text-base md:text-lg">Hook Builder</span>
@@ -787,7 +787,7 @@ export default function AITools() {
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
               <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <Target className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <span className="text-base md:text-lg">CTA Suggester</span>
@@ -870,7 +870,7 @@ export default function AITools() {
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
               <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <span className="text-base md:text-lg">Content Quality Scorer</span>
@@ -955,7 +955,7 @@ export default function AITools() {
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
               <h2 className="font-display font-bold text-gray-900 flex items-center gap-2.5 md:gap-3">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <ImageIcon className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
                 <span className="text-base md:text-lg">Visual Brainstormer</span>

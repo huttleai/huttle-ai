@@ -34,7 +34,7 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations are used when Trend Lab, AI Plan Builder, AI Power Tools, or Huttle Agent create content for you. Each AI action (generating captions, hashtags, content ideas, etc.) counts as one generation. Your subscription plan determines your monthly limit.'
+      answer: 'AI generations are used when Trend Lab, AI Plan Builder, or AI Power Tools create content for you. Each AI action (generating captions, hashtags, content ideas, etc.) counts as one generation. Your subscription plan determines your monthly limit.'
     },
     {
       question: 'When do my AI generations reset?',
@@ -63,10 +63,6 @@ export default function Help() {
     {
       question: 'How do I save content to my Content Library?',
       answer: 'When you generate content using any AI tool, click the "Save to Library" button. You can also manually add content from the Content Library page. Organize saved content with tags and folders for easy access later.'
-    },
-    {
-      question: 'What can Huttle Agent do?',
-      answer: 'Huttle Agent is your AI assistant that can help with content strategy, answer questions about social media best practices, suggest improvements to your posts, and provide personalized recommendations based on your brand and goals.'
     },
     {
       question: 'Is my data secure and private?',
@@ -163,18 +159,6 @@ export default function Help() {
         'Adapt content for different platforms',
         'Create multiple variations from one piece',
         'Maintain brand voice across formats'
-      ]
-    },
-    { 
-      id: 'agent', 
-      name: 'Huttle Agent', 
-      icon: Bot,
-      description: 'Your AI-powered assistant',
-      tips: [
-        'Ask questions about social media strategy',
-        'Get personalized content recommendations',
-        'Request help with specific tasks',
-        'Learn best practices through conversation'
       ]
     },
     { 

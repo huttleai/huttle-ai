@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Calendar,
@@ -17,7 +17,8 @@ import {
   LogOut,
   Sparkles,
   Zap,
-  Repeat
+  Repeat,
+  ChevronRight
 } from 'lucide-react';
 import { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
@@ -28,6 +29,8 @@ export default function Sidebar() {
   const { logout } = useContext(AuthContext);
   const { userTier, getFeatureLimit } = useContext(SubscriptionContext);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [hoveredItem, setHoveredItem] = useState(null);
   
   // AI usage data
   const subscriptionTier = userTier || 'free';
@@ -57,48 +60,54 @@ export default function Sidebar() {
     { 
       section: 'MAIN', 
       items: [
-        { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
-        { name: 'Smart Calendar', icon: Calendar, path: '/calendar' },
-        { name: 'Content Library', icon: FolderOpen, path: '/library' }
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/', color: 'from-blue-500 to-cyan-500' },
+        { name: 'Smart Calendar', icon: Calendar, path: '/calendar', color: 'from-emerald-500 to-teal-500' },
+        { name: 'Content Library', icon: FolderOpen, path: '/library', color: 'from-amber-500 to-orange-500' }
       ]
     },
     { 
       section: 'AI TOOLS', 
       items: [
-        { name: 'AI Plan Builder', icon: Wand2, path: '/plan-builder' },
-        { name: 'AI Power Tools', icon: Zap, path: '/ai-tools' },
-        { name: 'Trend Lab', icon: Beaker, path: '/trend-lab' },
-        { name: 'Content Repurposer', icon: Repeat, path: '/repurposer', badge: 'Pro' },
-        { name: 'Huttle Agent', icon: Bot, path: '/agent', badge: 'Pro' }
+        { name: 'AI Plan Builder', icon: Wand2, path: '/plan-builder', color: 'from-violet-500 to-purple-500' },
+        { name: 'AI Power Tools', icon: Zap, path: '/ai-tools', color: 'from-yellow-500 to-orange-500' },
+        { name: 'Trend Lab', icon: Beaker, path: '/trend-lab', color: 'from-pink-500 to-rose-500' },
+        { name: 'Content Repurposer', icon: Repeat, path: '/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' },
+        { name: 'Huttle Agent', icon: Bot, path: '/agent', badge: 'Pro', color: 'from-indigo-500 to-violet-500' }
       ]
     },
     { 
       section: 'ACCOUNT', 
       items: [
-        { name: 'Profile', icon: User, path: '/profile' },
-        { name: 'Brand Voice', icon: Waves, path: '/brand-voice' },
-        { name: 'Subscription', icon: CreditCard, path: '/subscription' },
-        { name: 'Social Updates', icon: Newspaper, path: '/social-updates' },
-        { name: 'Settings', icon: Settings, path: '/settings' },
-        { name: 'Help', icon: HelpCircle, path: '/help' }
+        { name: 'Profile', icon: User, path: '/profile', color: 'from-slate-500 to-gray-600' },
+        { name: 'Brand Voice', icon: Waves, path: '/brand-voice', color: 'from-blue-500 to-indigo-500' },
+        { name: 'Subscription', icon: CreditCard, path: '/subscription', color: 'from-emerald-500 to-green-500' },
+        { name: 'Social Updates', icon: Newspaper, path: '/social-updates', color: 'from-orange-500 to-red-500' },
+        { name: 'Settings', icon: Settings, path: '/settings', color: 'from-gray-500 to-slate-600' },
+        { name: 'Help', icon: HelpCircle, path: '/help', color: 'from-blue-400 to-cyan-500' }
       ]
     }
   ];
+
+  // Check if path is active
+  const isPathActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <>
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-3.5 left-4 z-50 p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+        className="lg:hidden fixed top-3.5 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
       >
-        {isMobileOpen ? <X className="w-5 h-5 text-gray-600" /> : <Menu className="w-5 h-5 text-gray-600" />}
+        {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
       </button>
 
       {/* Overlay for mobile */}
       {isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-30 fade-in"
+          className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30 animate-fadeIn"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -107,13 +116,17 @@ export default function Sidebar() {
       <aside
         className={`
           fixed left-0 top-0 h-screen w-64 
-          bg-white border-r border-gray-100
-          flex flex-col overflow-y-auto z-40 
-          transition-transform duration-200 ease-out
+          bg-gradient-to-b from-white via-white to-gray-50/80
+          border-r border-gray-100/80
+          flex flex-col overflow-hidden z-40 
+          transition-transform duration-300 ease-out
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
-        <div className="flex flex-col h-full p-5">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.03),transparent_50%)] pointer-events-none" />
+        
+        <div className="relative flex flex-col h-full p-5 overflow-y-auto scrollbar-thin">
           {/* Logo */}
           <div 
             className="mb-8 mt-1 cursor-pointer group"
@@ -122,7 +135,7 @@ export default function Sidebar() {
             <img 
               src="/huttle-logo.png" 
               alt="Huttle AI" 
-              className="h-8 w-auto transition-transform duration-150 group-hover:scale-105"
+              className="h-8 w-auto transition-all duration-200 group-hover:scale-105"
             />
           </div>
 
@@ -130,88 +143,136 @@ export default function Sidebar() {
           <nav className="flex-1 space-y-6">
             {navItems.map((section) => (
               <div key={section.section}>
-                <h2 className="text-[10px] font-semibold tracking-wider text-gray-400 mb-2 px-3 uppercase">
+                <h2 className="text-[10px] font-bold tracking-widest text-gray-400/80 mb-3 px-3 uppercase">
                   {section.section}
                 </h2>
-                <div className="space-y-0.5">
-                  {section.items.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setIsMobileOpen(false)}
-                      className={({ isActive }) =>
-                        `group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 ${
-                          isActive
-                            ? 'bg-huttle-cyan-light text-huttle-blue font-semibold'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <item.icon className={`w-[18px] h-[18px] transition-transform duration-150 ${
-                            isActive ? 'text-huttle-blue' : 'group-hover:scale-105'
-                          }`} />
-                          <span className="text-sm flex-1">{item.name}</span>
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const isActive = isPathActive(item.path);
+                    const isHovered = hoveredItem === item.path;
+                    
+                    return (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setIsMobileOpen(false)}
+                        onMouseEnter={() => setHoveredItem(item.path)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        className="group relative block"
+                      >
+                        {/* Left accent border for active */}
+                        {isActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-huttle-primary rounded-r-full" />
+                        )}
+                        
+                        {/* Content */}
+                        <div className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                          isActive 
+                            ? 'bg-blue-50/80' 
+                            : isHovered 
+                              ? 'bg-gray-50' 
+                              : 'bg-transparent'
+                        }`}>
+                          {/* Icon Container - Simple monochrome */}
+                          <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                            isActive 
+                              ? 'bg-huttle-primary/10' 
+                              : isHovered
+                                ? 'bg-gray-100'
+                                : 'bg-transparent'
+                          }`}>
+                            <item.icon className={`w-[18px] h-[18px] transition-all duration-200 ${
+                              isActive 
+                                ? 'text-huttle-primary' 
+                                : isHovered 
+                                  ? 'text-gray-700' 
+                                  : 'text-gray-500'
+                            }`} />
+                          </div>
+                          
+                          {/* Text */}
+                          <span className={`text-sm flex-1 font-medium transition-all duration-200 ${
+                            isActive 
+                              ? 'text-gray-900' 
+                              : isHovered 
+                                ? 'text-gray-900' 
+                                : 'text-gray-600'
+                          }`}>
+                            {item.name}
+                          </span>
+                          
+                          {/* Badge */}
                           {item.badge && (
-                            <span className="badge badge-pro text-[10px] px-1.5 py-0.5">
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all duration-200 ${
+                              isActive 
+                                ? 'bg-huttle-primary text-white' 
+                                : 'bg-gray-200 text-gray-700'
+                            }`}>
                               {item.badge}
                             </span>
                           )}
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
+                        </div>
+                      </NavLink>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </nav>
 
-          {/* AI Usage Meter - Clean design */}
-          <div className="mt-auto pt-4 border-t border-gray-100">
-            <div className="p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-huttle-blue" />
-                  <span className="text-sm font-medium text-gray-900">AI Generations</span>
+          {/* AI Usage Meter - Compact Design */}
+          <div className="mt-auto pt-4">
+            <div className="relative overflow-hidden p-3 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-200/50">
+              <div className="relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-6 h-6 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
+                      <Sparkles className="w-3 h-3 text-huttle-primary" />
+                    </div>
+                    <span className="text-xs font-semibold text-gray-900">AI Credits</span>
+                  </div>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded-full">
+                    {tierLabel}
+                  </span>
                 </div>
-                <span className="text-xs text-gray-500">{tierLabel}</span>
+                
+                <div className="flex items-baseline gap-1 mb-2">
+                  <span className="text-xl font-bold text-gray-900">{aiGensUsed}</span>
+                  <span className="text-xs text-gray-500">/ {aiGensLimit === Infinity ? '∞' : aiGensLimit}</span>
+                </div>
+                
+                {/* Progress bar */}
+                <div className="h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${
+                      aiGensPercent > 90 
+                        ? 'bg-red-500' 
+                        : aiGensPercent > 70 
+                          ? 'bg-orange-500' 
+                          : 'bg-huttle-primary'
+                    }`}
+                    style={{ width: `${Math.min(aiGensPercent, 100)}%` }}
+                  />
+                </div>
+                
+                {aiGensPercent > 80 && subscriptionTier !== 'pro' && (
+                  <button 
+                    onClick={() => navigate('/subscription')}
+                    className="mt-2 w-full text-[10px] font-semibold text-huttle-primary hover:text-huttle-primary-dark transition-colors flex items-center justify-center gap-0.5"
+                  >
+                    Upgrade for more
+                    <ChevronRight className="w-2.5 h-2.5" />
+                  </button>
+                )}
               </div>
-              
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-xl font-semibold text-gray-900">{aiGensUsed}</span>
-                <span className="text-sm text-gray-500">/ {aiGensLimit}</span>
-              </div>
-              
-              <div className="progress-bar">
-                <div 
-                  className={`progress-bar-fill ${
-                    aiGensPercent > 90 
-                      ? 'progress-bar-fill-danger' 
-                      : aiGensPercent > 70 
-                        ? 'progress-bar-fill-warning' 
-                        : ''
-                  }`}
-                  style={{ width: `${Math.min(aiGensPercent, 100)}%` }}
-                />
-              </div>
-              
-              {aiGensPercent > 80 && subscriptionTier !== 'pro' && (
-                <button 
-                  onClick={() => navigate('/subscription')}
-                  className="mt-3 w-full text-xs font-medium text-huttle-blue hover:text-huttle-blue-dark transition-colors"
-                >
-                  Upgrade for more →
-                </button>
-              )}
             </div>
 
             {/* Logout Button */}
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 mt-3 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-150 group"
+              className="w-full flex items-center justify-center gap-2 mt-3 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group"
             >
-              <LogOut className="w-4 h-4 transition-transform duration-150 group-hover:rotate-[-8deg]" />
+              <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:rotate-[-12deg]" />
               <span className="text-sm font-medium">Sign Out</span>
             </button>
           </div>

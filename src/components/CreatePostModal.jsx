@@ -10,8 +10,8 @@ import VoiceInput from './VoiceInput';
 import SmartTimeSuggestion from './SmartTimeSuggestion';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
-export default function CreatePostModal({ isOpen, onClose, preselectedDate = null }) {
-  const { schedulePost } = useContent();
+export default function CreatePostModal({ isOpen, onClose, preselectedDate = null, postToEdit = null }) {
+  const { schedulePost, updateScheduledPost } = useContent();
   const { showToast } = useToast();
   const { brandData } = useContext(BrandContext);
   const { platforms } = usePreferredPlatforms();
@@ -36,6 +36,54 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       setPostData(prev => ({ ...prev, scheduledDate: preselectedDate }));
     }
   }, [preselectedDate, isOpen]);
+
+  // Populate form when editing a post
+  useEffect(() => {
+    if (postToEdit && isOpen) {
+      // Use originalPost if available (from calendar transformation), otherwise use postToEdit directly
+      const sourcePost = postToEdit.originalPost || postToEdit;
+      
+      // Derive contentType from type if contentType is not available
+      let contentType = sourcePost.contentType || '';
+      if (!contentType && postToEdit.type) {
+        const typeMap = {
+          'image': 'Image Post',
+          'video': 'Video',
+          'text': 'Text Post'
+        };
+        contentType = typeMap[postToEdit.type] || '';
+      }
+      
+      setPostData({
+        title: postToEdit.title || sourcePost.title || '',
+        platforms: postToEdit.platforms || sourcePost.platforms || [],
+        contentType: contentType,
+        scheduledDate: postToEdit.date || sourcePost.scheduledDate || preselectedDate || '',
+        scheduledTime: postToEdit.time || sourcePost.scheduledTime || '',
+        caption: postToEdit.caption || sourcePost.caption || '',
+        hashtags: postToEdit.hashtags || sourcePost.hashtags || '',
+        keywords: postToEdit.keywords || sourcePost.keywords || '',
+        imagePrompt: postToEdit.imagePrompt || sourcePost.imagePrompt || '',
+        videoPrompt: postToEdit.videoPrompt || sourcePost.videoPrompt || '',
+        media: postToEdit.media || sourcePost.media || []
+      });
+    } else if (!postToEdit && isOpen) {
+      // Reset form when creating new post
+      setPostData({
+        title: '',
+        platforms: [],
+        contentType: '',
+        scheduledDate: preselectedDate || '',
+        scheduledTime: '',
+        caption: '',
+        hashtags: '',
+        keywords: '',
+        imagePrompt: '',
+        videoPrompt: '',
+        media: []
+      });
+    }
+  }, [postToEdit, isOpen, preselectedDate]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
   const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
@@ -66,9 +114,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
   const handlePlatformToggle = (platform) => {
     setPostData(prev => ({
       ...prev,
-      platforms: prev.platforms.includes(platform)
-        ? prev.platforms.filter(p => p !== platform)
-        : [...prev.platforms, platform]
+      platforms: [platform] // Only allow one platform selection
     }));
   };
 
@@ -298,13 +344,32 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       return;
     }
 
-    // Schedule the post and wait for result
-    const postId = await schedulePost(postData);
-    if (postId) {
-      showToast('Post scheduled successfully!', 'success');
+    if (postToEdit && (postToEdit.id || postToEdit.originalPost?.id)) {
+      // Update existing post - use originalPost.id if available, otherwise use postToEdit.id
+      const postId = postToEdit.originalPost?.id || postToEdit.id;
+      await updateScheduledPost(postId, {
+        title: postData.title,
+        platforms: postData.platforms,
+        contentType: postData.contentType,
+        scheduledDate: postData.scheduledDate,
+        scheduledTime: postData.scheduledTime,
+        caption: postData.caption,
+        hashtags: postData.hashtags,
+        keywords: postData.keywords,
+        imagePrompt: postData.imagePrompt,
+        videoPrompt: postData.videoPrompt,
+        media: postData.media
+      });
+      showToast('Post updated successfully!', 'success');
     } else {
-      // Error toast is already shown by schedulePost
-      showToast('Failed to schedule post', 'error');
+      // Create new post
+      const postId = await schedulePost(postData);
+      if (postId) {
+        showToast('Post scheduled successfully!', 'success');
+      } else {
+        // Error toast is already shown by schedulePost
+        showToast('Failed to schedule post', 'error');
+      }
     }
     
     // Reset form and close modal
@@ -333,7 +398,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Create Custom Post</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{postToEdit ? 'Edit Post' : 'Create Custom Post'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -388,14 +453,14 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
 
           {/* Platforms */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Select Platforms</label>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Select Platform</label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {platforms.map((platform) => (
                 <button
                   key={platform.name}
                   onClick={() => handlePlatformToggle(platform.name)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
-                    postData.platforms.includes(platform.name)
+                    postData.platforms[0] === platform.name
                       ? 'border-huttle-primary bg-huttle-primary/10'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
@@ -727,7 +792,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             disabled={isGenerating}
             className="px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Schedule Post
+            {postToEdit ? 'Update Post' : 'Schedule Post'}
           </button>
         </div>
       </div>

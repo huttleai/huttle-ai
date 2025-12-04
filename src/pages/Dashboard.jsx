@@ -19,7 +19,11 @@ import {
   Clock,
   Zap,
   ChevronRight,
-  Flame
+  Flame,
+  Activity,
+  ArrowUpRight,
+  Copy,
+  Check
 } from 'lucide-react';
 import CreatePostModal from '../components/CreatePostModal';
 import FloatingActionButton from '../components/FloatingActionButton';
@@ -32,6 +36,7 @@ import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal } from '../c
 import { socialUpdates } from '../data/socialUpdates';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
+import { getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
 
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
@@ -51,21 +56,48 @@ export default function Dashboard() {
   const [aiGensLimit, setAiGensLimit] = useState(Infinity);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
-  const [greeting, setGreeting] = useState('');
+  const [timeGreeting, setTimeGreeting] = useState('');
+  const [hoveredStat, setHoveredStat] = useState(null);
+  const [hoveredTrend, setHoveredTrend] = useState(null);
+  const [copiedHashtag, setCopiedHashtag] = useState(null);
   
-  // Generate greeting based on time of day
+  // Copy hashtag to clipboard
+  const copyHashtag = async (hashtag) => {
+    try {
+      await navigator.clipboard.writeText(hashtag);
+      setCopiedHashtag(hashtag);
+      showToast('Hashtag copied to clipboard!', 'success');
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedHashtag(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy hashtag:', err);
+      showToast('Failed to copy hashtag', 'error');
+    }
+  };
+  
+  // Generate time-based greeting
   useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Good morning');
-    else if (hour < 17) setGreeting('Good afternoon');
-    else setGreeting('Good evening');
+    if (hour < 12) setTimeGreeting('Good morning');
+    else if (hour < 17) setTimeGreeting('Good afternoon');
+    else setTimeGreeting('Good evening');
   }, []);
+
+  // Get personalized greeting based on profile type
+  const isCreator = isCreatorProfile(brandProfile);
+  const personalizedGreeting = getPersonalizedGreeting(
+    brandProfile, 
+    user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator'
+  );
   
-  // AI Insights
+  // AI Insights - all use blue theme for consistency
   const aiInsights = [
-    { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles },
-    { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock },
-    { title: 'Content Gap Found', description: 'Add more video content - 60% higher engagement', icon: BarChart3 },
+    { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles, color: 'from-blue-500 to-cyan-500' },
+    { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock, color: 'from-cyan-500 to-blue-500' },
+    { title: 'Content Gap Found', description: 'Add more video content - 60% higher engagement', icon: BarChart3, color: 'from-blue-600 to-cyan-500' },
   ];
   
   // Track previous values for detecting updates
@@ -232,11 +264,6 @@ export default function Dashboard() {
         { topic: 'Wellness Wednesday Tips', engagement: '3.2M posts', growth: '+23%' },
         { topic: 'Skin Care Technology', engagement: '987K posts', growth: '+89%' },
         { topic: '#GlowUp2024', engagement: '1.5M posts', growth: '+34%' },
-        { topic: 'Anti-Aging Solutions', engagement: '1.9M posts', growth: '+52%' },
-        { topic: 'Laser Treatments Guide', engagement: '876K posts', growth: '+71%' },
-        { topic: 'Recovery & Aftercare', engagement: '2.1M posts', growth: '+28%' },
-        { topic: 'Patient Success Stories', engagement: '1.3M posts', growth: '+63%' },
-        { topic: 'Seasonal Skin Care', engagement: '945K posts', growth: '+39%' },
       ],
       'beauty': [
         { topic: 'Clean Beauty Movement', engagement: '2.4M posts', growth: '+45%' },
@@ -244,11 +271,6 @@ export default function Dashboard() {
         { topic: 'Makeup Tutorials', engagement: '3.2M posts', growth: '+23%' },
         { topic: 'Beauty Tech Innovation', engagement: '987K posts', growth: '+89%' },
         { topic: '#BeautyTips', engagement: '1.5M posts', growth: '+34%' },
-        { topic: 'Sustainable Beauty', engagement: '2.2M posts', growth: '+41%' },
-        { topic: 'Vegan Beauty Products', engagement: '1.4M posts', growth: '+55%' },
-        { topic: 'Natural Hair Care', engagement: '1.7M posts', growth: '+33%' },
-        { topic: 'Beauty Hacks & Tricks', engagement: '2.8M posts', growth: '+27%' },
-        { topic: 'DIY Beauty Treatments', engagement: '1.1M posts', growth: '+72%' },
       ],
       'tech': [
         { topic: 'AI Integration', engagement: '2.4M posts', growth: '+45%' },
@@ -256,11 +278,6 @@ export default function Dashboard() {
         { topic: 'Remote Work Tools', engagement: '3.2M posts', growth: '+23%' },
         { topic: 'Cloud Computing', engagement: '987K posts', growth: '+89%' },
         { topic: '#TechForGood', engagement: '1.5M posts', growth: '+34%' },
-        { topic: 'Blockchain Applications', engagement: '1.6M posts', growth: '+58%' },
-        { topic: 'Sustainable Tech', engagement: '892K posts', growth: '+76%' },
-        { topic: 'Quantum Computing', engagement: '734K posts', growth: '+91%' },
-        { topic: 'Edge Computing', engagement: '1.2M posts', growth: '+44%' },
-        { topic: 'Digital Transformation', engagement: '2.5M posts', growth: '+31%' },
       ]
     };
     
@@ -379,97 +396,171 @@ export default function Dashboard() {
     }
   };
 
-  const displayName = brandProfile?.businessName || user?.name || user?.email?.split('@')[0] || 'Creator';
+  // Build display name - for creators, use first name; for brands, use brand name
+  const displayName = isCreator 
+    ? personalizedGreeting.name
+    : brandProfile?.brandName || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator';
+
+  // Stats configuration - all use blue/cyan theme matching logo
+  const stats = [
+    { 
+      label: 'Scheduled', 
+      value: sortedPosts.length, 
+      icon: Calendar, 
+      color: 'from-blue-500 to-cyan-500',
+      bgColor: 'bg-blue-500/10',
+      textColor: 'text-blue-600'
+    },
+    { 
+      label: 'Streak', 
+      value: postingStreak, 
+      icon: Flame, 
+      subtext: postingStreak === 1 ? 'day' : 'days', 
+      color: 'from-cyan-500 to-blue-500',
+      bgColor: 'bg-cyan-500/10',
+      textColor: 'text-cyan-600'
+    },
+    { 
+      label: 'Next Post', 
+      value: nextPostInfo.display, 
+      icon: Clock, 
+      badge: nextPostInfo.badge, 
+      color: 'from-blue-600 to-cyan-500',
+      bgColor: 'bg-blue-500/10',
+      textColor: 'text-blue-600'
+    },
+    { 
+      label: 'Platforms', 
+      value: activePlatforms, 
+      icon: Target, 
+      color: 'from-cyan-600 to-blue-500',
+      bgColor: 'bg-cyan-500/10',
+      textColor: 'text-cyan-600'
+    },
+  ];
 
   return (
-    <div className="flex-1 min-h-screen bg-white ml-0 lg:ml-64 pt-16 px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50/50 ml-0 lg:ml-64 pt-16 px-4 sm:px-6 lg:px-8 pb-12">
+      {/* Subtle background pattern - blue theme only */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-bl from-blue-500/5 via-cyan-500/3 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-cyan-500/5 via-blue-500/3 to-transparent rounded-full blur-3xl" />
+      </div>
+      
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
-      <div className="mb-8 pt-6">
+      <div className="relative mb-8 pt-6">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="fade-in">
-            <p className="text-gray-500 text-sm font-medium mb-1">{greeting}</p>
-            <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">
-              {displayName}
-            </h1>
-            <p className="text-gray-500 mt-1 text-sm">
-              Here's what's happening with your content today.
-            </p>
+          <div className="animate-fadeIn">
+            {isCreator ? (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Active Now</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                  {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
+                </h1>
+                <p className="text-gray-500 mt-2 text-sm sm:text-base">
+                  Ready to create something amazing today?
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">{timeGreeting}</p>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                  {displayName}
+                </h1>
+                <p className="text-gray-500 mt-2 text-sm sm:text-base">
+                  Here's what's happening with your content today.
+                </p>
+              </>
+            )}
           </div>
           
-          <div className="flex items-center gap-3 slide-in-right">
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsCreatePostOpen(true)}
-              className="btn-primary"
+              className="group relative inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/35 hover:scale-[1.02]"
             >
               <Plus className="w-4 h-4" />
-              New Post
+              <span>New Post</span>
+              <ArrowUpRight className="w-4 h-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Scheduled', value: sortedPosts.length, icon: Calendar, badge: 'Active' },
-          { label: 'Streak', value: postingStreak, icon: Flame, subtext: postingStreak === 1 ? 'day' : 'days' },
-          { label: 'Next Post', value: nextPostInfo.display, icon: Clock, badge: nextPostInfo.badge },
-          { label: 'Platforms', value: activePlatforms, icon: Target, badge: activePlatforms > 0 ? 'Active' : null },
-        ].map((stat, idx) => (
+      {/* Stats Overview - Bento Style */}
+      <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        {stats.map((stat, idx) => (
           <div 
             key={stat.label}
-            className="card hover-lift p-5 stagger-item"
+            className={`group relative overflow-hidden rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 transition-all duration-300 cursor-pointer ${
+              hoveredStat === idx ? 'shadow-xl scale-[1.02] border-gray-200' : 'shadow-sm hover:shadow-lg'
+            }`}
+            onMouseEnter={() => setHoveredStat(idx)}
+            onMouseLeave={() => setHoveredStat(null)}
             style={{ animationDelay: `${idx * 50}ms` }}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-                <stat.icon className="w-4 h-4 text-huttle-blue" />
+            {/* Gradient accent on hover */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+            
+            {/* Top accent line */}
+            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+            
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110`}>
+                  <stat.icon className="w-5 h-5 text-white" />
+                </div>
+                {stat.badge && (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${stat.bgColor} ${stat.textColor}`}>
+                    {stat.badge}
+                  </span>
+                )}
               </div>
-              {stat.badge && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-huttle-cyan-light text-huttle-blue">
-                  {stat.badge}
-                </span>
-              )}
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stat.value}</p>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">{stat.label}</p>
+              {stat.subtext && <p className="text-[10px] text-gray-400 mt-0.5">{stat.subtext}</p>}
             </div>
-            <p className="text-xl font-semibold text-gray-900 count-up">{stat.value}</p>
-            <p className="text-xs text-gray-500">{stat.label}</p>
-            {stat.subtext && <p className="text-[10px] text-gray-400 mt-0.5">{stat.subtext}</p>}
           </div>
         ))}
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
         {/* Left Column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Calendar & Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <MiniCalendar 
               onDateClick={(dateStr) => navigate('/calendar', { state: { date: dateStr, view: 'day' } })}
             />
             
-            {/* Quick Stats */}
-            <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-huttle-blue" />
+            {/* Quick Stats Card */}
+            <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 bg-white border border-gray-100 shadow-sm">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full" />
+              
+              <div className="relative flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <Activity className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Content Stats</h3>
+                  <h3 className="font-bold text-gray-900">Content Stats</h3>
                   <p className="text-gray-500 text-xs">This week</p>
                 </div>
               </div>
               
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 text-sm">Scheduled</span>
-                  <span className="text-xl font-semibold text-gray-900">{sortedPosts.length}</span>
+              <div className="relative space-y-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-600 text-sm font-medium">Scheduled</span>
+                  <span className="text-xl font-bold text-gray-900">{sortedPosts.length}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 text-sm">This Week</span>
-                  <span className="text-lg font-medium text-huttle-blue">
+                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100/50">
+                  <span className="text-blue-700 text-sm font-medium">This Week</span>
+                  <span className="text-xl font-bold text-blue-600">
                     {sortedPosts.filter(p => {
                       if (!p.scheduledDate) return false;
                       const postDate = new Date(p.scheduledDate);
@@ -481,75 +572,71 @@ export default function Dashboard() {
                     }).length}
                   </span>
                 </div>
-                <div className="pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => setIsCreatePostOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-huttle-blue hover:bg-huttle-blue-dark text-white rounded-lg font-medium text-sm transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Quick Schedule
-                  </button>
-                </div>
+                <button
+                  onClick={() => setIsCreatePostOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                >
+                  <Plus className="w-4 h-4" />
+                  Quick Schedule
+                </button>
               </div>
             </div>
           </div>
 
           {/* Upcoming Posts */}
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-huttle-blue" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-gray-900">Upcoming Posts</h2>
-                  <p className="text-xs text-gray-500">{sortedPosts.length} scheduled</p>
-                </div>
-              </div>
-              <Link to="/calendar" className="flex items-center gap-1 text-huttle-blue text-sm font-medium hover-arrow">
-                View Calendar
-                <ChevronRight className="w-4 h-4 arrow-icon" />
-              </Link>
-            </div>
+          <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
             
-            {sortedPosts.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-6 h-6 text-gray-300" />
+            <div className="p-5 sm:p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <Calendar className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-gray-900">Upcoming Posts</h2>
+                    <p className="text-xs text-gray-500">{sortedPosts.length} scheduled</p>
+                  </div>
                 </div>
-                <h3 className="font-medium text-gray-900 mb-1">No posts scheduled</h3>
-                <p className="text-sm text-gray-500 mb-4">Create your first post to get started</p>
-                <button onClick={() => setIsCreatePostOpen(true)} className="btn-primary">
-                  <Plus className="w-4 h-4" />
-                  Schedule Post
-                </button>
+                <Link to="/calendar" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors group">
+                  View Calendar
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </Link>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {sortedPosts.slice(0, 4).map((post, idx) => (
-                  <HoverPreview
-                    key={post.id}
-                    preview={
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-gray-900">{post.title}</h4>
-                        {post.caption && <p className="text-sm text-gray-600 line-clamp-3">{post.caption}</p>}
-                        <div className="text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Platforms:</span>
-                            <span className="font-medium">{post.platforms.join(', ')}</span>
-                          </div>
-                        </div>
-                      </div>
-                    }
+              
+              {sortedPosts.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
+                    <Calendar className="w-7 h-7 text-blue-400" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-1">No posts scheduled</h3>
+                  <p className="text-sm text-gray-500 mb-5">Create your first post to get started</p>
+                  <button 
+                    onClick={() => setIsCreatePostOpen(true)} 
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/25"
                   >
-                    <div 
-                      className="group p-4 bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 hover:bg-white hover:shadow-soft transition-all cursor-pointer stagger-item"
-                      onClick={() => navigate('/calendar', { state: { date: post.scheduledDate, view: 'day' } })}
-                      style={{ animationDelay: `${idx * 50}ms` }}
+                    <Plus className="w-4 h-4" />
+                    Schedule Post
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sortedPosts.slice(0, 4).map((post, idx) => (
+                    <HoverPreview
+                      key={post.id}
+                      preview={
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-gray-900">{post.title}</h4>
+                          {post.caption && <p className="text-sm text-gray-600 line-clamp-3">{post.caption}</p>}
+                        </div>
+                      }
                     >
-                      <div className="flex items-start justify-between">
+                      <div 
+                        className="group flex items-center justify-between p-4 bg-gray-50 hover:bg-white rounded-xl border border-transparent hover:border-gray-200 hover:shadow-lg transition-all cursor-pointer"
+                        onClick={() => navigate('/calendar', { state: { date: post.scheduledDate, view: 'day' } })}
+                      >
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 truncate group-hover:text-huttle-blue transition-colors">
+                          <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                             {post.title}
                           </h3>
                           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -557,176 +644,225 @@ export default function Dashboard() {
                               <Clock className="w-3 h-3" />
                               {post.scheduledDate} at {formatTo12Hour(post.scheduledTime)}
                             </span>
-                            <span className="badge badge-cyan">
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
                               {post.platforms[0]}{post.platforms.length > 1 ? ` +${post.platforms.length - 1}` : ''}
                             </span>
                           </div>
                         </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
-                          className="p-1.5 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-2 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          <Trash2 className="w-4 h-4 text-red-500" />
                         </button>
                       </div>
-                    </div>
-                  </HoverPreview>
-                ))}
-                {sortedPosts.length > 4 && (
-                  <Link to="/calendar" className="block text-center text-sm text-huttle-blue font-medium pt-2 hover:underline">
-                    View all {sortedPosts.length} posts →
-                  </Link>
-                )}
-              </div>
-            )}
+                    </HoverPreview>
+                  ))}
+                  {sortedPosts.length > 4 && (
+                    <Link to="/calendar" className="block text-center text-sm text-blue-600 font-semibold pt-2 hover:underline">
+                      View all {sortedPosts.length} posts →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Right Column - Trending */}
-        <div className="card p-6 h-fit">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-huttle-blue" />
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm h-fit">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-purple-500" />
+          
+          <div className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <TrendingUp className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">Trending Now</h2>
+                <h2 className="font-bold text-gray-900">Trending Now</h2>
                 <p className="text-xs text-gray-500">Hot in your niche</p>
               </div>
             </div>
-          </div>
-          
-          {(!brandProfile?.industry && !brandProfile?.niche) && (
-            <div className="bg-huttle-cyan-light border border-huttle-cyan/20 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-4 h-4 text-huttle-blue flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 mb-1">Personalize Your Feed</p>
-                  <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
-                  <Link to="/brand-voice" className="inline-flex items-center gap-1 text-xs font-medium text-huttle-blue hover-arrow">
-                    Setup Brand Voice
-                    <ArrowRight className="w-3 h-3 arrow-icon" />
-                  </Link>
+            
+            {(!brandProfile?.industry && !brandProfile?.niche) && (
+              <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">Personalize Your Feed</p>
+                    <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
+                    <Link to="/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-700 group">
+                      Setup Brand Voice
+                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
+                  </div>
                 </div>
               </div>
+            )}
+            
+            <div className="space-y-1">
+              {trendingTopics.map((item, i) => (
+                <button 
+                  key={i}
+                  onClick={() => setIsCreatePostOpen(true)}
+                  onMouseEnter={() => setHoveredTrend(i)}
+                  onMouseLeave={() => setHoveredTrend(null)}
+                  className={`w-full group flex items-center gap-3 p-3 rounded-xl transition-all duration-200 text-left ${
+                    hoveredTrend === i ? 'bg-gradient-to-r from-violet-50 to-purple-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-200 ${
+                    i < 3 
+                      ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md' 
+                      : hoveredTrend === i 
+                        ? 'bg-violet-100 text-violet-600' 
+                        : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold truncate transition-colors ${
+                      hoveredTrend === i ? 'text-violet-700' : 'text-gray-900'
+                    }`}>
+                      {item.topic}
+                    </p>
+                    <p className="text-[11px] text-gray-500">{item.engagement}</p>
+                  </div>
+                  <span className={`text-xs font-bold text-emerald-600 transition-opacity ${
+                    hoveredTrend === i ? 'opacity-100' : 'opacity-0'
+                  }`}>
+                    {item.growth}
+                  </span>
+                </button>
+              ))}
             </div>
-          )}
-          
-          <div className="space-y-1">
-            {trendingTopics.map((item, i) => (
-              <button 
-                key={i}
-                onClick={() => setIsCreatePostOpen(true)}
-                className="w-full group flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-all text-left stagger-item"
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <span className="w-6 h-6 rounded bg-gray-100 group-hover:bg-huttle-cyan-light flex items-center justify-center text-[10px] font-semibold text-gray-400 group-hover:text-huttle-blue transition-colors">
-                  {i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 group-hover:text-huttle-blue transition-colors truncate">
-                    {item.topic}
-                  </p>
-                  <p className="text-[11px] text-gray-500">{item.engagement}</p>
-                </div>
-                <span className="text-[11px] font-semibold text-huttle-cyan opacity-0 group-hover:opacity-100 transition-opacity">
-                  {item.growth}
-                </span>
-              </button>
-            ))}
+            
+            <Link 
+              to="/trend-lab" 
+              className="mt-4 w-full py-3 flex items-center justify-center gap-2 border-2 border-violet-200 text-violet-700 font-semibold rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-all text-sm"
+            >
+              <Beaker className="w-4 h-4" />
+              Explore Trend Lab
+            </Link>
           </div>
-          
-          <Link to="/trend-lab" className="mt-4 w-full btn-secondary py-2.5 text-sm flex items-center justify-center gap-2">
-            <Beaker className="w-4 h-4" />
-            Explore Trend Lab
-          </Link>
         </div>
       </div>
 
       {/* Bottom Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Hashtags */}
-        <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-              <Target className="w-4 h-4 text-huttle-cyan" />
-            </div>
-            <div>
-              <AIDisclaimerTooltip phraseIndex={1} position="right">
-                <h2 className="font-semibold text-gray-900">Hashtags of the Day</h2>
-              </AIDisclaimerTooltip>
-              <p className="text-xs text-gray-500">AI-recommended</p>
-            </div>
-          </div>
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
           
-          <div className="space-y-2">
-            {keywords.map((keyword, i) => (
-              <div key={i} className="group flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-white hover:shadow-soft border border-transparent hover:border-gray-100 transition-all cursor-pointer stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                <span className="font-medium text-huttle-blue text-sm">{keyword.tag}</span>
-                <span className="text-xs bg-huttle-cyan-light text-huttle-cyan px-2 py-0.5 rounded-full font-medium">{keyword.score}</span>
+          <div className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Target className="w-5 h-5 text-white" />
               </div>
-            ))}
+              <div>
+                <AIDisclaimerTooltip phraseIndex={1} position="right">
+                  <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
+                </AIDisclaimerTooltip>
+                <p className="text-xs text-gray-500">AI-recommended</p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {keywords.map((keyword, i) => {
+                const isCopied = copiedHashtag === keyword.tag;
+                return (
+                  <div 
+                    key={i} 
+                    onClick={() => copyHashtag(keyword.tag)}
+                    className="group flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-blue-50 hover:shadow-md border border-transparent hover:border-blue-100 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="font-semibold text-blue-600 text-sm group-hover:text-blue-700">{keyword.tag}</span>
+                      {isCopied ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                    </div>
+                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-semibold">{keyword.score}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <AIDisclaimerFooter phraseIndex={1} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
           </div>
-          <AIDisclaimerFooter phraseIndex={1} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
         </div>
 
         {/* Daily Alerts */}
-        <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-              <Bell className="w-4 h-4 text-huttle-blue" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-900">Daily Alerts</h2>
-              <p className="text-xs text-gray-500">Important updates</p>
-            </div>
-          </div>
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500" />
           
-          <div className="space-y-2">
-            {[
-              { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post' },
-              { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More' },
-            ].map((alert, i) => (
-              <div key={i} className="p-4 rounded-lg border bg-huttle-cyan-light border-huttle-cyan/20 transition-all hover:shadow-soft cursor-pointer stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                <div className="flex items-start justify-between mb-1">
-                  <h4 className="font-medium text-sm text-gray-900">{alert.title}</h4>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-huttle-blue/10 text-huttle-blue">{alert.type}</span>
-                </div>
-                <p className="text-xs text-gray-600 mb-2">{alert.desc}</p>
-                <button onClick={() => setIsCreatePostOpen(true)} className="text-xs font-medium text-huttle-blue hover:underline">{alert.action} →</button>
+          <div className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <Bell className="w-5 h-5 text-white" />
               </div>
-            ))}
+              <div>
+                <h2 className="font-bold text-gray-900">Daily Alerts</h2>
+                <p className="text-xs text-gray-500">Important updates</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              {[
+                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-blue-100 text-blue-700' },
+                { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More', typeColor: 'bg-cyan-100 text-cyan-700' },
+              ].map((alert, i) => (
+                <div key={i} className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100/50 hover:shadow-lg hover:border-blue-200 transition-all cursor-pointer">
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-semibold text-sm text-gray-900">{alert.title}</h4>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-bold ${alert.typeColor}`}>{alert.type}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-3">{alert.desc}</p>
+                  <button onClick={() => setIsCreatePostOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 group">
+                    {alert.action}
+                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* AI Insights */}
-        <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 rounded-lg bg-huttle-cyan-light flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-huttle-blue" />
-            </div>
-            <div>
-              <AIDisclaimerTooltip phraseIndex={2} position="right">
-                <h2 className="font-semibold text-gray-900">AI Insights</h2>
-              </AIDisclaimerTooltip>
-              <p className="text-xs text-gray-500">Smart recommendations</p>
-            </div>
-          </div>
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
           
-          <div className="space-y-2">
-            {aiInsights.map((insight, i) => (
-              <div key={i} className="p-4 rounded-lg border bg-huttle-cyan-light border-huttle-cyan/20 transition-all hover:shadow-soft cursor-pointer stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                <div className="flex items-start gap-3">
-                  <insight.icon className="w-4 h-4 mt-0.5 flex-shrink-0 text-huttle-blue" />
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-900">{insight.title}</h4>
-                    <p className="text-xs text-gray-600 mt-0.5">{insight.description}</p>
+          <div className="p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <AIDisclaimerTooltip phraseIndex={2} position="right">
+                  <h2 className="font-bold text-gray-900">AI Insights</h2>
+                </AIDisclaimerTooltip>
+                <p className="text-xs text-gray-500">Smart recommendations</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              {aiInsights.map((insight, i) => (
+                <div key={i} className="group p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100/50 hover:shadow-lg hover:border-blue-200 transition-all cursor-pointer">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${insight.color} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                      <insight.icon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm text-gray-900">{insight.title}</h4>
+                      <p className="text-xs text-gray-600 mt-0.5">{insight.description}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <AIDisclaimerFooter phraseIndex={2} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
           </div>
-          <AIDisclaimerFooter phraseIndex={2} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
         </div>
       </div>
 

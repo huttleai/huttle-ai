@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   preferred_platforms TEXT[], -- Array of platforms they use most
   brand_voice_preference TEXT, -- Preferred tone (e.g., "casual", "professional", "humorous")
   
+  -- Profile type (Brand/Business vs Solo Creator)
+  profile_type TEXT DEFAULT 'brand', -- 'brand' for businesses, 'creator' for solo creators
+  creator_archetype TEXT, -- For solo creators: 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
+  
+  -- Extended brand/creator info
+  brand_name TEXT, -- Brand name or creator handle
+  industry TEXT, -- Industry or category
+  
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
@@ -29,6 +37,7 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
 CREATE INDEX IF NOT EXISTS idx_user_profile_user_id ON public.user_profile(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_profile_niche ON public.user_profile(niche);
 CREATE INDEX IF NOT EXISTS idx_user_profile_quiz_completed ON public.user_profile(quiz_completed_at);
+CREATE INDEX IF NOT EXISTS idx_user_profile_profile_type ON public.user_profile(profile_type);
 
 -- Enable RLS
 ALTER TABLE public.user_profile ENABLE ROW LEVEL SECURITY;
@@ -65,3 +74,10 @@ CREATE TRIGGER update_user_profile_updated_at
   EXECUTE FUNCTION update_user_profile_updated_at();
 
 COMMENT ON TABLE public.user_profile IS 'Stores user onboarding quiz data and preferences for personalized AI content generation.';
+
+-- Migration for existing tables (run if table already exists):
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS profile_type TEXT DEFAULT 'brand';
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS creator_archetype TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS brand_name TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS industry TEXT;
+-- CREATE INDEX IF NOT EXISTS idx_user_profile_profile_type ON public.user_profile(profile_type);

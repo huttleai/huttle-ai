@@ -201,27 +201,39 @@ export default function VoiceInput({
     <div className={`space-y-3 ${className}`}>
       {/* Voice Input Button */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={isListening ? stopListening : startListening}
-          disabled={isPolishing}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-            isListening
-              ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-              : 'bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white hover:shadow-lg hover:shadow-huttle-primary/25'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {isListening ? (
-            <>
-              <MicOff className="w-5 h-5" />
-              <span>Stop Recording</span>
-            </>
-          ) : (
-            <>
-              <Mic className="w-5 h-5" />
-              <span>Voice to Post</span>
-            </>
+        <div className="relative group">
+          <button
+            onClick={isListening ? stopListening : startListening}
+            disabled={isPolishing}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              isListening
+                ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                : 'bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white hover:shadow-lg hover:shadow-huttle-primary/25'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isListening ? (
+              <>
+                <MicOff className="w-5 h-5" />
+                <span>Stop Recording</span>
+              </>
+            ) : (
+              <>
+                <Mic className="w-5 h-5" />
+                <span>Voice to Post</span>
+              </>
+            )}
+          </button>
+          
+          {/* Hover Preview Tooltip */}
+          {!isListening && (
+            <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+              <div className="bg-blue-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[200px] text-center">
+                Record your voice, AI transforms it into a polished post
+                <div className="absolute top-full left-6 w-0 h-0 border-4 border-transparent border-t-blue-50" />
+              </div>
+            </div>
           )}
-        </button>
+        </div>
 
         {isListening && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -351,14 +363,23 @@ export function VoiceInputButton({ onContent, platform, className = '' }) {
 
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white rounded-lg hover:shadow-md transition-all font-medium ${className}`}
-        title="Voice to Post"
-      >
-        <Mic className="w-3.5 h-3.5" />
-        Voice
-      </button>
+      <div className="relative group">
+        <button
+          onClick={() => setIsOpen(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white rounded-lg hover:shadow-md transition-all font-medium ${className}`}
+        >
+          <Mic className="w-3.5 h-3.5" />
+          Voice
+        </button>
+        
+        {/* Hover Preview Tooltip */}
+        <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+          <div className="bg-blue-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[180px] text-center">
+            Record your voice, AI transforms it into a polished post
+            <div className="absolute top-full left-4 w-0 h-0 border-4 border-transparent border-t-blue-50" />
+          </div>
+        </div>
+      </div>
     );
   }
 

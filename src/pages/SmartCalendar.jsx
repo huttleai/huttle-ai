@@ -18,7 +18,8 @@ import {
   Sparkles,
   Eye,
   Zap,
-  Target
+  Target,
+  Pencil
 } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
@@ -59,6 +60,7 @@ export default function SmartCalendar() {
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [postToPublish, setPostToPublish] = useState(null);
+  const [postToEdit, setPostToEdit] = useState(null);
   const [draggedPost, setDraggedPost] = useState(null);
   const [dragOverDate, setDragOverDate] = useState(null);
   const [quickAddDate, setQuickAddDate] = useState(null);
@@ -302,7 +304,8 @@ export default function SmartCalendar() {
   };
 
   const handleEditPost = (post) => {
-    addToast('Edit functionality coming soon!', 'info');
+    setPostToEdit(post);
+    setIsCreatePostOpen(true);
   };
 
   const handleDeletePost = (post) => {
@@ -446,6 +449,16 @@ export default function SmartCalendar() {
                 {post.type === 'image' && <Image className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-pink-500`} />}
                 {post.type === 'video' && <Video className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-purple-500`} />}
                 {post.optimal && <Sparkles className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-amber-500`} />}
+                {/* Edit Button - Always Visible */}
+                {!compact && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
+                    className="p-1 hover:bg-blue-50 rounded transition-colors"
+                    title="Edit Post"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-huttle-primary" />
+                  </button>
+                )}
               </div>
             </div>
             
@@ -481,6 +494,13 @@ export default function SmartCalendar() {
           {/* Quick Actions on Hover */}
           {!compact && hoveredPost === post.id && (
             <div className="absolute top-1 right-1 flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-md p-1 shadow-sm border border-gray-100 animate-fadeIn">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
+                className="p-1 hover:bg-blue-50 rounded transition-colors"
+                title="Edit"
+              >
+                <Pencil className="w-3.5 h-3.5 text-huttle-primary" />
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleOpenPublishModal(post); }}
                 className="p-1 hover:bg-huttle-cyan-light rounded transition-colors"
@@ -803,7 +823,7 @@ export default function SmartCalendar() {
                           ))}
                           {posts.length === 0 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleQuickAdd(dateStr); }}
+                              onClick={(e) => { e.stopPropagation(); setQuickAddDate(null); setIsCreatePostOpen(true); }}
                               className="w-full py-6 md:py-8 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-huttle-primary hover:text-huttle-primary hover:bg-huttle-cyan-light/30 transition-all duration-200 flex flex-col items-center gap-2"
                             >
                               <Plus className="w-5 h-5" />
@@ -887,6 +907,14 @@ export default function SmartCalendar() {
                           {/* Post Actions */}
                           <div className="bg-gray-50 px-4 md:px-5 py-3 md:py-4 border-t border-gray-100">
                             <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleEditPost(post)}
+                                className="flex items-center gap-2 px-3 py-2 bg-huttle-primary text-white rounded-lg font-medium text-sm hover:bg-huttle-primary-dark transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </button>
+                              
                               <button
                                 onClick={() => handleOpenPublishModal(post)}
                                 className="btn-primary text-sm"
@@ -999,11 +1027,16 @@ export default function SmartCalendar() {
                 {upcomingPosts.map(post => (
                   <div 
                     key={post.id}
-                    onClick={() => handlePostClick(post)}
-                    className="flex items-center gap-3 md:gap-4 p-3 md:p-4 hover:bg-gray-50 cursor-pointer transition-colors group"
+                    className="flex items-center gap-3 md:gap-4 p-3 md:p-4 hover:bg-gray-50 transition-colors group"
                   >
-                    <div className="w-2 h-2 rounded-full bg-huttle-primary flex-shrink-0 group-hover:scale-125 transition-transform" />
-                    <div className="flex-1 min-w-0">
+                    <div 
+                      onClick={() => handlePostClick(post)}
+                      className="w-2 h-2 rounded-full bg-huttle-primary flex-shrink-0 group-hover:scale-125 transition-transform cursor-pointer"
+                    />
+                    <div 
+                      onClick={() => handlePostClick(post)}
+                      className="flex-1 min-w-0 cursor-pointer"
+                    >
                       <h4 className="font-semibold text-sm text-gray-900 truncate group-hover:text-huttle-primary transition-colors">
                         {post.title}
                       </h4>
@@ -1014,6 +1047,13 @@ export default function SmartCalendar() {
                     {post.optimal && (
                       <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
+                      className="p-1.5 hover:bg-blue-50 rounded transition-colors"
+                      title="Edit Post"
+                    >
+                      <Pencil className="w-4 h-4 text-huttle-primary" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1028,8 +1068,10 @@ export default function SmartCalendar() {
         onClose={() => {
           setIsCreatePostOpen(false);
           setQuickAddDate(null);
+          setPostToEdit(null);
         }}
         preselectedDate={quickAddDate}
+        postToEdit={postToEdit}
       />
 
       {/* Publish Modal */}

@@ -39,33 +39,32 @@ export function AIDisclaimerTooltip({ children, phraseIndex = 0, position = 'top
     setIsVisible(false);
   };
 
+  // For 'right' position, show above to avoid overlap and clipping
+  const effectivePosition = position === 'right' ? 'top' : position;
+
   const getPositionClasses = () => {
-    switch (position) {
+    switch (effectivePosition) {
       case 'top':
         return 'bottom-full left-1/2 -translate-x-1/2 mb-2';
       case 'bottom':
         return 'top-full left-1/2 -translate-x-1/2 mt-2';
       case 'left':
         return 'right-full top-1/2 -translate-y-1/2 mr-2';
-      case 'right':
-        return 'left-full top-1/2 -translate-y-1/2 ml-2';
       default:
         return 'bottom-full left-1/2 -translate-x-1/2 mb-2';
     }
   };
 
   const getArrowClasses = () => {
-    switch (position) {
+    switch (effectivePosition) {
       case 'top':
-        return 'top-full left-1/2 -translate-x-1/2 border-t-blue-900';
+        return 'top-full left-1/2 -translate-x-1/2 border-t-white';
       case 'bottom':
-        return 'bottom-full left-1/2 -translate-x-1/2 border-b-blue-900';
+        return 'bottom-full left-1/2 -translate-x-1/2 border-b-white';
       case 'left':
-        return 'left-full top-1/2 -translate-y-1/2 border-l-blue-900';
-      case 'right':
-        return 'right-full top-1/2 -translate-y-1/2 border-r-blue-900';
+        return 'left-full top-1/2 -translate-y-1/2 border-l-white';
       default:
-        return 'top-full left-1/2 -translate-x-1/2 border-t-blue-900';
+        return 'top-full left-1/2 -translate-x-1/2 border-t-white';
     }
   };
 
@@ -75,19 +74,34 @@ export function AIDisclaimerTooltip({ children, phraseIndex = 0, position = 'top
       <span
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="ml-1 cursor-help"
+        className="ml-1 cursor-help relative z-10"
       >
-        <Info className="w-3.5 h-3.5 text-blue-500 hover:text-blue-600 transition-colors" />
-      </span>
-
-      {isVisible && (
-        <div className={`absolute z-50 ${getPositionClasses()}`}>
-          <div className="bg-blue-900 text-white text-xs rounded-lg px-3 py-2 max-w-xs shadow-xl leading-relaxed">
-            {getRotatingPhrase('tooltip', phraseIndex)}
-            <div className={`absolute w-0 h-0 border-4 border-transparent ${getArrowClasses()}`} />
+        <Info className="w-3.5 h-3.5 text-huttle-primary hover:text-huttle-primary-dark transition-colors" />
+        
+        {isVisible && (
+          <div 
+            className={`fixed ${getPositionClasses()}`}
+            style={{ 
+              width: '300px',
+              maxWidth: 'min(300px, calc(100vw - 2rem))',
+              pointerEvents: 'none',
+              zIndex: 999999,
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)'
+            }}
+          >
+            <div className="bg-gradient-to-br from-huttle-primary to-blue-500 text-white text-sm rounded-xl px-4 py-3.5 shadow-2xl border-2 border-white/20 leading-relaxed w-full box-border backdrop-blur-sm animate-fadeIn">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-white/90" />
+                <div className="text-left flex-1">
+                  {getRotatingPhrase('tooltip', phraseIndex)}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </span>
     </div>
   );
 }

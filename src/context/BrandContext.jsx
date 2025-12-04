@@ -14,12 +14,17 @@ export function useBrand() {
     updateBrandData: context.updateBrandData,
     resetBrandData: context.resetBrandData,
     loading: context.loading,
+    // Convenience helpers for profile type
+    isCreator: context.brandData?.profileType === 'creator',
+    isBrand: context.brandData?.profileType === 'brand' || !context.brandData?.profileType,
   };
 }
 
 export function BrandProvider({ children }) {
   const { user, userProfile } = useContext(AuthContext);
   const [brandData, setBrandData] = useState({
+    profileType: 'brand', // 'brand' or 'creator'
+    creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
     brandName: '',
     niche: '',
     industry: '',
@@ -60,7 +65,9 @@ export function BrandProvider({ children }) {
           }
         } else if (data) {
           // Map user_profile fields to brandData structure
-          setBrandData({
+          const mappedData = {
+            profileType: data.profile_type || 'brand',
+            creatorArchetype: data.creator_archetype || '',
             brandName: data.brand_name || '',
             niche: data.niche || '',
             industry: data.industry || '',
@@ -68,17 +75,10 @@ export function BrandProvider({ children }) {
             brandVoice: data.brand_voice_preference || '',
             platforms: data.preferred_platforms || [],
             goals: data.content_goals || [],
-          });
+          };
+          setBrandData(mappedData);
           // Also sync to localStorage as backup
-          localStorage.setItem('brandData', JSON.stringify({
-            brandName: data.brand_name || '',
-            niche: data.niche || '',
-            industry: data.industry || '',
-            targetAudience: data.target_audience || '',
-            brandVoice: data.brand_voice_preference || '',
-            platforms: data.preferred_platforms || [],
-            goals: data.content_goals || [],
-          }));
+          localStorage.setItem('brandData', JSON.stringify(mappedData));
         } else {
           // No profile found, try localStorage
           const savedBrand = localStorage.getItem('brandData');
@@ -115,12 +115,13 @@ export function BrandProvider({ children }) {
           .from('user_profile')
           .upsert({
             user_id: user.id,
+            profile_type: updated.profileType || 'brand',
+            creator_archetype: updated.creatorArchetype || null,
             niche: updated.niche,
             target_audience: updated.targetAudience,
             brand_voice_preference: updated.brandVoice,
             preferred_platforms: updated.platforms,
             content_goals: updated.goals,
-            // Add new fields if they exist in your schema
             brand_name: updated.brandName,
             industry: updated.industry,
             updated_at: new Date().toISOString(),
@@ -141,6 +142,8 @@ export function BrandProvider({ children }) {
 
   const resetBrandData = async () => {
     const resetData = {
+      profileType: 'brand',
+      creatorArchetype: '',
       brandName: '',
       niche: '',
       industry: '',
@@ -158,6 +161,8 @@ export function BrandProvider({ children }) {
         await supabase
           .from('user_profile')
           .update({
+            profile_type: 'brand',
+            creator_archetype: null,
             niche: null,
             target_audience: null,
             brand_voice_preference: null,
