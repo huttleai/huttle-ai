@@ -362,7 +362,7 @@ function NotificationPanel() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <Bell className="w-6 h-6" />
-              <h2 className="text-2xl font-bold">Notifications</h2>
+              <h2 className="text-2xl font-bold text-white">Notifications</h2>
             </div>
             <button
               onClick={() => setShowNotificationPanel(false)}

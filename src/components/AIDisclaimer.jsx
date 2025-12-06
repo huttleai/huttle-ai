@@ -10,6 +10,17 @@ const DISCLAIMER_PHRASES = {
     "AI-generated insight from trending patterns. Adapt to your unique audience!",
     "Smart prediction based on current trends. Your creativity makes it work!",
   ],
+  // Specific phrases for different sections
+  hashtags: [
+    "AI-recommended hashtags trending in your niche right now. These hashtags are selected based on current engagement rates, growth velocity, and relevance to your brand. Copy and use them in your posts to increase discoverability!",
+    "Curated hashtags showing high engagement potential in your industry. Updated daily based on real-time social media data. Mix these with your brand-specific hashtags for best results.",
+    "Trending hashtags selected by AI analysis of millions of posts in your niche. These tags are currently gaining momentum—use them while they're hot to boost your reach!",
+  ],
+  insights: [
+    "AI-powered insights analyzing your content patterns and engagement data. These recommendations identify opportunities to improve your posting strategy, optimal timing, and content mix based on what's working in your niche.",
+    "Smart recommendations generated from your posting history and trending patterns. These insights help you understand what content types, topics, and timing drive the best engagement for your audience.",
+    "Personalized AI insights tailored to your brand and niche. Based on analysis of successful posts in your industry, these suggestions help you optimize your content strategy and posting schedule.",
+  ],
   footer: [
     "Powered by real-time trends & your data—predictions are guides, not guarantees. Past performance isn't future-proof.",
     "AI insights based on live data—treat as inspiration, not certainty. Test and refine!",
@@ -21,6 +32,7 @@ const DISCLAIMER_PHRASES = {
 // Get a rotating phrase based on index
 const getRotatingPhrase = (type, index = 0) => {
   const phrases = DISCLAIMER_PHRASES[type] || DISCLAIMER_PHRASES.tooltip;
+  if (!phrases) return DISCLAIMER_PHRASES.tooltip[0];
   return phrases[index % phrases.length];
 };
 
@@ -41,6 +53,15 @@ export function AIDisclaimerTooltip({ children, phraseIndex = 0, position = 'top
 
   // For 'right' position, show above to avoid overlap and clipping
   const effectivePosition = position === 'right' ? 'top' : position;
+  
+  // Determine which phrase type to use based on phraseIndex
+  const getPhraseType = () => {
+    if (phraseIndex === 1) return 'hashtags';
+    if (phraseIndex === 2) return 'insights';
+    return 'tooltip';
+  };
+  
+  const phraseType = getPhraseType();
 
   const getPositionClasses = () => {
     switch (effectivePosition) {
@@ -80,25 +101,70 @@ export function AIDisclaimerTooltip({ children, phraseIndex = 0, position = 'top
         
         {isVisible && (
           <div 
-            className={`fixed ${getPositionClasses()}`}
+            className={`absolute ${getPositionClasses()} z-50`}
             style={{ 
-              width: '300px',
-              maxWidth: 'min(300px, calc(100vw - 2rem))',
+              width: phraseType === 'hashtags' || phraseType === 'insights' ? '320px' : '300px',
+              maxWidth: 'min(320px, calc(100vw - 2rem))',
               pointerEvents: 'none',
-              zIndex: 999999,
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)'
             }}
           >
             <div className="bg-gradient-to-br from-huttle-primary to-blue-500 text-white text-sm rounded-xl px-4 py-3.5 shadow-2xl border-2 border-white/20 leading-relaxed w-full box-border backdrop-blur-sm animate-fadeIn">
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-white/90" />
                 <div className="text-left flex-1">
-                  {getRotatingPhrase('tooltip', phraseIndex)}
+                  {getRotatingPhrase(phraseType, 0)}
                 </div>
               </div>
             </div>
+            {/* Arrow pointing to info icon */}
+            {effectivePosition === 'top' && (
+              <div 
+                className="absolute top-full left-1/2 -translate-x-1/2"
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: '8px solid transparent',
+                  borderRight: '8px solid transparent',
+                  borderTop: '8px solid #00bad3',
+                }}
+              />
+            )}
+            {effectivePosition === 'bottom' && (
+              <div 
+                className="absolute bottom-full left-1/2 -translate-x-1/2"
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: '8px solid transparent',
+                  borderRight: '8px solid transparent',
+                  borderBottom: '8px solid #00bad3',
+                }}
+              />
+            )}
+            {effectivePosition === 'left' && (
+              <div 
+                className="absolute left-full top-1/2 -translate-y-1/2"
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderTop: '8px solid transparent',
+                  borderBottom: '8px solid transparent',
+                  borderLeft: '8px solid #00bad3',
+                }}
+              />
+            )}
+            {effectivePosition === 'right' && (
+              <div 
+                className="absolute right-full top-1/2 -translate-y-1/2"
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderTop: '8px solid transparent',
+                  borderBottom: '8px solid transparent',
+                  borderRight: '8px solid #00bad3',
+                }}
+              />
+            )}
           </div>
         )}
       </span>

@@ -32,11 +32,12 @@ import MiniCalendar from '../components/MiniCalendar';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
-import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal } from '../components/AIDisclaimer';
+import { AIDisclaimerFooter, HowWePredictModal } from '../components/AIDisclaimer';
 import { socialUpdates } from '../data/socialUpdates';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
+import { getPlatformIcon } from '../components/SocialIcons';
 
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
@@ -60,6 +61,7 @@ export default function Dashboard() {
   const [hoveredStat, setHoveredStat] = useState(null);
   const [hoveredTrend, setHoveredTrend] = useState(null);
   const [copiedHashtag, setCopiedHashtag] = useState(null);
+  const [copiedTopic, setCopiedTopic] = useState(null);
   
   // Copy hashtag to clipboard
   const copyHashtag = async (hashtag) => {
@@ -75,6 +77,23 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to copy hashtag:', err);
       showToast('Failed to copy hashtag', 'error');
+    }
+  };
+  
+  // Copy topic to clipboard
+  const copyTopic = async (topic) => {
+    try {
+      await navigator.clipboard.writeText(topic);
+      setCopiedTopic(topic);
+      showToast('Topic copied to clipboard!', 'success');
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedTopic(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy topic:', err);
+      showToast('Failed to copy topic', 'error');
     }
   };
   
@@ -259,39 +278,39 @@ export default function Dashboard() {
     
     const trendsByIndustry = {
       'medical spa': [
-        { topic: 'Preventative Aesthetics Trend', engagement: '2.4M posts', growth: '+45%' },
-        { topic: 'Non-Invasive Treatments', engagement: '1.8M posts', growth: '+67%' },
-        { topic: 'Wellness Wednesday Tips', engagement: '3.2M posts', growth: '+23%' },
-        { topic: 'Skin Care Technology', engagement: '987K posts', growth: '+89%' },
-        { topic: '#GlowUp2024', engagement: '1.5M posts', growth: '+34%' },
+        { topic: 'Preventative Aesthetics Trend', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
+        { topic: 'Non-Invasive Treatments', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok'] },
+        { topic: 'Wellness Wednesday Tips', engagement: '3.2M posts', growth: '+23%', platforms: ['Instagram', 'Facebook', 'TikTok'] },
+        { topic: 'Skin Care Technology', engagement: '987K posts', growth: '+89%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
+        { topic: '#GlowUp2024', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'TikTok'] },
       ],
       'beauty': [
-        { topic: 'Clean Beauty Movement', engagement: '2.4M posts', growth: '+45%' },
-        { topic: 'Skincare Routines', engagement: '1.8M posts', growth: '+67%' },
-        { topic: 'Makeup Tutorials', engagement: '3.2M posts', growth: '+23%' },
-        { topic: 'Beauty Tech Innovation', engagement: '987K posts', growth: '+89%' },
-        { topic: '#BeautyTips', engagement: '1.5M posts', growth: '+34%' },
+        { topic: 'Clean Beauty Movement', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
+        { topic: 'Skincare Routines', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
+        { topic: 'Makeup Tutorials', engagement: '3.2M posts', growth: '+23%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
+        { topic: 'Beauty Tech Innovation', engagement: '987K posts', growth: '+89%', platforms: ['Instagram', 'TikTok'] },
+        { topic: '#BeautyTips', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
       ],
       'tech': [
-        { topic: 'AI Integration', engagement: '2.4M posts', growth: '+45%' },
-        { topic: 'Cybersecurity Trends', engagement: '1.8M posts', growth: '+67%' },
-        { topic: 'Remote Work Tools', engagement: '3.2M posts', growth: '+23%' },
-        { topic: 'Cloud Computing', engagement: '987K posts', growth: '+89%' },
-        { topic: '#TechForGood', engagement: '1.5M posts', growth: '+34%' },
+        { topic: 'AI Integration', engagement: '2.4M posts', growth: '+45%', platforms: ['X', 'LinkedIn', 'YouTube'] },
+        { topic: 'Cybersecurity Trends', engagement: '1.8M posts', growth: '+67%', platforms: ['X', 'LinkedIn'] },
+        { topic: 'Remote Work Tools', engagement: '3.2M posts', growth: '+23%', platforms: ['LinkedIn', 'X', 'YouTube'] },
+        { topic: 'Cloud Computing', engagement: '987K posts', growth: '+89%', platforms: ['LinkedIn', 'X'] },
+        { topic: '#TechForGood', engagement: '1.5M posts', growth: '+34%', platforms: ['X', 'LinkedIn', 'Instagram'] },
       ]
     };
     
     const defaultTrends = [
-      { topic: 'Social Media Strategy 2024', engagement: '2.4M posts', growth: '+45%' },
-      { topic: 'Content Creation Tips', engagement: '1.8M posts', growth: '+67%' },
-      { topic: 'Digital Marketing Trends', engagement: '3.2M posts', growth: '+23%' },
-      { topic: 'Personal Branding', engagement: '987K posts', growth: '+89%' },
-      { topic: '#GrowthMindset', engagement: '1.5M posts', growth: '+34%' },
-      { topic: 'Influencer Marketing', engagement: '2.1M posts', growth: '+38%' },
-      { topic: 'Video Content Strategy', engagement: '1.9M posts', growth: '+56%' },
-      { topic: 'Community Building', engagement: '1.4M posts', growth: '+69%' },
-      { topic: 'SEO Best Practices', engagement: '1.6M posts', growth: '+42%' },
-      { topic: 'Analytics & Insights', engagement: '1.2M posts', growth: '+51%' },
+      { topic: 'Social Media Strategy 2024', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'X', 'LinkedIn'] },
+      { topic: 'Content Creation Tips', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
+      { topic: 'Digital Marketing Trends', engagement: '3.2M posts', growth: '+23%', platforms: ['LinkedIn', 'X', 'Instagram'] },
+      { topic: 'Personal Branding', engagement: '987K posts', growth: '+89%', platforms: ['LinkedIn', 'Instagram', 'X'] },
+      { topic: '#GrowthMindset', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'X', 'LinkedIn'] },
+      { topic: 'Influencer Marketing', engagement: '2.1M posts', growth: '+38%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
+      { topic: 'Video Content Strategy', engagement: '1.9M posts', growth: '+56%', platforms: ['TikTok', 'Instagram', 'YouTube'] },
+      { topic: 'Community Building', engagement: '1.4M posts', growth: '+69%', platforms: ['Instagram', 'Facebook', 'LinkedIn'] },
+      { topic: 'SEO Best Practices', engagement: '1.6M posts', growth: '+42%', platforms: ['LinkedIn', 'X', 'YouTube'] },
+      { topic: 'Analytics & Insights', engagement: '1.2M posts', growth: '+51%', platforms: ['LinkedIn', 'X', 'Instagram'] },
     ];
     
     const industryTrends = trendsByIndustry[industry] || trendsByIndustry[niche] || [];
@@ -685,33 +704,77 @@ export default function Dashboard() {
               )}
               
               <div className="space-y-1">
-                {trendingTopics.slice(0, 5).map((item, i) => (
-                  <button 
-                    key={i}
-                    onClick={() => setIsCreatePostOpen(true)}
-                    onMouseEnter={() => setHoveredTrend(i)}
-                    onMouseLeave={() => setHoveredTrend(null)}
-                    className={`w-full group flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 text-left ${
-                      hoveredTrend === i ? 'bg-gray-50' : ''
-                    }`}
-                  >
-                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 ${
-                      i < 3 
-                        ? 'bg-blue-50 text-huttle-primary' 
-                        : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate transition-colors ${
-                        hoveredTrend === i ? 'text-gray-900' : 'text-gray-700'
-                      }`}>
-                        {item.topic}
-                      </p>
-                      <p className="text-[10px] text-gray-400">{item.engagement}</p>
-                    </div>
-                  </button>
-                ))}
+                {trendingTopics.slice(0, 5).map((item, i) => {
+                  const isCopied = copiedTopic === item.topic;
+                  return (
+                    <HoverPreview
+                      key={i}
+                      preview={
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="font-bold text-gray-900 mb-1">{item.topic}</h4>
+                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                              <span>{item.engagement}</span>
+                              <span className="text-green-600 font-semibold">{item.growth}</span>
+                            </div>
+                          </div>
+                          <div className="border-t border-gray-200 pt-3">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Trending on:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {item.platforms?.map((platform, idx) => {
+                                const platformIcon = getPlatformIcon(platform, 'w-3.5 h-3.5 text-gray-700');
+                                return (
+                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
+                                    {platformIcon}
+                                    <span className="text-xs font-medium text-gray-700">{platform}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              This topic is gaining traction on these platforms. Consider creating content tailored to each platform's audience.
+                            </p>
+                          </div>
+                        </div>
+                      }
+                    >
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyTopic(item.topic);
+                        }}
+                        onMouseEnter={() => setHoveredTrend(i)}
+                        onMouseLeave={() => setHoveredTrend(null)}
+                        className={`w-full group flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 text-left ${
+                          hoveredTrend === i ? 'bg-gray-50' : ''
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 ${
+                          i < 3 
+                            ? 'bg-blue-50 text-huttle-primary' 
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate transition-colors ${
+                            hoveredTrend === i ? 'text-gray-900' : 'text-gray-700'
+                          }`}>
+                            {item.topic}
+                          </p>
+                          <p className="text-[10px] text-gray-400">{item.engagement}</p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          {isCopied ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </div>
+                      </button>
+                    </HoverPreview>
+                  );
+                })}
               </div>
               
               <Link 
@@ -732,9 +795,7 @@ export default function Dashboard() {
                   <Sparkles className="w-5 h-5 text-huttle-primary" />
                 </div>
                 <div>
-                  <AIDisclaimerTooltip phraseIndex={2} position="right">
-                    <h2 className="font-bold text-gray-900">AI Insights</h2>
-                  </AIDisclaimerTooltip>
+                  <h2 className="font-bold text-gray-900">AI Insights</h2>
                   <p className="text-xs text-gray-500">Smart recommendations</p>
                 </div>
               </div>
@@ -770,9 +831,7 @@ export default function Dashboard() {
                 <Target className="w-5 h-5 text-huttle-primary" />
               </div>
               <div>
-                <AIDisclaimerTooltip phraseIndex={1} position="right">
-                  <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
-                </AIDisclaimerTooltip>
+                <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
                 <p className="text-xs text-gray-500">AI-recommended</p>
               </div>
             </div>

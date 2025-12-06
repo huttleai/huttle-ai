@@ -273,7 +273,8 @@ export default function AIPlanBuilder() {
         <button 
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="btn-primary px-6 md:px-8 py-2.5 md:py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-6 md:px-8 py-2.5 md:py-3 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all shadow-md hover:opacity-90"
+          style={{ backgroundColor: '#01bad2' }}
         >
           {isGenerating ? 'Generating...' : 'Generate AI Plan'}
         </button>
