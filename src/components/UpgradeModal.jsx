@@ -85,24 +85,24 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div 
-          className="bg-white rounded-2xl shadow-2xl max-w-lg w-full pointer-events-auto animate-slideUp"
+          className="bg-white rounded-xl shadow-2xl max-w-lg w-full pointer-events-auto animate-slideUp border border-gray-100"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="relative bg-gradient-to-r from-huttle-primary to-blue-500 text-white p-6 rounded-t-2xl">
+          <div className="relative p-6 rounded-t-xl border-b border-gray-100">
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-lg transition-all"
+              className="absolute top-4 right-4 p-2 hover:bg-gray-50 rounded-lg transition-all text-gray-400 hover:text-gray-600"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+                <Sparkles className="w-6 h-6 text-huttle-primary" />
               </div>
               <div>
-                <h3 className="text-2xl font-bold">{config.title}</h3>
-                <p className="text-sm text-white/90 mt-1">{config.description}</p>
+                <h3 className="text-2xl font-bold text-huttle-primary">{config.title}</h3>
+                <p className="text-sm text-gray-500 mt-1">{config.description}</p>
               </div>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
           {/* Content */}
           <div className="p-6">
             {/* Preview Box */}
-            <div className="bg-gradient-to-r from-huttle-primary/10 to-blue-500/10 rounded-lg p-4 mb-6 border border-huttle-primary/20">
+            <div className="bg-gradient-to-r from-huttle-primary/5 to-blue-500/5 rounded-xl p-4 mb-6 border border-huttle-primary/10">
               <div className="flex items-start gap-3">
                 <Zap className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-1" />
                 <div>
@@ -142,7 +142,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
                 // TODO: Implement navigation to /subscription page
                 onClose();
               }}
-              className="w-full px-6 py-3 bg-gradient-to-r from-huttle-primary to-blue-500 text-white rounded-lg hover:from-huttle-primary-dark hover:to-blue-600 transition-all shadow-md hover:shadow-lg font-semibold flex items-center justify-center gap-2"
+              className="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 btn-upgrade-glow"
             >
               <Sparkles className="w-5 h-5" />
               Upgrade to {config.tier}

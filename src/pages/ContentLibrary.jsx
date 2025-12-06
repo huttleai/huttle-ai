@@ -825,13 +825,20 @@ export default function ContentLibrary() {
     <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-2 sm:px-4 md:px-8 pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full">
       <div className="max-w-full">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-            Content Library
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Your centralized hub for all content assets
-          </p>
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+              <FolderOpen className="w-6 h-6 text-huttle-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Content Library
+              </h1>
+              <p className="text-gray-500">
+                Your centralized hub for all content assets
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Main Layout: Content + Sidebar */}
@@ -839,134 +846,141 @@ export default function ContentLibrary() {
           {/* Main Content Area */}
           <div className="flex-1 min-w-0 w-full max-w-full">
             {/* Search Bar */}
-            <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="mb-6">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400 group-focus-within:text-huttle-primary transition-colors" />
+              </div>
               <input
                 type="text"
                 placeholder="Search your content..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none transition-all text-sm"
+                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary transition-all shadow-sm hover:shadow-md"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Projects Filter */}
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
-            <button
-              onClick={() => setShowCreateProjectModal(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm bg-gradient-to-r from-huttle-primary to-indigo-600 text-white hover:shadow-md"
-            >
-              <FolderPlus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-              New Project
-            </button>
+            {/* Projects Filter */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+              <button
+                onClick={() => setShowCreateProjectModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm bg-white border border-dashed border-gray-300 text-gray-600 hover:border-huttle-primary hover:text-huttle-primary hover:bg-huttle-primary/5"
+              >
+                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-white transition-colors">
+                  <Plus className="w-4 h-4" />
+                </div>
+                New Project
+              </button>
 
-            {projects.map((project) => (
-              <div key={project.id} className="relative group">
-                <button
-                  onClick={() => setActiveProject(project.id)}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm ${
-                    activeProject === project.id
-                      ? 'text-white shadow-md'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                  style={{
-                    backgroundColor: activeProject === project.id ? project.color : undefined
-                  }}
-                >
-                  <Folder className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                  <span className="hidden sm:inline">{project.name}</span>
-                  <span className="sm:hidden">{project.name.length > 12 ? project.name.substring(0, 12) + '...' : project.name}</span>
-                  <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded ${
-                    activeProject === project.id ? 'bg-white/20' : 'bg-gray-100'
-                  }`}>
-                    {project.count}
-                  </span>
-                </button>
-                {project.id !== 'all' && (
-                  <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
-                      className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center hover:bg-blue-600 shadow-lg"
-                      title="Edit project"
+              {projects.map((project) => (
+                <div key={project.id} className="relative group">
+                  <button
+                    onClick={() => setActiveProject(project.id)}
+                    className={`flex items-center gap-3 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm border ${
+                      activeProject === project.id
+                        ? 'bg-white border-huttle-primary text-huttle-primary shadow-sm ring-1 ring-huttle-primary/20'
+                        : 'bg-white border-gray-100 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div 
+                      className="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm"
+                      style={{ 
+                        backgroundColor: activeProject === project.id ? project.color : '#f3f4f6',
+                        color: activeProject === project.id ? '#fff' : '#6b7280'
+                      }}
                     >
-                      <Edit2 className="w-2.5 h-2.5" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); confirmDeleteProject(project); }}
-                      className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-lg"
-                      title="Delete project"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Tabs & Controls */}
-          <div className="flex flex-col gap-2 sm:gap-3 mb-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-              {[
-                { key: 'all', label: 'All', icon: FolderOpen },
-                { key: 'image', label: 'Images', icon: Image },
-                { key: 'video', label: 'Videos', icon: Video },
-                { key: 'text', label: 'Text', icon: FileText }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap text-xs sm:text-sm ${
-                    activeTab === tab.key
-                      ? 'bg-huttle-primary text-white'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <tab.icon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                  {tab.label}
-                </button>
+                      <Folder className="w-3.5 h-3.5" />
+                    </div>
+                    <span>{project.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      activeProject === project.id ? 'bg-huttle-primary/10 text-huttle-primary' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {project.count}
+                    </span>
+                  </button>
+                  {project.id !== 'all' && (
+                    <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 scale-90">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
+                        className="w-6 h-6 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-huttle-primary hover:border-huttle-primary shadow-sm"
+                        title="Edit project"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); confirmDeleteProject(project); }}
+                        className="w-6 h-6 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-500 shadow-sm"
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
-            
-            <div className="flex gap-2">
-              <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+
+            <div className="flex flex-col gap-2 sm:gap-3 mb-6">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                {[
+                  { key: 'all', label: 'All', icon: FolderOpen },
+                  { key: 'image', label: 'Images', icon: Image },
+                  { key: 'video', label: 'Videos', icon: Video },
+                  { key: 'text', label: 'Text', icon: FileText }
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm ${
+                      activeTab === tab.key
+                        ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/20'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="flex gap-3">
+                <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gray-100 text-huttle-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+                  >
+                    <Grid className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gray-100 text-huttle-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+                  >
+                    <List className="w-5 h-5" />
+                  </button>
+                </div>
+                <button 
+                  onClick={() => setShowUploadModal(true)}
+                  disabled={storagePercent >= 100}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl transition-all shadow-md text-sm font-medium ${
+                    storagePercent >= 100
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-huttle-primary to-indigo-600 text-white hover:shadow-lg hover:shadow-huttle-primary/20'
+                  }`}
                 >
-                  <Grid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-huttle-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                >
-                  <List className="w-3.5 h-3.5" />
+                  <Upload className="w-4 h-4" />
+                  {storagePercent >= 100 ? 'Storage Full' : 'Upload Content'}
                 </button>
               </div>
-              <button 
-                onClick={() => setShowUploadModal(true)}
-                disabled={storagePercent >= 100}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg transition-all shadow-sm text-xs sm:text-sm font-medium ${
-                  storagePercent >= 100
-                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                    : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
-                }`}
-              >
-                <Upload className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-                {storagePercent >= 100 ? 'Storage Full' : 'Upload'}
-              </button>
             </div>
-          </div>
 
           {/* Selected Items Actions */}
           {selectedItems.length > 0 && (
@@ -1025,8 +1039,8 @@ export default function ContentLibrary() {
                   <div 
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`bg-white rounded-xl shadow-sm border-2 transition-all hover:shadow-lg cursor-pointer relative group ${
-                      selectedItems.includes(item.id) ? 'border-huttle-primary ring-2 ring-huttle-primary/20' : 'border-gray-100 hover:border-gray-200'
+                    className={`card group relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer overflow-hidden ${
+                      selectedItems.includes(item.id) ? 'ring-2 ring-huttle-primary ring-offset-2' : ''
                     }`}
                   >
                     {viewMode === 'grid' ? (
@@ -1038,50 +1052,63 @@ export default function ContentLibrary() {
                           {/* Selection checkbox */}
                           <button
                             onClick={(e) => handleSelectItem(item.id, e)}
-                            className={`absolute top-2 right-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                            className={`absolute top-2 right-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                               selectedItems.includes(item.id)
-                                ? 'bg-huttle-primary text-white'
-                                : 'bg-white/90 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-white'
-                            } shadow-md`}
+                                ? 'bg-huttle-primary text-white scale-100 opacity-100 shadow-md'
+                                : 'bg-white/90 text-gray-400 scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 hover:bg-white hover:text-huttle-primary shadow-sm'
+                            }`}
                           >
-                            {selectedItems.includes(item.id) && <Check className="w-4 h-4" />}
+                            {selectedItems.includes(item.id) ? <Check className="w-5 h-5" /> : <div className="w-4 h-4 rounded border-2 border-gray-300" />}
                           </button>
                           
                           {/* Type badge */}
-                          <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 text-white text-[10px] rounded-full flex items-center gap-1 font-medium">
-                            {item.type === 'image' && <Image className="w-2.5 h-2.5" />}
-                            {item.type === 'video' && <Video className="w-2.5 h-2.5" />}
-                            {item.type === 'text' && <FileText className="w-2.5 h-2.5" />}
-                            <span className="capitalize">{item.type}</span>
+                          <div className={`absolute top-2 left-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-sm backdrop-blur-md ${
+                            item.type === 'image' ? 'bg-pink-500/90 text-white' :
+                            item.type === 'video' ? 'bg-purple-500/90 text-white' :
+                            'bg-blue-500/90 text-white'
+                          }`}>
+                            {item.type === 'image' && <Image className="w-3 h-3" />}
+                            {item.type === 'video' && <Video className="w-3 h-3" />}
+                            {item.type === 'text' && <FileText className="w-3 h-3" />}
+                            <span>{item.type}</span>
                           </div>
                         </div>
                         
                         {/* Info */}
-                        <div className="p-3">
-                          <h3 className="font-semibold text-sm text-gray-900 truncate mb-1">{item.name}</h3>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-gray-500">{item.date}</p>
-                            {item.size && <p className="text-xs text-gray-400">{item.size}</p>}
+                        <div className="p-4 bg-white">
+                          <h3 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-huttle-primary transition-colors">{item.name}</h3>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <div className={`w-1.5 h-1.5 rounded-full ${
+                                item.type === 'image' ? 'bg-pink-400' :
+                                item.type === 'video' ? 'bg-purple-400' :
+                                'bg-blue-400'
+                              }`} />
+                              {item.date}
+                            </span>
+                            {item.size && <span>{item.size}</span>}
                           </div>
                         </div>
                       </>
                     ) : (
-                      <div className="flex items-center gap-4 p-3">
+                      <div className="flex items-center gap-4 p-4 hover:bg-gray-50/50 transition-colors">
                         {/* List view thumbnail */}
-                        <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 shadow-inner border border-gray-100">
                           {item.type === 'text' ? (
-                            <div className="w-full h-full bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-2">
-                              <p className="text-[10px] text-gray-500 line-clamp-3">{item.content?.slice(0, 60)}</p>
+                            <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-2">
+                              <FileText className="w-6 h-6 text-blue-400" />
                             </div>
                           ) : item.type === 'video' ? (
-                            <div className="w-full h-full relative">
+                            <div className="w-full h-full relative group/thumb">
                               <img 
                                 src={getDisplayUrl(item) || ''} 
                                 alt={item.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover/thumb:scale-110"
                               />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                                <Play className="w-6 h-6 text-white" />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm backdrop-blur-sm">
+                                  <Play className="w-4 h-4 text-gray-900 ml-0.5" />
+                                </div>
                               </div>
                             </div>
                           ) : (
@@ -1094,12 +1121,27 @@ export default function ContentLibrary() {
                         </div>
                         
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate">{item.name}</h3>
-                          <p className="text-sm text-gray-500 mt-0.5">{item.date} {item.size && `• ${item.size}`}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full capitalize">{item.type}</span>
+                          <h3 className="font-semibold text-gray-900 truncate group-hover:text-huttle-primary transition-colors">{item.name}</h3>
+                          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                            <span>{item.date}</span>
+                            {item.size && (
+                              <>
+                                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                <span>{item.size}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md ${
+                              item.type === 'image' ? 'bg-pink-50 text-pink-600 border border-pink-100' :
+                              item.type === 'video' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
+                              'bg-blue-50 text-blue-600 border border-blue-100'
+                            }`}>
+                              {item.type}
+                            </span>
                             {item.project && (
-                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full">
+                              <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[10px] font-medium rounded-md border border-gray-100 flex items-center gap-1">
+                                <Folder className="w-3 h-3" />
                                 {projects.find(p => p.id === item.project)?.name}
                               </span>
                             )}
@@ -1108,13 +1150,13 @@ export default function ContentLibrary() {
                         
                         <button
                           onClick={(e) => handleSelectItem(item.id, e)}
-                          className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                             selectedItems.includes(item.id)
-                              ? 'bg-huttle-primary border-huttle-primary text-white'
-                              : 'border-gray-300 hover:border-huttle-primary'
+                              ? 'bg-huttle-primary border-huttle-primary text-white shadow-md'
+                              : 'border-gray-100 text-gray-300 hover:border-huttle-primary hover:text-huttle-primary hover:bg-white'
                           }`}
                         >
-                          {selectedItems.includes(item.id) && <Check className="w-4 h-4" />}
+                          {selectedItems.includes(item.id) ? <Check className="w-5 h-5" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
                         </button>
                       </div>
                     )}
@@ -1530,7 +1572,7 @@ export default function ContentLibrary() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Upload {uploadType === 'image' ? 'Image' : 'Video'} File
                   </label>
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-huttle-primary transition-all bg-gray-50/50">
+                  <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-huttle-primary hover:bg-huttle-primary/5 transition-all bg-gray-50/50 group cursor-pointer">
                     <input
                       type="file"
                       name="file"
@@ -1539,15 +1581,15 @@ export default function ContentLibrary() {
                       id="file-upload"
                       disabled={uploading}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-huttle-primary/10 flex items-center justify-center">
-                        <Upload className="w-7 h-7 text-huttle-primary" />
+                    <label htmlFor="file-upload" className="cursor-pointer w-full h-full block">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300">
+                        <Upload className="w-8 h-8 text-huttle-primary" />
                       </div>
-                      <p className="text-gray-700 font-medium mb-1">
-                        {uploading ? 'Uploading...' : 'Click to select file'}
+                      <p className="text-gray-900 font-semibold mb-1 text-lg group-hover:text-huttle-primary transition-colors">
+                        {uploading ? 'Uploading...' : 'Click or Drag to Upload'}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        or drag and drop • {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
+                      <p className="text-sm text-gray-500">
+                        {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
                       </p>
                     </label>
                   </div>

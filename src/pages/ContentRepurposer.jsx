@@ -211,8 +211,8 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
-            <Repeat className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+            <Repeat className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">

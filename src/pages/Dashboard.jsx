@@ -95,9 +95,9 @@ export default function Dashboard() {
   
   // AI Insights - all use blue theme for consistency
   const aiInsights = [
-    { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles, color: 'from-blue-500 to-cyan-500' },
-    { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock, color: 'from-cyan-500 to-blue-500' },
-    { title: 'Content Gap Found', description: 'Add more video content - 60% higher engagement', icon: BarChart3, color: 'from-blue-600 to-cyan-500' },
+    { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles, color: 'text-huttle-primary', bg: 'bg-white' },
+    { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock, color: 'text-huttle-primary', bg: 'bg-white' },
+    { title: 'Content Gap Found', description: 'Add more video content - 60% higher engagement', icon: BarChart3, color: 'text-huttle-primary', bg: 'bg-white' },
   ];
   
   // Track previous values for detecting updates
@@ -401,78 +401,72 @@ export default function Dashboard() {
     ? personalizedGreeting.name
     : brandProfile?.brandName || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator';
 
-  // Stats configuration - all use blue/cyan theme matching logo
+  // Stats configuration - clean monochrome style
   const stats = [
     { 
       label: 'Scheduled', 
       value: sortedPosts.length, 
       icon: Calendar, 
-      color: 'from-blue-500 to-cyan-500',
-      bgColor: 'bg-blue-500/10',
-      textColor: 'text-blue-600'
+      color: 'text-huttle-primary',
+      bgColor: 'bg-white',
+      textColor: 'text-gray-900'
     },
     { 
       label: 'Streak', 
       value: postingStreak, 
       icon: Flame, 
       subtext: postingStreak === 1 ? 'day' : 'days', 
-      color: 'from-cyan-500 to-blue-500',
-      bgColor: 'bg-cyan-500/10',
-      textColor: 'text-cyan-600'
+      color: 'text-huttle-primary',
+      bgColor: 'bg-white',
+      textColor: 'text-gray-900'
     },
     { 
       label: 'Next Post', 
       value: nextPostInfo.display, 
       icon: Clock, 
       badge: nextPostInfo.badge, 
-      color: 'from-blue-600 to-cyan-500',
-      bgColor: 'bg-blue-500/10',
-      textColor: 'text-blue-600'
+      color: 'text-huttle-primary',
+      bgColor: 'bg-white',
+      textColor: 'text-gray-900'
     },
     { 
       label: 'Platforms', 
       value: activePlatforms, 
       icon: Target, 
-      color: 'from-cyan-600 to-blue-500',
-      bgColor: 'bg-cyan-500/10',
-      textColor: 'text-cyan-600'
+      color: 'text-huttle-primary',
+      bgColor: 'bg-white',
+      textColor: 'text-gray-900'
     },
   ];
 
   return (
-    <div className="flex-1 min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50/50 ml-0 lg:ml-64 pt-16 px-4 sm:px-6 lg:px-8 pb-12">
-      {/* Subtle background pattern - blue theme only */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-bl from-blue-500/5 via-cyan-500/3 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-cyan-500/5 via-blue-500/3 to-transparent rounded-full blur-3xl" />
-      </div>
-      
+    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-16 px-4 sm:px-6 lg:px-8 pb-12">
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
-      {/* Welcome Header */}
+      {/* Welcome Header - Clean & Minimal */}
       <div className="relative mb-8 pt-6">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div className="animate-fadeIn">
             {isCreator ? (
               <>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Active Now</span>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-green-600">Active Now</span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                   {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
                 </h1>
-                <p className="text-gray-500 mt-2 text-sm sm:text-base">
+                <p className="text-gray-500 mt-1 text-sm">
                   Ready to create something amazing today?
                 </p>
               </>
             ) : (
               <>
-                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">{timeGreeting}</p>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                   {displayName}
                 </h1>
-                <p className="text-gray-500 mt-2 text-sm sm:text-base">
+                <p className="text-gray-500 mt-1 text-sm">
                   Here's what's happening with your content today.
                 </p>
               </>
@@ -482,7 +476,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsCreatePostOpen(true)}
-              className="group relative inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/35 hover:scale-[1.02]"
+              className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.02]"
             >
               <Plus className="w-4 h-4" />
               <span>New Post</span>
@@ -492,60 +486,52 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Overview - Bento Style */}
-      <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+      {/* Stats Overview - Clean Cards */}
+      <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map((stat, idx) => (
           <div 
             key={stat.label}
-            className={`group relative overflow-hidden rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 transition-all duration-300 cursor-pointer ${
-              hoveredStat === idx ? 'shadow-xl scale-[1.02] border-gray-200' : 'shadow-sm hover:shadow-lg'
+            className={`group relative overflow-hidden rounded-xl bg-white border border-gray-100/80 p-5 transition-all duration-300 cursor-pointer ${
+              hoveredStat === idx ? 'shadow-md border-gray-200 scale-[1.02]' : 'shadow-sm hover:shadow-md'
             }`}
             onMouseEnter={() => setHoveredStat(idx)}
             onMouseLeave={() => setHoveredStat(null)}
             style={{ animationDelay: `${idx * 50}ms` }}
           >
-            {/* Gradient accent on hover */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
-            
-            {/* Top accent line */}
-            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-            
-            <div className="relative">
-              <div className="flex items-center justify-between mb-3">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110`}>
-                  <stat.icon className="w-5 h-5 text-white" />
-                </div>
-                {stat.badge && (
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${stat.bgColor} ${stat.textColor}`}>
-                    {stat.badge}
-                  </span>
-                )}
+            <div className="flex items-start justify-between mb-3">
+              <div className={`w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:bg-blue-50`}>
+                <stat.icon className={`w-5 h-5 ${stat.color}`} />
               </div>
-              <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stat.value}</p>
-              <p className="text-xs sm:text-sm text-gray-500 font-medium">{stat.label}</p>
-              {stat.subtext && <p className="text-[10px] text-gray-400 mt-0.5">{stat.subtext}</p>}
+              {stat.badge && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-blue-50 text-huttle-primary rounded-full">
+                  {stat.badge}
+                </span>
+              )}
             </div>
+            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">{stat.label}</p>
+            {stat.subtext && <p className="text-[10px] text-gray-400 mt-1">{stat.subtext}</p>}
           </div>
         ))}
       </div>
 
       {/* Main Content Grid */}
-      <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+      <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Left Column */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Calendar & Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <MiniCalendar 
-              onDateClick={(dateStr) => navigate('/calendar', { state: { date: dateStr, view: 'day' } })}
-            />
+            <div className="rounded-xl border border-gray-100/80 bg-white shadow-sm overflow-hidden">
+              <MiniCalendar 
+                onDateClick={(dateStr) => navigate('/calendar', { state: { date: dateStr, view: 'day' } })}
+              />
+            </div>
             
             {/* Quick Stats Card */}
-            <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 bg-white border border-gray-100 shadow-sm">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full" />
-              
+            <div className="relative overflow-hidden rounded-xl p-5 bg-white border border-gray-100/80 shadow-sm">
               <div className="relative flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <Activity className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-huttle-primary" />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900">Content Stats</h3>
@@ -554,13 +540,13 @@ export default function Dashboard() {
               </div>
               
               <div className="relative space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between p-3 bg-gray-50/50 rounded-xl border border-gray-100">
                   <span className="text-gray-600 text-sm font-medium">Scheduled</span>
                   <span className="text-xl font-bold text-gray-900">{sortedPosts.length}</span>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100/50">
-                  <span className="text-blue-700 text-sm font-medium">This Week</span>
-                  <span className="text-xl font-bold text-blue-600">
+                <div className="flex items-center justify-between p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
+                  <span className="text-huttle-primary text-sm font-medium">This Week</span>
+                  <span className="text-xl font-bold text-huttle-primary">
                     {sortedPosts.filter(p => {
                       if (!p.scheduledDate) return false;
                       const postDate = new Date(p.scheduledDate);
@@ -574,7 +560,7 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => setIsCreatePostOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-semibold text-sm transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Quick Schedule
@@ -584,36 +570,34 @@ export default function Dashboard() {
           </div>
 
           {/* Upcoming Posts */}
-          <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
-            
-            <div className="p-5 sm:p-6">
+          <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
+            <div className="p-5">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <Calendar className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-huttle-primary" />
                   </div>
                   <div>
                     <h2 className="font-bold text-gray-900">Upcoming Posts</h2>
                     <p className="text-xs text-gray-500">{sortedPosts.length} scheduled</p>
                   </div>
                 </div>
-                <Link to="/calendar" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors group">
+                <Link to="/calendar" className="flex items-center gap-1 text-huttle-primary text-sm font-semibold hover:text-huttle-primary-dark transition-colors group">
                   View Calendar
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </div>
               
               {sortedPosts.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                    <Calendar className="w-7 h-7 text-blue-400" />
+                <div className="text-center py-10">
+                  <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                    <Calendar className="w-6 h-6 text-gray-400" />
                   </div>
                   <h3 className="font-semibold text-gray-900 mb-1">No posts scheduled</h3>
-                  <p className="text-sm text-gray-500 mb-5">Create your first post to get started</p>
+                  <p className="text-sm text-gray-500 mb-4">Create your first post to get started</p>
                   <button 
                     onClick={() => setIsCreatePostOpen(true)} 
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/25"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     Schedule Post
@@ -632,19 +616,19 @@ export default function Dashboard() {
                       }
                     >
                       <div 
-                        className="group flex items-center justify-between p-4 bg-gray-50 hover:bg-white rounded-xl border border-transparent hover:border-gray-200 hover:shadow-lg transition-all cursor-pointer"
+                        className="group flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-all cursor-pointer"
                         onClick={() => navigate('/calendar', { state: { date: post.scheduledDate, view: 'day' } })}
                       >
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                          <h3 className="font-semibold text-gray-900 truncate group-hover:text-huttle-primary transition-colors">
                             {post.title}
                           </h3>
-                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                          <div className="flex items-center gap-3 mt-1 flex-wrap">
                             <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                               <Clock className="w-3 h-3" />
                               {post.scheduledDate} at {formatTo12Hour(post.scheduledTime)}
                             </span>
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
                               {post.platforms[0]}{post.platforms.length > 1 ? ` +${post.platforms.length - 1}` : ''}
                             </span>
                           </div>
@@ -659,7 +643,7 @@ export default function Dashboard() {
                     </HoverPreview>
                   ))}
                   {sortedPosts.length > 4 && (
-                    <Link to="/calendar" className="block text-center text-sm text-blue-600 font-semibold pt-2 hover:underline">
+                    <Link to="/calendar" className="block text-center text-sm text-huttle-primary font-semibold pt-2 hover:underline">
                       View all {sortedPosts.length} posts →
                     </Link>
                   )}
@@ -669,95 +653,121 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right Column - Trending */}
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm h-fit">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-purple-500" />
-          
-          <div className="p-5 sm:p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="font-bold text-gray-900">Trending Now</h2>
-                <p className="text-xs text-gray-500">Hot in your niche</p>
-              </div>
-            </div>
-            
-            {(!brandProfile?.industry && !brandProfile?.niche) && (
-              <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900 mb-1">Personalize Your Feed</p>
-                    <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
-                    <Link to="/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-700 group">
-                      Setup Brand Voice
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                    </Link>
-                  </div>
+        {/* Right Column - Trending & Insights */}
+        <div className="space-y-6">
+          {/* Trending Now */}
+          <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-huttle-primary" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-gray-900">Trending Now</h2>
+                  <p className="text-xs text-gray-500">Hot in your niche</p>
                 </div>
               </div>
-            )}
-            
-            <div className="space-y-1">
-              {trendingTopics.map((item, i) => (
-                <button 
-                  key={i}
-                  onClick={() => setIsCreatePostOpen(true)}
-                  onMouseEnter={() => setHoveredTrend(i)}
-                  onMouseLeave={() => setHoveredTrend(null)}
-                  className={`w-full group flex items-center gap-3 p-3 rounded-xl transition-all duration-200 text-left ${
-                    hoveredTrend === i ? 'bg-gradient-to-r from-violet-50 to-purple-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-200 ${
-                    i < 3 
-                      ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md' 
-                      : hoveredTrend === i 
-                        ? 'bg-violet-100 text-violet-600' 
-                        : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold truncate transition-colors ${
-                      hoveredTrend === i ? 'text-violet-700' : 'text-gray-900'
-                    }`}>
-                      {item.topic}
-                    </p>
-                    <p className="text-[11px] text-gray-500">{item.engagement}</p>
+              
+              {(!brandProfile?.industry && !brandProfile?.niche) && (
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 mb-1">Personalize Your Feed</p>
+                      <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
+                      <Link to="/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark group">
+                        Setup Brand Voice
+                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      </Link>
+                    </div>
                   </div>
-                  <span className={`text-xs font-bold text-emerald-600 transition-opacity ${
-                    hoveredTrend === i ? 'opacity-100' : 'opacity-0'
-                  }`}>
-                    {item.growth}
-                  </span>
-                </button>
-              ))}
+                </div>
+              )}
+              
+              <div className="space-y-1">
+                {trendingTopics.slice(0, 5).map((item, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setIsCreatePostOpen(true)}
+                    onMouseEnter={() => setHoveredTrend(i)}
+                    onMouseLeave={() => setHoveredTrend(null)}
+                    className={`w-full group flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 text-left ${
+                      hoveredTrend === i ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 ${
+                      i < 3 
+                        ? 'bg-blue-50 text-huttle-primary' 
+                        : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate transition-colors ${
+                        hoveredTrend === i ? 'text-gray-900' : 'text-gray-700'
+                      }`}>
+                        {item.topic}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{item.engagement}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              <Link 
+                to="/trend-lab" 
+                className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-sm"
+              >
+                <Beaker className="w-4 h-4" />
+                Explore Trend Lab
+              </Link>
             </div>
-            
-            <Link 
-              to="/trend-lab" 
-              className="mt-4 w-full py-3 flex items-center justify-center gap-2 border-2 border-violet-200 text-violet-700 font-semibold rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-all text-sm"
-            >
-              <Beaker className="w-4 h-4" />
-              Explore Trend Lab
-            </Link>
+          </div>
+
+          {/* AI Insights */}
+          <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-huttle-primary" />
+                </div>
+                <div>
+                  <AIDisclaimerTooltip phraseIndex={2} position="right">
+                    <h2 className="font-bold text-gray-900">AI Insights</h2>
+                  </AIDisclaimerTooltip>
+                  <p className="text-xs text-gray-500">Smart recommendations</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {aiInsights.map((insight, i) => (
+                  <div key={i} className="group p-3 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0`}>
+                        <insight.icon className="w-4 h-4 text-huttle-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm text-gray-900">{insight.title}</h4>
+                        <p className="text-xs text-gray-600 mt-0.5">{insight.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <AIDisclaimerFooter phraseIndex={2} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom Grid */}
-      <div className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Bottom Grid - Hashtags & Alerts */}
+      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Hashtags */}
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
-          
-          <div className="p-5 sm:p-6">
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
+          <div className="p-5">
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Target className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                <Target className="w-5 h-5 text-huttle-primary" />
               </div>
               <div>
                 <AIDisclaimerTooltip phraseIndex={1} position="right">
@@ -774,17 +784,17 @@ export default function Dashboard() {
                   <div 
                     key={i} 
                     onClick={() => copyHashtag(keyword.tag)}
-                    className="group flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-blue-50 hover:shadow-md border border-transparent hover:border-blue-100 transition-all cursor-pointer"
+                    className="group flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
                   >
                     <div className="flex items-center gap-2 flex-1">
-                      <span className="font-semibold text-blue-600 text-sm group-hover:text-blue-700">{keyword.tag}</span>
+                      <span className="font-medium text-gray-700 text-sm group-hover:text-gray-900">{keyword.tag}</span>
                       {isCopied ? (
-                        <Check className="w-4 h-4 text-green-500" />
+                        <Check className="w-3.5 h-3.5 text-green-500" />
                       ) : (
                         <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       )}
                     </div>
-                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-semibold">{keyword.score}</span>
+                    <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">{keyword.score}</span>
                   </div>
                 );
               })}
@@ -794,13 +804,11 @@ export default function Dashboard() {
         </div>
 
         {/* Daily Alerts */}
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500" />
-          
-          <div className="p-5 sm:p-6">
+        <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
+          <div className="p-5">
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                <Bell className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-huttle-primary" />
               </div>
               <div>
                 <h2 className="font-bold text-gray-900">Daily Alerts</h2>
@@ -810,58 +818,22 @@ export default function Dashboard() {
             
             <div className="space-y-3">
               {[
-                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-blue-100 text-blue-700' },
-                { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More', typeColor: 'bg-cyan-100 text-cyan-700' },
+                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-blue-50 text-huttle-primary' },
+                { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More', typeColor: 'bg-gray-100 text-gray-600' },
               ].map((alert, i) => (
-                <div key={i} className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100/50 hover:shadow-lg hover:border-blue-200 transition-all cursor-pointer">
+                <div key={i} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
                   <div className="flex items-start justify-between mb-2">
                     <h4 className="font-semibold text-sm text-gray-900">{alert.title}</h4>
                     <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-bold ${alert.typeColor}`}>{alert.type}</span>
                   </div>
                   <p className="text-xs text-gray-600 mb-3">{alert.desc}</p>
-                  <button onClick={() => setIsCreatePostOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 group">
+                  <button onClick={() => setIsCreatePostOpen(true)} className="text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark flex items-center gap-1 group">
                     {alert.action}
                     <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* AI Insights */}
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
-          
-          <div className="p-5 sm:p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <AIDisclaimerTooltip phraseIndex={2} position="right">
-                  <h2 className="font-bold text-gray-900">AI Insights</h2>
-                </AIDisclaimerTooltip>
-                <p className="text-xs text-gray-500">Smart recommendations</p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              {aiInsights.map((insight, i) => (
-                <div key={i} className="group p-4 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100/50 hover:shadow-lg hover:border-blue-200 transition-all cursor-pointer">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${insight.color} flex items-center justify-center flex-shrink-0 shadow-md`}>
-                      <insight.icon className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-sm text-gray-900">{insight.title}</h4>
-                      <p className="text-xs text-gray-600 mt-0.5">{insight.description}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <AIDisclaimerFooter phraseIndex={2} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
           </div>
         </div>
       </div>

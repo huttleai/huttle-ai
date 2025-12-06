@@ -156,13 +156,22 @@
      CARDS - Clean & Minimal
      =================================== */
   .card {
-    @apply bg-white rounded-xl border border-gray-100;
+    @apply bg-white rounded-xl border border-gray-100/80 shadow-sm;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .card-hover:hover {
-    @apply border-gray-200;
+    @apply border-gray-200 bg-gray-50;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Utility Classes */
+  .section-header {
+    @apply text-[10px] font-bold tracking-widest text-gray-400/80 uppercase;
+  }
+
+  .icon-box {
+    @apply rounded-lg flex items-center justify-center transition-all duration-200;
   }
 
   /* Premium glass card */
@@ -587,6 +596,29 @@
     animation: ring-expand 1.5s ease-out infinite;
   }
 
+  /* Upgrade Button Glow */
+  @keyframes upgrade-glow {
+    0%, 100% {
+      box-shadow: 0 0 10px rgba(43, 143, 199, 0.5), 0 0 20px rgba(43, 143, 199, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(43, 143, 199, 0.7), 0 0 35px rgba(43, 143, 199, 0.5);
+    }
+  }
+
+  .btn-upgrade-glow {
+    @apply relative overflow-hidden;
+    background-color: var(--huttle-blue);
+    color: white;
+    animation: upgrade-glow 2s infinite ease-in-out;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .btn-upgrade-glow:hover {
+    background-color: var(--huttle-blue-dark);
+    transform: translateY(-1px);
+  }
+
   .skeleton {
     @apply bg-gray-100 rounded animate-pulse;
   }
@@ -729,3 +761,4 @@
     display: none !important;
   }
 }
+

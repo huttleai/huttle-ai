@@ -412,8 +412,8 @@ export default function AITools() {
         {/* Header */}
         <div className="mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl md:rounded-2xl bg-huttle-primary flex items-center justify-center shadow-xl shadow-huttle-blue/25 flex-shrink-0">
-              <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+              <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">

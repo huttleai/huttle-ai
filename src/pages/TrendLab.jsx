@@ -322,8 +322,8 @@ export default function TrendLab() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
-            <div className="w-14 h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-xl shadow-huttle-blue/25">
-              <Lightbulb className="w-7 h-7 text-white" />
+            <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+              <Lightbulb className="w-7 h-7 text-huttle-primary" />
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">

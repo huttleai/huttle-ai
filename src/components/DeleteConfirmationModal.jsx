@@ -36,54 +36,55 @@ export default function DeleteConfirmationModal({
     <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-4 animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-slideUp">
         {/* Header */}
-        <div className="relative px-6 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-red-100 p-2 rounded-lg">
+        <div className="relative px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="bg-red-50 p-3 rounded-xl border border-red-100">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-xl font-bold text-red-600">
               {title}
             </h2>
           </div>
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="absolute right-4 top-4 p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="absolute right-6 top-6 p-2 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-5">
           {/* Main Message */}
-          <div className="space-y-2">
-            <p className="text-gray-700 font-medium">
+          <div className="space-y-3">
+            <p className="text-gray-700 font-medium leading-relaxed">
               {message}
             </p>
             {itemName && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
                 <p className="text-sm text-gray-600">
-                  <span className="font-semibold">Item:</span> {itemName}
+                  <span className="font-bold text-gray-900">Item:</span> {itemName}
                 </p>
               </div>
             )}
           </div>
 
           {/* Warning Box */}
-          <div className="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-4">
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 pt-0.5">
-                {content.icon}
+          <div className="bg-red-50/50 border border-red-100 rounded-xl p-4 flex gap-3">
+            <div className="flex-shrink-0 pt-0.5">
+              <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-3 h-3 text-red-600" />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-800 mb-1">
-                  This action cannot be undone
-                </p>
-                <p className="text-sm text-red-700">
-                  {content.warning}
-                </p>
-              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-900 mb-0.5">
+                This action cannot be undone
+              </p>
+              <p className="text-sm text-red-700 leading-snug">
+                {content.warning}
+              </p>
             </div>
           </div>
 
@@ -92,14 +93,14 @@ export default function DeleteConfirmationModal({
             <button
               onClick={onClose}
               disabled={isDeleting}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:text-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {content.cancelText}
             </button>
             <button
               onClick={onConfirm}
               disabled={isDeleting}
-              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-red-600/20"
             >
               {isDeleting ? (
                 <>

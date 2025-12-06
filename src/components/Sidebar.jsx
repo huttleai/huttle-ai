@@ -258,7 +258,7 @@ export default function Sidebar() {
                 {aiGensPercent > 80 && subscriptionTier !== 'pro' && (
                   <button 
                     onClick={() => navigate('/subscription')}
-                    className="mt-2 w-full text-[10px] font-semibold text-huttle-primary hover:text-huttle-primary-dark transition-colors flex items-center justify-center gap-0.5"
+                    className="mt-2 w-full text-[10px] font-semibold text-white py-1.5 px-2 rounded-lg flex items-center justify-center gap-0.5 btn-upgrade-glow"
                   >
                     Upgrade for more
                     <ChevronRight className="w-2.5 h-2.5" />

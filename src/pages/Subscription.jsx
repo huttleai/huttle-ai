@@ -250,22 +250,20 @@ export default function Subscription() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
-      {/* Subtle background pattern */}
-      <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
-      
-      <div className="relative z-10">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-huttle-100 text-huttle-700 rounded-full text-sm font-semibold mb-4">
-            <Sparkles className="w-4 h-4" />
-            Simple, transparent pricing
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+            <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mb-3">
-            Choose the perfect plan for you
-          </h1>
-          <p className="text-gray-600 text-lg">
-            Unlock the full power of AI-driven content creation. Cancel anytime.
-          </p>
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+              Subscription Plans
+            </h1>
+            <p className="text-base text-gray-600">
+              Unlock the full power of AI-driven content creation
+            </p>
+          </div>
         </div>
 
         {/* Billing Cycle Toggle */}
@@ -306,15 +304,15 @@ export default function Subscription() {
           {plans.map((plan) => (
             <div
               key={plan.name}
-              className={`relative bg-white rounded-2xl border-2 ${
+              className={`relative bg-white rounded-xl border transition-all duration-300 ${
                 plan.popular 
-                  ? 'border-huttle-primary shadow-xl shadow-huttle-primary/10 scale-105' 
-                  : 'border-gray-200 shadow-soft hover:shadow-lg'
-              } p-6 lg:p-8 flex flex-col transition-all duration-300`}
+                  ? 'border-huttle-primary shadow-lg scale-105 z-10' 
+                  : 'border-gray-200 shadow-sm hover:shadow-md'
+              } p-6 lg:p-8 flex flex-col`}
             >
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-huttle-primary to-cyan-400 text-white text-sm font-bold rounded-full shadow-lg shadow-huttle-primary/30">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-huttle-primary text-white text-sm font-bold rounded-full shadow-md">
                     <Sparkles className="w-3.5 h-3.5" />
                     Most Popular
                   </span>
@@ -322,10 +320,10 @@ export default function Subscription() {
               )}
 
               <div className="text-center mb-6">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center mx-auto mb-4 shadow-lg`}>
-                  <plan.icon className="w-7 h-7 text-white" />
+                <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 mx-auto mb-4">
+                  <plan.icon className="w-7 h-7 text-huttle-primary" />
                 </div>
-                <h3 className="text-xl font-display font-bold text-gray-900 mb-1">{plan.name}</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
                 <p className="text-sm text-gray-500 mb-4">{plan.description}</p>
                 {getPrice(plan)}
               </div>
@@ -334,18 +332,12 @@ export default function Subscription() {
                 <ul className="space-y-3">
                   {plan.features.map((feature, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center ${
-                        feature.startsWith('Everything') 
-                          ? 'bg-huttle-100' 
-                          : 'bg-green-100'
-                      }`}>
-                        <Check className={`w-3 h-3 ${
-                          feature.startsWith('Everything') ? 'text-huttle-600' : 'text-green-600'
-                        }`} />
-                      </div>
+                      <Check className={`w-5 h-5 flex-shrink-0 ${
+                        feature.startsWith('Everything') ? 'text-huttle-primary' : 'text-green-500'
+                      }`} />
                       <span className={`text-sm ${
                         feature.startsWith('Everything') 
-                          ? 'text-huttle-700 font-semibold' 
+                          ? 'text-gray-900 font-semibold' 
                           : 'text-gray-600'
                       }`}>
                         {feature}
@@ -358,14 +350,14 @@ export default function Subscription() {
               <button
                 onClick={() => handleUpgrade(plan.id)}
                 disabled={loading !== null || plan.tier === userTier}
-                className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-200 ${
+                className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
                   plan.tier === userTier
-                    ? 'bg-gray-100 text-gray-500 cursor-default'
+                    ? 'bg-gray-100 text-gray-500 cursor-default border border-gray-200'
                     : plan.popular
-                      ? 'bg-gradient-to-r from-huttle-primary to-huttle-600 text-white shadow-lg shadow-huttle-primary/25 hover:shadow-xl hover:scale-[1.02] disabled:opacity-50'
+                      ? 'btn-upgrade-glow text-white shadow-md hover:shadow-lg disabled:opacity-50'
                       : plan.id === 'freemium'
-                        ? 'bg-gray-100 text-gray-600 cursor-default'
-                        : 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50'
+                        ? 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300 cursor-default'
+                        : 'btn-upgrade-glow text-white shadow-md hover:shadow-lg disabled:opacity-50'
                 }`}
               >
                 {getButtonText(plan)}
@@ -420,7 +412,7 @@ export default function Subscription() {
                   <button 
                     onClick={handleCancelSubscription}
                     disabled={loading === 'portal' || loading === 'cancel'}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     {loading === 'cancel' ? (
                       <>

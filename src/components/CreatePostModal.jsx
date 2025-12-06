@@ -397,10 +397,10 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">{postToEdit ? 'Edit Post' : 'Create Custom Post'}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-huttle-primary">{postToEdit ? 'Edit Post' : 'Create Custom Post'}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
@@ -465,7 +465,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded flex items-center justify-center ${platform.color} text-white`}>
+                  <div className={`w-8 h-8 rounded flex items-center justify-center bg-white border border-gray-100`}>
                     <platform.icon className="w-5 h-5" />
                   </div>
                   <span className="font-medium text-sm">{platform.name}</span>

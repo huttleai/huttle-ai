@@ -13,14 +13,14 @@ export default function AIFeatureLock({ used, limit }) {
   
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-md bg-white/60 rounded-xl">
-      <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 border-2 border-red-200">
+      <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 border border-red-200">
         <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
             <Lock className="w-8 h-8 text-red-600" />
           </div>
         </div>
         
-        <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
+        <h3 className="text-2xl font-bold text-huttle-primary text-center mb-2">
           AI Limit Reached
         </h3>
         
@@ -28,7 +28,7 @@ export default function AIFeatureLock({ used, limit }) {
           You've used all <span className="font-bold text-red-600">{used}/{limit}</span> AI generations this billing cycle.
         </p>
         
-        <div className="bg-gradient-to-br from-huttle-primary to-purple-600 rounded-lg p-4 mb-6 text-white">
+        <div className="bg-gradient-to-r from-huttle-primary to-purple-600 rounded-xl p-4 mb-6 text-white shadow-lg">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-5 h-5" />
             <span className="font-bold">Upgrade to Pro</span>
@@ -43,7 +43,7 @@ export default function AIFeatureLock({ used, limit }) {
         
         <button
           onClick={() => navigate('/subscription')}
-          className="w-full px-6 py-3 bg-gradient-to-r from-huttle-primary to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2 group"
+          className="w-full px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 group btn-upgrade-glow"
         >
           <span>Upgrade Now</span>
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

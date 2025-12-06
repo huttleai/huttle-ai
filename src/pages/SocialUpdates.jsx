@@ -213,8 +213,10 @@ export default function SocialUpdates() {
   return (
     <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8">
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Newspaper className="w-8 h-8 text-huttle-primary" />
+        <div className="flex items-center gap-4 mb-2">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+            <Newspaper className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+          </div>
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
             Social Updates
           </h1>
@@ -263,8 +265,8 @@ export default function SocialUpdates() {
           >
             <div className="flex items-start gap-4">
               {/* Platform Icon */}
-              <div className={`w-12 h-12 rounded-full ${update.color} flex items-center justify-center flex-shrink-0`}>
-                <update.icon className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-white border border-gray-100 shadow-sm">
+                <update.icon className="w-7 h-7" />
               </div>
 
               {/* Content */}
@@ -305,20 +307,20 @@ export default function SocialUpdates() {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedUpdate(null)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className={`${selectedUpdate.color} text-white p-6 rounded-t-xl`}>
+            <div className="bg-white border-b border-gray-100 p-6 rounded-t-xl">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                    <selectedUpdate.icon className="w-8 h-8" />
+                  <div className="w-16 h-16 bg-white border border-gray-100 rounded-full flex items-center justify-center shadow-sm">
+                    <selectedUpdate.icon className="w-10 h-10" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold mb-1">{selectedUpdate.platform} Update</h2>
-                    <p className="text-sm opacity-90">{selectedUpdate.date}</p>
+                    <h2 className="text-2xl font-bold mb-1 text-gray-900">{selectedUpdate.platform} Update</h2>
+                    <p className="text-sm text-gray-500">{selectedUpdate.date}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedUpdate(null)}
-                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
                 >
                   <X className="w-6 h-6" />
                 </button>

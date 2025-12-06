@@ -95,25 +95,25 @@ export default function CancelSubscriptionModal({
     <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-4 animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-slideUp max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="relative px-6 py-5 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-2xl">
+        <div className="relative px-6 py-5 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className={`${showFeedbackForm ? 'bg-blue-100' : 'bg-red-100'} p-2 rounded-lg`}>
+            <div className={`${showFeedbackForm ? 'bg-blue-50' : 'bg-red-50'} p-2 rounded-xl border ${showFeedbackForm ? 'border-blue-100' : 'border-red-100'}`}>
               {showFeedbackForm ? (
                 <MessageSquare className="w-6 h-6 text-blue-600" />
               ) : (
                 <AlertCircle className="w-6 h-6 text-red-600" />
               )}
             </div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className={`text-xl font-bold ${showFeedbackForm ? 'text-huttle-primary' : 'text-red-600'}`}>
               {showFeedbackForm ? 'Help Us Improve' : 'Cancel Subscription'}
             </h2>
           </div>
           <button
             onClick={handleCloseModal}
             disabled={isLoading}
-            className="absolute right-4 top-4 p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="absolute right-4 top-4 p-2 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 

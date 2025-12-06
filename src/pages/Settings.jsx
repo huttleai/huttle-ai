@@ -49,8 +49,8 @@ export default function Settings() {
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
-            <SettingsIcon className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+            <SettingsIcon className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
@@ -132,8 +132,8 @@ export default function Settings() {
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-10 h-10 rounded-lg ${platform.color} flex items-center justify-center`}>
-                    <platform.icon className="w-6 h-6 text-white" />
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white border border-gray-100 shadow-sm`}>
+                    <platform.icon className="w-6 h-6" />
                   </div>
                   <div className="flex-1">
                     <h4 className="font-semibold text-gray-900">{platform.name}</h4>
