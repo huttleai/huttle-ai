@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Info, HelpCircle, X } from 'lucide-react';
-import { useSubscription } from '../context/SubscriptionContext';
 
 // Rotating disclaimer phrases for variety (empowering, not warning-heavy)
 const DISCLAIMER_PHRASES = {
@@ -179,9 +178,6 @@ export function AIDisclaimerFooter({
   onModalOpen,
   className = '' 
 }) {
-  const { userTier, TIERS } = useSubscription();
-  const isPro = userTier === TIERS.PRO;
-
   return (
     <div className={`flex items-start gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3 ${className}`}>
       <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -197,11 +193,6 @@ export function AIDisclaimerFooter({
             How We Predict
             <HelpCircle className="w-3 h-3" />
           </button>
-        )}
-        {isPro && (
-          <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold">
-            PRO
-          </span>
         )}
       </div>
     </div>
