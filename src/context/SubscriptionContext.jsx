@@ -10,7 +10,11 @@ export function SubscriptionProvider({ children }) {
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
   
-  const [userTier, setUserTier] = useState(TIERS.FREE);
+  // Check for dev mode (same pattern as AuthContext)
+  const skipAuth = import.meta.env.VITE_SKIP_AUTH === 'true' || 
+                   (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
+  
+  const [userTier, setUserTier] = useState(skipAuth ? TIERS.PRO : TIERS.FREE);
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,6 +23,14 @@ export function SubscriptionProvider({ children }) {
   const userId = user?.id || null;
 
   useEffect(() => {
+    if (skipAuth) {
+      // Dev mode: Set to Pro tier immediately
+      setUserTier(TIERS.PRO);
+      setLoading(false);
+      console.log('🚀 Development mode: Subscription tier set to Pro');
+      return;
+    }
+    
     if (userId) {
       loadUserTier();
       refreshStorageUsage();
@@ -29,7 +41,7 @@ export function SubscriptionProvider({ children }) {
       setStorageUsage(0);
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, skipAuth]);
 
   const loadUserTier = async () => {
     try {
@@ -49,10 +61,19 @@ export function SubscriptionProvider({ children }) {
   };
 
   const getFeatureLimit = (feature) => {
+    // Dev mode: Return unlimited for all features
+    if (skipAuth) {
+      return Infinity;
+    }
     return TIER_LIMITS[userTier]?.[feature] || 0;
   };
 
   const checkAndTrackUsage = async (feature, metadata = {}) => {
+    // Dev mode: Allow all features without limits
+    if (skipAuth) {
+      return { allowed: true, remaining: Infinity };
+    }
+
     // Check if feature is available for tier
     if (!checkFeatureAccess(feature)) {
       showToast(`This feature requires ${userTier === TIERS.FREE ? 'Essentials' : 'Pro'} plan. Upgrade to unlock!`, 'warning');
@@ -109,6 +130,10 @@ export function SubscriptionProvider({ children }) {
   };
 
   const getStorageLimit = () => {
+    // Dev mode: Return Pro tier storage limit (25GB)
+    if (skipAuth) {
+      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 25 * 1024 * 1024 * 1024; // 25GB in bytes
+    }
     return TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
   };
 
@@ -117,6 +142,12 @@ export function SubscriptionProvider({ children }) {
   };
 
   const refreshStorageUsage = async () => {
+    // Dev mode: Skip Supabase calls
+    if (skipAuth) {
+      setStorageUsage(0);
+      return 0;
+    }
+    
     try {
       const result = await getSupabaseStorageUsage(userId);
       if (result.success) {

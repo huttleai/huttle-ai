@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { Repeat, FileText, ArrowRight, Wand2, Save, Calendar, Crown, Copy, Check, Sparkles, ChevronRight } from 'lucide-react';
+import { Repeat, FileText, ArrowRight, Wand2, Save, Calendar, Crown, Copy, Check, Sparkles, ChevronRight, Lightbulb } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
+import { mockRepurposerExamples } from '../data/mockData';
 
 const FORMAT_OPTIONS = [
   { from: 'reel', to: 'story', label: 'Reel → Story', description: 'Condense reel into story highlights', icon: '🎬' },
@@ -507,6 +508,58 @@ Format as JSON with fields: content, hashtags, tips, hooks`
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Example Transformations */}
+      <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+            <Lightbulb className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900">Example Transformations</h2>
+            <p className="text-xs text-gray-500">See how content gets repurposed across platforms</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {mockRepurposerExamples.map((example) => (
+            <div 
+              key={example.id}
+              className="p-4 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
+            >
+              {/* Source */}
+              <div className="mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Source</span>
+                <p className="text-sm font-medium text-gray-900 mt-1">{example.originalContent}</p>
+              </div>
+              
+              {/* Arrow */}
+              <div className="flex items-center gap-2 my-2">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-huttle-primary/30 to-transparent" />
+                <ArrowRight className="w-4 h-4 text-huttle-primary" />
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-huttle-primary/30 to-transparent" />
+              </div>
+              
+              {/* Output */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Output</span>
+                  <span className="text-[10px] font-semibold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded-full">
+                    {example.targetPlatform}
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-gray-700">{example.outputType}</p>
+              </div>
+              
+              {/* Preview */}
+              <div className="p-3 bg-white rounded-lg border border-gray-100">
+                <p className="text-xs text-gray-600 line-clamp-3">{example.repurposedContent.content}</p>
+                <p className="text-[10px] text-huttle-primary mt-2">{example.repurposedContent.hashtags}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

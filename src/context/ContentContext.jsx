@@ -8,6 +8,7 @@ import {
   deleteScheduledPost as deleteScheduledPostDB,
   getUserPreferences,
 } from '../config/supabase';
+import { mockScheduledPosts } from '../data/mockData';
 
 export const ContentContext = createContext();
 
@@ -28,68 +29,10 @@ export function ContentProvider({ children }) {
   const [syncing, setSyncing] = useState(false);
   const [userTimezone, setUserTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  // Seed demo posts for dev mode (defined early so it can be used in useEffect)
+  // Seed demo posts for dev mode using realistic mock data
   // Note: Only supported platforms should be used (Instagram, Facebook, TikTok, YouTube, X/Twitter)
-  // LinkedIn was removed from supported platforms - do not add it back
   const seedDevModeScheduledPosts = () => {
-    const demoPosts = [
-      {
-        id: 'demo-post-1',
-        title: 'Vitamin C Carousel',
-        caption: 'Swipe to learn how Vitamin C brightens skin ✨ #GlowSkin',
-        hashtags: '#skincare #vitaminc',
-        keywords: 'vitamin c, skincare tips',
-        platforms: ['Instagram', 'Facebook'],
-        contentType: 'Image Carousel',
-        imagePrompt: 'Bright orange serum flatlay',
-        videoPrompt: '',
-        media: [],
-        scheduledDate: '2024-02-06',
-        scheduledTime: '09:30',
-        status: 'scheduled',
-        createdAt: '2024-02-01T10:00:00.000Z',
-        updatedAt: '2024-02-01T10:00:00.000Z',
-        timezone: 'America/New_York',
-      },
-      {
-        id: 'demo-post-2',
-        title: 'Clinic BTS Reel',
-        caption: 'Behind the scenes of a Hydrafacial appointment 💧',
-        hashtags: '#behindthescenes #hydrafacial',
-        keywords: 'hydrafacial, bts',
-        platforms: ['Instagram', 'TikTok'],
-        contentType: 'Video Reel',
-        imagePrompt: '',
-        videoPrompt: 'Short clips of treatment steps',
-        media: [],
-        scheduledDate: '2024-02-07',
-        scheduledTime: '14:00',
-        status: 'scheduled',
-        createdAt: '2024-02-02T12:00:00.000Z',
-        updatedAt: '2024-02-02T12:00:00.000Z',
-        timezone: 'America/New_York',
-      },
-      {
-        id: 'demo-post-3',
-        title: 'Email Teaser',
-        caption: 'Subject: 3 ways to keep your glow between treatments ✨',
-        hashtags: '#emailmarketing',
-        keywords: 'email teaser',
-        platforms: ['X'],
-        contentType: 'Text',
-        imagePrompt: '',
-        videoPrompt: '',
-        media: [],
-        scheduledDate: '2024-02-08',
-        scheduledTime: '11:15',
-        status: 'scheduled',
-        createdAt: '2024-02-03T08:30:00.000Z',
-        updatedAt: '2024-02-03T08:30:00.000Z',
-        timezone: 'America/New_York',
-      },
-    ];
-
-    setScheduledPosts(demoPosts);
+    setScheduledPosts(mockScheduledPosts);
     setLoading(false);
   };
 

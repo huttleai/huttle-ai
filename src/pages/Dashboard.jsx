@@ -34,6 +34,7 @@ import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import { AIDisclaimerFooter, HowWePredictModal } from '../components/AIDisclaimer';
 import { socialUpdates } from '../data/socialUpdates';
+import { mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
@@ -271,55 +272,16 @@ export default function Dashboard() {
     return platforms.size;
   }, [scheduledPosts]);
 
-  // Trending topics
+  // Trending topics - use mock data with volume field mapped to engagement
   const trendingTopics = useMemo(() => {
-    const industry = brandProfile?.industry?.toLowerCase() || '';
-    const niche = brandProfile?.niche?.toLowerCase() || '';
-    
-    const trendsByIndustry = {
-      'medical spa': [
-        { topic: 'Preventative Aesthetics Trend', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
-        { topic: 'Non-Invasive Treatments', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok'] },
-        { topic: 'Wellness Wednesday Tips', engagement: '3.2M posts', growth: '+23%', platforms: ['Instagram', 'Facebook', 'TikTok'] },
-        { topic: 'Skin Care Technology', engagement: '987K posts', growth: '+89%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
-        { topic: '#GlowUp2024', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'TikTok'] },
-      ],
-      'beauty': [
-        { topic: 'Clean Beauty Movement', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
-        { topic: 'Skincare Routines', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
-        { topic: 'Makeup Tutorials', engagement: '3.2M posts', growth: '+23%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
-        { topic: 'Beauty Tech Innovation', engagement: '987K posts', growth: '+89%', platforms: ['Instagram', 'TikTok'] },
-        { topic: '#BeautyTips', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'TikTok', 'Pinterest'] },
-      ],
-      'tech': [
-        { topic: 'AI Integration', engagement: '2.4M posts', growth: '+45%', platforms: ['X', 'LinkedIn', 'YouTube'] },
-        { topic: 'Cybersecurity Trends', engagement: '1.8M posts', growth: '+67%', platforms: ['X', 'LinkedIn'] },
-        { topic: 'Remote Work Tools', engagement: '3.2M posts', growth: '+23%', platforms: ['LinkedIn', 'X', 'YouTube'] },
-        { topic: 'Cloud Computing', engagement: '987K posts', growth: '+89%', platforms: ['LinkedIn', 'X'] },
-        { topic: '#TechForGood', engagement: '1.5M posts', growth: '+34%', platforms: ['X', 'LinkedIn', 'Instagram'] },
-      ]
-    };
-    
-    const defaultTrends = [
-      { topic: 'Social Media Strategy 2024', engagement: '2.4M posts', growth: '+45%', platforms: ['Instagram', 'X', 'LinkedIn'] },
-      { topic: 'Content Creation Tips', engagement: '1.8M posts', growth: '+67%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
-      { topic: 'Digital Marketing Trends', engagement: '3.2M posts', growth: '+23%', platforms: ['LinkedIn', 'X', 'Instagram'] },
-      { topic: 'Personal Branding', engagement: '987K posts', growth: '+89%', platforms: ['LinkedIn', 'Instagram', 'X'] },
-      { topic: '#GrowthMindset', engagement: '1.5M posts', growth: '+34%', platforms: ['Instagram', 'X', 'LinkedIn'] },
-      { topic: 'Influencer Marketing', engagement: '2.1M posts', growth: '+38%', platforms: ['Instagram', 'TikTok', 'YouTube'] },
-      { topic: 'Video Content Strategy', engagement: '1.9M posts', growth: '+56%', platforms: ['TikTok', 'Instagram', 'YouTube'] },
-      { topic: 'Community Building', engagement: '1.4M posts', growth: '+69%', platforms: ['Instagram', 'Facebook', 'LinkedIn'] },
-      { topic: 'SEO Best Practices', engagement: '1.6M posts', growth: '+42%', platforms: ['LinkedIn', 'X', 'YouTube'] },
-      { topic: 'Analytics & Insights', engagement: '1.2M posts', growth: '+51%', platforms: ['LinkedIn', 'X', 'Instagram'] },
-    ];
-    
-    const industryTrends = trendsByIndustry[industry] || trendsByIndustry[niche] || [];
-    
-    if (industryTrends.length > 0) {
-      return industryTrends.slice(0, 10);
-    }
-    return defaultTrends.slice(0, 10);
-  }, [brandProfile?.industry, brandProfile?.niche]);
+    // Transform mock data to match expected format
+    return mockTrendingTopics.map(trend => ({
+      topic: trend.topic,
+      engagement: trend.volume,
+      growth: trend.growth,
+      platforms: trend.platforms
+    }));
+  }, []);
 
   // Hashtags
   const keywords = useMemo(() => {
@@ -683,7 +645,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h2 className="font-bold text-gray-900">Trending Now</h2>
-                  <p className="text-xs text-gray-500">Hot in your niche</p>
+                  <p className="text-xs text-gray-500">Hot topics and keywords across platforms</p>
                 </div>
               </div>
               
@@ -775,6 +737,27 @@ export default function Dashboard() {
                     </HoverPreview>
                   );
                 })}
+              </div>
+
+              {/* Trending Keywords (no hashtags) */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Trending Keywords</p>
+                  <span className="text-[10px] text-gray-400">{keywords.length} keywords</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {keywords.map((keyword, idx) => {
+                    const cleanKeyword = keyword.tag?.replace(/^#/, '') || keyword.tag;
+                    return (
+                      <span 
+                        key={idx}
+                        className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700"
+                      >
+                        {cleanKeyword}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
               
               <Link 
