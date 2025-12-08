@@ -6,6 +6,7 @@ import {
   Clock, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
   Image, 
   Video, 
   ArrowLeft, 
@@ -67,6 +68,10 @@ export default function SmartCalendar() {
   const [showPostActions, setShowPostActions] = useState(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const saved = localStorage.getItem('smartCalendarStatusFilter');
+    return saved || 'all';
+  });
   const calendarRef = useRef(null);
 
   // Check if navigating from Dashboard with a specific date
@@ -82,6 +87,11 @@ export default function SmartCalendar() {
       }
     }
   }, [location.state]);
+
+  // Persist status filter to localStorage
+  useEffect(() => {
+    localStorage.setItem('smartCalendarStatusFilter', statusFilter);
+  }, [statusFilter]);
 
   const { user } = useContext(AuthContext);
   const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing } = useContent();
@@ -130,6 +140,22 @@ export default function SmartCalendar() {
     });
   }, [scheduledPosts]);
 
+  // Filter posts based on status filter
+  const filteredPosts = useMemo(() => {
+    if (statusFilter === 'all') {
+      return allPosts;
+    }
+    return allPosts.filter(post => {
+      if (statusFilter === 'scheduled') {
+        return post.status === 'scheduled';
+      }
+      if (statusFilter === 'draft') {
+        return post.status === 'draft';
+      }
+      return true;
+    });
+  }, [allPosts, statusFilter]);
+
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayNamesShort = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -175,7 +201,7 @@ export default function SmartCalendar() {
 
   const getPostsForDate = (date) => {
     const dateStr = typeof date === 'string' ? date : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    return allPosts.filter(post => post.date === dateStr);
+    return filteredPosts.filter(post => post.date === dateStr);
   };
 
   const handleDayClick = (day, e) => {
@@ -206,52 +232,60 @@ export default function SmartCalendar() {
     return `${monthNames[month]} ${year}`;
   };
 
-  // Drag and Drop Handlers
+  // Drag and Drop Handlers - using a ref to store dragged post for reliable access
+  const draggedPostRef = useRef(null);
+  
   const handleDragStart = useCallback((e, post) => {
-    setDraggedPost(post);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      postId: post.id,
-      originalDate: post.date,
-      originalTime: post.time
-    }));
+    console.log('Drag started for post:', post.title);
     
-    setTimeout(() => {
-      e.target.classList.add('opacity-50', 'scale-95');
-    }, 0);
+    // Store in both state and ref for reliable access
+    draggedPostRef.current = post;
+    setDraggedPost(post);
+    
+    // Configure the drag operation - must set data for drag to work
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', post.id);
+    e.dataTransfer.setData('application/json', JSON.stringify(post));
   }, []);
 
-  const handleDragEnd = useCallback((e) => {
+  const handleDragEnd = useCallback(() => {
+    console.log('Drag ended');
+    draggedPostRef.current = null;
     setDraggedPost(null);
     setDragOverDate(null);
-    e.target.classList.remove('opacity-50', 'scale-95');
-  }, []);
-
-  const handleDragOver = useCallback((e, dateStr) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverDate(dateStr);
-  }, []);
-
-  const handleDragLeave = useCallback((e) => {
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOverDate(null);
-    }
   }, []);
 
   const handleDrop = useCallback(async (e, targetDateStr) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverDate(null);
     
-    if (!draggedPost) return;
+    console.log('Drop event on date:', targetDateStr);
+    
+    // Use ref for reliable access to dragged post
+    const post = draggedPostRef.current;
+    console.log('Dragged post from ref:', post?.title);
+    
+    if (!post) {
+      console.log('No post in ref, returning');
+      return;
+    }
+    
+    // Don't do anything if dropping on the same date
+    if (post.date === targetDateStr) {
+      draggedPostRef.current = null;
+      setDraggedPost(null);
+      return;
+    }
     
     try {
-      const postToUpdate = allPosts.find(p => p.id === draggedPost.id);
+      const postToUpdate = allPosts.find(p => p.id === post.id);
       
       if (postToUpdate && (postToUpdate.createdAt || postToUpdate.status)) {
-        await updateScheduledPost(draggedPost.id, {
+        // Keep the same status when rescheduling - only update date/time
+        await updateScheduledPost(post.id, {
           scheduledDate: targetDateStr,
-          scheduledTime: draggedPost.time
+          scheduledTime: post.time
         });
         addToast('Post rescheduled successfully!', 'success');
       } else {
@@ -262,8 +296,9 @@ export default function SmartCalendar() {
       addToast('Failed to reschedule post', 'error');
     }
     
+    draggedPostRef.current = null;
     setDraggedPost(null);
-  }, [draggedPost, allPosts, updateScheduledPost, addToast]);
+  }, [allPosts, updateScheduledPost, addToast]);
 
   // Quick Add Handler
   const handleQuickAdd = (dateStr) => {
@@ -343,7 +378,7 @@ export default function SmartCalendar() {
     setIsPublishModalOpen(true);
   };
 
-  // Get stats for the current view
+  // Get stats for the current view (using filtered posts)
   const getStats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -354,19 +389,19 @@ export default function SmartCalendar() {
     const thisWeekEnd = new Date(thisWeekStart);
     thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
     
-    const thisMonthPosts = allPosts.filter(post => {
+    const thisMonthPosts = filteredPosts.filter(post => {
       if (!post.date) return false;
       const postDate = new Date(post.date);
       return postDate.getMonth() === month && postDate.getFullYear() === year;
     });
     
-    const thisWeekPosts = allPosts.filter(post => {
+    const thisWeekPosts = filteredPosts.filter(post => {
       if (!post.date) return false;
       const postDate = new Date(post.date);
       return postDate >= thisWeekStart && postDate <= thisWeekEnd;
     });
     
-    const upcomingPosts = allPosts.filter(post => {
+    const upcomingPosts = filteredPosts.filter(post => {
       if (!post.date) return false;
       const postDate = new Date(post.date);
       return postDate >= today;
@@ -376,9 +411,9 @@ export default function SmartCalendar() {
       thisMonth: thisMonthPosts.length,
       thisWeek: thisWeekPosts.length,
       upcoming: upcomingPosts.length,
-      total: allPosts.length
+      total: filteredPosts.length
     };
-  }, [allPosts, month, year]);
+  }, [filteredPosts, month, year]);
 
   // Status Badge Component - Clean Style
   const StatusBadge = ({ status }) => {
@@ -409,31 +444,43 @@ export default function SmartCalendar() {
     );
   };
 
-  // Post Card Component for Calendar
-  const PostCard = ({ post, compact = false }) => {
+  // Render a draggable post card
+  const renderPostCard = (post, compact = false) => {
     const isBeingDragged = draggedPost?.id === post.id;
     
     return (
       <div
-        draggable
-        onDragStart={(e) => handleDragStart(e, post)}
-        onDragEnd={handleDragEnd}
-        onClick={(e) => handlePostClick(post, e)}
-        onMouseEnter={() => setHoveredPost(post.id)}
+        key={post.id}
+        draggable={true}
+        onDragStart={(e) => {
+          console.log('onDragStart fired for:', post.title);
+          handleDragStart(e, post);
+        }}
+        onDragEnd={(e) => {
+          console.log('onDragEnd fired');
+          handleDragEnd();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!draggedPostRef.current) {
+            handlePostClick(post, e);
+          }
+        }}
+        onMouseEnter={() => !draggedPost && setHoveredPost(post.id)}
         onMouseLeave={() => setHoveredPost(null)}
-        className={`post-item group relative cursor-grab active:cursor-grabbing transition-all duration-200 ${
-          isBeingDragged ? 'opacity-50 scale-95' : 'hover:scale-[1.02]'
+        className={`post-item group relative cursor-grab active:cursor-grabbing ${
+          isBeingDragged ? 'opacity-40 scale-95' : 'hover:scale-[1.02]'
         } ${compact ? 'p-1' : 'p-2'}`}
       >
         <div className={`
-          relative overflow-hidden rounded-lg border transition-all duration-200
+          relative overflow-hidden rounded-lg border
           ${post.status === 'posted' 
             ? 'bg-gray-50/50 border-gray-100' 
-            : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+            : 'bg-white border-gray-200 group-hover:border-blue-300 group-hover:shadow-sm'
           }
         `}>
           {/* Drag Handle Indicator */}
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-huttle-primary opacity-0 group-hover:opacity-100 transition-opacity rounded-l" />
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-huttle-primary opacity-0 group-hover:opacity-100 rounded-l" />
           
           <div className={`${compact ? 'p-1.5' : 'p-2.5'}`}>
             {/* Time & Type */}
@@ -448,16 +495,6 @@ export default function SmartCalendar() {
                 {post.type === 'image' && <Image className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-gray-400`} />}
                 {post.type === 'video' && <Video className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-gray-400`} />}
                 {post.optimal && <Sparkles className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-amber-500`} />}
-                {/* Edit Button - Always Visible */}
-                {!compact && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
-                    className="p-1 hover:bg-gray-100 rounded transition-colors"
-                    title="Edit Post"
-                  >
-                    <Pencil className="w-3 h-3 text-gray-500" />
-                  </button>
-                )}
               </div>
             </div>
             
@@ -484,8 +521,8 @@ export default function SmartCalendar() {
             )}
           </div>
           
-          {/* Quick Actions on Hover */}
-          {!compact && hoveredPost === post.id && (
+          {/* Quick Actions on Hover - only show when not dragging */}
+          {!compact && hoveredPost === post.id && !draggedPost && (
             <div className="absolute top-1 right-1 flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-md p-1 shadow-sm border border-gray-100 animate-fadeIn z-10">
               <button
                 onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
@@ -522,28 +559,56 @@ export default function SmartCalendar() {
     );
   };
 
-  // Calendar Day Cell Component
-  const DayCell = ({ day, isToday, posts, dateStr }) => {
+  // Render a calendar day cell with drop zone
+  const renderDayCell = (day, isToday, posts, dateStr) => {
     const isDragOver = dragOverDate === dateStr;
     const hasMultiplePosts = posts.length > 2;
     
     return (
       <div
+        key={dateStr}
         onClick={(e) => handleDayClick(day, e)}
-        onDragOver={(e) => handleDragOver(e, dateStr)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(e, dateStr)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dragOverDate !== dateStr) {
+            console.log('Drag over cell:', dateStr);
+            setDragOverDate(dateStr);
+          }
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          if (dragOverDate !== dateStr) {
+            setDragOverDate(dateStr);
+          }
+        }}
+        onDragLeave={(e) => {
+          // Only clear if we're leaving to outside this cell
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (
+            e.clientX < rect.left ||
+            e.clientX > rect.right ||
+            e.clientY < rect.top ||
+            e.clientY > rect.bottom
+          ) {
+            setDragOverDate(null);
+          }
+        }}
+        onDrop={(e) => {
+          console.log('onDrop fired for cell:', dateStr);
+          handleDrop(e, dateStr);
+        }}
         className={`
           relative min-h-[100px] md:min-h-[120px] border-r border-b border-gray-100 
-          transition-all duration-200 cursor-pointer group
+          cursor-pointer group
           ${isToday ? 'bg-blue-50/20' : 'bg-white hover:bg-gray-50/50'}
-          ${isDragOver ? 'bg-blue-50 ring-2 ring-huttle-primary ring-inset' : ''}
+          ${isDragOver ? 'bg-blue-100 ring-2 ring-huttle-primary ring-inset' : ''}
         `}
       >
         {/* Day Number */}
         <div className="flex items-center justify-between p-2">
           <span className={`
-            inline-flex items-center justify-center w-7 h-7 rounded-lg text-sm font-medium transition-all
+            inline-flex items-center justify-center w-7 h-7 rounded-lg text-sm font-medium
             ${isToday 
               ? 'bg-huttle-primary text-white shadow-sm' 
               : 'text-gray-700 group-hover:bg-gray-100'
@@ -563,9 +628,7 @@ export default function SmartCalendar() {
         
         {/* Posts */}
         <div className="px-1 pb-1 space-y-1">
-          {posts.slice(0, 2).map(post => (
-            <PostCard key={post.id} post={post} compact />
-          ))}
+          {posts.slice(0, 2).map(post => renderPostCard(post, true))}
           {hasMultiplePosts && (
             <button 
               onClick={(e) => { e.stopPropagation(); handleDayClick(day, e); }}
@@ -578,7 +641,7 @@ export default function SmartCalendar() {
         
         {/* Drop Indicator */}
         {isDragOver && (
-          <div className="absolute inset-2 border-2 border-dashed border-huttle-primary rounded-lg flex items-center justify-center bg-blue-50/80 pointer-events-none">
+          <div className="absolute inset-2 border-2 border-dashed border-huttle-primary rounded-lg flex items-center justify-center bg-blue-50/80 pointer-events-none z-10">
             <span className="text-xs font-semibold text-huttle-primary">Drop here</span>
           </div>
         )}
@@ -605,7 +668,7 @@ export default function SmartCalendar() {
             </div>
           </div>
           
-          {/* Quick Stats */}
+          {/* Quick Stats and Filter */}
           <div className="flex items-center gap-2 md:gap-3">
             <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-sm">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -618,6 +681,20 @@ export default function SmartCalendar() {
               <span className="text-sm font-medium text-gray-600">
                 <span className="text-gray-900 font-bold">{getStats.thisWeek}</span> this week
               </span>
+            </div>
+            
+            {/* Status Filter Dropdown */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-8 text-sm font-medium text-gray-700 hover:border-huttle-primary focus:outline-none focus:ring-2 focus:ring-huttle-primary focus:border-transparent transition-all cursor-pointer shadow-sm"
+              >
+                <option value="all">All Posts</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="draft">Drafts</option>
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -758,15 +835,7 @@ export default function SmartCalendar() {
                     const posts = getPostsForDate(dateStr);
                     const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year;
                     
-                    return (
-                      <DayCell
-                        key={day}
-                        day={day}
-                        isToday={isToday}
-                        posts={posts}
-                        dateStr={dateStr}
-                      />
-                    );
+                    return renderDayCell(day, isToday, posts, dateStr);
                   })}
                 </div>
               </>
@@ -801,19 +870,39 @@ export default function SmartCalendar() {
                       <div
                         key={i}
                         onClick={() => handleWeekDayClick(date)}
-                        onDragOver={(e) => handleDragOver(e, dateStr)}
-                        onDragLeave={handleDragLeave}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverDate !== dateStr) {
+                            setDragOverDate(dateStr);
+                          }
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          if (dragOverDate !== dateStr) {
+                            setDragOverDate(dateStr);
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          if (
+                            e.clientX < rect.left ||
+                            e.clientX > rect.right ||
+                            e.clientY < rect.top ||
+                            e.clientY > rect.bottom
+                          ) {
+                            setDragOverDate(null);
+                          }
+                        }}
                         onDrop={(e) => handleDrop(e, dateStr)}
                         className={`
-                          p-2 border-r border-gray-100 last:border-r-0 cursor-pointer transition-all duration-200
+                          p-2 border-r border-gray-100 last:border-r-0 cursor-pointer
                           hover:bg-gray-50 overflow-y-auto
-                          ${isDragOver ? 'bg-blue-50 ring-2 ring-huttle-primary ring-inset' : ''}
+                          ${isDragOver ? 'bg-blue-100 ring-2 ring-huttle-primary ring-inset' : ''}
                         `}
                       >
                         <div className="space-y-2">
-                          {posts.map(post => (
-                            <PostCard key={post.id} post={post} />
-                          ))}
+                          {posts.map(post => renderPostCard(post, false))}
                           {posts.length === 0 && (
                             <button
                               onClick={(e) => { e.stopPropagation(); setQuickAddDate(null); setIsCreatePostOpen(true); }}
@@ -977,7 +1066,7 @@ export default function SmartCalendar() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        const upcomingPosts = allPosts
+        const upcomingPosts = filteredPosts
           .filter(post => {
             if (!post.date) return false;
             const postDate = new Date(post.date);
