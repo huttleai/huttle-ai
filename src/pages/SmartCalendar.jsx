@@ -35,6 +35,7 @@ import CreatePostModal from '../components/CreatePostModal';
 import PublishModal from '../components/PublishModal';
 import CalendarTemplates, { CalendarTemplateButton } from '../components/CalendarTemplates';
 import UpgradeModal from '../components/UpgradeModal';
+import OptimizeTimesModal from '../components/OptimizeTimesModal';
 import { downloadPostAsText, downloadPostAsJSON, copyPostToClipboard, downloadForPlatform } from '../utils/downloadHelpers';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformColor } from '../components/SocialIcons';
@@ -68,6 +69,7 @@ export default function SmartCalendar() {
   const [showPostActions, setShowPostActions] = useState(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState(() => {
     const saved = localStorage.getItem('smartCalendarStatusFilter');
     return saved || 'all';
@@ -376,6 +378,36 @@ export default function SmartCalendar() {
   const handleOpenPublishModal = (post) => {
     setPostToPublish(post);
     setIsPublishModalOpen(true);
+  };
+
+  // Handle applying optimized times to posts
+  const handleApplyOptimizations = async (recommendations) => {
+    if (!recommendations || recommendations.length === 0) return;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const rec of recommendations) {
+      // Only update if time actually changed
+      if (rec.originalTime !== rec.optimizedTime) {
+        try {
+          await updateScheduledPost(rec.postId, {
+            scheduledTime: rec.optimizedTime
+          });
+          successCount++;
+        } catch (error) {
+          console.error('Failed to update post:', rec.postId, error);
+          failCount++;
+        }
+      }
+    }
+
+    if (successCount > 0) {
+      addToast(`${successCount} post${successCount !== 1 ? 's' : ''} optimized successfully!`, 'success');
+    }
+    if (failCount > 0) {
+      addToast(`Failed to optimize ${failCount} post${failCount !== 1 ? 's' : ''}`, 'error');
+    }
   };
 
   // Get stats for the current view (using filtered posts)
@@ -720,8 +752,11 @@ export default function SmartCalendar() {
               }
             }} 
           />
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl font-medium text-sm transition-all hidden sm:flex">
-            <Sparkles className="w-4 h-4" />
+          <button 
+            onClick={() => setIsOptimizeModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-huttle-primary/50 rounded-xl font-medium text-sm transition-all hidden sm:flex"
+          >
+            <Sparkles className="w-4 h-4 text-huttle-primary" />
             <span>Optimize Times</span>
           </button>
         </div>
@@ -1171,6 +1206,14 @@ export default function SmartCalendar() {
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         feature="calendarTemplates"
+      />
+
+      {/* Optimize Times Modal */}
+      <OptimizeTimesModal
+        isOpen={isOptimizeModalOpen}
+        onClose={() => setIsOptimizeModalOpen(false)}
+        posts={allPosts}
+        onOptimize={handleApplyOptimizations}
       />
     </div>
   );

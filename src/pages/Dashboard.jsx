@@ -586,7 +586,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {sortedPosts.slice(0, 4).map((post, idx) => (
+                  {sortedPosts.slice(0, 5).map((post, idx) => (
                     <HoverPreview
                       key={post.id}
                       preview={
@@ -623,7 +623,7 @@ export default function Dashboard() {
                       </div>
                     </HoverPreview>
                   ))}
-                  {sortedPosts.length > 4 && (
+                  {sortedPosts.length > 5 && (
                     <Link to="/calendar" className="block text-center text-sm text-huttle-primary font-semibold pt-2 hover:underline">
                       View all {sortedPosts.length} posts →
                     </Link>
