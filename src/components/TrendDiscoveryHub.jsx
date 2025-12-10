@@ -1,12 +1,14 @@
 import { useState, useContext, useEffect } from 'react';
 import { BrandContext } from '../context/BrandContext';
+import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight } from 'lucide-react';
+import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
 import { scanTrendingTopics } from '../services/perplexityAPI';
 import { generateTrendIdeas } from '../services/grokAPI';
 import { useToast } from '../context/ToastContext';
 import { getToastDisclaimer } from './AIDisclaimer';
+import { saveContentLibraryItem } from '../config/supabase';
 
 /**
  * TrendDiscoveryHub - Reimagined with cutting-edge design
@@ -14,6 +16,7 @@ import { getToastDisclaimer } from './AIDisclaimer';
  */
 export default function TrendDiscoveryHub({ onRemix }) {
   const { brandData } = useContext(BrandContext);
+  const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { TIERS, userTier } = useSubscription();
   
@@ -24,6 +27,7 @@ export default function TrendDiscoveryHub({ onRemix }) {
   const [deepDiveResults, setDeepDiveResults] = useState(null);
   const [isLoadingDeepDive, setIsLoadingDeepDive] = useState(false);
   const [copiedIdea, setCopiedIdea] = useState(null);
+  const [savedTrendIndex, setSavedTrendIndex] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [hoveredTrend, setHoveredTrend] = useState(null);
@@ -204,6 +208,41 @@ Focus on content that's performing well right now and could be adapted without c
     if (onRemix) {
       onRemix(content.substring(0, 200));
       showToast('Added to Content Remix Studio! Scroll down to remix.', 'success');
+    }
+  };
+
+  const handleAddToLibrary = async (content, type = 'trend', itemIndex = null) => {
+    if (!user?.id) {
+      showToast('Please log in to add content to library', 'error');
+      return;
+    }
+
+    try {
+      const name = type === 'trend' 
+        ? `Trend - ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`
+        : `Trend Idea - ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`;
+
+      const itemData = {
+        name,
+        type: 'text',
+        content: content,
+        size_bytes: 0,
+        description: `Generated from Trend Discovery Hub`,
+      };
+
+      const result = await saveContentLibraryItem(user.id, itemData);
+
+      if (result.success) {
+        setSavedTrendIndex(itemIndex);
+        setTimeout(() => setSavedTrendIndex(null), 2000);
+        showToast('Added to Content Library!', 'success');
+      } else {
+        showToast('Failed to add to library', 'error');
+        console.error('Error saving to library:', result.error);
+      }
+    } catch (error) {
+      console.error('Error adding to library:', error);
+      showToast('Error adding to library', 'error');
     }
   };
 
@@ -454,18 +493,40 @@ Focus on content that's performing well right now and could be adapted without c
                               </div>
                             </div>
                             
-                            {/* Action Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSendToRemix(trend.name + (trend.description ? ': ' + trend.description : ''));
-                              }}
-                              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105 lg:opacity-0 lg:group-hover:opacity-100"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                              <span>Use This</span>
-                              <ArrowUpRight className="w-3.5 h-3.5" />
-                            </button>
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddToLibrary(trend.name + (trend.description ? ': ' + trend.description : ''), 'trend', `trend-${i}`);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-xl text-sm font-medium transition-all"
+                                title="Add to Library"
+                              >
+                                {savedTrendIndex === `trend-${i}` ? (
+                                  <>
+                                    <Check className="w-4 h-4 text-green-600" />
+                                    <span className="text-green-600">Saved!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FolderPlus className="w-4 h-4 text-huttle-primary" />
+                                    <span>Save</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendToRemix(trend.name + (trend.description ? ': ' + trend.description : ''));
+                                }}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 hover:scale-105"
+                              >
+                                <Sparkles className="w-4 h-4" />
+                                <span>Use This</span>
+                                <ArrowUpRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -664,6 +725,22 @@ Focus on content that's performing well right now and could be adapted without c
                                   <>
                                     <Copy className="w-3.5 h-3.5" />
                                     <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleAddToLibrary(idea.content, 'idea', `idea-${idea.id}`)}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-white text-huttle-primary border border-huttle-primary/30 rounded-xl text-xs font-medium hover:bg-huttle-primary/5 transition-colors"
+                              >
+                                {savedTrendIndex === `idea-${idea.id}` ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                    <span className="text-green-600">Saved!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FolderPlus className="w-3.5 h-3.5" />
+                                    <span>Save</span>
                                   </>
                                 )}
                               </button>

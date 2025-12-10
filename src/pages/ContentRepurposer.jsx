@@ -1,14 +1,16 @@
 import { useState, useContext } from 'react';
-import { Repeat, FileText, ArrowRight, Wand2, Save, Calendar, Crown, Copy, Check, Sparkles, ChevronRight, Lightbulb } from 'lucide-react';
+import { Repeat, FileText, ArrowRight, Wand2, Save, Calendar, Crown, Copy, Check, Sparkles, ChevronRight, Lightbulb, FolderPlus } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useContent } from '../context/ContentContext';
+import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
 import { mockRepurposerExamples } from '../data/mockData';
+import { saveContentLibraryItem } from '../config/supabase';
 
 const FORMAT_OPTIONS = [
   { from: 'reel', to: 'story', label: 'Reel → Story', description: 'Condense reel into story highlights', icon: '🎬' },
@@ -31,6 +33,7 @@ const PLATFORM_OPTIMIZATIONS = [
 export default function ContentRepurposer() {
   const { addToast } = useToast();
   const { brandData } = useContext(BrandContext);
+  const { user } = useContext(AuthContext);
   const { userTier } = useSubscription();
   const { saveGeneratedContent, setDraft } = useContent();
   const navigate = useNavigate();
@@ -42,6 +45,8 @@ export default function ContentRepurposer() {
   const [isRepurposing, setIsRepurposing] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [scheduled, setScheduled] = useState(false);
 
   const isPro = userTier === 'Pro' || userTier === 'pro';
 
@@ -174,22 +179,40 @@ Format as JSON with fields: content, hashtags, tips, hooks`
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!repurposedContent) return;
 
-    saveGeneratedContent({
-      type: 'repurposed-content',
-      content: repurposedContent.content,
-      metadata: {
-        format: repurposedContent.format,
-        platform: repurposedContent.platform.value,
-        hashtags: repurposedContent.hashtags,
-        original: repurposedContent.original
-      },
-      tool: 'content-repurposer'
-    });
+    if (!user?.id) {
+      addToast('Please log in to save content to library', 'error');
+      return;
+    }
 
-    addToast('Saved to Content Library!', 'success');
+    try {
+      const name = `Repurposed ${repurposedContent.format.to} - ${repurposedContent.platform.label}`;
+      const fullContent = `${repurposedContent.content}\n\n${repurposedContent.hashtags || ''}`;
+
+      const itemData = {
+        name,
+        type: 'text',
+        content: fullContent,
+        size_bytes: 0,
+        description: `Repurposed from ${repurposedContent.format.from} to ${repurposedContent.format.to} for ${repurposedContent.platform.label}`,
+      };
+
+      const result = await saveContentLibraryItem(user.id, itemData);
+
+      if (result.success) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        addToast('Saved to Content Library!', 'success');
+      } else {
+        addToast('Failed to save to library', 'error');
+        console.error('Error saving to library:', result.error);
+      }
+    } catch (error) {
+      console.error('Error saving to library:', error);
+      addToast('Error saving to library', 'error');
+    }
   };
 
   const handleSchedule = () => {
@@ -203,6 +226,8 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       timestamp: new Date().toISOString()
     });
 
+    setScheduled(true);
+    setTimeout(() => setScheduled(false), 2000);
     addToast('Navigating to calendar...', 'info');
     setTimeout(() => navigate('/calendar'), 500);
   };
@@ -483,15 +508,33 @@ Format as JSON with fields: content, hashtags, tips, hooks`
                   onClick={handleSave}
                   className="flex items-center gap-2 px-4 py-2 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded-lg transition-colors text-sm font-medium"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Save to Library</span>
+                  {saved ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-600" />
+                      <span className="text-green-600">Added!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FolderPlus className="w-4 h-4" />
+                      <span>Add to Library</span>
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={handleSchedule}
                   className="flex items-center gap-2 px-4 py-2 bg-huttle-primary text-white hover:bg-huttle-primary-dark rounded-lg transition-colors text-sm font-medium"
                 >
-                  <Calendar className="w-4 h-4" />
-                  <span>Schedule</span>
+                  {scheduled ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Scheduled!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" />
+                      <span>Schedule</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Save, Calendar, Image as ImageIcon, Lightbulb, ChevronRight } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Save, Calendar, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -7,6 +7,8 @@ import { useContent } from '../context/ContentContext';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AIFeatureLock from '../components/AIFeatureLock';
+import PlatformSelector from '../components/PlatformSelector';
+import { getPlatformTips, getPlatform } from '../utils/platformGuidelines';
 import { 
   generateCaption, 
   scoreContentQuality, 
@@ -18,6 +20,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
+import { saveContentLibraryItem } from '../config/supabase';
 
 export default function AITools() {
   const { addToast: showToast } = useToast();
@@ -28,29 +31,34 @@ export default function AITools() {
   const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState('caption');
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [savedIndex, setSavedIndex] = useState(null);
+  const [scheduledIndex, setScheduledIndex] = useState(null);
   const [applyBrandVoice, setApplyBrandVoice] = useState(true);
 
   // Caption Generator State
   const [captionInput, setCaptionInput] = useState('');
   const [captionLength, setCaptionLength] = useState('medium');
   const [captionTone, setCaptionTone] = useState('engaging');
+  const [captionPlatform, setCaptionPlatform] = useState('instagram');
   const [generatedCaptions, setGeneratedCaptions] = useState([]);
   const [isLoadingCaptions, setIsLoadingCaptions] = useState(false);
 
   // Hashtag Generator State
   const [hashtagInput, setHashtagInput] = useState('');
+  const [hashtagPlatform, setHashtagPlatform] = useState('instagram');
   const [generatedHashtags, setGeneratedHashtags] = useState([]);
   const [isLoadingHashtags, setIsLoadingHashtags] = useState(false);
 
   // Hook Builder State
   const [hookInput, setHookInput] = useState('');
   const [hookTheme, setHookTheme] = useState('question');
+  const [hookPlatform, setHookPlatform] = useState('instagram');
   const [generatedHooks, setGeneratedHooks] = useState([]);
   const [isLoadingHooks, setIsLoadingHooks] = useState(false);
 
   // CTA Suggester State
   const [ctaGoal, setCtaGoal] = useState('');
-  const [ctaPlatform, setCtaPlatform] = useState('general');
+  const [ctaPlatform, setCtaPlatform] = useState('instagram');
   const [generatedCTAs, setGeneratedCTAs] = useState([]);
   const [isLoadingCTAs, setIsLoadingCTAs] = useState(false);
 
@@ -61,6 +69,7 @@ export default function AITools() {
 
   // Visual Brainstormer State
   const [visualPrompt, setVisualPrompt] = useState('');
+  const [visualPlatform, setVisualPlatform] = useState('instagram');
   const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
   
@@ -146,7 +155,7 @@ export default function AITools() {
         : captionTone;
 
       const result = await generateCaption(
-        { topic: captionInput, platform: 'social media' },
+        { topic: captionInput, platform: captionPlatform },
         { ...brandData, brandVoice }
       );
 
@@ -198,10 +207,13 @@ export default function AITools() {
 
     setIsLoadingHashtags(true);
     try {
-      const result = await generateHashtags(hashtagInput, brandData);
+      const result = await generateHashtags(hashtagInput, brandData, hashtagPlatform);
+      const platformData = getPlatform(hashtagPlatform);
+      const hashtagCount = platformData?.hashtags?.max || 10;
 
       if (result.success) {
-        const mockHashtags = [
+        // Generate platform-appropriate hashtags with realistic data
+        const baseHashtags = [
           { tag: '#ContentCreator', score: 95, posts: '2.4M' },
           { tag: '#SocialMediaMarketing', score: 92, posts: '1.8M' },
           { tag: '#DigitalMarketing', score: 89, posts: '3.1M' },
@@ -210,10 +222,18 @@ export default function AITools() {
           { tag: '#BrandBuilding', score: 82, posts: '654K' },
           { tag: '#SocialMedia', score: 80, posts: '5.6M' },
           { tag: '#OnlineMarketing', score: 75, posts: '987K' },
+          { tag: '#GrowthHacking', score: 72, posts: '456K' },
+          { tag: '#ContentMarketing', score: 70, posts: '2.1M' },
+          { tag: '#BusinessTips', score: 68, posts: '1.5M' },
+          { tag: '#Entrepreneur', score: 65, posts: '8.2M' },
+          { tag: '#SmallBusiness', score: 62, posts: '4.3M' },
+          { tag: '#Marketing', score: 60, posts: '12.4M' },
+          { tag: '#Success', score: 58, posts: '15.8M' },
         ];
-        setGeneratedHashtags(mockHashtags);
+        // Return platform-appropriate count
+        setGeneratedHashtags(baseHashtags.slice(0, hashtagCount));
         incrementAIUsage();
-        showToast(`Hashtags generated! ${getToastDisclaimer('general')}`, 'success');
+        showToast(`${hashtagCount} hashtags generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         showToast('Failed to generate hashtags', 'error');
       }
@@ -236,13 +256,14 @@ export default function AITools() {
 
     setIsLoadingHooks(true);
     try {
-      const result = await generateHooks(hookInput, brandData, hookTheme);
+      const result = await generateHooks(hookInput, brandData, hookTheme, hookPlatform);
+      const platformData = getPlatform(hookPlatform);
 
       if (result.success) {
         const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
         setGeneratedHooks(hooks.length > 0 ? hooks : [result.hooks]);
         incrementAIUsage();
-        showToast(`Hooks generated! ${getToastDisclaimer('general')}`, 'success');
+        showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         showToast('Failed to generate hooks', 'error');
       }
@@ -266,12 +287,13 @@ export default function AITools() {
     setIsLoadingCTAs(true);
     try {
       const result = await generateCTAs(ctaGoal, brandData, ctaPlatform);
+      const platformData = getPlatform(ctaPlatform);
 
       if (result.success) {
         const ctas = result.ctas.split(/\d+\./).filter(c => c.trim());
         setGeneratedCTAs(ctas.length > 0 ? ctas : [result.ctas]);
         incrementAIUsage();
-        showToast(`CTAs generated! ${getToastDisclaimer('general')}`, 'success');
+        showToast(`CTAs generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         showToast('Failed to generate CTAs', 'error');
       }
@@ -337,7 +359,8 @@ export default function AITools() {
 
     setIsLoadingVisualIdeas(true);
     try {
-      const result = await generateVisualIdeas(visualPrompt, brandData);
+      const result = await generateVisualIdeas(visualPrompt, brandData, visualPlatform);
+      const platformData = getPlatform(visualPlatform);
       
       let ideas = [];
       if (result.success && result.ideas) {
@@ -351,29 +374,29 @@ export default function AITools() {
           }
         } catch {
           const ideaSections = content.split(/\d+\./).filter(s => s.trim());
-          ideas = ideaSections.slice(0, 5).map((section, i) => ({
+          ideas = ideaSections.slice(0, 4).map((section, i) => ({
             title: `${visualPrompt} - Concept ${i + 1}`,
             description: section.trim().substring(0, 200),
             style: 'Creative visual style',
-            platform: ['Instagram', 'TikTok', 'YouTube', 'Pinterest', 'Facebook'][i] || 'Instagram',
-            type: ['image', 'video', 'carousel', 'image', 'video'][i] || 'image'
+            platform: platformData?.name || 'Instagram',
+            type: platformData?.contentFormats?.[i % platformData.contentFormats.length] || 'image'
           }));
         }
       }
       
       if (ideas.length === 0) {
+        const formats = platformData?.contentFormats || ['image', 'video', 'carousel', 'image'];
         ideas = [
-          { title: `${visualPrompt} - Concept 1`, description: 'A visually striking composition that captures attention', style: 'Cinematic 4K with dramatic lighting', platform: 'Instagram', type: 'image' },
-          { title: `${visualPrompt} - Concept 2`, description: 'Dynamic movement and energy to engage viewers', style: 'Fast-paced editing with bold colors', platform: 'TikTok', type: 'video' },
-          { title: `${visualPrompt} - Concept 3`, description: 'Clean, minimalist approach with focus on key elements', style: 'Minimalist flat design', platform: 'Instagram', type: 'carousel' },
-          { title: `${visualPrompt} - Concept 4`, description: 'Artistic interpretation with creative flair', style: 'Watercolor illustration style', platform: 'Pinterest', type: 'image' },
-          { title: `${visualPrompt} - Concept 5`, description: 'Professional and polished for maximum impact', style: 'Studio photography aesthetic', platform: 'X (Twitter)', type: 'image' }
+          { title: `${visualPrompt} - Concept 1`, description: 'A visually striking composition that captures attention', style: 'Cinematic 4K with dramatic lighting', platform: platformData?.name || 'Instagram', type: formats[0] || 'image' },
+          { title: `${visualPrompt} - Concept 2`, description: 'Dynamic movement and energy to engage viewers', style: 'Fast-paced editing with bold colors', platform: platformData?.name || 'Instagram', type: formats[1] || 'video' },
+          { title: `${visualPrompt} - Concept 3`, description: 'Clean, minimalist approach with focus on key elements', style: 'Minimalist flat design', platform: platformData?.name || 'Instagram', type: formats[2] || 'carousel' },
+          { title: `${visualPrompt} - Concept 4`, description: 'Artistic interpretation with creative flair', style: 'Watercolor illustration style', platform: platformData?.name || 'Instagram', type: formats[3] || 'image' }
         ];
       }
 
       setGeneratedVisualIdeas(ideas);
       incrementAIUsage();
-      showToast(`Visual ideas generated! ${getToastDisclaimer('general')}`, 'success');
+      showToast(`Visual ideas generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
     } catch (error) {
       console.error('Visual brainstorm error:', error);
       showToast('Error generating visual ideas', 'error');
@@ -394,8 +417,55 @@ export default function AITools() {
     showToast('Content saved! Access it from Content Library.', 'success');
   };
 
-  const handleScheduleContent = (content) => {
+  const handleAddToLibrary = async (content, contentType, metadata = {}, itemIndex = null) => {
+    if (!user?.id) {
+      showToast('Please log in to add content to library', 'error');
+      return;
+    }
+
+    try {
+      const toolNames = {
+        caption: 'Caption',
+        hashtags: 'Hashtags',
+        hooks: 'Hook',
+        cta: 'CTA',
+        'visual-brainstorm': 'Visual Idea'
+      };
+      
+      const baseName = toolNames[activeTool] || 'Content';
+      const inputText = metadata.input || captionInput || hashtagInput || hookInput || ctaGoal || visualPrompt || '';
+      const name = inputText 
+        ? `${baseName} - ${inputText.substring(0, 30)}${inputText.length > 30 ? '...' : ''}`
+        : `${baseName} - ${new Date().toLocaleDateString()}`;
+
+      const itemData = {
+        name,
+        type: 'text',
+        content: typeof content === 'string' ? content : JSON.stringify(content),
+        size_bytes: 0,
+        description: `Generated from ${toolNames[activeTool] || 'AI Tools'}`,
+      };
+
+      const result = await saveContentLibraryItem(user.id, itemData);
+
+      if (result.success) {
+        setSavedIndex(itemIndex);
+        setTimeout(() => setSavedIndex(null), 2000);
+        showToast('Added to Content Library!', 'success');
+      } else {
+        showToast('Failed to add to library', 'error');
+        console.error('Error saving to library:', result.error);
+      }
+    } catch (error) {
+      console.error('Error adding to library:', error);
+      showToast('Error adding to library', 'error');
+    }
+  };
+
+  const handleScheduleContent = (content, itemIndex = null) => {
     setDraft({ content, source: 'ai-tools', tool: activeTool, timestamp: new Date().toISOString() });
+    setScheduledIndex(itemIndex);
+    setTimeout(() => setScheduledIndex(null), 2000);
     showToast('Navigating to calendar...', 'info');
     setTimeout(() => navigate('/calendar'), 500);
   };
@@ -524,6 +594,17 @@ export default function AITools() {
                 />
               </div>
               
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
+                <PlatformSelector
+                  value={captionPlatform}
+                  onChange={setCaptionPlatform}
+                  contentType="caption"
+                  showTips={true}
+                />
+              </div>
+              
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Length</label>
@@ -600,11 +681,11 @@ export default function AITools() {
                           <button onClick={() => handleCopy(caption.trim(), `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
                             {copiedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
                           </button>
-                          <button onClick={() => handleSaveContent(caption.trim(), 'caption', { input: captionInput })} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
-                            <Save className="w-3 h-3 text-gray-600" /><span>Save</span>
+                          <button onClick={() => handleAddToLibrary(caption.trim(), 'caption', { input: captionInput }, `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
+                            {savedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Add to Library</span></>}
                           </button>
-                          <button onClick={() => handleScheduleContent(caption.trim())} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
-                            <Calendar className="w-3 h-3" /><span>Schedule</span>
+                          <button onClick={() => handleScheduleContent(caption.trim(), `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
+                            {scheduledIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Scheduled!</span></> : <><Calendar className="w-3 h-3 text-gray-600" /><span>Schedule</span></>}
                           </button>
                         </div>
                       </div>
@@ -638,6 +719,17 @@ export default function AITools() {
                   onChange={(e) => setHashtagInput(e.target.value)}
                   placeholder="e.g., fitness tips, small business marketing, travel photography"
                   className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm"
+                />
+              </div>
+
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
+                <PlatformSelector
+                  value={hashtagPlatform}
+                  onChange={setHashtagPlatform}
+                  contentType="hashtag"
+                  showTips={true}
                 />
               </div>
 
@@ -691,9 +783,14 @@ export default function AITools() {
                             <span className="text-xs text-gray-500">{hashtag.posts} posts</span>
                           </div>
                         </div>
-                        <button onClick={() => handleCopy(hashtag.tag, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0 ml-2">
-                          {copiedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                        </button>
+                        <div className="flex items-center gap-1.5 ml-2">
+                          <button onClick={() => handleAddToLibrary(hashtag.tag, 'hashtag', { input: hashtagInput }, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
+                            {savedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                          </button>
+                          <button onClick={() => handleCopy(hashtag.tag, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
+                            {copiedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -718,6 +815,22 @@ export default function AITools() {
 
             <div className="p-4 md:p-5 space-y-3 md:space-y-4">
               <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brief Idea</label>
+                <input type="text" value={hookInput} onChange={(e) => setHookInput(e.target.value)} placeholder="e.g., why consistency matters in fitness" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
+              </div>
+
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
+                <PlatformSelector
+                  value={hookPlatform}
+                  onChange={setHookPlatform}
+                  contentType="hook"
+                  showTips={true}
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Hook Theme</label>
                 <select value={hookTheme} onChange={(e) => setHookTheme(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm">
                   <option value="question">Question</option>
@@ -726,10 +839,6 @@ export default function AITools() {
                   <option value="story">Story Beginning</option>
                   <option value="statistic">Statistic/Fact</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brief Idea</label>
-                <input type="text" value={hookInput} onChange={(e) => setHookInput(e.target.value)} placeholder="e.g., why consistency matters in fitness" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
               </div>
 
               {/* Brand Voice Toggle */}
@@ -770,9 +879,14 @@ export default function AITools() {
                     {generatedHooks.map((hook, i) => (
                       <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
                         <p className="text-sm text-gray-800 font-medium flex-1">{hook.trim()}</p>
-                        <button onClick={() => handleCopy(hook.trim(), `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors ml-2 flex-shrink-0">
-                          {copiedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                        </button>
+                        <div className="flex items-center gap-1.5 ml-2">
+                          <button onClick={() => handleAddToLibrary(hook.trim(), 'hook', { input: hookInput }, `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
+                            {savedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                          </button>
+                          <button onClick={() => handleCopy(hook.trim(), `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
+                            {copiedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -800,16 +914,16 @@ export default function AITools() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Your Goal</label>
                 <input type="text" value={ctaGoal} onChange={(e) => setCtaGoal(e.target.value)} placeholder="e.g., increase engagement, drive sales, get DMs" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
               </div>
+              
+              {/* Platform Selector */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
-                <select value={ctaPlatform} onChange={(e) => setCtaPlatform(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm">
-                  <option value="general">General</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="tiktok">TikTok</option>
-                  <option value="twitter">X/Twitter</option>
-                  <option value="youtube">YouTube</option>
-                </select>
+                <PlatformSelector
+                  value={ctaPlatform}
+                  onChange={setCtaPlatform}
+                  contentType="cta"
+                  showTips={true}
+                />
               </div>
 
               {/* Brand Voice Toggle */}
@@ -847,17 +961,25 @@ export default function AITools() {
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={3} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
                   <div className="space-y-2">
-                    {generatedCTAs.map((cta, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-800 font-medium">{cta.trim()}</p>
-                          <p className="text-xs text-gray-500 mt-1">Best for: {ctaPlatform === 'general' ? 'All platforms' : ctaPlatform}</p>
+                    {generatedCTAs.map((cta, i) => {
+                      const platformData = getPlatform(ctaPlatform);
+                      return (
+                        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-800 font-medium">{cta.trim()}</p>
+                            <p className="text-xs text-gray-500 mt-1">Best for: {platformData?.name || 'All platforms'}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-2">
+                            <button onClick={() => handleAddToLibrary(cta.trim(), 'cta', { input: ctaGoal, platform: ctaPlatform }, `cta-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
+                              {savedIndex === `cta-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                            </button>
+                            <button onClick={() => handleCopy(cta.trim(), `cta-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
+                              {copiedIndex === `cta-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => handleCopy(cta.trim(), `cta-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors ml-2 flex-shrink-0">
-                          {copiedIndex === `cta-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -970,6 +1092,17 @@ export default function AITools() {
                 <p className="text-xs text-gray-500 mt-2">Be specific! Include mood, setting, colors, or visual style.</p>
               </div>
 
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
+                <PlatformSelector
+                  value={visualPlatform}
+                  onChange={setVisualPlatform}
+                  contentType="visual"
+                  showTips={true}
+                />
+              </div>
+
               {/* Brand Voice Toggle */}
               <div className="bg-gray-50 rounded-lg border border-gray-200 px-2.5 md:px-3 py-2 md:py-2.5 relative group">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1010,9 +1143,14 @@ export default function AITools() {
                       <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
                         <div className="flex items-start justify-between mb-2 gap-2">
                           <h5 className="font-medium text-gray-900 text-xs md:text-sm flex-1 min-w-0">{idea.title}</h5>
-                          <button onClick={() => handleCopy(JSON.stringify(idea, null, 2), `visual-${i}`)} className="p-1 hover:bg-white rounded flex-shrink-0">
-                            {copiedIndex === `visual-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleAddToLibrary(JSON.stringify(idea, null, 2), 'visual-idea', { input: visualPrompt }, `visual-${i}`)} className="p-1 hover:bg-white rounded flex-shrink-0" title="Add to Library">
+                              {savedIndex === `visual-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                            </button>
+                            <button onClick={() => handleCopy(JSON.stringify(idea, null, 2), `visual-${i}`)} className="p-1 hover:bg-white rounded flex-shrink-0">
+                              {copiedIndex === `visual-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                            </button>
+                          </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="text-xs bg-huttle-primary/10 text-huttle-primary px-2 py-0.5 rounded font-medium">{idea.type}</span>

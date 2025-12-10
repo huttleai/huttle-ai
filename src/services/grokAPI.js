@@ -8,9 +8,11 @@
  * - Qualitative scoring and content quality analysis
  * 
  * All functions now use centralized brand context for consistent brand alignment
+ * Platform-specific guidelines are injected for optimized content per platform
  */
 
 import { buildSystemPrompt, getBrandVoice, getNiche, getTargetAudience, buildBrandContext } from '../utils/brandContextBuilder';
+import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 
 const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY || '';
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
@@ -73,6 +75,14 @@ export async function generateCaption(contentData, brandData) {
       'You are a professional social media content writer. Create compelling, engaging captions that drive engagement.',
       brandData
     );
+    
+    // Get platform-specific context
+    const platform = contentData.platform || 'instagram';
+    const platformContext = buildPlatformContext(platform, 'caption');
+    const platformData = getPlatform(platform);
+    const hashtagGuidelines = getHashtagGuidelines(platform);
+    const hookGuidelines = getHookGuidelines(platform);
+    const ctaGuidelines = getCTAGuidelines(platform);
 
     const response = await fetch(GROK_API_URL, {
       method: 'POST',
@@ -89,16 +99,23 @@ export async function generateCaption(contentData, brandData) {
           },
           {
             role: 'user',
-            content: `Write a compelling social media caption about: "${contentData.topic}". 
+            content: `Write 4 compelling social media captions about: "${contentData.topic}". 
 
-Platform: ${contentData.platform}
+${platformContext}
 
-Requirements:
+PLATFORM-SPECIFIC REQUIREMENTS:
+- Character limit: ${platformData?.charLimit || 2200} characters
+- Hook style: ${hookGuidelines.style}
+- Include ${hashtagGuidelines.count} hashtags (${hashtagGuidelines.style})
+- CTA style: ${ctaGuidelines.style} (examples: ${ctaGuidelines.examples.slice(0, 3).join(', ')})
+
+GENERAL REQUIREMENTS:
 - Match the brand voice exactly
 - Appeal to the target audience
-- Include relevant hashtags
-- Add a clear call-to-action
-- Keep it authentic and engaging`
+- Keep it authentic and engaging
+- Optimize for ${platformData?.name || 'social media'} algorithm and culture
+
+Number them 1-4. Each caption should have a different hook approach.`
           }
         ],
         temperature: 0.7,
@@ -236,11 +253,15 @@ Make sure all content aligns with the brand voice and appeals to the target audi
   }
 }
 
-export async function generateHooks(input, brandData, theme = 'question') {
+export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram') {
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
     const audience = getTargetAudience(brandData);
+    
+    // Get platform-specific hook guidelines
+    const hookGuidelines = getHookGuidelines(platform);
+    const platformData = getPlatform(platform);
 
     const systemPrompt = buildSystemPrompt(
       'You are a content hook expert. Create attention-grabbing opening lines that stop the scroll.',
@@ -264,17 +285,23 @@ export async function generateHooks(input, brandData, theme = 'question') {
             role: 'user',
             content: `Build 4 short hooks (under 15 words each) for: "${input}"
 
-Hook style: ${theme}
+PLATFORM: ${platformData?.name || 'Social Media'}
+Platform hook style: ${hookGuidelines.style}
+Platform hook examples: ${hookGuidelines.examples.join(', ')}
+Platform tip: ${hookGuidelines.tip}
+
+Hook theme: ${theme}
 Niche: ${niche}
 Target audience: ${audience}
 
 Each hook must:
 - Match the ${brandVoice} brand voice
+- Be optimized for ${platformData?.name || 'social media'} culture and algorithm
 - Stop the scroll immediately
 - Create curiosity or urgency
 - Feel authentic to the brand
 
-Number them 1-4.`
+Number them 1-4. Vary the approach for each hook.`
           }
         ],
         temperature: 0.8,
@@ -296,11 +323,15 @@ Number them 1-4.`
   }
 }
 
-export async function generateCTAs(goal, brandData, platform = 'general') {
+export async function generateCTAs(goal, brandData, platform = 'instagram') {
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
     const audience = getTargetAudience(brandData);
+    
+    // Get platform-specific CTA guidelines
+    const ctaGuidelines = getCTAGuidelines(platform);
+    const platformData = getPlatform(platform);
 
     const systemPrompt = buildSystemPrompt(
       'You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.',
@@ -324,19 +355,22 @@ export async function generateCTAs(goal, brandData, platform = 'general') {
             role: 'user',
             content: `Suggest 5 urgent CTAs for goal: "${goal}"
 
-Platform: ${platform}
+PLATFORM: ${platformData?.name || 'Social Media'}
+Platform CTA style: ${ctaGuidelines.style}
+Platform CTA examples: ${ctaGuidelines.examples.join(', ')}
+Platform tip: ${ctaGuidelines.tip}
+
 Niche: ${niche}
 Target audience: ${audience}
 
-Examples: "DM for tips", "Save this", "Link in bio", etc.
-
 Each CTA must:
 - Match the ${brandVoice} brand voice
+- Be optimized for ${platformData?.name || 'social media'} (what works best on this platform)
 - Create urgency or desire
-- Be appropriate for ${platform}
 - Feel natural, not pushy
+- Use platform-specific language and conventions
 
-Number them 1-5.`
+Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
           }
         ],
         temperature: 0.7,
@@ -358,11 +392,18 @@ Number them 1-5.`
   }
 }
 
-export async function generateHashtags(input, brandData) {
+export async function generateHashtags(input, brandData, platform = 'instagram') {
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
     const audience = getTargetAudience(brandData);
+    
+    // Get platform-specific hashtag guidelines
+    const hashtagGuidelines = getHashtagGuidelines(platform);
+    const platformData = getPlatform(platform);
+    
+    // Determine hashtag count based on platform
+    const hashtagCount = hashtagGuidelines.max || 10;
 
     const systemPrompt = buildSystemPrompt(
       'You are a hashtag expert. Generate relevant, high-engagement hashtags that boost discoverability.',
@@ -384,18 +425,28 @@ export async function generateHashtags(input, brandData) {
           },
           {
             role: 'user',
-            content: `Suggest 10 trending hashtags for: "${input}"
+            content: `Suggest ${hashtagCount} optimized hashtags for: "${input}"
+
+PLATFORM: ${platformData?.name || 'Social Media'}
+Recommended hashtag count: ${hashtagGuidelines.count}
+Hashtag style for this platform: ${hashtagGuidelines.style}
+Platform tip: ${hashtagGuidelines.tip}
 
 Niche: ${niche}
 Target audience: ${audience}
 
 Requirements:
-- Mix of popular and niche-specific hashtags
+- Optimize for ${platformData?.name || 'social media'} algorithm and discovery
+- Mix of popular and niche-specific hashtags appropriate for this platform
 - Fit the ${brandVoice} brand voice
 - Boost discoverability for the target audience
 - Include a mix of reach sizes (high, medium, low competition)
 
-Rank them by engagement potential with brief explanations.`
+Return exactly ${hashtagCount} hashtags ranked by engagement potential. For each hashtag include:
+1. The hashtag
+2. Estimated popularity/posts (e.g., "2.4M posts")
+3. Engagement score (0-100)
+4. Brief reason why it works for ${platformData?.name || 'this platform'}`
           }
         ],
         temperature: 0.5,
@@ -719,10 +770,14 @@ Hashtags: [platform-appropriate hashtags]
  * Generate visual/image content ideas
  * @param {string} prompt - Visual concept description
  * @param {Object} brandData - Brand data from BrandContext
+ * @param {string} platform - Target platform for visual content
  * @returns {Promise<Object>} Generated visual ideas
  */
-export async function generateVisualIdeas(prompt, brandData) {
+export async function generateVisualIdeas(prompt, brandData, platform = 'instagram') {
   try {
+    const platformData = getPlatform(platform);
+    const platformContext = buildPlatformContext(platform, 'visual');
+    
     const systemPrompt = buildSystemPrompt(
       'You are a visual content strategist. Create compelling image and video concepts that align with brand identity.',
       brandData
@@ -745,12 +800,20 @@ export async function generateVisualIdeas(prompt, brandData) {
             role: 'user',
             content: `Generate 4 visual content ideas for: "${prompt}"
 
+${platformContext}
+
+PLATFORM-SPECIFIC REQUIREMENTS:
+- Optimize visuals for ${platformData?.name || 'social media'}
+- Consider ${platformData?.contentFormats?.join(', ') || 'various formats'}
+- Match ${platformData?.audienceStyle || 'engaging visual style'}
+
 For each idea, include:
-- Visual concept description
+- Visual concept description optimized for ${platformData?.name || 'social media'}
+- Recommended format (${platformData?.contentFormats?.slice(0, 3).join(', ') || 'image, video, carousel'})
 - Color palette suggestions
-- Composition tips
-- Platform optimization notes
+- Composition tips for ${platformData?.name || 'social media'}
 - Text overlay suggestions (if applicable)
+- Why this works for ${platformData?.name || 'this platform'}
 
 Make sure all visuals align with the brand identity and appeal to the target audience.
 
