@@ -195,11 +195,11 @@ export default function SmartTimeSuggestion({
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 overflow-hidden">
+    <div className="bg-gradient-to-br from-huttle-50 to-cyan-50 rounded-xl border border-huttle-200 overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-100/50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-huttle-100/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500">
@@ -230,7 +230,7 @@ export default function SmartTimeSuggestion({
                 className={`p-3 rounded-lg border-2 text-left transition-all ${
                   selectedSuggestion === suggestion.id
                     ? 'border-green-500 bg-green-50 shadow-lg shadow-green-200/50 ring-2 ring-green-300 ring-offset-1'
-                    : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow'
+                    : 'border-gray-200 bg-white hover:border-huttle-300 hover:shadow'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -245,8 +245,8 @@ export default function SmartTimeSuggestion({
                   {formatDate(suggestion.date)}
                 </div>
                 <div className="flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-3 h-3 text-blue-500" />
-                  <span className="text-xs text-blue-600 font-medium">
+                  <TrendingUp className="w-3 h-3 text-huttle-primary" />
+                  <span className="text-xs text-huttle-primary font-medium">
                     {suggestion.label}
                   </span>
                 </div>
@@ -261,8 +261,8 @@ export default function SmartTimeSuggestion({
 
           {/* Tip */}
           {suggestions.length > 0 && suggestions[0].tip && (
-            <div className="flex items-start gap-2 p-2 bg-white rounded-lg border border-blue-100">
-              <Sparkles className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-2 p-2 bg-white rounded-lg border border-huttle-100">
+              <Sparkles className="w-4 h-4 text-huttle-primary mt-0.5 flex-shrink-0" />
               <p className="text-xs text-gray-600">
                 <strong>Pro tip:</strong> {suggestions[0].tip}
               </p>
@@ -299,11 +299,11 @@ export function TimeSuggestionChip({ platform, onSelect }) {
   return (
     <button
       onClick={() => onSelect(bestTime.time)}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-huttle-100 text-huttle-primary rounded-full text-xs font-medium hover:bg-huttle-200 transition-colors"
     >
       <Clock className="w-3 h-3" />
       <span>Best: {formatTime(bestTime.time)}</span>
-      <span className="text-blue-500">({bestTime.score}%)</span>
+      <span className="text-huttle-primary">({bestTime.score}%)</span>
     </button>
   );
 }

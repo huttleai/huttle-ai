@@ -109,8 +109,7 @@ export default function Profile() {
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <button 
               onClick={handleSave}
-              className="px-6 py-2.5 text-white rounded-lg font-medium transition-all shadow-md hover:opacity-90 flex items-center gap-2"
-              style={{ backgroundColor: '#01bad2' }}
+              className="px-6 py-2.5 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-lg font-medium transition-all shadow-md flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               Save Changes

@@ -18,12 +18,12 @@
   --huttle-cyan-light: #E0F7FA;
   
   /* Logo gradient */
-  --huttle-gradient: linear-gradient(135deg, #2B8FC7 0%, #00BCD4 100%);
+  --huttle-gradient: linear-gradient(135deg, #01bad2 0%, #00BCD4 100%);
   
   /* Legacy support */
-  --huttle-primary: #2B8FC7;
-  --huttle-primary-dark: #2480B5;
-  --huttle-primary-light: #E3F2FD;
+  --huttle-primary: #01bad2;
+  --huttle-primary-dark: #00ACC1;
+  --huttle-primary-light: #E0F7FA;
 }
 
 @layer base {
@@ -367,24 +367,24 @@
      GRADIENT UTILITIES
      =================================== */
   
-  /* Primary gradient background - blue to cyan */
+  /* Primary gradient background - cyan brand */
   .bg-huttle-gradient {
-    background: linear-gradient(135deg, #2B8FC7 0%, #00BCD4 100%) !important;
+    background: linear-gradient(135deg, #01bad2 0%, #00BCD4 100%) !important;
   }
 
   /* Reverse gradient - cyan to blue */
   .bg-huttle-gradient-reverse {
-    background: linear-gradient(135deg, #00BCD4 0%, #2B8FC7 100%) !important;
+    background: linear-gradient(135deg, #00BCD4 0%, #01bad2 100%) !important;
   }
 
   /* Vertical gradient */
   .bg-huttle-gradient-vertical {
-    background: linear-gradient(180deg, #2B8FC7 0%, #00BCD4 100%) !important;
+    background: linear-gradient(180deg, #01bad2 0%, #00BCD4 100%) !important;
   }
 
   /* Subtle gradient for backgrounds */
   .bg-huttle-gradient-subtle {
-    background: linear-gradient(135deg, rgba(43, 143, 199, 0.1) 0%, rgba(0, 188, 212, 0.1) 100%) !important;
+    background: linear-gradient(135deg, rgba(1, 186, 210, 0.1) 0%, rgba(0, 188, 212, 0.1) 100%) !important;
   }
 
   /* Premium violet-fuchsia gradient */

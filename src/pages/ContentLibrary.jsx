@@ -1065,7 +1065,7 @@ export default function ContentLibrary() {
                           <div className={`absolute top-2 left-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-sm backdrop-blur-md ${
                             item.type === 'image' ? 'bg-pink-500/90 text-white' :
                             item.type === 'video' ? 'bg-purple-500/90 text-white' :
-                            'bg-blue-500/90 text-white'
+                            'bg-huttle-primary/90 text-white'
                           }`}>
                             {item.type === 'image' && <Image className="w-3 h-3" />}
                             {item.type === 'video' && <Video className="w-3 h-3" />}
@@ -1082,7 +1082,7 @@ export default function ContentLibrary() {
                               <div className={`w-1.5 h-1.5 rounded-full ${
                                 item.type === 'image' ? 'bg-pink-400' :
                                 item.type === 'video' ? 'bg-purple-400' :
-                                'bg-blue-400'
+                                'bg-huttle-primary'
                               }`} />
                               {item.date}
                             </span>
@@ -1095,8 +1095,8 @@ export default function ContentLibrary() {
                         {/* List view thumbnail */}
                         <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 shadow-inner border border-gray-100">
                           {item.type === 'text' ? (
-                            <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-2">
-                              <FileText className="w-6 h-6 text-blue-400" />
+                            <div className="w-full h-full bg-gradient-to-br from-huttle-50 to-cyan-50 flex items-center justify-center p-2">
+                              <FileText className="w-6 h-6 text-huttle-primary" />
                             </div>
                           ) : item.type === 'video' ? (
                             <div className="w-full h-full relative group/thumb">
@@ -1135,7 +1135,7 @@ export default function ContentLibrary() {
                             <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md ${
                               item.type === 'image' ? 'bg-pink-50 text-pink-600 border border-pink-100' :
                               item.type === 'video' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
-                              'bg-blue-50 text-blue-600 border border-blue-100'
+                              'bg-huttle-50 text-huttle-primary border border-huttle-100'
                             }`}>
                               {item.type}
                             </span>
@@ -1205,7 +1205,7 @@ export default function ContentLibrary() {
                             <span>Videos</span>
                           </div>
                           <div className="flex items-center gap-2 text-gray-600">
-                            <FileText className="w-4 h-4 text-blue-500" />
+                            <FileText className="w-4 h-4 text-huttle-primary" />
                             <span>Text & Captions</span>
                           </div>
                         </div>
@@ -1290,7 +1290,7 @@ export default function ContentLibrary() {
                 <span className="text-xs text-gray-600">{contentCounts.videos} vid</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <div className="w-2 h-2 rounded-full bg-huttle-primary" />
                 <span className="text-xs text-gray-600">{contentCounts.text} txt</span>
               </div>
             </div>

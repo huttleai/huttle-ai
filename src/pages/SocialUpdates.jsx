@@ -344,12 +344,12 @@ export default function SocialUpdates() {
               {(selectedUpdate.timeline || selectedUpdate.affectedUsers) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {selectedUpdate.timeline && (
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="p-4 bg-huttle-50 rounded-lg border border-huttle-200">
                       <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-5 h-5 text-blue-600" />
-                        <h4 className="font-semibold text-blue-900">Timeline</h4>
+                        <Clock className="w-5 h-5 text-huttle-primary" />
+                        <h4 className="font-semibold text-gray-900">Timeline</h4>
                       </div>
-                      <p className="text-sm text-blue-800">{selectedUpdate.timeline}</p>
+                      <p className="text-sm text-gray-800">{selectedUpdate.timeline}</p>
                     </div>
                   )}
                   {selectedUpdate.affectedUsers && (
@@ -420,8 +420,8 @@ export default function SocialUpdates() {
 
       {/* Footer Notes */}
       <div className="mt-8">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-sm text-blue-900">
+        <div className="bg-huttle-50 border border-huttle-200 rounded-xl p-4">
+          <p className="text-sm text-gray-900">
             <strong>Note:</strong> These updates are curated to help you stay informed about platform changes that might affect your content strategy. Links are provided for detailed information from official sources.
           </p>
         </div>

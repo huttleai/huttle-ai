@@ -336,8 +336,7 @@ export default function AIPlanBuilder() {
         <button 
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="px-6 md:px-8 py-2.5 md:py-3 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all shadow-md hover:opacity-90"
-          style={{ backgroundColor: '#01bad2' }}
+          className="px-6 md:px-8 py-2.5 md:py-3 bg-huttle-primary hover:bg-huttle-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all shadow-md"
         >
           {isGenerating ? 'Generating...' : 'Generate AI Plan'}
         </button>
@@ -369,7 +368,7 @@ export default function AIPlanBuilder() {
                 <h4 className="text-sm font-semibold text-gray-700 mb-1">Content Mix</h4>
                 <div className="text-sm">
                   <span className="text-green-600 font-semibold">{generatedPlan.contentMix.educational}%</span> Educational • 
-                  <span className="text-blue-600 font-semibold"> {generatedPlan.contentMix.entertaining}%</span> Fun • 
+                  <span className="text-huttle-primary font-semibold"> {generatedPlan.contentMix.entertaining}%</span> Fun • 
                   <span className="text-purple-600 font-semibold"> {generatedPlan.contentMix.promotional}%</span> Promo
                 </div>
               </div>
@@ -417,7 +416,7 @@ export default function AIPlanBuilder() {
                                 <span className="font-semibold text-green-600">{formatTo12Hour(post.time)}</span>
                               </div>
                             </div>
-                            <div className="bg-blue-50 rounded p-2 text-xs text-blue-800 border-t">
+                            <div className="bg-huttle-50 rounded p-2 text-xs text-huttle-primary border-t">
                               💡 This timing is optimized for maximum engagement based on your audience
                             </div>
                           </div>
@@ -443,13 +442,13 @@ export default function AIPlanBuilder() {
             </div>
             
             {/* Info Message */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-huttle-50 border border-huttle-200 rounded-lg p-4 flex items-start gap-3">
+              <Info className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm text-blue-900 font-medium mb-1">
+                <p className="text-sm text-gray-900 font-medium mb-1">
                   Customize Your Plan in Smart Calendar
                 </p>
-                <p className="text-xs text-blue-700">
+                <p className="text-xs text-gray-700">
                   After exporting, you can edit post details, adjust timing, and make any custom changes within the Smart Calendar.
                 </p>
               </div>

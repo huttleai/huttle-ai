@@ -699,7 +699,7 @@ export default function TrendLab() {
 
         {/* Personalized Trend Alerts */}
         <div
-          className="trend-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 p-6 hover:shadow-lg transition-all cursor-pointer group"
+          className="trend-card bg-gradient-to-br from-huttle-50 to-huttle-100 rounded-xl border border-huttle-200 p-6 hover:shadow-lg transition-all cursor-pointer group"
           onClick={() => {
             setActiveFeature('alerts');
             showToast('Setting up personalized trend alerts...', 'info');
@@ -709,15 +709,15 @@ export default function TrendLab() {
           }}
         >
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-              <Bell className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 rounded-full bg-huttle-200 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <Bell className="w-6 h-6 text-huttle-primary" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-bold mb-2 text-blue-900">Personalized Trend Alerts</h3>
-              <p className="text-sm text-blue-700 mb-4">
+              <h3 className="text-lg font-bold mb-2 text-gray-900">Personalized Trend Alerts</h3>
+              <p className="text-sm text-gray-700 mb-4">
                 Get real-time notifications when trends spike in your niche. Never miss an opportunity.
               </p>
-              <div className="flex items-center text-blue-600 text-sm font-medium">
+              <div className="flex items-center text-huttle-primary text-sm font-medium">
                 <span>Set Up Alerts</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </div>

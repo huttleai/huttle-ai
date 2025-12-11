@@ -345,3 +345,5 @@ export function getImprovementColor(improvement) {
     default: return 'text-gray-600 bg-gray-50 border-gray-200';
   }
 }
+
+

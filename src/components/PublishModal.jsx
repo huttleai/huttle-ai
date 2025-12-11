@@ -385,8 +385,8 @@ export default function PublishModal({ isOpen, onClose, post }) {
 
           {/* Instructions for Direct Publish */}
           {activeTab === 'direct' && selectedPlatform && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-900">
+            <div className="bg-huttle-50 border border-huttle-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-900">
                 <strong>How it works:</strong> {PLATFORM_CONFIGS[selectedPlatform].instructions}
                 {!isMobile && ' Your caption will be copied to clipboard automatically.'}
               </p>

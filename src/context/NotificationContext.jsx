@@ -324,7 +324,7 @@ function NotificationPanel() {
   const getIcon = (type) => {
     switch (type) {
       case 'reminder':
-        return <Clock className="w-5 h-5 text-blue-500" />;
+        return <Clock className="w-5 h-5 text-huttle-primary" />;
       case 'warning':
         return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
       case 'error':
@@ -332,7 +332,7 @@ function NotificationPanel() {
       case 'success':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       default:
-        return <Info className="w-5 h-5 text-blue-500" />;
+        return <Info className="w-5 h-5 text-huttle-primary" />;
     }
   };
 
@@ -408,7 +408,7 @@ function NotificationPanel() {
                 <div
                   key={notification.id}
                   className={`p-4 hover:bg-gray-50 transition-all cursor-pointer ${
-                    !notification.read ? 'bg-blue-50 bg-opacity-50' : ''
+                    !notification.read ? 'bg-huttle-50 bg-opacity-50' : ''
                   }`}
                   onClick={() => !notification.read && markAsRead(notification.id)}
                 >

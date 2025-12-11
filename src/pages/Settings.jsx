@@ -113,7 +113,7 @@ export default function Settings() {
               <p className="text-sm text-gray-600">Select which platforms you use most</p>
             </div>
           </div>
-          <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">
+          <span className="text-xs bg-huttle-100 text-huttle-primary px-3 py-1 rounded-full font-semibold">
             {preferredPlatforms.length} Selected
           </span>
         </div>
@@ -154,12 +154,12 @@ export default function Settings() {
           })}
         </div>
 
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-6 p-4 bg-huttle-50 border border-huttle-200 rounded-lg">
           <div className="flex gap-3">
-            <ExternalLink className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <ExternalLink className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-blue-900 mb-1">How Publishing Works</h4>
-              <p className="text-sm text-blue-700">
+              <h4 className="font-semibold text-gray-900 mb-1">How Publishing Works</h4>
+              <p className="text-sm text-gray-700">
                 When you click "Publish Now" on a post, Huttle AI opens the native app on your phone (or the website on desktop) with your content ready to paste. No account connection required!
               </p>
             </div>

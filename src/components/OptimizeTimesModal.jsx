@@ -225,7 +225,7 @@ export default function OptimizeTimesModal({
               <>
                 {/* Brand Context Info */}
                 {brandData?.niche && (
-                  <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2">
+                  <div className="mb-4 p-3 bg-huttle-50 border border-huttle-100 rounded-lg flex items-start gap-2">
                     <Info className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" />
                     <div className="text-sm text-gray-700">
                       <span className="font-medium">Optimizing for: </span>
@@ -524,3 +524,5 @@ export default function OptimizeTimesModal({
     </div>
   );
 }
+
+

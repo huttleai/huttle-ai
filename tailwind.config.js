@@ -36,10 +36,10 @@ export default {
           800: '#00838F',
           900: '#006064',
         },
-        // Legacy support (mapped to new colors)
-        'huttle-primary': '#2B8FC7',
-        'huttle-primary-dark': '#2480B5',
-        'huttle-primary-light': '#E3F2FD',
+        // Primary brand color (cyan #01bad2)
+        'huttle-primary': '#01bad2',
+        'huttle-primary-dark': '#00ACC1',
+        'huttle-primary-light': '#E0F7FA',
         // Accent colors for variety
         'accent': {
           purple: '#8B5CF6',
@@ -143,15 +143,15 @@ export default {
         'card-hover': '0 8px 24px 0 rgba(0, 0, 0, 0.08)',
         // Focus rings using logo colors
         'focus-blue': '0 0 0 2px #fff, 0 0 0 4px #2B8FC7',
-        'focus-cyan': '0 0 0 2px #fff, 0 0 0 4px #00BCD4',
+        'focus-cyan': '0 0 0 2px #fff, 0 0 0 4px #01bad2',
       },
       // Clean Background Gradients
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         // Logo gradient (blue to cyan)
-        'huttle-gradient': 'linear-gradient(135deg, #2B8FC7 0%, #00BCD4 100%)',
-        'huttle-gradient-reverse': 'linear-gradient(135deg, #00BCD4 0%, #2B8FC7 100%)',
-        'huttle-gradient-vertical': 'linear-gradient(180deg, #2B8FC7 0%, #00BCD4 100%)',
+        'huttle-gradient': 'linear-gradient(135deg, #01bad2 0%, #00BCD4 100%)',
+        'huttle-gradient-reverse': 'linear-gradient(135deg, #00BCD4 0%, #01bad2 100%)',
+        'huttle-gradient-vertical': 'linear-gradient(180deg, #01bad2 0%, #00BCD4 100%)',
         // Subtle surface gradients
         'surface-gradient': 'linear-gradient(180deg, #ffffff 0%, #FAFBFC 100%)',
       },

@@ -123,7 +123,7 @@ export function SubscriptionProvider({ children }) {
   const getTierColor = (tier) => {
     const colors = {
       [TIERS.FREE]: 'text-gray-600',
-      [TIERS.ESSENTIALS]: 'text-blue-600',
+      [TIERS.ESSENTIALS]: 'text-huttle-primary',
       [TIERS.PRO]: 'text-purple-600',
     };
     return colors[tier] || 'text-gray-600';

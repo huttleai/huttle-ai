@@ -120,13 +120,12 @@ export default function MiniCalendar({ onDateClick }) {
                 aspect-square flex flex-col items-center justify-center rounded-lg text-xs font-medium
                 transition-all duration-150 relative group
                 ${today 
-                  ? 'bg-white border-2 border-huttle-cyan shadow-sm' 
+                  ? 'bg-white border-2 border-huttle-cyan shadow-sm text-huttle-primary' 
                   : postCount > 0
                     ? 'bg-huttle-cyan-light text-huttle-blue hover:bg-huttle-cyan/20'
                     : 'hover:bg-gray-50 text-gray-700'
                 }
               `}
-              style={today ? { color: '#01bad2' } : {}}
             >
               <span>{day}</span>
               {postCount > 0 && !today && (

@@ -204,9 +204,9 @@ export default function FeatureAccessList({ compact = false }) {
       </div>
 
       {/* Essentials Tier */}
-      <div className="bg-white rounded-xl border-2 border-blue-300 p-6">
+      <div className="bg-white rounded-xl border-2 border-huttle-300 p-6">
         <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-blue-600 mb-2">Essentials</h3>
+          <h3 className="text-2xl font-bold text-huttle-primary mb-2">Essentials</h3>
           <p className="text-3xl font-bold text-gray-900 mb-1">$9</p>
           <p className="text-sm text-gray-600">300 AI generations/month</p>
         </div>
@@ -235,14 +235,14 @@ export default function FeatureAccessList({ compact = false }) {
         {currentTier === 'essentials' ? (
           <button
             disabled
-            className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold cursor-default"
+            className="w-full py-2 bg-huttle-primary text-white rounded-lg font-semibold cursor-default"
           >
             Current Plan
           </button>
         ) : (
           <button
             onClick={handleUpgrade}
-            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold"
+            className="w-full py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-semibold"
           >
             {currentTier === 'free' ? 'Upgrade' : 'Downgrade'}
           </button>

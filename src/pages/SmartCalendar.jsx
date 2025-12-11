@@ -451,7 +451,7 @@ export default function SmartCalendar() {
   const StatusBadge = ({ status }) => {
     const styles = {
       draft: 'bg-gray-100 text-gray-600 border-gray-200',
-      scheduled: 'bg-blue-50 text-huttle-primary border-blue-100',
+      scheduled: 'bg-huttle-50 text-huttle-primary border-huttle-100',
       ready: 'bg-green-50 text-green-700 border-green-200',
       posting: 'bg-amber-50 text-amber-700 border-amber-200',
       posted: 'bg-gray-100 text-gray-500 border-gray-200',
@@ -508,7 +508,7 @@ export default function SmartCalendar() {
           relative overflow-hidden rounded-lg border
           ${post.status === 'posted' 
             ? 'bg-gray-50/50 border-gray-100' 
-            : 'bg-white border-gray-200 group-hover:border-blue-300 group-hover:shadow-sm'
+            : 'bg-white border-gray-200 group-hover:border-huttle-300 group-hover:shadow-sm'
           }
         `}>
           {/* Drag Handle Indicator */}
@@ -633,8 +633,8 @@ export default function SmartCalendar() {
         className={`
           relative min-h-[100px] md:min-h-[120px] border-r border-b border-gray-100 
           cursor-pointer group
-          ${isToday ? 'bg-blue-50/20' : 'bg-white hover:bg-gray-50/50'}
-          ${isDragOver ? 'bg-blue-100 ring-2 ring-huttle-primary ring-inset' : ''}
+          ${isToday ? 'bg-huttle-50/20' : 'bg-white hover:bg-gray-50/50'}
+          ${isDragOver ? 'bg-huttle-100 ring-2 ring-huttle-primary ring-inset' : ''}
         `}
       >
         {/* Day Number */}
@@ -673,7 +673,7 @@ export default function SmartCalendar() {
         
         {/* Drop Indicator */}
         {isDragOver && (
-          <div className="absolute inset-2 border-2 border-dashed border-huttle-primary rounded-lg flex items-center justify-center bg-blue-50/80 pointer-events-none z-10">
+          <div className="absolute inset-2 border-2 border-dashed border-huttle-primary rounded-lg flex items-center justify-center bg-huttle-50/80 pointer-events-none z-10">
             <span className="text-xs font-semibold text-huttle-primary">Drop here</span>
           </div>
         )}
@@ -817,7 +817,7 @@ export default function SmartCalendar() {
                     setCurrentDate(new Date());
                     if (view === 'day') setView('month');
                   }}
-                  className="px-3 py-1.5 text-sm font-medium text-huttle-primary hover:bg-blue-50 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium text-huttle-primary hover:bg-huttle-50 rounded-lg transition-colors"
                 >
                   Today
                 </button>
@@ -885,7 +885,7 @@ export default function SmartCalendar() {
                     return (
                       <div
                         key={i}
-                        className={`p-3 text-center border-r border-gray-100 last:border-r-0 ${isToday ? 'bg-blue-50/30' : ''}`}
+                        className={`p-3 text-center border-r border-gray-100 last:border-r-0 ${isToday ? 'bg-huttle-50/30' : ''}`}
                       >
                         <div className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">{dayNames[date.getDay()]}</div>
                         <div className={`text-lg font-bold mt-1 ${isToday ? 'text-huttle-primary' : 'text-gray-900'}`}>
@@ -933,7 +933,7 @@ export default function SmartCalendar() {
                         className={`
                           p-2 border-r border-gray-100 last:border-r-0 cursor-pointer
                           hover:bg-gray-50 overflow-y-auto
-                          ${isDragOver ? 'bg-blue-100 ring-2 ring-huttle-primary ring-inset' : ''}
+                          ${isDragOver ? 'bg-huttle-100 ring-2 ring-huttle-primary ring-inset' : ''}
                         `}
                       >
                         <div className="space-y-2">
@@ -941,7 +941,7 @@ export default function SmartCalendar() {
                           {posts.length === 0 && (
                             <button
                               onClick={(e) => { e.stopPropagation(); setQuickAddDate(null); setIsCreatePostOpen(true); }}
-                              className="w-full py-8 border border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-huttle-primary hover:text-huttle-primary hover:bg-blue-50/30 transition-all duration-200 flex flex-col items-center gap-2 group"
+                              className="w-full py-8 border border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-huttle-primary hover:text-huttle-primary hover:bg-huttle-50/30 transition-all duration-200 flex flex-col items-center gap-2 group"
                             >
                               <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
                               <span className="text-xs font-medium">Add Post</span>

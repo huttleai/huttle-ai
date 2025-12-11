@@ -97,9 +97,9 @@ export default function CancelSubscriptionModal({
         {/* Header */}
         <div className="relative px-6 py-5 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className={`${showFeedbackForm ? 'bg-blue-50' : 'bg-red-50'} p-2 rounded-xl border ${showFeedbackForm ? 'border-blue-100' : 'border-red-100'}`}>
+            <div className={`${showFeedbackForm ? 'bg-huttle-50' : 'bg-red-50'} p-2 rounded-xl border ${showFeedbackForm ? 'border-huttle-100' : 'border-red-100'}`}>
               {showFeedbackForm ? (
-                <MessageSquare className="w-6 h-6 text-blue-600" />
+                <MessageSquare className="w-6 h-6 text-huttle-primary" />
               ) : (
                 <AlertCircle className="w-6 h-6 text-red-600" />
               )}
@@ -181,16 +181,16 @@ export default function CancelSubscriptionModal({
           )}
 
           {/* Info Box */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+          <div className="bg-huttle-50 border-l-4 border-huttle-primary rounded-r-lg p-4">
             <div className="flex gap-3">
               <div className="flex-shrink-0 pt-0.5">
-                <Calendar className="w-5 h-5 text-blue-600" />
+                <Calendar className="w-5 h-5 text-huttle-primary" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-blue-800 mb-1">
+                <p className="text-sm font-semibold text-gray-900 mb-1">
                   You'll keep your access
                 </p>
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-gray-700">
                   Your subscription will remain active until <span className="font-semibold">{formatDate(renewalDate)}</span>. 
                   After that, you'll be automatically moved to the free plan.
                 </p>
@@ -287,8 +287,8 @@ export default function CancelSubscriptionModal({
                 </div>
 
                 {/* Thank you message */}
-                <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
-                  <p className="text-sm text-blue-700">
+                <div className="bg-huttle-50 border-l-4 border-huttle-primary rounded-r-lg p-4">
+                  <p className="text-sm text-gray-700">
                     <span className="font-semibold">Thank you for your feedback!</span> You can always come back anytime.
                   </p>
                 </div>

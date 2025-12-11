@@ -60,7 +60,7 @@ const AUDIENCES = [
 
 // Content goals - different for brand vs creator
 const BRAND_CONTENT_GOALS = [
-  { value: 'grow_followers', label: 'Grow Followers', icon: Users, color: 'bg-blue-500' },
+  { value: 'grow_followers', label: 'Grow Followers', icon: Users, color: 'bg-huttle-primary' },
   { value: 'increase_engagement', label: 'Increase Engagement', icon: MessageSquare, color: 'bg-green-500' },
   { value: 'drive_sales', label: 'Drive Sales', icon: Target, color: 'bg-purple-500' },
   { value: 'build_brand', label: 'Build Brand Awareness', icon: Sparkles, color: 'bg-amber-500' },
@@ -69,7 +69,7 @@ const BRAND_CONTENT_GOALS = [
 ];
 
 const CREATOR_CONTENT_GOALS = [
-  { value: 'grow_followers', label: 'Grow My Following', icon: Users, color: 'bg-blue-500' },
+  { value: 'grow_followers', label: 'Grow My Following', icon: Users, color: 'bg-huttle-primary' },
   { value: 'increase_engagement', label: 'Boost Engagement', icon: MessageSquare, color: 'bg-green-500' },
   { value: 'build_community', label: 'Build Community', icon: Heart, color: 'bg-pink-500' },
   { value: 'share_story', label: 'Share My Story', icon: PenTool, color: 'bg-amber-500' },

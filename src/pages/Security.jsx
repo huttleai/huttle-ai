@@ -272,8 +272,8 @@ export default function Security() {
             </div>
           </form>
 
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-700">
+          <div className="mt-4 p-3 bg-huttle-50 border border-huttle-200 rounded-lg">
+            <p className="text-xs text-gray-700">
               A confirmation link will be sent to your new email address. You'll need to click the link to complete the change.
             </p>
           </div>
@@ -282,4 +282,6 @@ export default function Security() {
     </div>
   );
 }
+
+
 

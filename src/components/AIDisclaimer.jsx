@@ -179,8 +179,8 @@ export function AIDisclaimerFooter({
   className = '' 
 }) {
   return (
-    <div className={`flex items-start gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3 ${className}`}>
-      <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+    <div className={`flex items-start gap-2 text-xs text-gray-600 bg-huttle-50 border border-huttle-200 rounded-lg p-3 ${className}`}>
+      <Info className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="leading-relaxed">
           {getRotatingPhrase('footer', phraseIndex)}
@@ -188,7 +188,7 @@ export function AIDisclaimerFooter({
         {showModal && (
           <button
             onClick={onModalOpen}
-            className="text-blue-600 hover:text-blue-700 font-medium underline mt-1 inline-flex items-center gap-1"
+            className="text-huttle-primary hover:text-huttle-primary-dark font-medium underline mt-1 inline-flex items-center gap-1"
           >
             How We Predict
             <HelpCircle className="w-3 h-3" />
@@ -235,8 +235,8 @@ export function HowWePredictModal({ isOpen, onClose }) {
               Our AI Stack
             </h3>
             <div className="space-y-3 ml-10">
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-900 mb-1">Advanced AI Models</h4>
+              <div className="p-4 bg-gradient-to-r from-huttle-50 to-cyan-50 rounded-lg border border-huttle-200">
+                <h4 className="font-semibold text-gray-900 mb-1">Advanced AI Models</h4>
                 <p className="text-sm text-gray-700">
                   Our proprietary algorithm combines multiple AI models to analyze social media trends, engagement patterns, and viral content across platforms. Trained on billions of posts to understand what resonates.
                 </p>

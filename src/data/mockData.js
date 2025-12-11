@@ -54,11 +54,11 @@ const generateRealisticDates = (count) => {
 
 export const STATUS_COLORS = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
-  scheduled: { bg: 'bg-blue-50', text: 'text-huttle-primary', border: 'border-blue-100' },
+  scheduled: { bg: 'bg-huttle-50', text: 'text-huttle-primary', border: 'border-huttle-100' },
   ready: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-100' },
   posted: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-200' },
   failed: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-100' },
-  active: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
+  active: { bg: 'bg-huttle-50', text: 'text-huttle-primary', border: 'border-huttle-100' },
   completed: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-100' }
 };
 
@@ -665,3 +665,5 @@ export const generateMockPost = (overrides = {}) => {
     ...overrides
   };
 };
+
+

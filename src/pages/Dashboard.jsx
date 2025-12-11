@@ -480,11 +480,11 @@ export default function Dashboard() {
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             <div className="flex items-start justify-between mb-3">
-              <div className={`w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:bg-blue-50`}>
+              <div className={`w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:bg-huttle-50`}>
                 <stat.icon className={`w-5 h-5 ${stat.color}`} />
               </div>
               {stat.badge && (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-blue-50 text-huttle-primary rounded-full">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-huttle-50 text-huttle-primary rounded-full">
                   {stat.badge}
                 </span>
               )}
@@ -525,7 +525,7 @@ export default function Dashboard() {
                   <span className="text-gray-600 text-sm font-medium">Scheduled</span>
                   <span className="text-xl font-bold text-gray-900">{sortedPosts.length}</span>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
+                <div className="flex items-center justify-between p-3 bg-huttle-50/30 rounded-xl border border-huttle-100/50">
                   <span className="text-huttle-primary text-sm font-medium">This Week</span>
                   <span className="text-xl font-bold text-huttle-primary">
                     {sortedPosts.filter(p => {
@@ -650,7 +650,7 @@ export default function Dashboard() {
               </div>
               
               {(!brandProfile?.industry && !brandProfile?.niche) && (
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mb-4">
+                <div className="bg-huttle-50/50 border border-huttle-100 rounded-xl p-4 mb-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
                     <div>
@@ -713,7 +713,7 @@ export default function Dashboard() {
                       >
                         <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 ${
                           i < 3 
-                            ? 'bg-blue-50 text-huttle-primary' 
+                            ? 'bg-huttle-50 text-huttle-primary' 
                             : 'bg-gray-100 text-gray-500'
                         }`}>
                           {i + 1}
@@ -860,7 +860,7 @@ export default function Dashboard() {
             
             <div className="space-y-3">
               {[
-                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-blue-50 text-huttle-primary' },
+                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-huttle-50 text-huttle-primary' },
                 { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More', typeColor: 'bg-gray-100 text-gray-600' },
               ].map((alert, i) => (
                 <div key={i} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">

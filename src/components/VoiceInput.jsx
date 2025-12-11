@@ -227,7 +227,7 @@ export default function VoiceInput({
           {/* Hover Preview Tooltip */}
           {!isListening && (
             <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-              <div className="bg-blue-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[200px] text-center">
+              <div className="bg-huttle-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[200px] text-center">
                 Record your voice, AI transforms it into a polished post
                 <div className="absolute top-full left-6 w-0 h-0 border-4 border-transparent border-t-blue-50" />
               </div>
@@ -374,7 +374,7 @@ export function VoiceInputButton({ onContent, platform, className = '' }) {
         
         {/* Hover Preview Tooltip */}
         <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-          <div className="bg-blue-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[180px] text-center">
+          <div className="bg-huttle-50 text-huttle-primary text-xs rounded-lg px-2.5 py-1.5 shadow-lg border border-huttle-primary/20 max-w-[180px] text-center">
             Record your voice, AI transforms it into a polished post
             <div className="absolute top-full left-4 w-0 h-0 border-4 border-transparent border-t-blue-50" />
           </div>

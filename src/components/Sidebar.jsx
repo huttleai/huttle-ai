@@ -168,7 +168,7 @@ export default function Sidebar() {
                         {/* Content */}
                         <div className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
                           isActive 
-                            ? 'bg-blue-50/80' 
+                            ? 'bg-huttle-50/80' 
                             : isHovered 
                               ? 'bg-gray-50' 
                               : 'bg-transparent'
