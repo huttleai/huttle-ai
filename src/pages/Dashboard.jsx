@@ -445,7 +445,7 @@ export default function Dashboard() {
               <>
                 <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                  {displayName}
+                  Mike <span className="animate-wave inline-block">👋</span>
                 </h1>
                 <p className="text-gray-500 mt-1 text-sm">
                   Here's what's happening with your content today.
