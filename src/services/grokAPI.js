@@ -680,6 +680,83 @@ etc.`
 }
 
 /**
+ * Remix content with mode-specific system prompts
+ * @param {string} content - Content to remix
+ * @param {Object} brandData - Brand data from BrandContext
+ * @param {string} mode - 'viral' for viral reach or 'sales' for sales conversion
+ * @returns {Promise<Object>} Remixed content
+ */
+export async function remixContentWithMode(content, brandData, mode = 'viral') {
+  try {
+    // Define mode-specific system prompts
+    const systemPrompts = {
+      viral: "You are a Social Media Virality Expert. Your goal is maximum reach. Take the user's input and rewrite it to be punchy, relatable, and shareable. Use short sentences, trending formats, and emojis. Optimize for engagement and comments.",
+      sales: "You are a Conversion Critic and Direct Response Copywriter. Your goal is revenue, not just views. Rewrite the user's input using the PAS (Problem-Agitation-Solution) framework. 1) Hook: Call out a specific customer pain point. 2) Body: Agitate the pain and present the offer as the solution. 3) CTA: Write an imperative Call to Action that requires a comment (e.g., 'Comment GUIDE'). 4) Objection: Add a P.S. handling a price or time objection."
+    };
+
+    const baseSystemPrompt = systemPrompts[mode] || systemPrompts.viral;
+    const systemPrompt = buildSystemPrompt(baseSystemPrompt, brandData);
+
+    const userPrompt = mode === 'sales' 
+      ? `Remix this content for maximum sales conversion: "${content}"
+
+Create 3 variations using the PAS framework. For each variation:
+- Start with a pain-point hook that stops the scroll
+- Agitate the problem to create urgency
+- Present the solution naturally
+- End with a comment-based CTA (e.g., "Comment READY to get started")
+- Add a P.S. that handles a common objection
+
+Format each variation clearly with labels.`
+      : `Remix this trending content for my brand: "${content}". 
+
+Adapt it to match my ${brandData?.brandVoice || 'engaging'} voice and create 3 variations for different platforms (Instagram, X (Twitter), TikTok).
+
+Make each variation:
+- Punchy and scroll-stopping
+- Highly shareable and relatable
+- Optimized for engagement and comments
+- Include relevant emojis and trending formats`;
+
+    const response = await fetch(GROK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'grok-4-1-fast-reasoning',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+        temperature: mode === 'sales' ? 0.7 : 0.8,
+      })
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      ideas: data.choices?.[0]?.message?.content || '',
+      mode,
+      usage: data.usage
+    };
+  } catch (error) {
+    console.error('Grok API Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Generate platform-specific remixes of content
  * @param {string} content - Original content to remix
  * @param {Object} brandData - Brand data from BrandContext

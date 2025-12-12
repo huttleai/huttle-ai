@@ -1,12 +1,12 @@
 import { useState, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, Download, TrendingUp, Lightbulb, Users, Shuffle, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight, Zap } from 'lucide-react';
+import { Search, Download, TrendingUp, Lightbulb, Users, Shuffle, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight, Zap, Flame, DollarSign } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RemixContentDisplay from '../components/RemixContentDisplay';
 import UpgradeModal from '../components/UpgradeModal';
 import { forecastTrends, getAudienceInsights } from '../services/perplexityAPI';
-import { generateTrendIdeas } from '../services/grokAPI';
+import { generateTrendIdeas, remixContentWithMode } from '../services/grokAPI';
 import TrendDiscoveryHub from '../components/TrendDiscoveryHub';
 import { useToast } from '../context/ToastContext';
 import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
@@ -40,6 +40,7 @@ export default function TrendLab() {
   const [audienceData, setAudienceData] = useState(null);
   const [remixInput, setRemixInput] = useState('');
   const [remixOutput, setRemixOutput] = useState(null);
+  const [remixMode, setRemixMode] = useState('viral'); // 'viral' or 'sales'
   
   // Mobile swipe functionality
   const [touchStart, setTouchStart] = useState(null);
@@ -244,15 +245,17 @@ export default function TrendLab() {
 
     setLoadingStates(prev => ({ ...prev, remixEngine: true }));
     try {
-      // Use Grok API to remix content
-      const result = await generateTrendIdeas(
+      // Use Grok API to remix content with selected mode
+      const result = await remixContentWithMode(
+        remixInput,
         brandData,
-        `Remix this trending content for my brand: "${remixInput}". Adapt it to match my ${brandData?.brandVoice || 'engaging'} voice and create 3 variations for different platforms (Instagram, X (Twitter), TikTok).`
+        remixMode
       );
 
       if (result.success) {
         setRemixOutput(result.ideas);
-        showToast(`Content remixed! ${getToastDisclaimer('remix')}`, 'success');
+        const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
+        showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
       } else {
         showToast('Failed to remix content', 'error');
       }
@@ -462,6 +465,51 @@ export default function TrendLab() {
                   <p className="text-xs md:text-sm text-gray-600 mb-4">
                     Transform trending content for your brand. Adapt ideas across platforms seamlessly.
                   </p>
+                  
+                  {/* Mode Toggle */}
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 mb-2 font-medium">Remix Mode</p>
+                    <div className="relative inline-grid grid-cols-2 p-1 bg-gray-100 rounded-xl border border-black gap-0">
+                      {/* Sliding Background */}
+                      <div 
+                        className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ease-out ${
+                          remixMode === 'sales' 
+                            ? 'left-[calc(50%+2px)] right-1' 
+                            : 'left-1 right-[calc(50%+2px)]'
+                        }`}
+                      />
+                      
+                      <button
+                        onClick={() => setRemixMode('viral')}
+                        className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300 bg-transparent ${
+                          remixMode === 'viral'
+                            ? 'text-gray-900'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <Flame className={`w-4 h-4 transition-all duration-300 flex-shrink-0 ${remixMode === 'viral' ? 'text-orange-500' : ''}`} />
+                        <span className="whitespace-nowrap">Viral Reach</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => setRemixMode('sales')}
+                        className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300 bg-transparent ${
+                          remixMode === 'sales'
+                            ? 'text-gray-900'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <DollarSign className={`w-4 h-4 transition-all duration-300 flex-shrink-0 ${remixMode === 'sales' ? 'text-green-600' : ''}`} />
+                        <span className="whitespace-nowrap">Sales Conversion</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      {remixMode === 'viral' 
+                        ? 'Optimized for engagement, shares, and maximum reach' 
+                        : 'Optimized for conversions using PAS framework with CTAs'}
+                    </p>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"

@@ -437,7 +437,7 @@ export function CalendarTemplateButton({ onClick, className = '' }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white rounded-lg hover:from-huttle-primary-dark hover:to-huttle-primary transition-all shadow-md hover:shadow-lg font-medium ${className}`}
+      className={`flex items-center gap-2 px-4 py-2 bg-huttle-gradient hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md ${className}`}
     >
       <Sparkles className="w-4 h-4" />
       <span>Templates</span>
