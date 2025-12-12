@@ -20,7 +20,7 @@ export default {
           'blue-light': '#E3F2FD',
           
           // FROM LOGO - Cyan side (right of ring)
-          cyan: '#00BCD4',
+          cyan: '#01bad2',
           'cyan-dark': '#00ACC1',
           'cyan-light': '#E0F7FA',
           
@@ -30,7 +30,7 @@ export default {
           200: '#80DEEA',
           300: '#4DD0E1',
           400: '#26C6DA',
-          500: '#00BCD4',
+          500: '#01bad2',
           600: '#00ACC1',
           700: '#0097A7',
           800: '#00838F',
@@ -149,9 +149,9 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         // Logo gradient (blue to cyan)
-        'huttle-gradient': 'linear-gradient(135deg, #01bad2 0%, #00BCD4 100%)',
-        'huttle-gradient-reverse': 'linear-gradient(135deg, #00BCD4 0%, #01bad2 100%)',
-        'huttle-gradient-vertical': 'linear-gradient(180deg, #01bad2 0%, #00BCD4 100%)',
+        'huttle-gradient': 'linear-gradient(135deg, #2B8FC7 0%, #01bad2 100%)',
+        'huttle-gradient-reverse': 'linear-gradient(135deg, #01bad2 0%, #2B8FC7 100%)',
+        'huttle-gradient-vertical': 'linear-gradient(180deg, #2B8FC7 0%, #01bad2 100%)',
         // Subtle surface gradients
         'surface-gradient': 'linear-gradient(180deg, #ffffff 0%, #FAFBFC 100%)',
       },

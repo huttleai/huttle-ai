@@ -18,17 +18,17 @@ const PROFILE_TYPES = [
     label: 'Solo Creator', 
     description: 'Building your personal brand',
     icon: Sparkles,
-    gradient: 'from-violet-500 to-pink-500'
+    gradient: 'from-huttle-500 to-huttle-600'
   }
 ];
 
 // Creator archetypes
 const CREATOR_ARCHETYPES = [
   { value: 'educator', label: 'The Educator', description: 'Teach and explain', emoji: '📚', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-  { value: 'entertainer', label: 'The Entertainer', description: 'Make people smile', emoji: '🎭', icon: Smile, color: 'from-pink-500 to-rose-500' },
+  { value: 'entertainer', label: 'The Entertainer', description: 'Make people smile', emoji: '🎭', icon: Smile, color: 'from-huttle-500 to-huttle-600' },
   { value: 'storyteller', label: 'The Storyteller', description: 'Share experiences', emoji: '✨', icon: PenTool, color: 'from-amber-500 to-orange-500' },
-  { value: 'inspirer', label: 'The Inspirer', description: 'Motivate others', emoji: '🔥', icon: Heart, color: 'from-red-500 to-pink-500' },
-  { value: 'curator', label: 'The Curator', description: 'Discover gems', emoji: '💎', icon: Search, color: 'from-purple-500 to-indigo-500' }
+  { value: 'inspirer', label: 'The Inspirer', description: 'Motivate others', emoji: '🔥', icon: Heart, color: 'from-huttle-500 to-huttle-600' },
+  { value: 'curator', label: 'The Curator', description: 'Discover gems', emoji: '💎', icon: Search, color: 'from-blue-500 to-cyan-500' }
 ];
 
 // Platform options
@@ -229,7 +229,7 @@ export default function BrandVoice() {
                   cy="24"
                   r="20"
                   fill="none"
-                  stroke={isCreator ? '#ec4899' : '#0ea5e9'}
+                  stroke={isCreator ? '#01bad2' : '#0ea5e9'}
                   strokeWidth="4"
                   strokeLinecap="round"
                   strokeDasharray={`${completeness * 1.256} 125.6`}
@@ -460,7 +460,7 @@ export default function BrandVoice() {
                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
                         isSelected
                           ? isCreator 
-                            ? 'bg-gradient-to-r from-violet-500 to-pink-500 text-white border-transparent shadow-md'
+                            ? 'bg-gradient-to-r from-huttle-500 to-huttle-600 text-white border-transparent shadow-md'
                             : 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       }`}
@@ -482,7 +482,7 @@ export default function BrandVoice() {
                 !hasUnsavedChanges 
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
                   : isCreator
-                    ? 'bg-gradient-to-r from-violet-500 to-pink-500 text-white hover:shadow-lg hover:shadow-pink-500/20'
+                    ? 'bg-gradient-to-r from-huttle-500 to-huttle-600 text-white hover:shadow-lg hover:shadow-huttle-500/20'
                     : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark hover:shadow-lg hover:shadow-huttle-primary/20'
               }`}
             >
@@ -516,7 +516,7 @@ export default function BrandVoice() {
                   cy="24"
                   r="20"
                   fill="none"
-                  stroke={isCreator ? '#ec4899' : '#0ea5e9'}
+                  stroke={isCreator ? '#01bad2' : '#0ea5e9'}
                   strokeWidth="4"
                   strokeLinecap="round"
                   strokeDasharray={`${completeness * 1.256} 125.6`}
@@ -549,11 +549,11 @@ export default function BrandVoice() {
         {/* How This Helps */}
         <div className={`rounded-xl border p-5 md:p-6 transition-all duration-500 ${
           isCreator 
-            ? 'bg-gradient-to-r from-violet-50/50 to-pink-50/50 border-pink-200/50'
+            ? 'bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-200/50'
             : 'bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-primary/20'
         }`}>
           <div className="flex items-start gap-3">
-            <Sparkles className={`w-5 h-5 flex-shrink-0 mt-1 ${isCreator ? 'text-pink-500' : 'text-huttle-primary'}`} />
+            <Sparkles className={`w-5 h-5 flex-shrink-0 mt-1 ${isCreator ? 'text-huttle-primary' : 'text-huttle-primary'}`} />
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">How This Helps</h3>
               <p className="text-sm text-gray-700">

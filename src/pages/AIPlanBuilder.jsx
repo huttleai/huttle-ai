@@ -336,7 +336,7 @@ export default function AIPlanBuilder() {
         <button 
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="px-6 md:px-8 py-2.5 md:py-3 bg-huttle-primary hover:bg-huttle-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all shadow-md"
+          className="px-6 md:px-8 py-2.5 md:py-3 bg-huttle-gradient hover:bg-huttle-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all shadow-md"
         >
           {isGenerating ? 'Generating...' : 'Generate AI Plan'}
         </button>
@@ -489,7 +489,7 @@ export default function AIPlanBuilder() {
                 });
                 showToast(`${count} posts added to Smart Calendar!`, 'success');
               }}
-              className="px-6 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium"
+              className="px-6 py-3 bg-huttle-gradient text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium"
             >
               Export to Calendar
             </button>

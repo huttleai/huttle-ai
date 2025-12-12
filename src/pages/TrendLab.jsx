@@ -524,18 +524,18 @@ export default function TrendLab() {
         </div>
 
         {/* Trend Forecaster Card - Paid Tiers Only */}
-        <div className={`trend-card bg-gradient-to-br ${checkFeatureAccess('trendForecasts') ? 'from-cyan-50 to-blue-50' : 'from-gray-50 to-gray-100'} rounded-xl shadow-sm border ${checkFeatureAccess('trendForecasts') ? 'border-cyan-200' : 'border-gray-300'} overflow-hidden hover:shadow-lg transition-all relative`}>
+        <div className={`trend-card bg-gradient-to-br ${checkFeatureAccess('trendForecasts') ? 'from-huttle-50 to-huttle-100' : 'from-gray-50 to-gray-100'} rounded-xl shadow-sm border ${checkFeatureAccess('trendForecasts') ? 'border-huttle-200' : 'border-gray-300'} overflow-hidden hover:shadow-lg transition-all relative`}>
           <div className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-4 flex-1">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-huttle-primary to-blue-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-huttle-blue via-huttle-primary to-huttle-600 flex items-center justify-center flex-shrink-0">
                   <Calendar className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-lg font-bold text-gray-900">Trend Forecaster</h3>
                     {!checkFeatureAccess('trendForecasts') && (
-                      <span className="px-2 py-1 bg-gradient-to-r from-huttle-primary to-blue-500 text-white text-xs font-bold rounded">
+                      <span className="px-2 py-1 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white text-xs font-bold rounded">
                         PRO
                       </span>
                     )}
@@ -556,7 +556,7 @@ export default function TrendLab() {
                           setUpgradeFeature('trendForecasts');
                           setShowUpgradeModal(true);
                         }}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-huttle-primary to-blue-500 text-white rounded-lg hover:from-huttle-primary-dark hover:to-blue-600 transition-all shadow-md hover:shadow-lg font-semibold"
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-lg hover:shadow-lg hover:shadow-huttle-500/30 transition-all shadow-md font-semibold"
                       >
                         <Zap className="w-5 h-5" />
                         Upgrade to Unlock
@@ -566,7 +566,7 @@ export default function TrendLab() {
                     <button
                       onClick={handleForecastTrends}
                       disabled={isLoadingForecaster}
-                      className="flex items-center gap-2 px-6 py-3 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md hover:shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-lg hover:shadow-lg hover:shadow-huttle-500/30 transition-all shadow-md font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoadingForecaster ? (
                         <>
@@ -599,7 +599,7 @@ export default function TrendLab() {
 
             {/* Trend Forecast Content */}
             {trendForecast && !collapsedCards.trendForecaster && checkFeatureAccess('trendForecasts') && (
-              <div className="space-y-6 mt-6 pt-6 border-t border-cyan-200 animate-fadeIn">
+              <div className="space-y-6 mt-6 pt-6 border-t border-huttle-200 animate-fadeIn">
                 <AIDisclaimerFooter 
                   phraseIndex={0} 
                   className="mb-4"
@@ -615,7 +615,7 @@ export default function TrendLab() {
                     {trendForecast.timeline.map((item, index) => (
                       <div
                         key={index}
-                        className="bg-white rounded-lg p-4 border border-cyan-200 hover:border-huttle-primary transition-all"
+                        className="bg-white rounded-lg p-4 border border-huttle-200 hover:border-huttle-primary transition-all"
                       >
                         <div className="flex items-start justify-between mb-2">
                           <span className="text-xs font-semibold text-huttle-primary bg-huttle-primary/10 px-2 py-1 rounded">
@@ -644,7 +644,7 @@ export default function TrendLab() {
                     <Lightbulb className="w-5 h-5 text-yellow-500" />
                     Tailored Post Ideas
                   </h4>
-                  <div className="bg-white rounded-lg p-4 border border-cyan-200">
+                  <div className="bg-white rounded-lg p-4 border border-huttle-200">
                     <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans mb-4">
                       {trendForecast.postIdeas}
                     </pre>

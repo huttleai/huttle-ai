@@ -13,12 +13,12 @@
   --huttle-blue-light: #E3F2FD;
   
   /* FROM LOGO - Cyan side (right of ring) */
-  --huttle-cyan: #00BCD4;
+  --huttle-cyan: #01bad2;
   --huttle-cyan-dark: #00ACC1;
   --huttle-cyan-light: #E0F7FA;
   
   /* Logo gradient */
-  --huttle-gradient: linear-gradient(135deg, #01bad2 0%, #00BCD4 100%);
+  --huttle-gradient: linear-gradient(135deg, #2B8FC7 0%, #01bad2 100%);
   
   /* Legacy support */
   --huttle-primary: #01bad2;
@@ -102,12 +102,14 @@
     @apply inline-flex items-center justify-center gap-2;
     @apply px-4 py-2.5 text-sm font-medium text-white rounded-lg;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
-    background-color: var(--huttle-blue);
-    transition: background-color 0.15s ease, transform 0.1s ease;
+    background-color: #01bad2;
+    transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(1, 186, 210, 0.2);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--huttle-blue-dark);
+    background-color: #00ACC1;
+    box-shadow: 0 4px 12px rgba(1, 186, 210, 0.3);
   }
 
   .btn-primary:active:not(:disabled) {
@@ -369,17 +371,17 @@
   
   /* Primary gradient background - cyan brand */
   .bg-huttle-gradient {
-    background: linear-gradient(135deg, #01bad2 0%, #00BCD4 100%) !important;
+    background: linear-gradient(135deg, #2B8FC7 0%, #01bad2 100%) !important;
   }
 
   /* Reverse gradient - cyan to blue */
   .bg-huttle-gradient-reverse {
-    background: linear-gradient(135deg, #00BCD4 0%, #01bad2 100%) !important;
+    background: linear-gradient(135deg, #01bad2 0%, #2B8FC7 100%) !important;
   }
 
   /* Vertical gradient */
   .bg-huttle-gradient-vertical {
-    background: linear-gradient(180deg, #01bad2 0%, #00BCD4 100%) !important;
+    background: linear-gradient(180deg, #01bad2 0%, #01bad2 100%) !important;
   }
 
   /* Subtle gradient for backgrounds */
@@ -599,23 +601,23 @@
   /* Upgrade Button Glow */
   @keyframes upgrade-glow {
     0%, 100% {
-      box-shadow: 0 0 10px rgba(43, 143, 199, 0.5), 0 0 20px rgba(43, 143, 199, 0.3);
+      box-shadow: 0 0 10px rgba(1, 186, 210, 0.5), 0 0 20px rgba(1, 186, 210, 0.3);
     }
     50% {
-      box-shadow: 0 0 20px rgba(43, 143, 199, 0.7), 0 0 35px rgba(43, 143, 199, 0.5);
+      box-shadow: 0 0 20px rgba(1, 186, 210, 0.7), 0 0 35px rgba(1, 186, 210, 0.5);
     }
   }
 
   .btn-upgrade-glow {
     @apply relative overflow-hidden;
-    background-color: var(--huttle-blue);
+    background: linear-gradient(to right, var(--huttle-blue), var(--huttle-cyan), var(--huttle-cyan-dark));
     color: white;
     animation: upgrade-glow 2s infinite ease-in-out;
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .btn-upgrade-glow:hover {
-    background-color: var(--huttle-blue-dark);
+    background: linear-gradient(to right, var(--huttle-blue-dark), var(--huttle-cyan-dark), #0097A7);
     transform: translateY(-1px);
   }
 

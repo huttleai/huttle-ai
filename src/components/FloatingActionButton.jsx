@@ -22,7 +22,7 @@ export default function FloatingActionButton({ onCreatePost }) {
               onCreatePost();
               setIsExpanded(false);
             }}
-            className="bg-huttle-blue text-white px-5 py-2.5 rounded-lg shadow-medium hover:shadow-elevated transition-all font-medium text-sm slide-in-right"
+            className="bg-huttle-cyan text-white px-5 py-2.5 rounded-lg shadow-medium hover:shadow-elevated transition-all font-medium text-sm slide-in-right"
           >
             Create Post
           </button>
@@ -35,7 +35,7 @@ export default function FloatingActionButton({ onCreatePost }) {
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-elevated transition-all duration-150 flex items-center justify-center press-scale ${
           isExpanded 
             ? 'bg-gray-900 hover:bg-gray-800' 
-            : 'bg-huttle-blue hover:bg-huttle-blue-dark'
+            : 'bg-huttle-cyan hover:bg-huttle-cyan-dark'
         }`}
       >
         <span className={`transition-transform duration-150 ${isExpanded ? 'rotate-45' : ''}`}>

@@ -312,7 +312,7 @@ export default function Subscription() {
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-huttle-primary text-white text-sm font-bold rounded-full shadow-md">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white text-sm font-bold rounded-full shadow-md">
                     <Sparkles className="w-3.5 h-3.5" />
                     Most Popular
                   </span>
@@ -354,10 +354,10 @@ export default function Subscription() {
                   plan.tier === userTier
                     ? 'bg-gray-100 text-gray-500 cursor-default border border-gray-200'
                     : plan.popular
-                      ? 'btn-upgrade-glow text-white shadow-md hover:shadow-lg disabled:opacity-50'
+                      ? 'bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] hover:shadow-lg disabled:opacity-50'
                       : plan.id === 'freemium'
                         ? 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300 cursor-default'
-                        : 'btn-upgrade-glow text-white shadow-md hover:shadow-lg disabled:opacity-50'
+                        : 'bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] hover:shadow-lg disabled:opacity-50'
                 }`}
               >
                 {getButtonText(plan)}

@@ -737,7 +737,7 @@ export default function SmartCalendar() {
         <div className="flex items-center gap-2 flex-wrap">
           <button 
             onClick={() => setIsCreatePostOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-huttle-gradient hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md"
           >
             <Plus className="w-4 h-4" />
             New Post
@@ -1019,7 +1019,7 @@ export default function SmartCalendar() {
                             <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={() => handleEditPost(post)}
-                                className="flex items-center gap-2 px-3 py-2 bg-huttle-primary text-white rounded-lg font-medium text-sm hover:bg-huttle-primary-dark transition-colors"
+                                className="flex items-center gap-2 px-3 py-2 bg-huttle-gradient text-white rounded-lg font-medium text-sm hover:bg-huttle-primary-dark transition-colors"
                               >
                                 <Pencil className="w-4 h-4" />
                                 <span className="hidden sm:inline">Edit</span>
@@ -1082,7 +1082,7 @@ export default function SmartCalendar() {
                       </p>
                       <button 
                         onClick={() => handleQuickAdd(`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`)}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-huttle-primary text-white rounded-xl font-semibold hover:bg-huttle-primary-dark transition-colors mx-auto"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-huttle-gradient text-white rounded-xl font-semibold hover:bg-huttle-primary-dark transition-colors mx-auto"
                       >
                         <Plus className="w-5 h-5" />
                         Schedule a Post

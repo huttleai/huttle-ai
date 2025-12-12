@@ -457,7 +457,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsCreatePostOpen(true)}
-              className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.02]"
+              className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-huttle-gradient hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.02]"
             >
               <Plus className="w-4 h-4" />
               <span>New Post</span>
@@ -578,7 +578,7 @@ export default function Dashboard() {
                   <p className="text-sm text-gray-500 mb-4">Create your first post to get started</p>
                   <button 
                     onClick={() => setIsCreatePostOpen(true)} 
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-huttle-primary hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-huttle-gradient hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     Schedule Post

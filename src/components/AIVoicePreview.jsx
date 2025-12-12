@@ -124,13 +124,13 @@ export default function AIVoicePreview({ brandData, isCreator }) {
   if (!hasEnoughData && !hasGenerated) {
     return (
       <div className={`rounded-xl border-2 border-dashed p-6 transition-all ${
-        isCreator ? 'border-pink-200 bg-pink-50/30' : 'border-huttle-primary/20 bg-huttle-50/30'
+        isCreator ? 'border-huttle-200 bg-huttle-50/30' : 'border-huttle-primary/20 bg-huttle-50/30'
       }`}>
         <div className="text-center">
           <div className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-3 ${
-            isCreator ? 'bg-pink-100' : 'bg-huttle-100'
+            isCreator ? 'bg-huttle-100' : 'bg-huttle-100'
           }`}>
-            <Wand2 className={`w-6 h-6 ${isCreator ? 'text-pink-500' : 'text-huttle-primary'}`} />
+            <Wand2 className={`w-6 h-6 ${isCreator ? 'text-huttle-primary' : 'text-huttle-primary'}`} />
           </div>
           <h4 className="font-semibold text-gray-900 mb-1">AI Voice Preview</h4>
           <p className="text-sm text-gray-500">
@@ -144,15 +144,15 @@ export default function AIVoicePreview({ brandData, isCreator }) {
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${
       isCreator 
-        ? 'border-pink-200 bg-gradient-to-br from-violet-50 to-pink-50' 
+        ? 'border-huttle-200 bg-gradient-to-br from-huttle-50 to-cyan-50' 
         : 'border-huttle-primary/20 bg-gradient-to-br from-huttle-50 to-cyan-50'
     }`}>
       {/* Header */}
       <div className={`px-5 py-3 border-b flex items-center justify-between ${
-        isCreator ? 'border-pink-100 bg-white/50' : 'border-huttle-primary/10 bg-white/50'
+        isCreator ? 'border-huttle-100 bg-white/50' : 'border-huttle-primary/10 bg-white/50'
       }`}>
         <div className="flex items-center gap-2">
-          <Sparkles className={`w-4 h-4 ${isCreator ? 'text-pink-500' : 'text-huttle-primary'}`} />
+          <Sparkles className={`w-4 h-4 ${isCreator ? 'text-huttle-primary' : 'text-huttle-primary'}`} />
           <h4 className="font-semibold text-gray-900 text-sm">AI Voice Preview</h4>
         </div>
         <div className="flex items-center gap-2">
@@ -172,10 +172,10 @@ export default function AIVoicePreview({ brandData, isCreator }) {
           <button
             onClick={generatePreview}
             disabled={isGenerating}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-md ${
               isCreator
-                ? 'bg-gradient-to-r from-violet-500 to-pink-500 text-white hover:from-violet-600 hover:to-pink-600'
-                : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
+                ? 'bg-gradient-to-r from-huttle-blue via-huttle-500 to-huttle-600 text-white hover:from-huttle-500 hover:via-huttle-600 hover:to-huttle-700 hover:shadow-lg hover:shadow-huttle-500/30'
+                : 'bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white hover:from-huttle-500 hover:via-huttle-600 hover:to-huttle-700 hover:shadow-lg hover:shadow-huttle-primary/30'
             } disabled:opacity-50`}
           >
             <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
@@ -194,10 +194,10 @@ export default function AIVoicePreview({ brandData, isCreator }) {
             <button
               onClick={generatePreview}
               disabled={isGenerating}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md ${
                 isCreator
-                  ? 'bg-gradient-to-r from-violet-500 to-pink-500 text-white hover:from-violet-600 hover:to-pink-600'
-                  : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
+                  ? 'bg-gradient-to-r from-huttle-blue via-huttle-500 to-huttle-600 text-white hover:from-huttle-500 hover:via-huttle-600 hover:to-huttle-700 hover:shadow-lg hover:shadow-huttle-500/30'
+                  : 'bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white hover:from-huttle-500 hover:via-huttle-600 hover:to-huttle-700 hover:shadow-lg hover:shadow-huttle-primary/30'
               } disabled:opacity-50`}
             >
               <Wand2 className={`w-4 h-4 ${isGenerating ? 'animate-pulse' : ''}`} />
