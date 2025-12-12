@@ -23,7 +23,7 @@ import Settings from './pages/Settings';
 import Help from './pages/Help';
 import SocialUpdates from './pages/SocialUpdates';
 import AITools from './pages/AITools';
-import ContentRepurposer from './pages/ContentRepurposer';
+// import ContentRepurposer from './pages/ContentRepurposer'; // Temporarily disabled - uncomment to re-enable
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Security from './pages/Security';
@@ -80,7 +80,7 @@ function AppContent() {
           <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
           <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
           <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
-          <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} />
+          {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
           <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />

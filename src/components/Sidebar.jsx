@@ -71,7 +71,7 @@ export default function Sidebar() {
         { name: 'AI Plan Builder', icon: Wand2, path: '/plan-builder', color: 'from-violet-500 to-purple-500' },
         { name: 'AI Power Tools', icon: Zap, path: '/ai-tools', color: 'from-yellow-500 to-orange-500' },
         { name: 'Trend Lab', icon: Beaker, path: '/trend-lab', color: 'from-pink-500 to-rose-500' },
-        { name: 'Content Repurposer', icon: Repeat, path: '/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' },
+        // { name: 'Content Repurposer', icon: Repeat, path: '/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' }, // Temporarily disabled - uncomment to re-enable
         { name: 'Huttle Agent', icon: Bot, path: '/agent', badge: 'Pro', color: 'from-indigo-500 to-violet-500' }
       ]
     },

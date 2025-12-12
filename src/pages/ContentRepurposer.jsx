@@ -13,13 +13,13 @@ import { mockRepurposerExamples } from '../data/mockData';
 import { saveContentLibraryItem } from '../config/supabase';
 
 const FORMAT_OPTIONS = [
-  { from: 'reel', to: 'story', label: 'Reel → Story', description: 'Condense reel into story highlights', icon: '🎬' },
-  { from: 'reel', to: 'thread', label: 'Reel → Thread', description: 'Break down video into text thread', icon: '🧵' },
+  { from: 'script', to: 'story', label: 'Script → Story Board', description: 'Outline story beats from your video script', icon: '📋' },
+  { from: 'script', to: 'thread', label: 'Script → Thread', description: 'Turn your video script into a viral text thread', icon: '📄' },
   { from: 'story', to: 'reel', label: 'Story → Reel', description: 'Expand story into full reel', icon: '📱' },
   { from: 'post', to: 'carousel', label: 'Post → Carousel', description: 'Split into carousel slides', icon: '🎠' },
   { from: 'longform', to: 'shorts', label: 'Long-form → Shorts', description: 'Extract key moments as shorts', icon: '✂️' },
   { from: 'thread', to: 'post', label: 'Thread → Post', description: 'Combine thread into single post', icon: '📝' },
-  { from: 'video', to: 'captions', label: 'Video → Captions', description: 'Generate captions from transcript', icon: '💬' }
+  { from: 'transcript', to: 'captions', label: 'Transcript → Captions', description: 'Format raw transcript into social captions', icon: '📝' }
 ];
 
 const PLATFORM_OPTIMIZATIONS = [

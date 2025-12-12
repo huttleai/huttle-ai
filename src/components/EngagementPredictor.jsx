@@ -276,7 +276,7 @@ export default function EngagementPredictor({
             <button
               onClick={analyzeContent}
               disabled={!hasContent || isAnalyzing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-huttle-primary/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-huttle-primary text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-huttle-primary/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isAnalyzing ? (
                 <>

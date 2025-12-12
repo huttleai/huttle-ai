@@ -302,38 +302,40 @@ Focus on content that's performing well right now and could be adapted without c
             </div>
 
             {/* Mode Toggle - Pill Design */}
-            <div className="relative flex p-1.5 bg-gray-100/80 rounded-2xl backdrop-blur-sm">
+            <div className="relative flex p-1 bg-gray-100/80 rounded-2xl backdrop-blur-sm w-full md:w-auto">
               {/* Sliding Background */}
               <div 
-                className={`absolute top-1.5 bottom-1.5 w-[calc(50%-4px)] bg-white rounded-xl shadow-lg shadow-gray-900/10 transition-all duration-300 ease-out ${
-                  activeMode === 'deepDive' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'
+                className={`absolute top-1 bottom-1 w-[calc(50%-2px)] bg-white rounded-xl shadow-lg shadow-gray-900/10 transition-all duration-300 ease-out ${
+                  activeMode === 'deepDive' ? 'translate-x-[calc(100%+2px)]' : 'translate-x-0'
                 }`}
               />
               
               <button
                 onClick={() => setActiveMode('quickScan')}
-                className={`relative z-10 flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-colors duration-300 ${
+                className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'quickScan'
                     ? 'text-gray-900'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Search className={`w-4 h-4 transition-all duration-300 ${activeMode === 'quickScan' ? 'text-huttle-primary' : ''}`} />
-                <span>Quick Scan</span>
+                <Search className={`w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0 transition-all duration-300 ${activeMode === 'quickScan' ? 'text-huttle-primary' : ''}`} />
+                <span className="hidden sm:inline">Quick Scan</span>
+                <span className="sm:hidden">Scan</span>
               </button>
               
               <button
                 onClick={() => canAccessDeepDive ? setActiveMode('deepDive') : setShowUpgradeModal(true)}
-                className={`relative z-10 flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-colors duration-300 ${
+                className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'deepDive'
                     ? 'text-gray-900'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Target className={`w-4 h-4 transition-all duration-300 ${activeMode === 'deepDive' ? 'text-huttle-primary' : ''}`} />
-                <span>Deep Dive</span>
+                <Target className={`w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0 transition-all duration-300 ${activeMode === 'deepDive' ? 'text-huttle-primary' : ''}`} />
+                <span className="hidden sm:inline">Deep Dive</span>
+                <span className="sm:hidden">Dive</span>
                 {!canAccessDeepDive && (
-                  <Lock className="w-3.5 h-3.5 text-gray-400" />
+                  <Lock className="w-3 h-3 md:w-3.5 md:h-3.5 text-gray-400 flex-shrink-0" />
                 )}
               </button>
             </div>

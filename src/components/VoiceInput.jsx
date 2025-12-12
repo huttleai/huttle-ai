@@ -208,7 +208,7 @@ export default function VoiceInput({
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
               isListening
                 ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-                : 'bg-gradient-to-r from-huttle-primary to-huttle-primary-light text-white hover:shadow-lg hover:shadow-huttle-primary/25'
+                : 'bg-huttle-primary text-white hover:shadow-lg hover:shadow-huttle-primary/25'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isListening ? (
