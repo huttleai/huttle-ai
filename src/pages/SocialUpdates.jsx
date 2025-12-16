@@ -5,6 +5,41 @@ import { getSocialUpdates } from '../config/supabase';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
 
+// TODO: N8N_WORKFLOW - Import workflow service when ready
+import { getSocialUpdates as getWorkflowSocialUpdates } from '../services/n8nWorkflowAPI';
+import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+
+/**
+ * Social Updates Page
+ * 
+ * TODO: N8N_WORKFLOW - This feature will move to n8n workflow
+ * Workflow: WORKFLOW_NAMES.SOCIAL_UPDATES
+ * 
+ * Data source priority:
+ * 1. n8n workflow (when configured) - Real-time scraped updates
+ * 2. Supabase social_updates table - Manually curated updates
+ * 3. Static data (socialUpdates.js) - Fallback/demo data
+ * 
+ * Current implementation uses:
+ * - Supabase social_updates table (primary)
+ * - Static data from data/socialUpdates.js (fallback)
+ * 
+ * Future implementation will:
+ * 1. Check if workflow is configured via isWorkflowConfigured()
+ * 2. If configured, call getWorkflowSocialUpdates() first
+ * 3. If workflow fails or not configured, fall back to Supabase
+ * 4. If Supabase fails, fall back to static data
+ * 
+ * Expected workflow response format:
+ * {
+ *   success: true,
+ *   updates: [{
+ *     id, platform, date, date_month, title, description,
+ *     link, impact, keyTakeaways, actionItems, affectedUsers, timeline
+ *   }]
+ * }
+ */
+
 export default function SocialUpdates() {
   const [selectedUpdate, setSelectedUpdate] = useState(null);
   const [apiUpdates, setApiUpdates] = useState([]);
@@ -62,6 +97,25 @@ export default function SocialUpdates() {
     const fetchUpdates = async () => {
       setIsLoading(true);
       try {
+        // ==========================================================================
+        // TODO: N8N_WORKFLOW - Add workflow as primary data source
+        // 
+        // When implementing:
+        // if (isWorkflowConfigured(WORKFLOW_NAMES.SOCIAL_UPDATES)) {
+        //   const workflowResult = await getWorkflowSocialUpdates({ limit: 12 });
+        //   if (workflowResult.success && workflowResult.updates?.length > 0) {
+        //     const transformed = workflowResult.updates.map(update => transformSupabaseUpdate(update));
+        //     setApiUpdates(transformed);
+        //     setUseStaticData(false);
+        //     setIsLoading(false);
+        //     return; // Exit early - workflow succeeded
+        //   }
+        //   // If workflow fails, fall through to Supabase
+        //   console.log('[SocialUpdates] Workflow failed, falling back to Supabase');
+        // }
+        // ==========================================================================
+        
+        // Current implementation: Supabase as primary source
         const result = await getSocialUpdates(12);
         
         if (result.success && result.updates && result.updates.length > 0) {

@@ -13,15 +13,15 @@ export function AuthProvider({ children }) {
     let isMounted = true;
     let timeoutId;
 
-    // Development bypass: Check if we should skip auth
-    const skipAuth = import.meta.env.VITE_SKIP_AUTH === 'true' || 
-                     import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true';
+    // Development bypass: Only allow via explicit environment variable in development
+    // SECURITY: Removed localStorage-based bypass to prevent client-side manipulation
+    const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
 
     const initializeSession = async () => {
       try {
-        // If skip auth is enabled, create a mock user
+        // If skip auth is enabled (DEV mode only with explicit env var), create a mock user
         if (skipAuth) {
-          console.log('🚀 Development mode: Skipping authentication');
+          console.warn('⚠️ DEV MODE: Authentication bypassed via VITE_SKIP_AUTH');
           const mockUser = {
             id: 'dev-user-123',
             email: 'dev@huttle.ai',

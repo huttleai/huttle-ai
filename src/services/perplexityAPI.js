@@ -8,12 +8,59 @@
  * - Forward-looking queries for trend forecasting
  * 
  * All functions now accept optional brandData for brand-aligned results
+ * 
+ * SECURITY: All API calls now go through the server-side proxy to protect API keys
  */
 
 import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
+import { supabase } from '../config/supabase';
 
-const PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY_API_KEY || '';
-const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
+// SECURITY: Use server-side proxy instead of exposing API key in client
+const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+
+/**
+ * Get auth headers for API requests
+ */
+async function getAuthHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (e) {
+    console.warn('Could not get auth session:', e);
+  }
+  
+  return headers;
+}
+
+/**
+ * Make a request to the Perplexity API via the secure proxy
+ */
+async function callPerplexityAPI(messages, temperature = 0.2) {
+  const headers = await getAuthHeaders();
+  
+  const response = await fetch(PERPLEXITY_PROXY_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      messages,
+      temperature,
+      model: 'sonar'
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 /**
  * Scan trending topics in a niche
@@ -27,22 +74,14 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const audience = getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a trend analysis expert. Provide real-time, data-backed trend insights with metrics. Prioritize trends that would resonate with the specified brand and audience.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a trend analysis expert. Provide real-time, data-backed trend insights with metrics. Prioritize trends that would resonate with the specified brand and audience.'
-          },
-          {
-            role: 'user',
-            content: `What are the top 10 trending topics in ${niche} ${platform !== 'all' ? `on ${platform}` : 'across social media platforms'} right now?
+      {
+        role: 'user',
+        content: `What are the top 10 trending topics in ${niche} ${platform !== 'all' ? `on ${platform}` : 'across social media platforms'} right now?
 
 Target Audience: ${audience}
 
@@ -55,16 +94,12 @@ Include:
 - Suggested content angles that match the brand voice
 
 Prioritize trends that align with the brand profile.`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      trends: data.choices?.[0]?.message?.content || '',
+      trends: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -88,22 +123,14 @@ export async function getKeywordsOfTheDay(brandData) {
     const audience = getTargetAudience(brandData);
     const brandVoice = getBrandVoice(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.'
-          },
-          {
-            role: 'user',
-            content: `What are 5-7 high-engagement keywords and hashtags trending today in the ${niche} industry?
+      {
+        role: 'user',
+        content: `What are 5-7 high-engagement keywords and hashtags trending today in the ${niche} industry?
 
 Target Audience: ${audience}
 Brand Voice: ${brandVoice}
@@ -113,16 +140,12 @@ Include:
 - Usage tips specific to the brand voice
 - Relevance to the target audience
 - Platform recommendations for each keyword`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      keywords: data.choices?.[0]?.message?.content || '',
+      keywords: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -146,22 +169,14 @@ export async function analyzeCompetitors(brandData, competitorNames = []) {
     const niche = getNiche(brandData);
     const brandContext = buildBrandContext(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.'
-          },
-          {
-            role: 'user',
-            content: `Analyze content strategies of top performers in ${niche} ${competitorNames.length ? `including ${competitorNames.join(', ')}` : ''}.
+      {
+        role: 'user',
+        content: `Analyze content strategies of top performers in ${niche} ${competitorNames.length ? `including ${competitorNames.join(', ')}` : ''}.
 
 My Brand Profile:
 ${brandContext}
@@ -172,16 +187,12 @@ Analyze:
 - Gaps in their strategy that my brand could fill
 - How to differentiate while maintaining my brand voice
 - Specific opportunities based on my target audience`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      analysis: data.choices?.[0]?.message?.content || '',
+      analysis: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };

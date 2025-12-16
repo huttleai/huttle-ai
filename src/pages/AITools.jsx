@@ -17,6 +17,7 @@ import {
   generateCTAs,
   generateVisualIdeas 
 } from '../services/grokAPI';
+import { generateWithN8n } from '../services/n8nGeneratorAPI';
 import { useNavigate } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
@@ -154,20 +155,24 @@ export default function AITools() {
         ? brandData.brandVoice 
         : captionTone;
 
-      const result = await generateCaption(
-        { topic: captionInput, platform: captionPlatform },
-        { ...brandData, brandVoice }
-      );
+      const result = await generateWithN8n({
+        userId: user.id,
+        topic: captionInput,
+        platform: captionPlatform,
+        contentType: 'caption',
+        brandVoice: brandVoice,
+        additionalContext: brandData
+      });
 
-      if (result.success && result.caption) {
-        const captions = result.caption.split(/\d+\./).filter(c => c.trim()).slice(0, 4);
+      if (result.success && result.content) {
+        const captions = result.content.split(/\d+\./).filter(c => c.trim()).slice(0, 4);
         
         if (captions.length > 0) {
           setGeneratedCaptions(captions);
           incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
-        } else if (result.caption.trim()) {
-          setGeneratedCaptions([result.caption.trim()]);
+        } else if (result.content.trim()) {
+          setGeneratedCaptions([result.content.trim()]);
           incrementAIUsage();
           showToast(`Caption generated! ${getToastDisclaimer('general')}`, 'success');
         } else {
@@ -180,17 +185,31 @@ export default function AITools() {
           showToast(`Using fallback captions. ${getToastDisclaimer('general')}`, 'info');
         }
       } else {
+        // Handle error with user-friendly messages
+        let errorMessage = 'API error - using fallback captions';
+        if (result.errorType === 'TIMEOUT') {
+          errorMessage = 'AI generation took too long. Using fallback captions.';
+        } else if (result.errorType === 'NETWORK') {
+          errorMessage = 'Connection failed. Using fallback captions.';
+        }
+        
         setGeneratedCaptions([
           `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
           `Ready to learn about ${captionInput}? 💡 Here's everything you need to know to get started today!`,
           `${captionInput} has never been easier! ✨ Try these simple strategies and see real results.`,
           `Unlock the power of ${captionInput}! 🚀 Share this with someone who needs to see it.`
         ]);
-        showToast(result.error || 'API error - using fallback captions', 'warning');
+        showToast(errorMessage, 'warning');
       }
     } catch (error) {
       console.error('Caption generation error:', error);
-      showToast('Error generating captions', 'error');
+      setGeneratedCaptions([
+        `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
+        `Ready to learn about ${captionInput}? 💡 Here's everything you need to know to get started today!`,
+        `${captionInput} has never been easier! ✨ Try these simple strategies and see real results.`,
+        `Unlock the power of ${captionInput}! 🚀 Share this with someone who needs to see it.`
+      ]);
+      showToast('Error generating captions. Using fallbacks.', 'error');
     } finally {
       setIsLoadingCaptions(false);
     }
@@ -256,20 +275,36 @@ export default function AITools() {
 
     setIsLoadingHooks(true);
     try {
-      const result = await generateHooks(hookInput, brandData, hookTheme, hookPlatform);
+      const result = await generateWithN8n({
+        userId: user.id,
+        topic: hookInput,
+        platform: hookPlatform,
+        contentType: 'hook',
+        brandVoice: brandData?.brandVoice || 'engaging',
+        theme: hookTheme,
+        additionalContext: brandData
+      });
+
       const platformData = getPlatform(hookPlatform);
 
-      if (result.success) {
-        const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
-        setGeneratedHooks(hooks.length > 0 ? hooks : [result.hooks]);
+      if (result.success && result.content) {
+        const hooks = result.content.split(/\d+\./).filter(h => h.trim());
+        setGeneratedHooks(hooks.length > 0 ? hooks : [result.content]);
         incrementAIUsage();
         showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
-        showToast('Failed to generate hooks', 'error');
+        // Handle error with user-friendly messages
+        let errorMessage = 'Failed to generate hooks';
+        if (result.errorType === 'TIMEOUT') {
+          errorMessage = 'AI generation took too long. Please try again.';
+        } else if (result.errorType === 'NETWORK') {
+          errorMessage = 'Connection failed. Please check your internet.';
+        }
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Hook generation error:', error);
-      showToast('Error generating hooks', 'error');
+      showToast('Error generating hooks. Please try again.', 'error');
     } finally {
       setIsLoadingHooks(false);
     }
@@ -666,8 +701,8 @@ export default function AITools() {
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50"
               >
                 {isLoadingCaptions ? <LoadingSpinner size="sm" /> : <Wand2 className="w-4 h-4" />}
-                <span>{isLoadingCaptions ? 'Generating...' : 'Generate Captions'}</span>
-                <ChevronRight className="w-4 h-4" />
+                <span>{isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
+                {!isLoadingCaptions && <ChevronRight className="w-4 h-4" />}
               </button>
 
               {generatedCaptions.length > 0 && (
@@ -869,7 +904,7 @@ export default function AITools() {
 
               <button onClick={handleGenerateHooks} disabled={isLoadingHooks} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHooks ? <LoadingSpinner size="sm" /> : <Type className="w-4 h-4" />}
-                <span>{isLoadingHooks ? 'Building...' : 'Generate Hooks'}</span>
+                <span>{isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
               </button>
 
               {generatedHooks.length > 0 && (

@@ -27,9 +27,27 @@ export default function Security() {
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     
-    // Validation
-    if (passwordForm.newPassword.length < 6) {
-      addToast('Password must be at least 6 characters long', 'error');
+    const password = passwordForm.newPassword;
+    
+    // Validation - enforce strong password policy
+    if (password.length < 8) {
+      addToast('Password must be at least 8 characters long', 'error');
+      return;
+    }
+    
+    // Check for required character types
+    if (!/[a-z]/.test(password)) {
+      addToast('Password must include a lowercase letter', 'error');
+      return;
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      addToast('Password must include an uppercase letter', 'error');
+      return;
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      addToast('Password must include a number', 'error');
       return;
     }
     
@@ -144,7 +162,7 @@ export default function Security() {
                   placeholder="Enter new password"
                   className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
                 <button
                   type="button"
@@ -168,7 +186,7 @@ export default function Security() {
                   placeholder="Confirm new password"
                   className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
                 <button
                   type="button"
@@ -203,8 +221,15 @@ export default function Security() {
 
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500">
-              Password must be at least 6 characters long. We recommend using a mix of letters, numbers, and special characters.
+              <strong>Password requirements:</strong>
             </p>
+            <ul className="text-xs text-gray-500 mt-1 ml-4 list-disc">
+              <li>At least 8 characters</li>
+              <li>One uppercase letter</li>
+              <li>One lowercase letter</li>
+              <li>One number</li>
+              <li>Special characters recommended for extra security</li>
+            </ul>
           </div>
         </div>
 
@@ -282,6 +307,8 @@ export default function Security() {
     </div>
   );
 }
+
+
 
 
 

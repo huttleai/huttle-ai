@@ -11,10 +11,24 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 // Allowed platforms only
 const ALLOWED_PLATFORMS = ['Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'YouTube'];
 
+// Secret for cron job authentication
+const CRON_SECRET = process.env.CRON_SECRET;
+
 export default async function handler(req, res) {
   // Only allow POST requests (or GET for manual triggers)
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // SECURITY: Verify cron secret for scheduled jobs
+  // This prevents unauthorized access to this endpoint
+  const providedSecret = req.headers['x-cron-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+  
+  if (!CRON_SECRET) {
+    console.warn('CRON_SECRET not configured - endpoint is unprotected!');
+  } else if (providedSecret !== CRON_SECRET) {
+    console.warn('Unauthorized access attempt to update-social-media endpoint');
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -165,9 +179,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error in update-social-media function:', error);
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
+      error: 'An unexpected error occurred. Please try again.'
     });
   }
 }

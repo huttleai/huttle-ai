@@ -752,13 +752,20 @@ export default function SmartCalendar() {
               }
             }} 
           />
-          <button 
-            onClick={() => setIsOptimizeModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-huttle-primary/50 rounded-xl font-medium text-sm transition-all hidden sm:flex"
-          >
-            <Sparkles className="w-4 h-4 text-huttle-primary" />
-            <span>Optimize Times</span>
-          </button>
+          <div className="relative group hidden sm:block">
+            <button 
+              onClick={() => setIsOptimizeModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-huttle-primary to-huttle-primary-dark text-white hover:from-huttle-primary-dark hover:to-huttle-primary rounded-xl font-medium text-sm transition-all shadow-md shadow-huttle-primary/20 hover:shadow-lg hover:shadow-huttle-primary/30"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Smart Scheduling</span>
+            </button>
+            {/* Tooltip */}
+            <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-slate-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+              Automatically assigns the highest-engagement time slots for your audience.
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45" />
+            </div>
+          </div>
         </div>
         
         {syncing && (

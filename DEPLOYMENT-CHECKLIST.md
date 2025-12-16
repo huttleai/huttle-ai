@@ -41,6 +41,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 # n8n Webhooks
 VITE_N8N_WEBHOOK_URL=https://your-n8n-instance.app/webhook/post-to-social
 VITE_N8N_CONNECTION_WEBHOOK_URL=https://your-n8n-instance.app/webhook/check-connections
+VITE_N8N_GENERATOR_WEBHOOK_URL=https://your-n8n-instance.app/webhook/ai-generator
 
 # API Base URL (will be your Vercel URL)
 VITE_API_BASE_URL=https://your-app.vercel.app/api
@@ -64,6 +65,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 # n8n Webhooks (for serverless functions)
 N8N_WEBHOOK_URL=https://your-n8n-instance.app/webhook/post-to-social
 N8N_CONNECTION_WEBHOOK_URL=https://your-n8n-instance.app/webhook/check-connections
+N8N_WEBHOOK_URL_GENERATOR=https://your-n8n-instance.app/webhook/ai-generator
 
 # Perplexity API (for social updates cron)
 PERPLEXITY_API_KEY=your_perplexity_api_key_here

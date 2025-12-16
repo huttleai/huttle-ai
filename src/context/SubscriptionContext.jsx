@@ -11,8 +11,8 @@ export function SubscriptionProvider({ children }) {
   const user = authContext?.user || null;
   
   // Check for dev mode (same pattern as AuthContext)
-  const skipAuth = import.meta.env.VITE_SKIP_AUTH === 'true' || 
-                   (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
+  // SECURITY: Only allow via explicit environment variable in development
+  const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
   
   const [userTier, setUserTier] = useState(skipAuth ? TIERS.PRO : TIERS.FREE);
   const [usage, setUsage] = useState({});

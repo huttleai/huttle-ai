@@ -12,6 +12,14 @@ export default defineConfig({
     watch: {
       usePolling: true,
       interval: 100
+    },
+    // Proxy API requests to local API server
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
     }
   },
   cacheDir: 'node_modules/.vite',

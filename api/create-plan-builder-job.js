@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -15,15 +16,11 @@ const supabase = createClient(
 const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK_URL;
 
 export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  // Set secure CORS headers
+  setCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  // Handle preflight requests
+  if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -116,7 +113,8 @@ export default async function handler(req, res) {
 
     if (jobError) {
       console.error('Error creating job:', jobError);
-      return res.status(500).json({ error: 'Failed to create job', details: jobError.message });
+      // SECURITY: Don't expose internal error details to client
+      return res.status(500).json({ error: 'Failed to create job. Please try again.' });
     }
 
     // 6. Call n8n webhook to start processing (non-blocking)
@@ -171,12 +169,14 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error in create-plan-builder-job:', error);
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
+      error: 'An unexpected error occurred. Please try again.'
     });
   }
 }
+
+
 
 
 

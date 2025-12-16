@@ -367,3 +367,70 @@ For platform API help: Check each platform's developer documentation
 **🎉 Setup Complete!**
 
 Your Huttle AI app now has full social media automation capabilities through n8n. Users can connect their accounts once and enjoy seamless multi-platform posting.
+
+---
+
+## 🤖 N8N Workflow Features (AI Features)
+
+In addition to social posting, Huttle AI uses n8n workflows for AI-powered features. These are separate from the social posting workflows above.
+
+### Workflow vs In-Code AI
+
+Huttle AI uses two types of AI integrations:
+
+| Type | Use Case | Examples |
+|------|----------|----------|
+| **In-Code AI** | Real-time, interactive features | AI Power Tools, Audience Engine, Content Remix |
+| **N8N Workflows** | Complex, multi-step operations | Plan Builder, Trend Forecaster, Viral Blueprint |
+
+### Workflow Features
+
+These features are designed to use n8n workflows:
+
+| Feature | Environment Variable | Webhook Path |
+|---------|---------------------|--------------|
+| Dashboard Trending | `VITE_N8N_DASHBOARD_WEBHOOK` | `/webhook/dashboard-trending` |
+| Dashboard Hashtags | `VITE_N8N_DASHBOARD_WEBHOOK` | `/webhook/dashboard-hashtags` |
+| AI Plan Builder | `VITE_N8N_PLAN_BUILDER_WEBHOOK` | `/webhook/ai-plan-builder` |
+| Trend Deep Dive | `VITE_N8N_TREND_DEEP_DIVE_WEBHOOK` | `/webhook/trend-deep-dive` |
+| Trend Forecaster | `VITE_N8N_TREND_FORECASTER_WEBHOOK` | `/webhook/trend-forecaster` |
+| Viral Blueprint | `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` | `/webhook/viral-blueprint` |
+| Social Updates | `VITE_N8N_SOCIAL_UPDATES_WEBHOOK` | `/webhook/social-updates` |
+
+### Environment Variables for Workflows
+
+Add these to your `.env` when workflows are ready:
+
+```env
+# N8N Workflow Endpoints (AI Features)
+VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard-data
+VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/ai-plan-builder
+VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n.app/webhook/trend-deep-dive
+VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
+VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
+VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates
+```
+
+### Fallback Behavior
+
+The frontend automatically handles workflow availability:
+
+1. **Workflow Configured**: Uses n8n workflow for the feature
+2. **Workflow Not Configured**: Falls back to existing implementation (mock data, Supabase, or in-code AI)
+3. **Workflow Fails**: Gracefully falls back to existing implementation
+
+This means you can enable workflows one at a time as you build them.
+
+### Related Documentation
+
+- **Workflow Specifications**: `docs/n8n/N8N-WORKFLOW-FEATURES.md`
+- **Feature Separation**: `docs/AI-FEATURES-SEPARATION.md`
+- **Service Layer**: `src/services/n8nWorkflowAPI.js`
+- **Constants**: `src/utils/workflowConstants.js`
+
+### Testing Workflow Integration
+
+1. Set the environment variable for the workflow
+2. Check browser console for `[N8N_WORKFLOW]` logs
+3. The frontend will automatically detect and use the workflow
+4. If workflow fails, check that fallback still works

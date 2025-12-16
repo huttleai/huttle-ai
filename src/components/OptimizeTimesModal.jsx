@@ -194,7 +194,7 @@ export default function OptimizeTimesModal({
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Optimize Posting Times</h2>
+                <h2 className="text-lg font-bold text-gray-900">Smart Scheduling</h2>
                 <p className="text-sm text-gray-500">
                   {step === 'select' && 'Select posts to optimize'}
                   {step === 'preview' && 'Review recommended changes'}
@@ -524,5 +524,7 @@ export default function OptimizeTimesModal({
     </div>
   );
 }
+
+
 
 

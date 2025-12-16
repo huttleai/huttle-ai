@@ -13,21 +13,69 @@ export default function Signup() {
   const { addToast } = useToast();
   const navigate = useNavigate();
 
-  // Password strength calculation
+  // Password strength calculation with security requirements
   const passwordStrength = useMemo(() => {
-    if (!password) return { score: 0, label: '', color: '' };
+    if (!password) return { score: 0, label: '', color: '', requirements: [] };
     
+    const requirements = [];
     let score = 0;
-    if (password.length >= 6) score += 1;
-    if (password.length >= 8) score += 1;
-    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password)) score += 1;
-    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+    
+    // Minimum length check (required: 8 characters)
+    if (password.length >= 8) {
+      score += 1;
+      requirements.push({ met: true, text: 'At least 8 characters' });
+    } else {
+      requirements.push({ met: false, text: 'At least 8 characters' });
+    }
+    
+    // Bonus for longer passwords
+    if (password.length >= 12) score += 1;
+    
+    // Lowercase letter check
+    if (/[a-z]/.test(password)) {
+      score += 0.5;
+      requirements.push({ met: true, text: 'Lowercase letter' });
+    } else {
+      requirements.push({ met: false, text: 'Lowercase letter' });
+    }
+    
+    // Uppercase letter check
+    if (/[A-Z]/.test(password)) {
+      score += 0.5;
+      requirements.push({ met: true, text: 'Uppercase letter' });
+    } else {
+      requirements.push({ met: false, text: 'Uppercase letter' });
+    }
+    
+    // Number check
+    if (/[0-9]/.test(password)) {
+      score += 1;
+      requirements.push({ met: true, text: 'Number' });
+    } else {
+      requirements.push({ met: false, text: 'Number' });
+    }
+    
+    // Special character check (bonus, not required)
+    if (/[^a-zA-Z0-9]/.test(password)) {
+      score += 1;
+      requirements.push({ met: true, text: 'Special character (bonus)' });
+    }
+    
+    // Round score and cap at 5
+    score = Math.min(5, Math.round(score));
     
     const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent'];
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
-    return { score, label: labels[score], color: colors[score] };
+    return { score, label: labels[score], color: colors[score], requirements };
+  }, [password]);
+
+  // Check if password meets minimum requirements
+  const passwordMeetsRequirements = useMemo(() => {
+    return password.length >= 8 && 
+           /[a-z]/.test(password) && 
+           /[A-Z]/.test(password) && 
+           /[0-9]/.test(password);
   }, [password]);
 
   const handleSubmit = async (e) => {
@@ -43,8 +91,14 @@ export default function Signup() {
       return;
     }
 
-    if (password.length < 6) {
-      addToast('Password must be at least 6 characters', 'error');
+    // Enforce strong password policy
+    if (password.length < 8) {
+      addToast('Password must be at least 8 characters', 'error');
+      return;
+    }
+
+    if (!passwordMeetsRequirements) {
+      addToast('Password must include uppercase, lowercase, and a number', 'error');
       return;
     }
 
@@ -184,10 +238,10 @@ export default function Signup() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input pl-10"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   required
                   disabled={loading}
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
               {/* Password strength indicator */}
@@ -209,6 +263,25 @@ export default function Signup() {
                   }`}>
                     {passwordStrength.label}
                   </p>
+                  {/* Password requirements checklist */}
+                  <div className="mt-2 space-y-1">
+                    {passwordStrength.requirements.slice(0, 4).map((req, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <div className={`w-3 h-3 rounded-full flex items-center justify-center ${
+                          req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {req.met ? (
+                            <Check className="w-2 h-2" />
+                          ) : (
+                            <X className="w-2 h-2" />
+                          )}
+                        </div>
+                        <span className={`text-[10px] ${req.met ? 'text-green-600' : 'text-gray-500'}`}>
+                          {req.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -231,7 +304,7 @@ export default function Signup() {
                   placeholder="Confirm your password"
                   required
                   disabled={loading}
-                  minLength={6}
+                  minLength={8}
                 />
                 {confirmPassword && (
                   <div className="absolute right-3.5 top-1/2 -translate-y-1/2">

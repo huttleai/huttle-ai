@@ -57,6 +57,20 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
       ],
       tier: 'Essentials or Pro'
     },
+    viralBlueprint: {
+      title: 'Unlock Viral Blueprint Generator',
+      description: 'Get AI-powered viral content strategies with hooks, structure, hashtags, and optimal posting times.',
+      preview: '"Generate a complete viral blueprint for your TikTok Reel in seconds"',
+      benefits: [
+        'Platform-specific viral strategies',
+        'AI-generated hooks and content structure',
+        'Optimal posting times',
+        'Viral potential scoring',
+        'Essentials: 15 blueprints/month',
+        'Pro: 60 blueprints/month'
+      ],
+      tier: 'Essentials or Pro'
+    },
     default: {
       title: 'Upgrade Your Plan',
       description: 'Unlock premium features to supercharge your content strategy.',

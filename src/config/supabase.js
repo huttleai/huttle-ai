@@ -107,6 +107,7 @@ export const TIER_LIMITS = {
     huttleAgent: false, // Pro only
     trendForecaster: false, // Pro only
     trendLab: false, // Essentials+ only
+    viralBlueprint: false, // Essentials+ only
     aiPlanBuilderDays: 7, // 7 days only for free
     storageLimit: 250 * 1024 * 1024, // 250MB in bytes
     scheduledPostsLimit: 10,
@@ -123,6 +124,7 @@ export const TIER_LIMITS = {
     huttleAgent: false, // Pro only
     trendForecaster: false, // Pro only
     trendLab: true, // Full access
+    viralBlueprint: 15, // 15 blueprints/month
     aiPlanBuilderDays: 14, // 7 or 14 days
     storageLimit: 5 * 1024 * 1024 * 1024, // 5GB in bytes
     scheduledPostsLimit: 50,
@@ -139,6 +141,7 @@ export const TIER_LIMITS = {
     huttleAgent: true, // Pro feature
     trendForecaster: true, // Pro feature
     trendLab: true, // Full access
+    viralBlueprint: 60, // 60 blueprints/month
     aiPlanBuilderDays: 14, // 7 or 14 days
     storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
     scheduledPostsLimit: -1, // Unlimited
@@ -157,6 +160,7 @@ export const FEATURES = {
   'huttle-agent': [TIERS.PRO],
   'trend-forecaster': [TIERS.PRO],
   'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO],
+  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO], // Essentials: 15/month, Pro: 60/month
   'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO], // All tiers, but different day limits
 };
 

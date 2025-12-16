@@ -4,16 +4,58 @@
  * NOTE: n8n is NOT used for posting to social media.
  * Huttle AI uses deep linking instead (see PublishModal.jsx).
  * 
- * These functions are OPTIONAL and can be used for:
+ * This file handles EXISTING n8n integrations:
  * - Trend alerts and notifications
  * - Burnout warnings
  * - Content gap reminders
  * - Scheduled workflow triggers
  * 
- * If you don't need these features, you can safely ignore this file.
+ * For NEW WORKFLOW-BASED AI FEATURES, see:
+ * - src/services/n8nWorkflowAPI.js (service layer)
+ * - src/utils/workflowConstants.js (configuration)
+ * - docs/n8n/N8N-WORKFLOW-FEATURES.md (documentation)
+ * 
+ * WORKFLOW-BASED FEATURES (n8nWorkflowAPI.js):
+ * - Dashboard: Trending Now, Hashtags of the Day
+ * - AI Plan Builder
+ * - Trend Discovery: Deep Dive
+ * - Trend Forecaster
+ * - Viral Blueprint
+ * - Social Updates
+ * 
+ * IN-CODE AI FEATURES (grokAPI.js / perplexityAPI.js):
+ * - AI Insights, Daily Alerts, Templates, Smart Scheduling
+ * - AI Power Tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visuals)
+ * - Trend Discovery: Quick Scan
+ * - Audience Insight Engine
+ * - Content Remix Studio
+ * 
+ * If you don't need notification features, you can safely ignore this file.
  */
 
 const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || '';
+
+// =============================================================================
+// WORKFLOW CONFIGURATION HELPERS
+// =============================================================================
+// Re-export workflow helpers from workflowConstants for convenience
+// These are used by components to check if workflows are available
+
+import { 
+  WORKFLOW_NAMES,
+  isWorkflowConfigured,
+  getWorkflowUrl,
+  getConfiguredWorkflows,
+  getUnconfiguredWorkflows
+} from '../utils/workflowConstants';
+
+export { 
+  WORKFLOW_NAMES,
+  isWorkflowConfigured,
+  getWorkflowUrl,
+  getConfiguredWorkflows,
+  getUnconfiguredWorkflows
+};
 
 /**
  * Check if n8n is configured

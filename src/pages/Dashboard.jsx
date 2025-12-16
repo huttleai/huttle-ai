@@ -40,6 +40,11 @@ import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getPlatformIcon } from '../components/SocialIcons';
 
+// TODO: N8N_WORKFLOW - Import workflow services when ready
+// These will be used to fetch real-time data from n8n workflows
+import { getTrendingNow, getHashtagsOfDay } from '../services/n8nWorkflowAPI';
+import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
   const { scheduledPosts, deleteScheduledPost } = useContent();
@@ -113,7 +118,12 @@ export default function Dashboard() {
     user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator'
   );
   
-  // AI Insights - all use blue theme for consistency
+  // ==========================================================================
+  // AI Insights - STAYS IN-CODE (uses Grok API)
+  // This feature does NOT move to n8n workflow.
+  // It uses the Grok API directly for smart recommendations.
+  // See: src/services/grokAPI.js
+  // ==========================================================================
   const aiInsights = [
     { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles, color: 'text-huttle-primary', bg: 'bg-white' },
     { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock, color: 'text-huttle-primary', bg: 'bg-white' },
@@ -272,8 +282,23 @@ export default function Dashboard() {
     return platforms.size;
   }, [scheduledPosts]);
 
-  // Trending topics - use mock data with volume field mapped to engagement
+  // ==========================================================================
+  // TODO: N8N_WORKFLOW - Trending Topics
+  // This section will be replaced with n8n workflow data when available.
+  // Workflow: WORKFLOW_NAMES.DASHBOARD_TRENDING
+  // 
+  // When implementing:
+  // 1. Call getTrendingNow({ niche, industry, platforms }) on component mount
+  // 2. If workflow returns success, use workflow data
+  // 3. If workflow returns useFallback: true, use mock data below
+  // 4. Add loading state while fetching
+  // 
+  // Expected workflow response format:
+  // { success: true, topics: [{ topic, engagement, growth, platforms }] }
+  // ==========================================================================
   const trendingTopics = useMemo(() => {
+    // TODO: N8N_WORKFLOW - Replace with workflow data when available
+    // Current implementation: Mock data fallback
     // Transform mock data to match expected format
     return mockTrendingTopics.map(trend => ({
       topic: trend.topic,
@@ -283,8 +308,23 @@ export default function Dashboard() {
     }));
   }, []);
 
-  // Hashtags
+  // ==========================================================================
+  // TODO: N8N_WORKFLOW - Hashtags of the Day
+  // This section will be replaced with n8n workflow data when available.
+  // Workflow: WORKFLOW_NAMES.DASHBOARD_HASHTAGS
+  // 
+  // When implementing:
+  // 1. Call getHashtagsOfDay({ niche, industry, limit: 4 }) on component mount
+  // 2. If workflow returns success, use workflow data
+  // 3. If workflow returns useFallback: true, use industry-based hashtags below
+  // 4. Add loading state while fetching
+  // 
+  // Expected workflow response format:
+  // { success: true, hashtags: [{ tag: '#hashtag', score: '95%' }] }
+  // ==========================================================================
   const keywords = useMemo(() => {
+    // TODO: N8N_WORKFLOW - Replace with workflow data when available
+    // Current implementation: Industry-based hashtag fallback
     const industry = brandProfile?.industry?.toLowerCase() || '';
     const niche = brandProfile?.niche?.toLowerCase() || '';
     
@@ -445,7 +485,7 @@ export default function Dashboard() {
               <>
                 <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                  Mike <span className="animate-wave inline-block">👋</span>
+                  {displayName} <span className="animate-wave inline-block">👋</span>
                 </h1>
                 <p className="text-gray-500 mt-1 text-sm">
                   Here's what's happening with your content today.

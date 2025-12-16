@@ -7,12 +7,35 @@ import RemixContentDisplay from '../components/RemixContentDisplay';
 import UpgradeModal from '../components/UpgradeModal';
 import { forecastTrends, getAudienceInsights } from '../services/perplexityAPI';
 import { generateTrendIdeas, remixContentWithMode } from '../services/grokAPI';
+import { generateWithN8n } from '../services/n8nGeneratorAPI';
+import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
 import TrendDiscoveryHub from '../components/TrendDiscoveryHub';
 import { useToast } from '../context/ToastContext';
+import { AuthContext } from '../context/AuthContext';
 import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
+
+// TODO: N8N_WORKFLOW - Import workflow services for features moving to n8n
+import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
+import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+
+/**
+ * Trend Lab Page - Feature Separation
+ * 
+ * MOVING TO N8N WORKFLOW:
+ * - Trend Forecaster (handleForecastTrends) -> WORKFLOW_NAMES.TREND_FORECASTER
+ * - Trend Deep Dive (in TrendDiscoveryHub) -> WORKFLOW_NAMES.TREND_DEEP_DIVE
+ * 
+ * STAYING IN-CODE (Grok/Perplexity APIs):
+ * - Audience Insight Engine (handleAudienceInsight) -> perplexityAPI.getAudienceInsights()
+ * - Content Remix Studio (handleRemixContent) -> n8nGeneratorAPI.generateWithN8n()
+ * - Trend Discovery Quick Scan (in TrendDiscoveryHub) -> grokAPI + perplexityAPI
+ * 
+ * See docs/AI-FEATURES-SEPARATION.md for complete mapping
+ */
 
 export default function TrendLab() {
   const { brandData } = useContext(BrandContext);
+  const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getUpgradeMessage, TIERS, userTier } = useSubscription();
   const [, setActiveFeature] = useState(null);
@@ -50,6 +73,40 @@ export default function TrendLab() {
   // Minimum swipe distance (in px)
   const minSwipeDistance = 50;
 
+  // ==========================================================================
+  // TODO: N8N_WORKFLOW - Trend Forecaster
+  // This function will be replaced with n8n workflow call when available.
+  // Workflow: WORKFLOW_NAMES.TREND_FORECASTER
+  // 
+  // When implementing:
+  // 1. Check if workflow is configured:
+  //    if (isWorkflowConfigured(WORKFLOW_NAMES.TREND_FORECASTER)) {
+  //      const result = await getTrendForecast({
+  //        niche: brandData?.niche,
+  //        timeframe: '7 days',
+  //        brandData
+  //      });
+  //      if (result.success) {
+  //        setTrendForecast({
+  //          rawForecast: result.forecast,
+  //          postIdeas: result.postIdeas,
+  //          citations: result.citations,
+  //          timeline: result.timeline
+  //        });
+  //        return;
+  //      }
+  //    }
+  // 2. If workflow not configured or fails, fall through to current implementation
+  // 
+  // Expected workflow response format:
+  // {
+  //   success: true,
+  //   forecast: 'Raw forecast text...',
+  //   timeline: [{ day, trend, velocity, confidence }],
+  //   postIdeas: 'Generated post ideas...',
+  //   citations: ['url1', 'url2']
+  // }
+  // ==========================================================================
   const handleForecastTrends = async () => {
     // Check if user has access to trend forecasts
     if (!checkFeatureAccess('trendForecasts')) {
@@ -64,6 +121,9 @@ export default function TrendLab() {
 
     setIsLoadingForecaster(true);
     try {
+      // TODO: N8N_WORKFLOW - Check workflow availability first
+      // Current implementation: Perplexity + Grok API fallback
+      
       // Get trend forecast from Perplexity API with full brand context
       const perplexityResult = await forecastTrends(
         brandData, 
@@ -211,6 +271,12 @@ export default function TrendLab() {
     };
   };
 
+  // ==========================================================================
+  // Audience Insight Engine - STAYS IN-CODE (uses Perplexity API)
+  // This feature does NOT move to n8n workflow.
+  // It uses the Perplexity API directly for real-time audience research.
+  // See: src/services/perplexityAPI.js -> getAudienceInsights()
+  // ==========================================================================
   const handleAudienceInsight = async () => {
     if (!brandData?.niche) {
       showToast('Please set your niche in Brand Voice first', 'warning');
@@ -237,31 +303,60 @@ export default function TrendLab() {
     }
   };
 
+  // ==========================================================================
+  // Content Remix Studio - STAYS IN-CODE (uses existing n8n generator)
+  // This feature does NOT move to the new n8n workflows.
+  // It uses the existing n8nGeneratorAPI.js for content remixing.
+  // See: src/services/n8nGeneratorAPI.js -> generateWithN8n()
+  // ==========================================================================
   const handleRemixContent = async () => {
     if (!remixInput.trim()) {
       showToast('Please enter a trend or content to remix', 'warning');
       return;
     }
 
+    if (!user?.id) {
+      showToast('Please log in to use remix features', 'error');
+      return;
+    }
+
     setLoadingStates(prev => ({ ...prev, remixEngine: true }));
     try {
-      // Use Grok API to remix content with selected mode
-      const result = await remixContentWithMode(
-        remixInput,
-        brandData,
-        remixMode
-      );
+      // Use n8n webhook to remix content with selected mode
+      const result = await generateWithN8n({
+        userId: user.id,
+        topic: remixInput,
+        platform: 'multi-platform',
+        contentType: 'remix',
+        brandVoice: getBrandVoice(brandData),
+        remixMode: remixMode,
+        additionalContext: {
+          mode: remixMode,
+          niche: getNiche(brandData),
+          targetAudience: getTargetAudience(brandData),
+          ...brandData
+        }
+      });
 
-      if (result.success) {
-        setRemixOutput(result.ideas);
+      if (result.success && result.content) {
+        setRemixOutput(result.content);
         const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
         showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
       } else {
-        showToast('Failed to remix content', 'error');
+        // Handle error with user-friendly messages
+        let errorMessage = 'Failed to remix content';
+        if (result.errorType === 'TIMEOUT') {
+          errorMessage = 'AI generation took too long. Please try again with shorter content.';
+        } else if (result.errorType === 'NETWORK') {
+          errorMessage = 'Connection failed. Please check your internet.';
+        } else if (result.error) {
+          errorMessage = result.error;
+        }
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Error remixing content:', error);
-      showToast('Error remixing content', 'error');
+      showToast('Error remixing content. Please try again.', 'error');
     } finally {
       setLoadingStates(prev => ({ ...prev, remixEngine: false }));
     }
@@ -527,7 +622,7 @@ export default function TrendLab() {
                       {loadingStates.remixEngine ? (
                         <>
                           <LoadingSpinner size="sm" />
-                          <span>Remixing...</span>
+                          <span>Remixing (10-15 sec)...</span>
                         </>
                       ) : (
                         <>

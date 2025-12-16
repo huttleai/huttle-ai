@@ -9,6 +9,36 @@ import { createPlanBuilderJob, subscribeToJob, getJobStatus } from '../services/
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 import { mockAIPlans, STATUS_COLORS } from '../data/mockData';
 
+// TODO: N8N_WORKFLOW - Import workflow service when ready
+// This page will transition to use n8n workflow for plan generation
+import { generateAIPlan } from '../services/n8nWorkflowAPI';
+import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+
+/**
+ * AI Plan Builder Page
+ * 
+ * TODO: N8N_WORKFLOW - This feature will move to n8n workflow
+ * Workflow: WORKFLOW_NAMES.AI_PLAN_BUILDER
+ * 
+ * Current implementation uses:
+ * - planBuilderAPI.js for async job creation
+ * - Vercel serverless function (/api/create-plan-builder-job)
+ * - Supabase jobs table for status tracking
+ * 
+ * Future implementation will:
+ * 1. Check if workflow is configured via isWorkflowConfigured()
+ * 2. If configured, call generateAIPlan() from n8nWorkflowAPI.js
+ * 3. If not configured, fall back to current job-based implementation
+ * 
+ * Expected workflow response format:
+ * {
+ *   success: true,
+ *   plan: { goal, period, totalPosts, platforms, contentMix },
+ *   schedule: [{ day, posts: [{ time, type, theme, platform }] }],
+ *   recommendations: { postFrequency, bestTimes, contentTypes }
+ * }
+ */
+
 export default function AIPlanBuilder() {
   const { showToast } = useToast();
   const { schedulePost } = useContent();
@@ -96,7 +126,31 @@ export default function AIPlanBuilder() {
     setIsGenerating(true);
     setProgress(10);
     
-    // Call the backend API to create job
+    // ==========================================================================
+    // TODO: N8N_WORKFLOW - Replace with workflow call when available
+    // 
+    // When implementing:
+    // 1. Check if workflow is configured:
+    //    if (isWorkflowConfigured(WORKFLOW_NAMES.AI_PLAN_BUILDER)) {
+    //      const result = await generateAIPlan({
+    //        goal: selectedGoal,
+    //        period: selectedPeriod,
+    //        platforms: selectedPlatforms,
+    //        niche: brandProfile?.niche || 'general',
+    //        brandVoice: brandProfile?.brandVoice,
+    //        brandProfile
+    //      });
+    //      if (result.success) {
+    //        setGeneratedPlan(result.plan);
+    //        setIsGenerating(false);
+    //        setProgress(100);
+    //        return;
+    //      }
+    //    }
+    // 2. If workflow not configured or fails, fall through to current implementation
+    // ==========================================================================
+    
+    // Current implementation: Call the backend API to create job
     const result = await createPlanBuilderJob({
       goal: selectedGoal,
       period: selectedPeriod,

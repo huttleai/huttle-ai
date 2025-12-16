@@ -7,9 +7,24 @@
  */
 
 import { buildBrandContext, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
+import { supabase } from '../config/supabase';
 
-const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY || '';
-const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
+// SECURITY: Use server-side proxy instead of exposing API key in client
+const GROK_PROXY_URL = '/api/ai/grok';
+
+/**
+ * Get auth headers for API requests
+ */
+async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (e) { /* ignore */ }
+  return headers;
+}
 
 /**
  * Platform-specific best posting times (fallback data)
@@ -190,12 +205,11 @@ REQUIREMENTS:
 
 Return ONLY valid JSON matching the structure specified.`;
 
-  const response = await fetch(GROK_API_URL, {
+  const headers = await getAuthHeaders();
+  
+  const response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROK_API_KEY}`
-    },
+    headers,
     body: JSON.stringify({
       model: 'grok-3-mini',
       messages: [
@@ -211,7 +225,7 @@ Return ONLY valid JSON matching the structure specified.`;
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
+  const content = data.content || '';
 
   // Parse JSON from response
   try {
@@ -381,5 +395,7 @@ export function distributePostTimes(posts, platform) {
     };
   });
 }
+
+
 
 

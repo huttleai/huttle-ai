@@ -621,6 +621,101 @@
     transform: translateY(-1px);
   }
 
+  /* Ignite Button - Viral Blueprint Generator */
+  @keyframes ignite-glow {
+    0%, 100% {
+      box-shadow: 
+        0 0 15px rgba(249, 115, 22, 0.5), 
+        0 0 30px rgba(236, 72, 153, 0.3),
+        0 0 45px rgba(168, 85, 247, 0.2);
+    }
+    50% {
+      box-shadow: 
+        0 0 25px rgba(249, 115, 22, 0.7), 
+        0 0 50px rgba(236, 72, 153, 0.5),
+        0 0 75px rgba(168, 85, 247, 0.3);
+    }
+  }
+
+  .btn-ignite {
+    @apply relative overflow-hidden;
+    background: linear-gradient(135deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
+    animation: ignite-glow 2s infinite ease-in-out;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .btn-ignite:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ea580c 0%, #db2777 50%, #9333ea 100%);
+    transform: translateY(-2px);
+    box-shadow: 
+      0 0 30px rgba(249, 115, 22, 0.6), 
+      0 0 60px rgba(236, 72, 153, 0.4),
+      0 0 90px rgba(168, 85, 247, 0.3);
+  }
+
+  .btn-ignite:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .btn-ignite:disabled {
+    animation: none;
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    box-shadow: none;
+  }
+
+  /* Neon Text Effect */
+  .text-neon {
+    text-shadow: 0 0 10px rgba(1, 186, 210, 0.5), 0 0 20px rgba(1, 186, 210, 0.3);
+  }
+
+  /* Command Center Header Background */
+  .bg-command-center {
+    background: 
+      radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.08) 0%, transparent 25%),
+      linear-gradient(to bottom, #ffffff, #f8fafc);
+  }
+
+  /* Glassmorphism Darker for Command Center */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 2px 4px -1px rgba(0, 0, 0, 0.03),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  }
+
+  /* Neon Pill Active State */
+  .neon-pill-active {
+    box-shadow: 0 0 10px rgba(1, 186, 210, 0.3), inset 0 0 10px rgba(1, 186, 210, 0.1);
+    border-color: rgba(1, 186, 210, 0.5);
+  }
+
+  /* Smooth reveal animation for results */
+  @keyframes reveal-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-reveal-up {
+    animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+
   .skeleton {
     @apply bg-gray-100 rounded animate-pulse;
   }

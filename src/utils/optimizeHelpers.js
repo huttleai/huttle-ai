@@ -346,4 +346,115 @@ export function getImprovementColor(improvement) {
   }
 }
 
+/**
+ * Best posting times by platform (2025 verified engagement data)
+ * Hours are in 24-hour format
+ * @type {Record<string, number[]>}
+ */
+export const BEST_TIMES = {
+  tiktok: [13, 16, 20],      // 1 PM (Lunch), 4 PM (Exit), 8 PM (Prime)
+  instagram: [7, 12, 17],    // 7 AM (Wake), 12 PM (Break), 5 PM (Home)
+  linkedin: [9, 12, 17],     // 9 AM (Start), 12 PM (Lunch), 5 PM (Finish)
+  twitter: [9, 13, 20],      // 9 AM (News), 1 PM (Lunch), 8 PM (TV)
+  youtube: [10, 15, 19],     // 10 AM (Weekend), 3 PM (School out), 7 PM (Prime)
+  facebook: [8, 13, 19],     // 8 AM (Check), 1 PM (Break), 7 PM (Relax)
+  default: [10, 18]          // Safe fallbacks
+};
 
+/**
+ * Normalize platform name to match BEST_TIMES keys
+ * @param {string} platform - Platform name (e.g., "Instagram", "X (Twitter)")
+ * @returns {string} Normalized platform key
+ */
+function normalizePlatformName(platform) {
+  if (!platform) return 'default';
+  
+  const normalized = platform.toLowerCase().trim();
+  
+  // Handle common variations
+  if (normalized.includes('instagram')) return 'instagram';
+  if (normalized.includes('twitter') || normalized.includes('x (')) return 'twitter';
+  if (normalized.includes('tiktok')) return 'tiktok';
+  if (normalized.includes('youtube')) return 'youtube';
+  if (normalized.includes('facebook')) return 'facebook';
+  if (normalized.includes('linkedin')) return 'linkedin';
+  
+  return 'default';
+}
+
+/**
+ * Find the closest hour in an array to the target hour
+ * @param {number} targetHour - The hour to snap to (0-23)
+ * @param {number[]} hours - Array of optimal hours
+ * @returns {number} The closest hour from the array
+ */
+function findClosestHour(targetHour, hours) {
+  if (!hours || hours.length === 0) return 10; // Fallback to 10 AM
+  
+  let closest = hours[0];
+  let minDiff = Math.abs(targetHour - hours[0]);
+  
+  for (let i = 1; i < hours.length; i++) {
+    const diff = Math.abs(targetHour - hours[i]);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = hours[i];
+    }
+  }
+  
+  return closest;
+}
+
+/**
+ * Get optimal posting time using Snap-to-Nearest algorithm
+ * Snaps the target date's hour to the nearest optimal engagement hour for the platform
+ * 
+ * @param {string} platform - Platform name (e.g., "Instagram", "TikTok", "X (Twitter)")
+ * @param {Date} targetDate - The date/time the user selected
+ * @returns {Date} New Date object with optimal hour, minutes set to 00
+ * 
+ * @example
+ * // User drags TikTok post to 2:00 PM (14:00)
+ * // TikTok array: [13, 16, 20]
+ * // |13-14|=1, |16-14|=2, |20-14|=6
+ * // Winner: 13 (1:00 PM)
+ * const optimal = getOptimalTime('TikTok', new Date('2025-01-15T14:00:00'));
+ * // Returns: Date with hour=13, minutes=0
+ */
+export function getOptimalTime(platform, targetDate) {
+  // Validate inputs
+  if (!targetDate || !(targetDate instanceof Date) || isNaN(targetDate.getTime())) {
+    // Return current date with default time if invalid
+    const fallback = new Date();
+    fallback.setHours(10, 0, 0, 0);
+    return fallback;
+  }
+  
+  // Step A: Get the current draft hour from the target date
+  const currentDraftHour = targetDate.getHours();
+  
+  // Step B: Look up the array for the platform
+  const platformKey = normalizePlatformName(platform);
+  const optimalHours = BEST_TIMES[platformKey] || BEST_TIMES.default;
+  
+  // Step C: Find the closest hour in the array
+  const optimalHour = findClosestHour(currentDraftHour, optimalHours);
+  
+  // Step D: Return a new Date object with the optimal hour, minutes = 00
+  const result = new Date(targetDate);
+  result.setHours(optimalHour, 0, 0, 0);
+  
+  return result;
+}
+
+/**
+ * Get optimal time as a formatted string (HH:MM)
+ * @param {string} platform - Platform name
+ * @param {Date} targetDate - The date/time the user selected
+ * @returns {string} Optimal time in HH:MM format
+ */
+export function getOptimalTimeString(platform, targetDate) {
+  const optimalDate = getOptimalTime(platform, targetDate);
+  const hours = String(optimalDate.getHours()).padStart(2, '0');
+  return `${hours}:00`;
+}

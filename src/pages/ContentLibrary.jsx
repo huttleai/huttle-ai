@@ -16,7 +16,7 @@ export default function ContentLibrary() {
   const { userTier, getStorageLimit, getTierDisplayName } = useSubscription();
   const skipAuth =
     import.meta.env.VITE_SKIP_AUTH === 'true' ||
-    (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
+    import.meta.env.VITE_SKIP_AUTH === 'true';
 
   // UI state
   const [viewMode, setViewMode] = useState('grid');

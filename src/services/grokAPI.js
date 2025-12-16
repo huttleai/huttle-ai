@@ -9,13 +9,60 @@
  * 
  * All functions now use centralized brand context for consistent brand alignment
  * Platform-specific guidelines are injected for optimized content per platform
+ * 
+ * SECURITY: All API calls now go through the server-side proxy to protect API keys
  */
 
 import { buildSystemPrompt, getBrandVoice, getNiche, getTargetAudience, buildBrandContext } from '../utils/brandContextBuilder';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
+import { supabase } from '../config/supabase';
 
-const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY || '';
-const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
+// SECURITY: Use server-side proxy instead of exposing API key in client
+const GROK_PROXY_URL = '/api/ai/grok';
+
+/**
+ * Get auth headers for API requests
+ */
+async function getAuthHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (e) {
+    console.warn('Could not get auth session:', e);
+  }
+  
+  return headers;
+}
+
+/**
+ * Make a request to the Grok API via the secure proxy
+ */
+async function callGrokAPI(messages, temperature = 0.7) {
+  const headers = await getAuthHeaders();
+  
+  const response = await fetch(GROK_PROXY_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      messages,
+      temperature,
+      model: 'grok-4-1-fast-reasoning'
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export async function generateTrendIdeas(brandData, trendTopic) {
   try {
@@ -24,22 +71,14 @@ export async function generateTrendIdeas(brandData, trendTopic) {
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Generate 5 creative content ideas for "${trendTopic}". 
+      {
+        role: 'user',
+        content: `Generate 5 creative content ideas for "${trendTopic}". 
             
 Make sure each idea:
 - Matches the brand voice and tone
@@ -48,16 +87,12 @@ Make sure each idea:
 - Can be adapted for the preferred platforms
 
 Number them 1-5 with brief descriptions.`
-          }
-        ],
-        temperature: 0.8,
-      })
-    });
+      }
+    ], 0.8);
 
-    const data = await response.json();
     return {
       success: true,
-      ideas: data.choices?.[0]?.message?.content || '',
+      ideas: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -84,22 +119,14 @@ export async function generateCaption(contentData, brandData) {
     const hookGuidelines = getHookGuidelines(platform);
     const ctaGuidelines = getCTAGuidelines(platform);
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Write 4 compelling social media captions about: "${contentData.topic}". 
+      {
+        role: 'user',
+        content: `Write 4 compelling social media captions about: "${contentData.topic}". 
 
 ${platformContext}
 
@@ -116,16 +143,12 @@ GENERAL REQUIREMENTS:
 - Optimize for ${platformData?.name || 'social media'} algorithm and culture
 
 Number them 1-4. Each caption should have a different hook approach.`
-          }
-        ],
-        temperature: 0.7,
-      })
-    });
+      }
+    ], 0.7);
 
-    const data = await response.json();
     return {
       success: true,
-      caption: data.choices?.[0]?.message?.content || '',
+      caption: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -142,22 +165,14 @@ export async function scoreContentQuality(content, brandData = null) {
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const brandSection = brandContext ? `\n\nBrand Profile to evaluate against:\n${brandContext}` : '';
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: 'You are a content quality analyzer. Provide scores and specific improvement suggestions based on engagement potential and brand alignment.'
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a content quality analyzer. Provide scores and specific improvement suggestions based on engagement potential and brand alignment.'
-          },
-          {
-            role: 'user',
-            content: `Analyze this content and provide a quality score (0-100) with breakdown for:
+      {
+        role: 'user',
+        content: `Analyze this content and provide a quality score (0-100) with breakdown for:
 - Hook (attention-grabbing opening)
 - CTA (call-to-action effectiveness)
 - Hashtags (relevance and reach)
@@ -167,28 +182,12 @@ ${brandData ? '- Brand Voice Alignment (how well it matches the brand)' : ''}
 Content: ${content}${brandSection}
 
 Provide specific, actionable improvement suggestions.`
-          }
-        ],
-        temperature: 0.3,
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Grok API Error:', response.status, errorText);
-      throw new Error(`API Error ${response.status}: ${errorText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0]) {
-      console.error('Unexpected API response format:', data);
-      throw new Error('Invalid API response format');
-    }
+      }
+    ], 0.3);
     
     return {
       success: true,
-      analysis: data.choices[0].message?.content || '',
+      analysis: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -207,22 +206,14 @@ export async function generateContentPlan(goals, brandData, days = 7) {
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Create a detailed ${days}-day content calendar to achieve: ${goals}
+      {
+        role: 'user',
+        content: `Create a detailed ${days}-day content calendar to achieve: ${goals}
 
 Include for each day:
 - Post type (reel, carousel, story, etc.)
@@ -232,16 +223,12 @@ Include for each day:
 - Brief content outline
 
 Make sure all content aligns with the brand voice and appeals to the target audience.`
-          }
-        ],
-        temperature: 0.6,
-      })
-    });
+      }
+    ], 0.6);
 
-    const data = await response.json();
     return {
       success: true,
-      plan: data.choices?.[0]?.message?.content || '',
+      plan: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -268,22 +255,14 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Build 4 short hooks (under 15 words each) for: "${input}"
+      {
+        role: 'user',
+        content: `Build 4 short hooks (under 15 words each) for: "${input}"
 
 PLATFORM: ${platformData?.name || 'Social Media'}
 Platform hook style: ${hookGuidelines.style}
@@ -302,16 +281,12 @@ Each hook must:
 - Feel authentic to the brand
 
 Number them 1-4. Vary the approach for each hook.`
-          }
-        ],
-        temperature: 0.8,
-      })
-    });
+      }
+    ], 0.8);
 
-    const data = await response.json();
     return {
       success: true,
-      hooks: data.choices?.[0]?.message?.content || '',
+      hooks: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -338,22 +313,14 @@ export async function generateCTAs(goal, brandData, platform = 'instagram') {
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Suggest 5 urgent CTAs for goal: "${goal}"
+      {
+        role: 'user',
+        content: `Suggest 5 urgent CTAs for goal: "${goal}"
 
 PLATFORM: ${platformData?.name || 'Social Media'}
 Platform CTA style: ${ctaGuidelines.style}
@@ -371,16 +338,12 @@ Each CTA must:
 - Use platform-specific language and conventions
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
-          }
-        ],
-        temperature: 0.7,
-      })
-    });
+      }
+    ], 0.7);
 
-    const data = await response.json();
     return {
       success: true,
-      ctas: data.choices?.[0]?.message?.content || '',
+      ctas: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -410,22 +373,14 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Suggest ${hashtagCount} optimized hashtags for: "${input}"
+      {
+        role: 'user',
+        content: `Suggest ${hashtagCount} optimized hashtags for: "${input}"
 
 PLATFORM: ${platformData?.name || 'Social Media'}
 Recommended hashtag count: ${hashtagGuidelines.count}
@@ -447,16 +402,12 @@ Return exactly ${hashtagCount} hashtags ranked by engagement potential. For each
 2. Estimated popularity/posts (e.g., "2.4M posts")
 3. Engagement score (0-100)
 4. Brief reason why it works for ${platformData?.name || 'this platform'}`
-          }
-        ],
-        temperature: 0.5,
-      })
-    });
+      }
+    ], 0.5);
 
-    const data = await response.json();
     return {
       success: true,
-      hashtags: data.choices?.[0]?.message?.content || '',
+      hashtags: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -476,22 +427,14 @@ export async function improveContent(content, suggestions, brandData) {
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Improve this content based on these suggestions: ${suggestions.join(', ')}.
+      {
+        role: 'user',
+        content: `Improve this content based on these suggestions: ${suggestions.join(', ')}.
 
 Original content:
 ${content}
@@ -503,16 +446,12 @@ Requirements:
 - Ensure it appeals to the target audience
 
 Provide the improved version.`
-          }
-        ],
-        temperature: 0.7,
-      })
-    });
+      }
+    ], 0.7);
 
-    const data = await response.json();
     return {
       success: true,
-      improvedContent: data.choices?.[0]?.message?.content || '',
+      improvedContent: data.content || '',
       usage: data.usage
     };
   } catch (error) {
@@ -538,22 +477,14 @@ export async function polishVoiceTranscript(transcript, brandData, platform = 's
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Transform this voice transcript into a polished ${platform} caption:
+      {
+        role: 'user',
+        content: `Transform this voice transcript into a polished ${platform} caption:
 
 "${transcript}"
 
@@ -566,14 +497,10 @@ Requirements:
 - Add 5-10 relevant hashtags at the end
 
 Return ONLY the polished caption with hashtags, no explanations.`
-          }
-        ],
-        temperature: 0.6,
-      })
-    });
+      }
+    ], 0.6);
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
+    const content = data.content || '';
     
     // Separate caption from hashtags
     const hashtagMatch = content.match(/(#\w+\s*)+$/);
@@ -610,22 +537,14 @@ export async function generateCaptionVariations(originalCaption, brandData, coun
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Create ${count} unique variations of this caption, each with a different approach:
+      {
+        role: 'user',
+        content: `Create ${count} unique variations of this caption, each with a different approach:
 
 Original: "${originalCaption}"
 
@@ -642,14 +561,10 @@ VARIATION 2: [Hook Type]
 [Caption]
 
 etc.`
-          }
-        ],
-        temperature: 0.8,
-      })
-    });
+      }
+    ], 0.8);
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
+    const content = data.content || '';
     
     // Parse variations
     const variations = [];
@@ -718,32 +633,20 @@ Make each variation:
 - Optimized for engagement and comments
 - Include relevant emojis and trending formats`;
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: userPrompt
-          }
-        ],
-        temperature: mode === 'sales' ? 0.7 : 0.8,
-      })
-    });
+      {
+        role: 'user',
+        content: userPrompt
+      }
+    ], mode === 'sales' ? 0.7 : 0.8);
 
-    const data = await response.json();
     return {
       success: true,
-      ideas: data.choices?.[0]?.message?.content || '',
+      ideas: data.content || '',
       mode,
       usage: data.usage
     };
@@ -763,31 +666,23 @@ Make each variation:
  * @param {Array} platforms - Array of platform names
  * @returns {Promise<Object>} Platform-specific versions
  */
-export async function generatePlatformRemixes(content, brandData, platforms = ['Instagram', 'TikTok', 'X', 'Facebook', 'YouTube']) {
+export async function generatePlatformRemixes(originalContent, brandData, platforms = ['Instagram', 'TikTok', 'X', 'Facebook', 'YouTube']) {
   try {
     const systemPrompt = buildSystemPrompt(
       'You are an expert cross-platform social media strategist. Adapt content for each platform while maintaining brand voice and maximizing engagement.',
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Adapt this content for each platform with platform-specific optimizations:
+      {
+        role: 'user',
+        content: `Adapt this content for each platform with platform-specific optimizations:
 
-Original Content: "${content}"
+Original Content: "${originalContent}"
 
 Platforms: ${platforms.join(', ')}
 
@@ -802,14 +697,10 @@ Format as:
 Caption: [optimized caption]
 Hashtags: [platform-appropriate hashtags]
 ---`
-          }
-        ],
-        temperature: 0.7,
-      })
-    });
+      }
+    ], 0.7);
 
-    const data = await response.json();
-    const content_response = data.choices?.[0]?.message?.content || '';
+    const content_response = data.content || '';
     
     // Parse platform remixes
     const remixes = {};
@@ -822,7 +713,7 @@ Hashtags: [platform-appropriate hashtags]
         const hashtagMatch = section.match(/Hashtags:\s*([^\n]+)/i);
         remixes[platform.toLowerCase()] = {
           platform,
-          caption: captionMatch ? captionMatch[1].trim() : content,
+          caption: captionMatch ? captionMatch[1].trim() : originalContent,
           hashtags: hashtagMatch ? hashtagMatch[1].trim() : ''
         };
       }
@@ -860,22 +751,14 @@ export async function generateVisualIdeas(prompt, brandData, platform = 'instagr
       brandData
     );
 
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Generate 4 visual content ideas for: "${prompt}"
+      {
+        role: 'user',
+        content: `Generate 4 visual content ideas for: "${prompt}"
 
 ${platformContext}
 
@@ -895,16 +778,12 @@ For each idea, include:
 Make sure all visuals align with the brand identity and appeal to the target audience.
 
 Number them 1-4.`
-          }
-        ],
-        temperature: 0.8,
-      })
-    });
+      }
+    ], 0.8);
 
-    const data = await response.json();
     return {
       success: true,
-      ideas: data.choices?.[0]?.message?.content || '',
+      ideas: data.content || '',
       usage: data.usage
     };
   } catch (error) {

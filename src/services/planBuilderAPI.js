@@ -1,8 +1,28 @@
 /**
  * Plan Builder API Service
  * 
+ * ============================================================================
+ * IMPORTANT: This is the EXISTING job-based Plan Builder implementation.
+ * It will be REPLACED by the n8n workflow when available.
+ * ============================================================================
+ * 
  * Handles async job creation and status polling for AI Plan Builder feature.
  * Uses Supabase Realtime subscriptions with polling fallback.
+ * 
+ * Current flow:
+ * 1. Frontend calls createPlanBuilderJob() -> creates job in Supabase
+ * 2. Vercel serverless function processes the job
+ * 3. Frontend polls for status via getJobStatus() or Realtime subscription
+ * 
+ * Future flow (when n8n workflow is ready):
+ * 1. Frontend checks if workflow is configured
+ * 2. If configured, calls n8nWorkflowAPI.generateAIPlan() instead
+ * 3. If not configured, falls back to this job-based implementation
+ * 
+ * See:
+ * - src/services/n8nWorkflowAPI.js -> generateAIPlan()
+ * - src/pages/AIPlanBuilder.jsx (TODO comments for migration)
+ * - docs/n8n/N8N-WORKFLOW-FEATURES.md (workflow specification)
  */
 
 import { supabase } from '../config/supabase';
@@ -131,6 +151,8 @@ export function subscribeToJob(jobId, callback) {
     supabase.removeChannel(channel);
   };
 }
+
+
 
 
 

@@ -15,9 +15,7 @@ export const ContentContext = createContext();
 export function ContentProvider({ children }) {
   const authContext = useContext(AuthContext);
   const { addToast } = useToast();
-  const skipAuth =
-    import.meta.env.VITE_SKIP_AUTH === 'true' ||
-    (import.meta.env.DEV && localStorage.getItem('skipAuth') === 'true');
+  const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
   
   // Safety check for AuthContext
   const user = authContext?.user || null;

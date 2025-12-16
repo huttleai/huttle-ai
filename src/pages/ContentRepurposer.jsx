@@ -10,7 +10,7 @@ import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '.
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
 import { mockRepurposerExamples } from '../data/mockData';
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveContentLibraryItem, supabase } from '../config/supabase';
 
 const FORMAT_OPTIONS = [
   { from: 'script', to: 'story', label: 'Script → Story Board', description: 'Outline story beats from your video script', icon: '📋' },
@@ -69,8 +69,8 @@ export default function ContentRepurposer() {
     setIsRepurposing(true);
 
     try {
-      const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY || '';
-      const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
+      // SECURITY: Use server-side proxy instead of exposing API key
+      const GROK_PROXY_URL = '/api/ai/grok';
 
       const formatOption = FORMAT_OPTIONS.find(f => `${f.from}-${f.to}` === selectedFormat);
       const platformOpt = PLATFORM_OPTIMIZATIONS.find(p => p.value === targetPlatform);
@@ -80,12 +80,16 @@ export default function ContentRepurposer() {
       const niche = getNiche(brandData);
       const audience = getTargetAudience(brandData);
 
-      const response = await fetch(GROK_API_URL, {
+      // Get auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(GROK_PROXY_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROK_API_KEY}`
-        },
+        headers,
         body: JSON.stringify({
           model: 'grok-4-1-fast-reasoning',
           messages: [
@@ -129,7 +133,8 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       });
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '';
+      // SECURITY: Updated to use proxy response format
+      const content = data.content || data.choices?.[0]?.message?.content || '';
 
       let result;
       try {

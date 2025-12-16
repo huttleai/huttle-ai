@@ -15,7 +15,8 @@ import SmartCalendar from './pages/SmartCalendar';
 import ContentLibrary from './pages/ContentLibrary';
 import AIPlanBuilder from './pages/AIPlanBuilder';
 import TrendLab from './pages/TrendLab';
-import HuttleAgent from './pages/HuttleAgent';
+import ViralBlueprint from './pages/ViralBlueprint';
+// import HuttleAgent from './pages/HuttleAgent'; // Temporarily disabled - kept in backend for future implementation
 import Profile from './pages/Profile';
 import BrandVoice from './pages/BrandVoice';
 import Subscription from './pages/Subscription';
@@ -79,9 +80,10 @@ function AppContent() {
           <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
           <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
           <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
+          <Route path="/viral-blueprint" element={<ProtectedRoute><ViralBlueprint /></ProtectedRoute>} />
           <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
           {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
-          <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} />
+          {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />
           <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />

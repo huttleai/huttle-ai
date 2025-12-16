@@ -129,6 +129,7 @@ All planned tasks from the App Testing & Integration Setup plan have been succes
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_N8N_WEBHOOK_URL`
 - `VITE_N8N_CONNECTION_WEBHOOK_URL`
+- `VITE_N8N_GENERATOR_WEBHOOK_URL` (for AI generation)
 - `VITE_API_BASE_URL`
 - `VITE_GROK_API_KEY`
 - `VITE_PERPLEXITY_API_KEY`
@@ -141,6 +142,7 @@ All planned tasks from the App Testing & Integration Setup plan have been succes
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `N8N_WEBHOOK_URL`
 - `N8N_CONNECTION_WEBHOOK_URL`
+- `N8N_WEBHOOK_URL_GENERATOR` (for AI generation proxy)
 - `PERPLEXITY_API_KEY`
 
 ### 6. n8n Integration ✓
