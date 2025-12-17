@@ -8,6 +8,8 @@
  * - N8N_WEBHOOK_URL_GENERATOR: n8n webhook endpoint for content generation
  */
 
+import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
+
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
 
 /**
@@ -18,19 +20,12 @@ export default async function handler(req, res) {
   console.log('🚀 [n8n-generator] Request method:', req.method);
   console.log('🚀 [n8n-generator] Request URL:', req.url);
   
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
-  );
+  // Set secure CORS headers
+  setCorsHeaders(req, res);
 
   // Handle preflight request
-  if (req.method === 'OPTIONS') {
+  if (handlePreflight(req, res)) {
     console.log('✅ [n8n-generator] Preflight request handled');
-    res.status(200).end();
     return;
   }
 
@@ -208,11 +203,9 @@ export default async function handler(req, res) {
       stack: error.stack?.substring(0, 300)
     });
     
-    // Return detailed error message
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({
-      error: `Server error: ${error.message || 'Unknown error'}`,
-      details: error.message,
-      type: error.name
+      error: 'An unexpected error occurred. Please try again.'
     });
   }
 }

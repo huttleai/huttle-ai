@@ -15,6 +15,7 @@ import {
   Flame,
   Building,
   User,
+  Users,
   Music,
   Video,
   MessageSquare,
@@ -123,6 +124,15 @@ const PLATFORMS = [
     glow: 'group-hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]',
     postTypes: ['Short', 'Video']
   }
+];
+
+/**
+ * Objective options for the Strategy Brief
+ */
+const OBJECTIVES = [
+  { id: 'views', label: 'Viral Reach', emoji: '🚀' },
+  { id: 'conversion', label: 'Leads/Sales', emoji: '💰' },
+  { id: 'trust', label: 'Community', emoji: '🤝' }
 ];
 
 /**
@@ -258,7 +268,9 @@ export default function ViralBlueprint() {
   // Form state
   const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [selectedPostType, setSelectedPostType] = useState(null);
+  const [objective, setObjective] = useState('views');
   const [topic, setTopic] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -286,7 +298,7 @@ export default function ViralBlueprint() {
   const currentPlatform = PLATFORMS.find(p => p.id === selectedPlatform);
 
   // Check if form is valid for submission
-  const isFormValid = selectedPlatform && selectedPostType && topic.trim().length > 0;
+  const isFormValid = selectedPlatform && selectedPostType && topic.trim().length > 0 && targetAudience.trim().length > 0;
 
   // Check if user has access
   const hasAccess = checkFeatureAccess('viralBlueprint');
@@ -325,7 +337,9 @@ export default function ViralBlueprint() {
     const payload = {
       platform: selectedPlatform,
       type: selectedPostType,
+      objective: objective,
       topic: topic.trim(),
+      targetAudience: targetAudience.trim(),
       voiceContext: voiceContextLabel
     };
 
@@ -400,7 +414,9 @@ export default function ViralBlueprint() {
   const handleReset = () => {
     setSelectedPlatform(null);
     setSelectedPostType(null);
+    setObjective('views');
     setTopic('');
+    setTargetAudience('');
     setGeneratedBlueprint(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -579,21 +595,77 @@ export default function ViralBlueprint() {
                   </div>
                 </div>
 
-                {/* Topic Input */}
-                <div className={`space-y-4 transition-all duration-500 ease-out ${selectedPostType ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-4 pointer-events-none'}`}>
-                  <h2 className="text-lg font-bold text-gray-900">What's the Topic?</h2>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Lightbulb className={`w-5 h-5 transition-colors duration-300 ${topic ? 'text-orange-500' : 'text-gray-400'}`} />
+                {/* Strategy Brief Section */}
+                <div className={`space-y-6 p-6 rounded-2xl bg-slate-50/50 border border-slate-200/50 transition-all duration-500 ease-out ${selectedPostType ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-4 pointer-events-none'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Strategy Brief</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+
+                  {/* Objective Selection */}
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-bold text-gray-900">What is the Goal?</h2>
+                    <div className="flex flex-wrap gap-3">
+                      {OBJECTIVES.map((obj) => {
+                        const isSelected = objective === obj.id;
+                        
+                        return (
+                          <button
+                            key={obj.id}
+                            onClick={() => setObjective(obj.id)}
+                            className={`
+                              relative px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300
+                              ${isSelected 
+                                ? 'bg-gray-900 text-white shadow-lg scale-105' 
+                                : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:shadow-md'
+                              }
+                            `}
+                          >
+                            <span className="relative z-10 flex items-center gap-2">
+                              <span>{obj.emoji}</span>
+                              <span className="font-bold">{obj.label}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5" />}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <input
-                      type="text"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="e.g., AI automation for real estate agents"
-                      className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-lg shadow-sm placeholder:text-gray-400 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/10 transition-all outline-none group-hover:border-gray-300"
-                      disabled={!selectedPostType}
-                    />
+                  </div>
+
+                  {/* Topic Input */}
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-bold text-gray-900">What's the Topic?</h2>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Lightbulb className={`w-5 h-5 transition-colors duration-300 ${topic ? 'text-orange-500' : 'text-gray-400'}`} />
+                      </div>
+                      <input
+                        type="text"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder="e.g., AI automation for real estate agents"
+                        className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-lg shadow-sm placeholder:text-gray-400 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/10 transition-all outline-none group-hover:border-gray-300"
+                        disabled={!selectedPostType}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Target Audience Input */}
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-bold text-gray-900">Who is this for?</h2>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Users className={`w-5 h-5 transition-colors duration-300 ${targetAudience ? 'text-orange-500' : 'text-gray-400'}`} />
+                      </div>
+                      <input
+                        type="text"
+                        value={targetAudience}
+                        onChange={(e) => setTargetAudience(e.target.value)}
+                        placeholder="e.g., SaaS Founders, New Moms, First-time Homebuyers..."
+                        className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-lg shadow-sm placeholder:text-gray-400 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/10 transition-all outline-none group-hover:border-gray-300"
+                        disabled={!selectedPostType}
+                      />
+                    </div>
                   </div>
                 </div>
 

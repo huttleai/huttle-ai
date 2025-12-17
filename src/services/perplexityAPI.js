@@ -217,22 +217,14 @@ export async function forecastTrends(brandData, timeframe = '7 days') {
     const audience = getTargetAudience(brandData);
     const brandVoice = getBrandVoice(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.'
-          },
-          {
-            role: 'user',
-            content: `Based on current data, what trends are likely to emerge in ${niche} over the next ${timeframe}?
+      {
+        role: 'user',
+        content: `Based on current data, what trends are likely to emerge in ${niche} over the next ${timeframe}?
 
 Target Audience: ${audience}
 Brand Voice: ${brandVoice}
@@ -242,16 +234,12 @@ Include:
 - How each trend relates to the target audience
 - Content angle suggestions that match the brand voice
 - Early-mover advantage opportunities`
-          }
-        ],
-        temperature: 0.3,
-      })
-    });
+      }
+    ], 0.3);
 
-    const data = await response.json();
     return {
       success: true,
-      forecast: data.choices?.[0]?.message?.content || '',
+      forecast: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -276,22 +264,14 @@ export async function getAudienceInsights(brandData, demographics = null) {
     const audience = demographics || getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are an audience research specialist. Provide deep insights into audience behavior and preferences that help brands connect authentically.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an audience research specialist. Provide deep insights into audience behavior and preferences that help brands connect authentically.'
-          },
-          {
-            role: 'user',
-            content: `What are the key preferences, behaviors, and content consumption patterns for ${audience} in the ${niche} space?
+      {
+        role: 'user',
+        content: `What are the key preferences, behaviors, and content consumption patterns for ${audience} in the ${niche} space?
 
 Brand Profile:
 ${brandContext}
@@ -303,16 +283,12 @@ Include:
 - Language and tone that resonates
 - Topics they actively seek out
 - How to build trust with this audience`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      insights: data.choices?.[0]?.message?.content || '',
+      insights: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -336,22 +312,14 @@ export async function getTrendingHashtags(keyword, brandData) {
     const niche = getNiche(brandData);
     const audience = getTargetAudience(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.'
-          },
-          {
-            role: 'user',
-            content: `Suggest trending hashtags for "${keyword}" in ${niche} right now.
+      {
+        role: 'user',
+        content: `Suggest trending hashtags for "${keyword}" in ${niche} right now.
 
 Target Audience: ${audience}
 
@@ -360,16 +328,12 @@ Include:
 - Hashtags with good reach but not oversaturated
 - Mix of broad and niche-specific tags
 - Which hashtags work best for reaching the target audience`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      hashtags: data.choices?.[0]?.message?.content || '',
+      hashtags: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -394,22 +358,14 @@ export async function getCaptionExamples(topic, brandData) {
     const brandVoice = getBrandVoice(brandData);
     const audience = getTargetAudience(brandData);
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.'
-          },
-          {
-            role: 'user',
-            content: `What caption styles are currently popular for ${topic} content in the ${niche} niche?
+      {
+        role: 'user',
+        content: `What caption styles are currently popular for ${topic} content in the ${niche} niche?
 
 Brand Voice: ${brandVoice}
 Target Audience: ${audience}
@@ -419,16 +375,12 @@ Include:
 - Common patterns and structures
 - How to adapt these styles to match a ${brandVoice} brand voice
 - What makes these captions resonate with ${audience}`
-          }
-        ],
-        temperature: 0.3,
-      })
-    });
+      }
+    ], 0.3);
 
-    const data = await response.json();
     return {
       success: true,
-      examples: data.choices?.[0]?.message?.content || '',
+      examples: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -453,22 +405,14 @@ export async function getBestCTAPractices(platform, goal, brandData = null) {
     const brandVoice = brandData ? getBrandVoice(brandData) : 'professional';
     const audience = brandData ? getTargetAudience(brandData) : 'general audience';
 
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.'
-          },
-          {
-            role: 'user',
-            content: `What are the most effective call-to-action formats for ${goal} on ${platform} in 2025?
+      {
+        role: 'user',
+        content: `What are the most effective call-to-action formats for ${goal} on ${platform} in 2025?
 
 Brand Voice: ${brandVoice}
 Target Audience: ${audience}
@@ -478,16 +422,12 @@ Include:
 - How to make CTAs feel natural for a ${brandVoice} voice
 - What CTAs resonate best with ${audience}
 - Platform-specific formatting tips`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
+      }
+    ], 0.2);
 
-    const data = await response.json();
     return {
       success: true,
-      practices: data.choices?.[0]?.message?.content || '',
+      practices: data.content || '',
       citations: data.citations || [],
       usage: data.usage
     };
@@ -511,51 +451,18 @@ export async function getSocialMediaUpdates(months = 12) {
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
     
-    const response = await fetch(PERPLEXITY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
       },
-      body: JSON.stringify({
-        model: 'sonar',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
-          },
-          {
-            role: 'user',
-            content: `Provide the latest social media platform updates from the past ${months} months (from ${currentMonth} ${currentYear} going back to ${months} months ago). ONLY include updates from these platforms: Facebook, Instagram, TikTok, X (Twitter), and YouTube. EXCLUDE LinkedIn, Threads and Snapchat completely. Return ONLY a valid JSON array, starting with [ and ending with ]. Each update object must have: platform (must be one of: Facebook, Instagram, TikTok, X, YouTube), date (format "Month YYYY"), title, description, impact ("high"/"medium"/"low"), keyTakeaways (array), actionItems (array), affectedUsers, timeline, link. Sort by date descending (most recent first).`
-          }
-        ],
-        temperature: 0.2,
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Perplexity API error response:', response.status, errorText);
-      return {
-        success: false,
-        error: `API returned ${response.status}: ${errorText}`,
-        updates: []
-      };
-    }
-
-    const data = await response.json();
+      {
+        role: 'user',
+        content: `Provide the latest social media platform updates from the past ${months} months (from ${currentMonth} ${currentYear} going back to ${months} months ago). ONLY include updates from these platforms: Facebook, Instagram, TikTok, X (Twitter), and YouTube. EXCLUDE LinkedIn, Threads and Snapchat completely. Return ONLY a valid JSON array, starting with [ and ending with ]. Each update object must have: platform (must be one of: Facebook, Instagram, TikTok, X, YouTube), date (format "Month YYYY"), title, description, impact ("high"/"medium"/"low"), keyTakeaways (array), actionItems (array), affectedUsers, timeline, link. Sort by date descending (most recent first).`
+      }
+    ], 0.2);
     
-    // Check if we got a valid response structure
-    if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-      console.error('Invalid API response structure:', data);
-      return {
-        success: false,
-        error: 'Invalid API response structure',
-        updates: []
-      };
-    }
-    
-    const content = data.choices[0]?.message?.content || '';
+    const content = data.content || '';
     
     if (!content || content.trim().length === 0) {
       console.warn('Perplexity API returned empty content. Full response:', JSON.stringify(data, null, 2));
