@@ -40,6 +40,9 @@ import UpgradeModal from '../components/UpgradeModal';
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
 import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
 
+// N8N Webhook URL for Viral Blueprint generation
+const N8N_WEBHOOK_URL = "https://huttleai.app.n8n.cloud/webhook/viral-blueprint";
+
 /**
  * Viral Blueprint Page
  * 
@@ -333,51 +336,108 @@ export default function ViralBlueprint() {
 
     setIsGenerating(true);
 
-    // Build payload
-    const payload = {
-      platform: selectedPlatform,
-      type: selectedPostType,
-      objective: objective,
-      topic: topic.trim(),
-      targetAudience: targetAudience.trim(),
-      voiceContext: voiceContextLabel
-    };
-
-    console.log('Blueprint Payload:', payload);
-
     try {
-      // ==========================================================================
-      // TODO: N8N_WORKFLOW - Replace with workflow call when available
-      // 
-      // When implementing:
-      // if (isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT)) {
-      //   const result = await generateViralBlueprint({
-      //     platform: selectedPlatform,
-      //     postType: selectedPostType,
-      //     topic: topic.trim(),
-      //     voiceContext: voiceContextLabel,
-      //     brandProfile
-      //   });
-      //   if (result.success) {
-      //     setGeneratedBlueprint({
-      //       isVideoContent: result.blueprint?.isVideoContent,
-      //       directorsCut: result.directorsCut,
-      //       seoStrategy: result.seoStrategy,
-      //       audioVibe: result.audioVibe,
-      //       viralScore: result.viralScore
-      //     });
-      //     // Update usage and show success
-      //     return;
-      //   }
-      //   // If workflow fails, fall through to mock generator
-      // }
-      // ==========================================================================
-      
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      // Build payload for n8n webhook
+      const payload = {
+        topic: topic.trim(),
+        platform: selectedPlatform,
+        objective: objective, // 'views', 'conversion', or 'trust'
+        targetAudience: targetAudience.trim(),
+        identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
+      };
 
-      // Current implementation: Generate mock blueprint
-      const mockBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
-      setGeneratedBlueprint(mockBlueprint);
+      console.log('[N8N] Blueprint Payload:', payload);
+      console.log('[N8N] Calling webhook:', N8N_WEBHOOK_URL);
+
+      // Make POST request with robust 60s timeout (compatible with all browsers)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.warn('[N8N] Aborting request after 60s timeout');
+        controller.abort();
+      }, 60000);
+
+      let response;
+      try {
+        response = await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error('[N8N] Request aborted (timeout after 60s)');
+          throw new Error('REQUEST_TIMEOUT');
+        }
+        console.error('[N8N] Fetch error:', fetchError);
+        throw fetchError;
+      }
+
+      clearTimeout(timeoutId);
+
+      console.log('[N8N] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'No error details');
+        console.error('[N8N] HTTP Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`HTTP_ERROR: ${response.status} ${response.statusText}`);
+      }
+
+      // Parse JSON response
+      let responseData;
+      try {
+        const rawText = await response.text();
+        console.log('[N8N] Raw response:', rawText.substring(0, 500));
+        responseData = JSON.parse(rawText);
+        console.log('[N8N] Parsed response structure:', Object.keys(responseData));
+      } catch (parseError) {
+        console.error('[N8N] JSON Parse Error:', parseError);
+        throw new Error('INVALID_JSON');
+      }
+
+      // Extract blueprint with multiple fallback paths
+      // Try: response.data.blueprint -> response.blueprint -> response.data.content -> response.content -> response itself
+      const blueprint = 
+        responseData?.data?.blueprint || 
+        responseData?.blueprint || 
+        responseData?.data?.content || 
+        responseData?.content || 
+        responseData;
+
+      console.log('[N8N] Extracted blueprint:', {
+        hasIsVideoContent: !!blueprint?.isVideoContent,
+        hasDirectorsCut: !!blueprint?.directorsCut,
+        hasSeoStrategy: !!blueprint?.seoStrategy,
+        blueprintKeys: blueprint ? Object.keys(blueprint) : 'null'
+      });
+
+      // Validate that we have at least some blueprint data
+      if (!blueprint || (typeof blueprint !== 'object')) {
+        console.error('[N8N] Invalid blueprint structure:', responseData);
+        throw new Error('INVALID_BLUEPRINT_STRUCTURE');
+      }
+
+      // Map response blueprint to blueprint state structure
+      setGeneratedBlueprint({
+        isVideoContent: blueprint.isVideoContent || isVideoContent(selectedPostType),
+        directorsCut: blueprint.directorsCut || [],
+        seoStrategy: blueprint.seoStrategy || {
+          visualKeywords: [],
+          spokenHooks: [],
+          captionKeywords: []
+        },
+        audioVibe: blueprint.audioVibe || null,
+        viralScore: blueprint.viralScore || 0
+      });
+
+      console.log('[N8N] Blueprint successfully mapped to state');
 
       // Update usage
       const newUsage = usageCount + 1;
@@ -395,9 +455,36 @@ export default function ViralBlueprint() {
       }, 100);
       
     } catch (error) {
-      console.error('Generation error:', error);
-      showToast('Failed to generate blueprint. Please try again.', 'error');
+      // Log detailed error information for debugging
+      console.error('[N8N] Generation error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
+
+      // Determine specific error message based on error type
+      let errorMessage = 'Blueprint generation failed. Please try again.';
+      
+      if (error.message === 'REQUEST_TIMEOUT') {
+        errorMessage = 'The request timed out after 60 seconds. Your n8n workflow may be taking longer than expected. Please try again.';
+        console.error('[N8N] TIMEOUT: Workflow exceeded 60s limit');
+      } else if (error.message === 'INVALID_JSON') {
+        errorMessage = 'Received invalid response from n8n. Please check your workflow output format.';
+        console.error('[N8N] PARSE ERROR: n8n returned non-JSON response');
+      } else if (error.message === 'INVALID_BLUEPRINT_STRUCTURE') {
+        errorMessage = 'The blueprint data structure is invalid. Please check your n8n workflow output.';
+        console.error('[N8N] STRUCTURE ERROR: Blueprint data is missing or malformed');
+      } else if (error.message?.startsWith('HTTP_ERROR')) {
+        errorMessage = `Connection error: ${error.message.replace('HTTP_ERROR: ', '')}`;
+        console.error('[N8N] HTTP ERROR: n8n returned error status');
+      } else if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
+        errorMessage = 'Unable to connect to n8n. Please check CORS settings.';
+        console.error('[N8N] CORS/NETWORK ERROR: Cannot reach n8n webhook');
+      }
+
+      showToast(errorMessage, 'error');
     } finally {
+      // Always stop loading spinner
       setIsGenerating(false);
     }
   };
@@ -712,7 +799,7 @@ export default function ViralBlueprint() {
                     {isGenerating ? (
                       <>
                         <LoadingSpinner size="sm" color="rgb(251, 146, 60)" />
-                        <span className="animate-pulse drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">Engineering Virality...</span>
+                        <span className="animate-pulse drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">Researching & Writing...</span>
                       </>
                     ) : (
                       <>

@@ -45,3 +45,7 @@ COMMENT ON COLUMN ai_analytics.success IS 'Whether the request was successful';
 COMMENT ON COLUMN ai_analytics.error_type IS 'Category of error if failed: TIMEOUT, NETWORK, VALIDATION, HTTP_xxx, etc';
 COMMENT ON COLUMN ai_analytics.model_used IS 'AI model used for generation (e.g., grok-4, sonar)';
 COMMENT ON COLUMN ai_analytics.metadata IS 'Additional metadata like content length, hashtag presence, etc';
+
+
+
+

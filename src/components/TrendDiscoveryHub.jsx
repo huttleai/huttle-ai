@@ -4,11 +4,12 @@ import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
+import MarkdownRenderer from './MarkdownRenderer';
 import { scanTrendingTopics } from '../services/perplexityAPI';
-import { generateTrendIdeas } from '../services/grokAPI';
+import { getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { useToast } from '../context/ToastContext';
 import { getToastDisclaimer } from './AIDisclaimer';
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveContentLibraryItem, supabase } from '../config/supabase';
 
 /**
  * TrendDiscoveryHub - Reimagined with cutting-edge design
@@ -150,38 +151,85 @@ export default function TrendDiscoveryHub({ onRemix }) {
 
     setIsLoadingDeepDive(true);
     try {
-      const result = await generateTrendIdeas(
-        brandData,
-        `Analyze trending content patterns in the "${deepDiveTopic}" niche/topic. Then create 5 unique content ideas inspired by these trends but tailored for my brand. For each idea include:
-        
-1. Content Angle: What makes it unique
-2. Hook: Attention-grabbing opening
-3. Platform: Best platform for this content
-4. Why It Works: Brief explanation of the trend psychology
-5. My Brand Twist: How to make it authentically mine
+      // Fetch user profile for personalized context
+      let userProfile = null;
+      if (user?.id) {
+        const { data } = await supabase
+          .from('user_profile')
+          .select('preferred_platforms')
+          .eq('user_id', user.id)
+          .single();
+        userProfile = data;
+      }
 
-Focus on content that's performing well right now and could be adapted without copying.`
-      );
+      // Use n8n workflow for Deep Dive
+      const result = await getTrendDeepDive({
+        trend: deepDiveTopic.trim(),
+        niche: brandData?.niche || '',
+        platforms: userProfile?.preferred_platforms || ['Instagram', 'TikTok', 'X'],
+        brandData: {
+          brandVoice: brandData?.brandVoice || '',
+          targetAudience: brandData?.targetAudience || ''
+        }
+      });
 
       if (result.success) {
-        const ideas = result.ideas.split(/\d+\.\s+/).filter(s => s.trim());
+        // Transform n8n workflow response to match existing UI format
+        const ideas = result.contentIdeas || [];
+        
+        // Build the raw content from analysis and ideas for "Copy All" functionality
+        let rawContent = result.analysis || '';
+        if (ideas.length > 0) {
+          rawContent += '\n\nContent Ideas:\n';
+          ideas.forEach((idea, index) => {
+            const ideaText = typeof idea === 'string' ? idea : idea.content || '';
+            rawContent += `\n${index + 1}. ${ideaText}`;
+          });
+        }
+
         setDeepDiveResults({
           topic: deepDiveTopic,
+          analysis: result.analysis || '',
           ideas: ideas.map((idea, index) => ({
             id: index + 1,
-            content: idea.trim(),
-            platform: extractPlatform(idea),
+            content: typeof idea === 'string' ? idea : idea.content || '',
+            platform: typeof idea === 'object' ? idea.platform : extractPlatform(idea),
           })),
-          rawContent: result.ideas,
-          timestamp: new Date().toLocaleString()
+          competitorInsights: result.competitorInsights || [],
+          citations: result.citations || [],
+          rawContent: rawContent,
+          timestamp: new Date().toLocaleString(),
+          source: 'n8n'
         });
-        showToast(`Generated ${ideas.length} inspired content ideas! ${getToastDisclaimer('general')}`, 'success');
+        showToast(`Deep Dive complete! Found ${ideas.length} content ideas. ${getToastDisclaimer('forecast')}`, 'ai');
       } else {
-        showToast('Failed to generate insights', 'error');
+        // If workflow is not configured or failed
+        const errorMessage = result.reason || 'Failed to complete deep dive analysis';
+        console.error('[TrendDiscoveryHub] Deep Dive failed:', errorMessage);
+        
+        // Show detailed error message to help with debugging
+        const userMessage = errorMessage.includes('not configured')
+          ? 'Deep Dive workflow not configured. Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable. Check console for details.'
+          : errorMessage.includes('timeout')
+          ? 'Workflow timed out. The analysis is taking longer than expected. Please try again or check your n8n workflow.'
+          : errorMessage.includes('404')
+          ? 'Workflow endpoint not found. Please verify the webhook URL is correct and the workflow is activated in n8n.'
+          : errorMessage.includes('500')
+          ? 'Workflow server error. Please check your n8n workflow logs for details.'
+          : `Deep Dive failed: ${errorMessage}. Check console for details.`;
+        
+        showToast(userMessage, 'error');
       }
     } catch (error) {
       console.error('Deep Dive error:', error);
-      showToast('Error analyzing trends', 'error');
+      
+      // Check if this is a timeout error
+      if (error.name === 'AbortError' || error.name === 'TimeoutError' || 
+          (error.message && error.message.toLowerCase().includes('timeout'))) {
+        showToast('The analysis is taking longer than expected. Please try again.', 'warning');
+      } else {
+        showToast('Error analyzing trends', 'error');
+      }
     } finally {
       setIsLoadingDeepDive(false);
     }
@@ -680,9 +728,16 @@ Focus on content that's performing well right now and could be adapted without c
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg">
-                            Ideas from "{deepDiveResults.topic}"
+                            Deep Dive: "{deepDiveResults.topic}"
                           </h3>
-                          <p className="text-xs text-gray-500">Generated: {deepDiveResults.timestamp}</p>
+                          <p className="text-xs text-gray-500">
+                            Generated: {deepDiveResults.timestamp}
+                            {deepDiveResults.source === 'n8n' && (
+                              <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                                AI Workflow
+                              </span>
+                            )}
+                          </p>
                         </div>
                         <button
                           onClick={() => {
@@ -695,7 +750,29 @@ Focus on content that's performing well right now and could be adapted without c
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Analysis Section (n8n workflow only) */}
+                      {deepDiveResults.analysis && (
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                          <div className="px-5 py-4 bg-gradient-to-r from-huttle-primary/5 to-purple-50 border-b border-gray-100">
+                            <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                              <Sparkles className="w-5 h-5 text-huttle-primary" />
+                              Trend Analysis
+                            </h4>
+                          </div>
+                          <div className="p-5">
+                            <MarkdownRenderer content={deepDiveResults.analysis} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Content Ideas */}
+                      {deepDiveResults.ideas.length > 0 && (
+                        <>
+                          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                            <Target className="w-4 h-4 text-huttle-primary" />
+                            Content Ideas
+                          </h4>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {deepDiveResults.ideas.slice(0, 4).map((idea) => (
                           <div
                             key={idea.id}
@@ -775,6 +852,50 @@ Focus on content that's performing well right now and could be adapted without c
                           </>
                         )}
                       </button>
+                        </>
+                      )}
+
+                      {/* Competitor Insights (n8n workflow only) */}
+                      {deepDiveResults.competitorInsights && deepDiveResults.competitorInsights.length > 0 && (
+                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200 p-5">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-blue-600" />
+                            Competitor Insights
+                          </h4>
+                          <ul className="space-y-2">
+                            {deepDiveResults.competitorInsights.map((insight, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                                <span className="text-blue-500 mt-1">•</span>
+                                <span>{insight}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Citations (n8n workflow only) */}
+                      {deepDiveResults.citations && deepDiveResults.citations.length > 0 && (
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                            <ExternalLink className="w-3 h-3" />
+                            Sources
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {deepDiveResults.citations.map((citation, idx) => (
+                              <a
+                                key={idx}
+                                href={citation}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-huttle-primary hover:text-huttle-primary-dark hover:underline"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                Source {idx + 1}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

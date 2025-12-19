@@ -282,3 +282,7 @@ CACHE_TTL_SECONDS=21600  # 6 hours
 1. Reduce TTL if needed
 2. Implement manual cache invalidation
 3. Add cache version to key structure
+
+
+
+

@@ -69,3 +69,7 @@ export function isOriginAllowed(req) {
 }
 
 export default { setCorsHeaders, handlePreflight, isOriginAllowed, ALLOWED_ORIGINS };
+
+
+
+

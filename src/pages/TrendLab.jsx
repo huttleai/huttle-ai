@@ -434,7 +434,7 @@ export default function TrendLab() {
           </div>
         </div>
 
-        {/* Trend Discovery Hub - Merged Trend Radar + Competitor Inspiration */}
+        {/* Trend Discovery Hub - Quick Scan & Deep Dive */}
         <TrendDiscoveryHub onRemix={(content) => setRemixInput(content)} />
 
       {/* Modular Dashboard Cards */}

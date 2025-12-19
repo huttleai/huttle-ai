@@ -15,42 +15,19 @@ import {
   X,
   Newspaper,
   LogOut,
-  Sparkles,
   Zap,
   Repeat,
-  ChevronRight,
   Flame
 } from 'lucide-react';
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { SubscriptionContext } from '../context/SubscriptionContext';
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { logout } = useContext(AuthContext);
-  const { userTier, getFeatureLimit } = useContext(SubscriptionContext);
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
-  
-  // AI usage data
-  const subscriptionTier = userTier || 'free';
-  const tierLabel = subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1);
-  const [aiGensUsed, setAiGensUsed] = useState(0);
-  const [aiGensLimit, setAiGensLimit] = useState(20);
-  
-  // Initialize AI usage limits (matching Dashboard pattern)
-  useEffect(() => {
-    const aiLimit = getFeatureLimit('aiGenerations');
-    setAiGensLimit(aiLimit === -1 ? Infinity : aiLimit);
-    
-    const savedUsage = localStorage.getItem('aiGensUsed');
-    if (savedUsage) {
-      setAiGensUsed(parseInt(savedUsage, 10));
-    }
-  }, [userTier, getFeatureLimit]);
-  
-  const aiGensPercent = aiGensLimit > 0 && aiGensLimit !== Infinity ? (aiGensUsed / aiGensLimit) * 100 : 0;
 
   const handleLogout = async () => {
     await logout();
@@ -222,57 +199,11 @@ export default function Sidebar() {
             ))}
           </nav>
 
-          {/* AI Usage Meter - Compact Design */}
-          <div className="mt-auto pt-4">
-            <div className="relative overflow-hidden p-3 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-200/50">
-              <div className="relative">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-6 h-6 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
-                      <Sparkles className="w-3 h-3 text-huttle-primary" />
-                    </div>
-                    <span className="text-xs font-semibold text-gray-900">AI Credits</span>
-                  </div>
-                  <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded-full">
-                    {tierLabel}
-                  </span>
-                </div>
-                
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-xl font-bold text-gray-900">{aiGensUsed}</span>
-                  <span className="text-xs text-gray-500">/ {aiGensLimit === Infinity ? '∞' : aiGensLimit}</span>
-                </div>
-                
-                {/* Progress bar */}
-                <div className="h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      aiGensPercent > 90 
-                        ? 'bg-red-500' 
-                        : aiGensPercent > 70 
-                          ? 'bg-orange-500' 
-                          : 'bg-huttle-primary'
-                    }`}
-                    style={{ width: `${Math.min(aiGensPercent, 100)}%` }}
-                  />
-                </div>
-                
-                {aiGensPercent > 80 && subscriptionTier !== 'pro' && (
-                  <button 
-                    onClick={() => navigate('/subscription')}
-                    className="mt-2 w-full text-[10px] font-semibold text-white py-1.5 px-2 rounded-lg flex items-center justify-center gap-0.5 btn-upgrade-glow"
-                  >
-                    Upgrade for more
-                    <ChevronRight className="w-2.5 h-2.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Logout Button */}
+          {/* Logout Button */}
+          <div className="mt-auto pt-6">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 mt-3 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group"
             >
               <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:rotate-[-12deg]" />
               <span className="text-sm font-medium">Sign Out</span>

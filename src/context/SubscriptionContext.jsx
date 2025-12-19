@@ -80,8 +80,9 @@ export function SubscriptionProvider({ children }) {
       return { allowed: false, reason: 'tier' };
     }
 
-    // Get remaining usage
+    // Get remaining usage and limit for percentage calculation
     const remaining = await getRemainingUsage(userId, feature, userTier);
+    const limit = TIER_LIMITS[userTier]?.[feature] || 0;
     
     if (remaining === Infinity) {
       // Unlimited - track and allow
@@ -90,19 +91,28 @@ export function SubscriptionProvider({ children }) {
     }
 
     if (remaining <= 0) {
-      showToast(`You've reached your monthly limit for this feature. Upgrade for more!`, 'warning');
+      showToast(`AI limit reached. Upgrade to Pro for unlimited generations.`, 'error');
       return { allowed: false, reason: 'limit', remaining: 0 };
     }
 
     // Has usage left - track and allow
     await trackUsage(userId, feature, metadata);
     
-    // Show warning if running low
-    if (remaining <= 3 && remaining > 0) {
-      showToast(`Only ${remaining - 1} ${feature} generations left this month`, 'info');
+    // Calculate usage percentage for threshold-based warnings
+    const used = limit - remaining + 1; // +1 because we just used one
+    const usagePercent = limit > 0 ? (used / limit) * 100 : 0;
+    const remainingAfterUse = remaining - 1;
+    
+    // Show contextual warnings based on usage thresholds (80%, 90%, 95%)
+    if (usagePercent >= 95 && remainingAfterUse > 0) {
+      showToast(`Almost out! Only ${remainingAfterUse} AI credit${remainingAfterUse !== 1 ? 's' : ''} left. Upgrade to avoid interruption.`, 'warning');
+    } else if (usagePercent >= 90 && remainingAfterUse > 0) {
+      showToast(`Running low! Only ${remainingAfterUse} AI credit${remainingAfterUse !== 1 ? 's' : ''} remaining this month.`, 'warning');
+    } else if (usagePercent >= 80 && remainingAfterUse > 0) {
+      showToast(`You've used ${Math.round(usagePercent)}% of your AI credits. Upgrade for unlimited access.`, 'info');
     }
 
-    return { allowed: true, remaining: remaining - 1 };
+    return { allowed: true, remaining: remainingAfterUse };
   };
 
   const refreshUsage = async (feature) => {

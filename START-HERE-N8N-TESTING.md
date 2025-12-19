@@ -147,3 +147,7 @@ open http://localhost:5173
 
 The debug logs will show you exactly where any issues occur. Share the logs if you need help!
 
+
+
+
+

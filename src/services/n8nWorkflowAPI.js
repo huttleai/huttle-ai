@@ -346,60 +346,106 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
   console.log('[N8N_WORKFLOW] getTrendDeepDive called', { trend, niche, platforms });
   
   // Check if workflow is configured
-  if (!isWorkflowConfigured(WORKFLOW_NAMES.TREND_DEEP_DIVE)) {
-    console.log('[N8N_WORKFLOW] Trend Deep Dive workflow not configured, using fallback');
+  const isConfigured = isWorkflowConfigured(WORKFLOW_NAMES.TREND_DEEP_DIVE);
+  const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.TREND_DEEP_DIVE);
+  
+  console.log('[N8N_WORKFLOW] Workflow configuration check:', {
+    workflowName: WORKFLOW_NAMES.TREND_DEEP_DIVE,
+    isConfigured,
+    webhookUrl: webhookUrl || 'NOT SET',
+    envVar: 'VITE_N8N_TREND_DEEP_DIVE_WEBHOOK'
+  });
+  
+  if (!isConfigured || !webhookUrl) {
+    console.warn('[N8N_WORKFLOW] Trend Deep Dive workflow not configured');
+    console.warn('[N8N_WORKFLOW] Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable');
     return {
       success: false,
-      useFallback: true,
-      reason: 'Workflow not configured'
+      useFallback: false,
+      reason: 'Workflow not configured. Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable.'
     };
   }
   
   try {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
-    const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.TREND_DEEP_DIVE);
     
-    console.log('[N8N_WORKFLOW] Calling Trend Deep Dive webhook:', webhookUrl);
+    const requestBody = {
+      userId,
+      trend,
+      niche,
+      platforms,
+      brandData,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('[N8N_WORKFLOW] Calling Trend Deep Dive webhook:', {
+      url: webhookUrl,
+      method: 'POST',
+      hasAuth: !!headers.Authorization,
+      userId,
+      requestBody
+    });
     
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        userId,
-        trend,
-        niche,
-        platforms,
-        brandData,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(45000) // 45 second timeout
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(120000) // 120 second timeout (2 minutes)
     });
     
+    console.log('[N8N_WORKFLOW] Response status:', response.status, response.statusText);
+    
     if (!response.ok) {
-      throw new Error(`Workflow returned status ${response.status}`);
+      const errorText = await response.text();
+      console.error('[N8N_WORKFLOW] Workflow error response:', errorText);
+      throw new Error(`Workflow returned status ${response.status}: ${errorText.substring(0, 200)}`);
     }
     
     const data = await response.json();
     
-    console.log('[N8N_WORKFLOW] Trend Deep Dive response received');
+    console.log('[N8N_WORKFLOW] Trend Deep Dive response received:', {
+      hasAnalysis: !!data.analysis,
+      analysisLength: data.analysis?.length || 0,
+      contentIdeasCount: data.contentIdeas?.length || 0,
+      competitorInsightsCount: data.competitorInsights?.length || 0,
+      citationsCount: data.citations?.length || 0,
+      dataKeys: Object.keys(data)
+    });
     
     return {
       success: true,
-      analysis: data.analysis || '',
-      contentIdeas: data.contentIdeas || [],
-      competitorInsights: data.competitorInsights || [],
-      citations: data.citations || [],
+      analysis: data.analysis || data.output || data.report || '',
+      contentIdeas: data.contentIdeas || data.ideas || [],
+      competitorInsights: data.competitorInsights || data.insights || [],
+      citations: data.citations || data.sources || [],
       source: 'n8n',
       metadata: data.metadata || {}
     };
     
   } catch (error) {
-    console.error('[N8N_WORKFLOW] getTrendDeepDive error:', error);
+    console.error('[N8N_WORKFLOW] getTrendDeepDive error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Provide more specific error messages
+    let errorReason = error.message;
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      errorReason = 'Workflow request timed out after 2 minutes. The workflow may be taking too long or not responding.';
+    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      errorReason = 'Network error. Please check if the n8n workflow URL is correct and accessible.';
+    } else if (error.message.includes('404')) {
+      errorReason = 'Workflow endpoint not found (404). Please verify the webhook URL is correct.';
+    } else if (error.message.includes('500')) {
+      errorReason = 'Workflow server error (500). Please check your n8n workflow logs.';
+    }
+    
     return {
       success: false,
-      useFallback: true,
-      reason: error.message
+      useFallback: false,
+      reason: errorReason
     };
   }
 }
