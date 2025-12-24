@@ -24,7 +24,8 @@ import {
   Mic,
   Type,
   Image,
-  FileText
+  FileText,
+  TrendingUp
 } from 'lucide-react';
 import { 
   TikTokIcon, 
@@ -35,13 +36,16 @@ import {
 } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
+import ViralScoreGauge from '../components/ViralScoreGauge';
+import PremiumScriptRenderer from '../components/PremiumScriptRenderer';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 // TODO: N8N_WORKFLOW - Import workflow service when ready
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
 import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
 
-// N8N Webhook URL for Viral Blueprint generation
-const N8N_WEBHOOK_URL = "https://huttleai.app.n8n.cloud/webhook/viral-blueprint";
+// N8N Webhook URL for Viral Blueprint generation (from environment variable)
+const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK || '';
 
 /**
  * Viral Blueprint Page
@@ -262,6 +266,240 @@ const generateMockBlueprint = (platform, postType, topic) => {
   };
 };
 
+/**
+ * Adapter function to translate n8n response formats into the existing state structure.
+ * Handles 5 master formats: Video, Carousel, Thread, Story, Post
+ * Also handles new simplified format with nested blueprint object:
+ * {
+ *   blueprint: {
+ *     viral_score: number,
+ *     hooks: string[],
+ *     content_script: string (Markdown formatted),
+ *     seo_keywords: string[],
+ *     suggested_hashtags: string[]
+ *   }
+ * }
+ * 
+ * @param {Object} data - The raw response data from n8n
+ * @returns {Object} Normalized blueprint object matching the existing state structure
+ */
+const adaptBlueprintResponse = (data) => {
+  let directorsCut = [];
+  let isVideo = false;
+
+  // 0a. NEW: Nested blueprint format: { blueprint: { viral_score, hooks, content_script, seo_keywords, suggested_hashtags } }
+  if (data.blueprint && typeof data.blueprint === 'object') {
+    const bp = data.blueprint;
+    
+    // Create a single directorsCut entry with the content script
+    directorsCut = [{
+      step: 1,
+      title: 'Content Blueprint',
+      script: bp.content_script || '',
+      text: bp.content_script || '',
+      visual: '', // No visual direction in new format
+      visualSuggestion: ''
+    }];
+
+    // Map hooks to spokenHooks, seo_keywords to visualKeywords, hashtags to captionKeywords
+    const seoStrategy = {
+      visualKeywords: Array.isArray(bp.seo_keywords) ? bp.seo_keywords : (bp.seo_keywords ? [bp.seo_keywords] : []),
+      spokenHooks: Array.isArray(bp.hooks) ? bp.hooks : (bp.hooks ? [bp.hooks] : []),
+      captionKeywords: Array.isArray(bp.suggested_hashtags) ? bp.suggested_hashtags : (bp.suggested_hashtags ? [bp.suggested_hashtags] : [])
+    };
+
+    // Map viral_score, default to 85 if missing or 0
+    const viralScore = (bp.viral_score && bp.viral_score > 0) ? bp.viral_score : 85;
+
+    return {
+      isVideoContent: false, // Default to non-video for simplified format
+      directorsCut,
+      viralScore,
+      audioVibe: null,
+      seoStrategy,
+      // Preserve hooks array for dedicated display
+      hooks: Array.isArray(bp.hooks) ? bp.hooks : (bp.hooks ? [bp.hooks] : [])
+    };
+  }
+
+  // 0b. Legacy simplified format: { hooks, content_script, visual_direction, suggested_hashtags, viral_score, visual_keywords }
+  if (data.hooks || data.content_script || data.visual_direction || data.suggested_hashtags) {
+    // Create a single directorsCut entry with the content script and visual direction
+    directorsCut = [{
+      step: 1,
+      title: 'Content Blueprint',
+      script: data.content_script || '',
+      text: data.content_script || '',
+      visual: data.visual_direction || '',
+      visualSuggestion: data.visual_direction || ''
+    }];
+
+    // Map hooks to spokenHooks, hashtags to captionKeywords, and visual_keywords to visualKeywords
+    const seoStrategy = {
+      visualKeywords: Array.isArray(data.visual_keywords) ? data.visual_keywords : (data.visual_keywords ? [data.visual_keywords] : []),
+      spokenHooks: Array.isArray(data.hooks) ? data.hooks : (data.hooks ? [data.hooks] : []),
+      captionKeywords: Array.isArray(data.suggested_hashtags) ? data.suggested_hashtags : (data.suggested_hashtags ? [data.suggested_hashtags] : [])
+    };
+
+    // Map viral_score, default to 85 if missing or 0
+    const viralScore = (data.viral_score && data.viral_score > 0) ? data.viral_score : 85;
+
+    return {
+      isVideoContent: false, // Default to non-video for simplified format
+      directorsCut,
+      viralScore,
+      audioVibe: null,
+      seoStrategy,
+      // Preserve hooks array for dedicated display
+      hooks: Array.isArray(data.hooks) ? data.hooks : (data.hooks ? [data.hooks] : [])
+    };
+  }
+
+  // 1. Video format (directors_cut with scenes)
+  if (data.directors_cut?.scenes || data.directors_cut) {
+    isVideo = true;
+    const scenes = data.directors_cut?.scenes || data.directors_cut;
+    if (Array.isArray(scenes)) {
+      directorsCut = scenes.map((item, index) => ({
+        step: index + 1,
+        title: item.timestamp || `Scene ${index + 1}`,
+        script: item.dialogue || item.script || '',
+        visual: item.visual_note || item.visual || ''
+      }));
+    }
+  }
+  // 2. Carousel format (slide_breakdown)
+  else if (data.slide_breakdown) {
+    directorsCut = data.slide_breakdown.map((item) => ({
+      step: item.slide_number || 1,
+      title: `Slide ${item.slide_number || 1}`,
+      script: [item.headline, item.body_text].filter(Boolean).join('\n\n'),
+      visual: item.visual_description || ''
+    }));
+  }
+  // 3. Thread format (tweet_breakdown)
+  else if (data.tweet_breakdown) {
+    directorsCut = data.tweet_breakdown.map((item) => ({
+      step: item.tweet_number || 1,
+      title: `Tweet ${item.tweet_number || 1}`,
+      script: item.text || '',
+      visual: item.media_suggestion ? `Media: ${item.media_suggestion}` : ''
+    }));
+  }
+  // 4. Story format (frame_breakdown)
+  else if (data.frame_breakdown) {
+    isVideo = true;
+    directorsCut = data.frame_breakdown.map((item) => ({
+      step: item.frame_number || 1,
+      title: `Frame ${item.frame_number || 1}`,
+      script: item.text_overlay || '',
+      visual: item.action 
+        ? `${item.visual || ''}\n(Action: ${item.action})`
+        : item.visual || ''
+    }));
+  }
+  // 5. Post format (caption_structure - object to array)
+  else if (data.caption_structure) {
+    const cs = data.caption_structure;
+    directorsCut = [
+      {
+        step: 1,
+        title: 'Hook',
+        script: cs.hook || '',
+        visual: 'Opening visual to grab attention'
+      },
+      {
+        step: 2,
+        title: 'Story',
+        script: cs.story || '',
+        visual: 'Supporting visual for the narrative'
+      },
+      {
+        step: 3,
+        title: 'Value',
+        script: Array.isArray(cs.value_points) ? cs.value_points.join('\n') : (cs.value_points || ''),
+        visual: 'Visual highlighting key takeaways'
+      },
+      {
+        step: 4,
+        title: 'CTA',
+        script: cs.cta || '',
+        visual: 'Call-to-action visual prompt'
+      }
+    ];
+  }
+  // Fallback: try to use existing directorsCut if present
+  else if (data.directorsCut && Array.isArray(data.directorsCut)) {
+    directorsCut = data.directorsCut;
+    isVideo = data.isVideoContent || false;
+  }
+
+  // Map viral score (handle nested or direct)
+  const viralScore = typeof data.viral_score === 'object' 
+    ? (data.viral_score?.score || 0)
+    : (data.viral_score || data.viralScore || 0);
+
+  // Map audio vibe (handle different key names)
+  let audioVibe = null;
+  if (data.audio_vibe) {
+    audioVibe = {
+      mood: data.audio_vibe.music_style || data.audio_vibe.mood || '',
+      bpm: data.audio_vibe.bpm || '',
+      suggestion: data.audio_vibe.suggestion || ''
+    };
+  } else if (data.audioVibe) {
+    audioVibe = data.audioVibe;
+  }
+
+  // Map SEO strategy (handle different structures)
+  let seoStrategy = {
+    visualKeywords: [],
+    captionKeywords: [],
+    spokenHooks: []
+  };
+
+  if (data.seo_keywords && Array.isArray(data.seo_keywords)) {
+    seoStrategy.visualKeywords = data.seo_keywords;
+    seoStrategy.captionKeywords = data.seo_keywords;
+  }
+  
+  if (data.seo_strategy) {
+    if (data.seo_strategy.hashtags) {
+      seoStrategy.visualKeywords = data.seo_strategy.hashtags;
+      seoStrategy.captionKeywords = data.seo_strategy.hashtags;
+    }
+    if (data.seo_strategy.title) {
+      seoStrategy.spokenHooks = [data.seo_strategy.title];
+    }
+    if (data.seo_strategy.visual_keywords) {
+      seoStrategy.visualKeywords = data.seo_strategy.visual_keywords;
+    }
+    if (data.seo_strategy.caption_keywords) {
+      seoStrategy.captionKeywords = data.seo_strategy.caption_keywords;
+    }
+    if (data.seo_strategy.spoken_hooks) {
+      seoStrategy.spokenHooks = data.seo_strategy.spoken_hooks;
+    }
+  }
+
+  // Fallback to existing seoStrategy if present
+  if (data.seoStrategy) {
+    seoStrategy = {
+      visualKeywords: data.seoStrategy.visualKeywords || seoStrategy.visualKeywords,
+      captionKeywords: data.seoStrategy.captionKeywords || seoStrategy.captionKeywords,
+      spokenHooks: data.seoStrategy.spokenHooks || seoStrategy.spokenHooks
+    };
+  }
+
+  return {
+    isVideoContent: isVideo,
+    directorsCut,
+    viralScore,
+    audioVibe,
+    seoStrategy
+  };
+};
+
 export default function ViralBlueprint() {
   const { brandProfile, isCreator, isBrand } = useBrand();
   const { user } = useContext(AuthContext);
@@ -280,6 +518,7 @@ export default function ViralBlueprint() {
   const [generatedBlueprint, setGeneratedBlueprint] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
+  const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
 
   // Usage tracking
   const [usageCount, setUsageCount] = useState(0);
@@ -296,6 +535,31 @@ export default function ViralBlueprint() {
       setUsageCount(parseInt(savedUsage, 10));
     }
   }, [userTier, getFeatureLimit]);
+
+  // Stepped loading animation - cycles through messages every 12 seconds
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingStep('Generate Blueprint');
+      return;
+    }
+
+    const messages = [
+      'Scanning platform trends...',
+      'Analyzing viral patterns...',
+      'Drafting content strategy...',
+      'Finalizing blueprint...'
+    ];
+
+    let currentIndex = 0;
+    setLoadingStep(messages[0]);
+
+    const interval = setInterval(() => {
+      currentIndex = (currentIndex + 1) % messages.length;
+      setLoadingStep(messages[currentIndex]);
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Get current platform config
   const currentPlatform = PLATFORMS.find(p => p.id === selectedPlatform);
@@ -337,24 +601,39 @@ export default function ViralBlueprint() {
     setIsGenerating(true);
 
     try {
+      // Map UI post types to backend master formats (5 formats)
+      const formatMapping = {
+        'Reel': 'Video',
+        'Short': 'Video',
+        'TikTok': 'Video',
+        'Video': 'Video',
+        'Image Post': 'Post',
+        'Post': 'Post',
+        'Thread': 'Thread',
+        'Carousel': 'Carousel',
+        'Story': 'Story'
+      };
+
       // Build payload for n8n webhook
       const payload = {
         topic: topic.trim(),
-        platform: selectedPlatform,
-        objective: objective, // 'views', 'conversion', or 'trust'
-        targetAudience: targetAudience.trim(),
+        platform: selectedPlatform,                          // e.g., 'Instagram', 'YouTube'
+        format: formatMapping[selectedPostType] || 'Post',   // Maps to 5 master formats
+        goal: objective,                                     // 'views', 'conversion', or 'trust'
+        audience: targetAudience.trim(),                     // e.g., 'SaaS Founders'
+        brandVoice: 'Authentic and Authoritative',           // Hardcoded for now
         identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
       };
 
       console.log('[N8N] Blueprint Payload:', payload);
       console.log('[N8N] Calling webhook:', N8N_WEBHOOK_URL);
 
-      // Make POST request with robust 60s timeout (compatible with all browsers)
+      // Make POST request with robust 120s timeout (compatible with all browsers)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.warn('[N8N] Aborting request after 60s timeout');
+        console.warn('[N8N] Aborting request after 120s timeout');
         controller.abort();
-      }, 60000);
+      }, 120000);
 
       let response;
       try {
@@ -369,7 +648,7 @@ export default function ViralBlueprint() {
       } catch (fetchError) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          console.error('[N8N] Request aborted (timeout after 60s)');
+          console.error('[N8N] Request aborted (timeout after 120s)');
           throw new Error('REQUEST_TIMEOUT');
         }
         console.error('[N8N] Fetch error:', fetchError);
@@ -402,42 +681,58 @@ export default function ViralBlueprint() {
         throw new Error('INVALID_JSON');
       }
 
-      // Extract blueprint with multiple fallback paths
+      // Extract raw data with multiple fallback paths
       // Try: response.data.blueprint -> response.blueprint -> response.data.content -> response.content -> response itself
-      const blueprint = 
+      const rawBlueprint = 
         responseData?.data?.blueprint || 
         responseData?.blueprint || 
         responseData?.data?.content || 
         responseData?.content || 
         responseData;
 
-      console.log('[N8N] Extracted blueprint:', {
-        hasIsVideoContent: !!blueprint?.isVideoContent,
-        hasDirectorsCut: !!blueprint?.directorsCut,
-        hasSeoStrategy: !!blueprint?.seoStrategy,
-        blueprintKeys: blueprint ? Object.keys(blueprint) : 'null'
+      console.log('[N8N] Raw blueprint data:', {
+        keys: rawBlueprint ? Object.keys(rawBlueprint) : 'null',
+        hasNewFormat: !!(rawBlueprint?.hooks || rawBlueprint?.content_script || rawBlueprint?.visual_direction || rawBlueprint?.suggested_hashtags),
+        hasDirectorsCut: !!rawBlueprint?.directors_cut,
+        hasSlideBreakdown: !!rawBlueprint?.slide_breakdown,
+        hasTweetBreakdown: !!rawBlueprint?.tweet_breakdown,
+        hasFrameBreakdown: !!rawBlueprint?.frame_breakdown,
+        hasCaptionStructure: !!rawBlueprint?.caption_structure
       });
 
       // Validate that we have at least some blueprint data
-      if (!blueprint || (typeof blueprint !== 'object')) {
+      if (!rawBlueprint || (typeof rawBlueprint !== 'object')) {
         console.error('[N8N] Invalid blueprint structure:', responseData);
         throw new Error('INVALID_BLUEPRINT_STRUCTURE');
       }
 
-      // Map response blueprint to blueprint state structure
+      // Use adapter to normalize the response into existing state structure
+      const adaptedBlueprint = adaptBlueprintResponse(rawBlueprint);
+
+      console.log('[N8N] Adapted blueprint:', {
+        isVideoContent: adaptedBlueprint.isVideoContent,
+        directorsCutLength: adaptedBlueprint.directorsCut?.length,
+        viralScore: adaptedBlueprint.viralScore,
+        hasAudioVibe: !!adaptedBlueprint.audioVibe,
+        seoKeywordsCount: adaptedBlueprint.seoStrategy?.visualKeywords?.length
+      });
+
+      // Set state with adapted blueprint, falling back to UI-based video detection
       setGeneratedBlueprint({
-        isVideoContent: blueprint.isVideoContent || isVideoContent(selectedPostType),
-        directorsCut: blueprint.directorsCut || [],
-        seoStrategy: blueprint.seoStrategy || {
+        isVideoContent: adaptedBlueprint.isVideoContent || isVideoContent(selectedPostType),
+        directorsCut: adaptedBlueprint.directorsCut || [],
+        seoStrategy: adaptedBlueprint.seoStrategy || {
           visualKeywords: [],
           spokenHooks: [],
           captionKeywords: []
         },
-        audioVibe: blueprint.audioVibe || null,
-        viralScore: blueprint.viralScore || 0
+        audioVibe: adaptedBlueprint.audioVibe || null,
+        viralScore: (adaptedBlueprint.viralScore && adaptedBlueprint.viralScore > 0) ? adaptedBlueprint.viralScore : 85,
+        // Preserve hooks array for dedicated UI display
+        hooks: adaptedBlueprint.hooks || []
       });
 
-      console.log('[N8N] Blueprint successfully mapped to state');
+      console.log('[N8N] Blueprint successfully adapted and mapped to state');
 
       // Update usage
       const newUsage = usageCount + 1;
@@ -466,8 +761,8 @@ export default function ViralBlueprint() {
       let errorMessage = 'Blueprint generation failed. Please try again.';
       
       if (error.message === 'REQUEST_TIMEOUT') {
-        errorMessage = 'The request timed out after 60 seconds. Your n8n workflow may be taking longer than expected. Please try again.';
-        console.error('[N8N] TIMEOUT: Workflow exceeded 60s limit');
+        errorMessage = 'The request timed out after 120 seconds. Your n8n workflow may be taking longer than expected. Please try again.';
+        console.error('[N8N] TIMEOUT: Workflow exceeded 120s limit');
       } else if (error.message === 'INVALID_JSON') {
         errorMessage = 'Received invalid response from n8n. Please check your workflow output format.';
         console.error('[N8N] PARSE ERROR: n8n returned non-JSON response');
@@ -532,9 +827,14 @@ export default function ViralBlueprint() {
                   <h1 className="text-3xl md:text-4xl font-display font-bold text-gray-900 tracking-tight">
                     Viral Blueprint
                   </h1>
-                  <span className="px-3 py-1 rounded-full bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-gray-900/20 ring-1 ring-white/20">
-                    Generator
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-gray-900/20 ring-1 ring-white/20">
+                      Generator
+                    </span>
+                    <span className="px-3 py-1 rounded-full bg-huttle-gradient text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-huttle-blue/20 ring-1 ring-white/20">
+                      Beta
+                    </span>
+                  </div>
                 </div>
                 <p className="text-gray-500 text-lg">
                   Engineer viral content with AI-powered precision
@@ -797,10 +1097,13 @@ export default function ViralBlueprint() {
                     )}
                     
                     {isGenerating ? (
-                      <>
-                        <LoadingSpinner size="sm" color="rgb(251, 146, 60)" />
-                        <span className="animate-pulse drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">Researching & Writing...</span>
-                      </>
+                      <div className="flex items-center justify-center gap-3">
+                        <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="animate-pulse drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">{loadingStep}</span>
+                      </div>
                     ) : (
                       <>
                         <Zap className="w-6 h-6 fill-current drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
@@ -809,6 +1112,11 @@ export default function ViralBlueprint() {
                       </>
                     )}
                   </button>
+                  
+                  {/* Helper text for generation time expectation */}
+                  <p className="text-xs text-gray-500 text-center mt-3">
+                    ⚡ Deep research & strategy generation takes 60-90 seconds. Please keep this tab open.
+                  </p>
                   
                   {generatedBlueprint && (
                     <button
@@ -828,180 +1136,265 @@ export default function ViralBlueprint() {
         {/* Results Section - The Blueprint */}
         {generatedBlueprint && hasAccess && (
           <div id="blueprint-results" className="space-y-8 animate-reveal-up">
-            <div className="flex items-center gap-4">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-              <h3 className="text-center font-display font-bold text-gray-400 uppercase tracking-widest text-sm flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-orange-500" />
-                Your Blueprint
-              </h3>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+            {/* Header with Viral Score Badge */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+                <h3 className="text-center font-display font-bold text-gray-400 uppercase tracking-widest text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-orange-500" />
+                  Your Blueprint
+                </h3>
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+              </div>
+              
+              {/* Viral Score Badge */}
+              {generatedBlueprint.viralScore > 0 && (
+                <div className={`
+                  flex items-center gap-2 px-4 py-2 rounded-full shadow-lg
+                  ${generatedBlueprint.viralScore >= 90 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' 
+                    : generatedBlueprint.viralScore >= 75 
+                      ? 'bg-gradient-to-r from-orange-400 to-amber-500 text-white'
+                      : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white'
+                  }
+                `}>
+                  <Flame className="w-4 h-4" />
+                  <span className="font-bold text-sm">Viral Score: {generatedBlueprint.viralScore}</span>
+                </div>
+              )}
             </div>
+
+            {/* Hooks Section - Display hooks as a styled list */}
+            {generatedBlueprint.hooks && generatedBlueprint.hooks.length > 0 && (
+              <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-gradient-to-br from-amber-50/60 to-orange-50/40 border border-amber-200/60 shadow-elevated p-6 md:p-8">
+                {/* Glassmorphism gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/20 pointer-events-none" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl blur opacity-40 animate-pulse" />
+                        <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-xl ring-1 ring-white/20">
+                          <Flame className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      🔥 Viral Hooks
+                    </h2>
+                    <button 
+                      onClick={() => handleCopy(generatedBlueprint.hooks.join('\n\n'), 'all-hooks')}
+                      className="px-4 py-2 rounded-xl bg-white/80 hover:bg-white border border-amber-200 hover:border-amber-300 text-amber-700 text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                    >
+                      {copiedSection === 'all-hooks' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          Copy All
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {generatedBlueprint.hooks.map((hook, index) => (
+                      <div 
+                        key={index}
+                        className="group flex items-start gap-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-amber-100/60 hover:border-amber-200 hover:shadow-md transition-all cursor-pointer"
+                        onClick={() => handleCopy(hook, `hook-${index}`)}
+                      >
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
+                          {index + 1}
+                        </div>
+                        <p className="flex-1 text-gray-800 leading-relaxed font-medium">
+                          {hook}
+                        </p>
+                        <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {copiedSection === `hook-${index}` ? (
+                            <Check className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Section A: Director's Cut / Content Blueprint */}
-            <div className="glass-panel rounded-2xl p-6 md:p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl blur opacity-40 animate-pulse" />
-                    <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center shadow-xl ring-1 ring-white/20">
-                      {generatedBlueprint.isVideoContent 
-                        ? <Video className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                        : <FileText className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                      }
+            <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-elevated p-6 md:p-8">
+              {/* Glassmorphism gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/20 pointer-events-none" />
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl blur opacity-40 animate-pulse" />
+                      <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center shadow-xl ring-1 ring-white/20">
+                        {generatedBlueprint.isVideoContent 
+                          ? <Video className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
+                          : <FileText className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
+                        }
+                      </div>
                     </div>
-                  </div>
-                  {generatedBlueprint.isVideoContent ? "The Director's Cut" : "Content Blueprint"}
-                </h2>
-                <span className="text-sm font-medium text-gray-500">
-                  {generatedBlueprint.isVideoContent ? 'Script + Visual Guide' : 'Text + Visual Suggestions'}
-                </span>
+                    {generatedBlueprint.isVideoContent ? "The Director's Cut" : "Content Blueprint"}
+                  </h2>
+                  <span className="text-sm font-medium text-gray-500">
+                    {generatedBlueprint.isVideoContent ? 'Script + Visual Guide' : 'Premium Strategy'}
+                  </span>
+                </div>
+
+                <div className="space-y-6">
+                  {generatedBlueprint.directorsCut.map((item, index) => (
+                    <div 
+                      key={index} 
+                      className="relative backdrop-blur-md bg-white/80 rounded-2xl border border-white/80 overflow-hidden hover:shadow-xl transition-all duration-300 group animate-slideUp"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      {/* Step Header */}
+                      <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50/80 to-white/60 border-b border-gray-100/50 backdrop-blur-sm">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 text-white flex items-center justify-center font-bold text-sm shadow-lg">
+                          {item.step}
+                        </div>
+                        <h3 className="font-bold text-gray-900">{item.title}</h3>
+                      </div>
+
+                      {/* Full Width Premium Script Renderer */}
+                      <div className="p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          {generatedBlueprint.isVideoContent 
+                            ? <MessageSquare className="w-4 h-4 text-indigo-500" />
+                            : <Type className="w-4 h-4 text-indigo-500" />
+                          }
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            {generatedBlueprint.isVideoContent ? 'Script' : 'Content'}
+                          </span>
+                        </div>
+                        <PremiumScriptRenderer 
+                          content={generatedBlueprint.isVideoContent ? item.script : item.text}
+                          onCopy={(text) => handleCopy(text, `script-${index}`)}
+                        />
+                      </div>
+
+                      {/* Visual Direction Section */}
+                      {(item.visual || item.visualSuggestion) && (
+                        <div className="p-6 pt-0">
+                          <div className="p-5 bg-gradient-to-br from-purple-50/80 to-indigo-50/60 backdrop-blur-sm rounded-xl border border-purple-100/50">
+                            <div className="flex items-center gap-2 mb-3">
+                              {generatedBlueprint.isVideoContent 
+                                ? <Eye className="w-4 h-4 text-purple-500" />
+                                : <Image className="w-4 h-4 text-purple-500" />
+                              }
+                              <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">
+                                Visual Direction
+                              </span>
+                            </div>
+                            <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">
+                              {generatedBlueprint.isVideoContent ? item.visual : item.visualSuggestion}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Section B: SEO Strategy - The Keyword Pack - Only show if there's SEO data */}
+            {(generatedBlueprint.seoStrategy.visualKeywords?.length > 0 || 
+              generatedBlueprint.seoStrategy.captionKeywords?.length > 0) && (
+              <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-elevated p-6 md:p-8">
+                {/* Glassmorphism gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-green-50/20 pointer-events-none" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-8">
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                        <Hash className="w-5 h-5 text-white" />
+                      </div>
+                      SEO Strategy
+                    </h2>
+                    <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 text-xs font-bold uppercase tracking-wider shadow-sm border border-green-200/50">
+                      Keyword Pack
+                    </span>
+                  </div>
 
               <div className="space-y-6">
-                {generatedBlueprint.directorsCut.map((item, index) => (
-                  <div 
-                    key={index} 
-                    className="relative bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 group"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    {/* Step Header */}
-                    <div className="flex items-center gap-4 p-4 bg-gray-50 border-b border-gray-100">
-                      <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-bold text-sm shadow-md">
-                        {item.step}
+                {/* Trending Keywords - Only show if there are seo_keywords */}
+                {generatedBlueprint.seoStrategy.visualKeywords && generatedBlueprint.seoStrategy.visualKeywords.length > 0 && (
+                  <div className="backdrop-blur-md bg-white/80 rounded-2xl p-6 border border-green-100/60 hover:shadow-xl transition-all duration-300 hover:border-green-200/80">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-md">
+                        <TrendingUp className="w-4 h-4 text-white" />
                       </div>
-                      <h3 className="font-bold text-gray-900">{item.title}</h3>
+                      <h3 className="font-bold text-gray-900 text-sm">📈 Trending Keywords</h3>
                     </div>
-
-                    {/* Split View: Adaptive based on content type */}
-                    <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-                      {/* Left Column: Script (video) or Text (non-video) */}
-                      <div className="p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                          {generatedBlueprint.isVideoContent 
-                            ? <MessageSquare className="w-4 h-4 text-blue-500" />
-                            : <Type className="w-4 h-4 text-blue-500" />
-                          }
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            {generatedBlueprint.isVideoContent ? 'Script' : 'Text'}
-                          </span>
-                        </div>
-                        <p className="text-gray-800 leading-relaxed font-medium whitespace-pre-line">
-                          {generatedBlueprint.isVideoContent ? item.script : item.text}
-                        </p>
-                      </div>
-
-                      {/* Right Column: Visual (video) or Visual Suggestion (non-video) */}
-                      <div className="p-5 bg-gray-50/50">
-                        <div className="flex items-center gap-2 mb-3">
-                          {generatedBlueprint.isVideoContent 
-                            ? <Eye className="w-4 h-4 text-purple-500" />
-                            : <Image className="w-4 h-4 text-purple-500" />
-                          }
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            {generatedBlueprint.isVideoContent ? 'Visual' : 'Visual Suggestion'}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          {generatedBlueprint.isVideoContent ? item.visual : item.visualSuggestion}
-                        </p>
-                      </div>
+                    <p className="text-xs text-gray-500 mb-4 leading-relaxed">Trending search terms to boost discoverability</p>
+                    <div className="flex flex-wrap gap-2">
+                      {generatedBlueprint.seoStrategy.visualKeywords.map((keyword, index) => (
+                        <span 
+                          key={index}
+                          className="px-4 py-2 bg-gradient-to-br from-green-50/90 to-emerald-100/70 backdrop-blur-sm border border-green-300/60 rounded-full text-xs font-semibold text-green-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
+                          onClick={() => handleCopy(keyword, `keyword-${index}`)}
+                        >
+                          {keyword}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Hashtags - Only show if there are hashtags */}
+                {generatedBlueprint.seoStrategy.captionKeywords && generatedBlueprint.seoStrategy.captionKeywords.length > 0 && (
+                  <div className="backdrop-blur-md bg-white/80 rounded-2xl p-6 border border-purple-100/60 hover:shadow-xl transition-all duration-300 hover:border-purple-200/80">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-500 flex items-center justify-center shadow-md">
+                        <Hash className="w-4 h-4 text-white" />
+                      </div>
+                      <h3 className="font-bold text-gray-900 text-sm">Hashtags</h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4 leading-relaxed">Caption & description tags</p>
+                    <div className="flex flex-wrap gap-2">
+                      {generatedBlueprint.seoStrategy.captionKeywords.map((keyword, index) => (
+                        <span 
+                          key={index}
+                          className="px-4 py-2 bg-gradient-to-br from-purple-50/90 to-purple-100/70 backdrop-blur-sm border border-purple-200/60 rounded-full text-xs font-semibold text-purple-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
+                          onClick={() => handleCopy(keyword, `caption-${index}`)}
+                        >
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={() => handleCopy(generatedBlueprint.seoStrategy.captionKeywords.join(' '), 'all-captions')}
+                      className="mt-5 w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      {copiedSection === 'all-captions' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Copied All!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          Copy All Tags
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
-
-            {/* Section B: SEO Strategy - The Keyword Pack */}
-            <div className="glass-panel rounded-2xl p-6 md:p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
-                    <Hash className="w-5 h-5 text-white" />
-                  </div>
-                  2025 SEO Strategy
-                </h2>
-                <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold uppercase tracking-wider">
-                  Keyword Pack
-                </span>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Visual Keywords */}
-                <div className="bg-white rounded-xl p-5 border border-gray-100 hover:shadow-md transition-all">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Type className="w-4 h-4 text-orange-500" />
-                    <h3 className="font-bold text-gray-900 text-sm">Visual Keywords</h3>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Put these on screen as text overlay</p>
-                  <div className="flex flex-wrap gap-2">
-                    {generatedBlueprint.seoStrategy.visualKeywords.map((keyword, index) => (
-                      <span 
-                        key={index}
-                        className="px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-700"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Spoken Hooks / Opening Lines */}
-                <div className="bg-white rounded-xl p-5 border border-gray-100 hover:shadow-md transition-all">
-                  <div className="flex items-center gap-2 mb-4">
-                    {generatedBlueprint.isVideoContent 
-                      ? <Mic className="w-4 h-4 text-blue-500" />
-                      : <Type className="w-4 h-4 text-blue-500" />
-                    }
-                    <h3 className="font-bold text-gray-900 text-sm">
-                      {generatedBlueprint.isVideoContent ? 'Spoken Hooks' : 'Opening Lines'}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">
-                    {generatedBlueprint.isVideoContent 
-                      ? 'Say these in the first 3 seconds' 
-                      : 'Start your post with these phrases'
-                    }
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {generatedBlueprint.seoStrategy.spokenHooks.map((hook, index) => (
-                      <span 
-                        key={index}
-                        className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-medium text-blue-700"
-                      >
-                        {hook}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Caption Keywords */}
-                <div className="bg-white rounded-xl p-5 border border-gray-100 hover:shadow-md transition-all">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Hash className="w-4 h-4 text-purple-500" />
-                    <h3 className="font-bold text-gray-900 text-sm">Caption Keywords</h3>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Natural phrases for your description</p>
-                  <div className="flex flex-wrap gap-2">
-                    {generatedBlueprint.seoStrategy.captionKeywords.map((keyword, index) => (
-                      <span 
-                        key={index}
-                        className="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs font-medium text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors"
-                        onClick={() => handleCopy(keyword, `caption-${index}`)}
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                  <button 
-                    onClick={() => handleCopy(generatedBlueprint.seoStrategy.captionKeywords.join(' '), 'all-captions')}
-                    className="mt-4 text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 transition-colors"
-                  >
-                    {copiedSection === 'all-captions' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    {copiedSection === 'all-captions' ? 'Copied!' : 'Copy All'}
-                  </button>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Section C: Audio Vibe - Only for video content */}
             {generatedBlueprint.isVideoContent && generatedBlueprint.audioVibe && (
@@ -1025,17 +1418,13 @@ export default function ViralBlueprint() {
               </div>
             )}
 
-            {/* Viral Score Footer */}
-            <div className="flex items-center justify-center gap-4 py-4">
-              <span className="text-sm font-medium text-gray-500">Viral Potential Score:</span>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-32 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${generatedBlueprint.viralScore}%` }}
-                  />
-                </div>
-                <span className="text-lg font-bold text-gray-900">{generatedBlueprint.viralScore}</span>
+            {/* Premium Viral Score Gauge */}
+            <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-gradient-to-br from-white/60 to-gray-50/40 border border-white/60 shadow-elevated p-8 md:p-12">
+              {/* Glassmorphism gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-50/20 via-transparent to-purple-50/20 pointer-events-none" />
+              
+              <div className="relative z-10 flex items-center justify-center">
+                <ViralScoreGauge score={generatedBlueprint.viralScore} />
               </div>
             </div>
           </div>

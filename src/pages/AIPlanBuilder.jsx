@@ -1,41 +1,46 @@
-import { useState, useEffect } from 'react';
-import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useContent } from '../context/ContentContext';
 import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
-import { createPlanBuilderJob, subscribeToJob, getJobStatus } from '../services/planBuilderAPI';
-import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
-import { mockAIPlans, STATUS_COLORS } from '../data/mockData';
+import { createJobDirectly, triggerN8nWebhook, subscribeToJob } from '../services/planBuilderAPI';
+import { mockAIPlans } from '../data/mockData';
+import { supabase } from '../config/supabase';
+import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
 
-// TODO: N8N_WORKFLOW - Import workflow service when ready
-// This page will transition to use n8n workflow for plan generation
-import { generateAIPlan } from '../services/n8nWorkflowAPI';
-import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+// Hardcoded list of allowed platforms for AI Plan Builder
+const ALLOWED_PLATFORMS = [
+  { id: 'facebook', name: 'Facebook', icon: FacebookIcon },
+  { id: 'instagram', name: 'Instagram', icon: InstagramIcon },
+  { id: 'x', name: 'X', displayName: 'X (Twitter)', icon: TwitterXIcon },
+  { id: 'tiktok', name: 'TikTok', icon: TikTokIcon },
+  { id: 'youtube', name: 'YouTube', icon: YouTubeIcon },
+];
+
+// Platform-specific optimal posting times (industry benchmarks)
+const PLATFORM_OPTIMAL_TIMES = {
+  'TikTok': '19:00',    // 7 PM - Peak evening engagement
+  'Instagram': '09:00', // 9 AM - Morning scroll
+  'X': '12:00',         // Noon - Lunch break engagement
+  'YouTube': '15:00',   // 3 PM - Afternoon watch time
+  'Facebook': '13:00',  // 1 PM - Post-lunch browsing
+};
 
 /**
  * AI Plan Builder Page
  * 
- * TODO: N8N_WORKFLOW - This feature will move to n8n workflow
- * Workflow: WORKFLOW_NAMES.AI_PLAN_BUILDER
+ * Fire-and-Forget Async Architecture:
+ * 1. Creates job directly in Supabase (status: pending)
+ * 2. Triggers n8n webhook with job_id (fire-and-forget)
+ * 3. Subscribes to Supabase Realtime for job updates
+ * 4. Applies intelligent time optimization before rendering
  * 
- * Current implementation uses:
- * - planBuilderAPI.js for async job creation
- * - Vercel serverless function (/api/create-plan-builder-job)
- * - Supabase jobs table for status tracking
- * 
- * Future implementation will:
- * 1. Check if workflow is configured via isWorkflowConfigured()
- * 2. If configured, call generateAIPlan() from n8nWorkflowAPI.js
- * 3. If not configured, fall back to current job-based implementation
- * 
- * Expected workflow response format:
+ * Expected n8n response format (stored in jobs.result):
  * {
- *   success: true,
- *   plan: { goal, period, totalPosts, platforms, contentMix },
- *   schedule: [{ day, posts: [{ time, type, theme, platform }] }],
- *   recommendations: { postFrequency, bestTimes, contentTypes }
+ *   goal, period, totalPosts, platforms, contentMix,
+ *   schedule: [{ day, posts: [{ topic, content_type, reasoning, platform }] }]
  * }
  */
 
@@ -43,69 +48,140 @@ export default function AIPlanBuilder() {
   const { showToast } = useToast();
   const { schedulePost } = useContent();
   const { brandProfile } = useBrand();
-  const { platforms: preferredPlatforms } = usePreferredPlatforms();
+  
+  // Form state
   const [selectedGoal, setSelectedGoal] = useState('Grow followers');
-  const [selectedPeriod, setSelectedPeriod] = useState('7 days');
+  const [selectedPeriod, setSelectedPeriod] = useState(7); // Integer: 7 or 14
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [brandVoice, setBrandVoice] = useState(''); // New: Brand Voice input
+  
+  // Generation state
   const [generatedPlan, setGeneratedPlan] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentJobId, setCurrentJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null);
   const [progress, setProgress] = useState(0);
+  
+  // Refs for cleanup
+  const progressIntervalRef = useRef(null);
+  const realtimeChannelRef = useRef(null);
 
-  // Subscribe to job updates when a job is created
+  /**
+   * Apply time optimization to schedule based on platform benchmarks
+   * Injects scheduled_time property into each post
+   */
+  const applyTimeOptimization = (schedule) => {
+    if (!schedule || !Array.isArray(schedule)) return schedule;
+    
+    return schedule.map(dayItem => ({
+      ...dayItem,
+      posts: (dayItem.posts || []).map(post => ({
+        ...post,
+        scheduled_time: PLATFORM_OPTIMAL_TIMES[post.platform] || '10:00'
+      }))
+    }));
+  };
+
+  /**
+   * Handle job completion - apply time optimization and update state
+   */
+  const handleJobComplete = (result) => {
+    // Clear progress interval
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    
+    // Apply time optimization to the schedule
+    const optimizedResult = {
+      ...result,
+      schedule: applyTimeOptimization(result.schedule)
+    };
+    
+    setProgress(100);
+    setGeneratedPlan(optimizedResult);
+    setIsGenerating(false);
+    setCurrentJobId(null);
+    showToast('AI Plan generated successfully!', 'success');
+  };
+
+  /**
+   * Handle job failure
+   */
+  const handleJobFailed = (errorMessage) => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    
+    setProgress(0);
+    setIsGenerating(false);
+    setCurrentJobId(null);
+    showToast(errorMessage || 'Failed to generate plan', 'error');
+  };
+
+  // Subscribe to job updates via Supabase Realtime
   useEffect(() => {
     if (!currentJobId) return;
 
-    // Subscribe to realtime updates
-    const unsubscribe = subscribeToJob(currentJobId, (updatedJob) => {
-      setJobStatus(updatedJob.status);
-      
-      if (updatedJob.status === 'completed') {
-        setGeneratedPlan(updatedJob.result);
-        setIsGenerating(false);
-        setProgress(100);
-        showToast('AI Plan generated successfully!', 'success');
-        setCurrentJobId(null);
-      } else if (updatedJob.status === 'failed') {
-        setIsGenerating(false);
-        setProgress(0);
-        showToast(updatedJob.error || 'Failed to generate plan', 'error');
-        setCurrentJobId(null);
-      } else if (updatedJob.status === 'running') {
-        setProgress(50); // Indicate processing
-      }
-    });
-
-    // Fallback polling every 3 seconds
-    const pollInterval = setInterval(async () => {
-      const result = await getJobStatus(currentJobId);
-      if (result.success && result.job) {
-        const job = result.job;
-        setJobStatus(job.status);
-        
-        if (job.status === 'completed') {
-          setGeneratedPlan(job.result);
-          setIsGenerating(false);
-          setProgress(100);
-          showToast('AI Plan generated successfully!', 'success');
-          setCurrentJobId(null);
-          clearInterval(pollInterval);
-        } else if (job.status === 'failed') {
-          setIsGenerating(false);
-          setProgress(0);
-          showToast(job.error || 'Failed to generate plan', 'error');
-          setCurrentJobId(null);
-          clearInterval(pollInterval);
-        } else if (job.status === 'running') {
-          setProgress(50);
+    // Create realtime channel for this job
+    const channel = supabase
+      .channel(`job:${currentJobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'jobs',
+          filter: `id=eq.${currentJobId}`
+        },
+        (payload) => {
+          const updatedJob = payload.new;
+          setJobStatus(updatedJob.status);
+          
+          if (updatedJob.status === 'completed' && updatedJob.result) {
+            handleJobComplete(updatedJob.result);
+          } else if (updatedJob.status === 'failed') {
+            handleJobFailed(updatedJob.error);
+          } else if (updatedJob.status === 'running') {
+            // Keep the progress animation going
+          }
         }
+      )
+      .subscribe();
+
+    realtimeChannelRef.current = channel;
+
+    // Timeout protection: if no update after 60 seconds, start polling
+    const timeoutId = setTimeout(async () => {
+      try {
+        const { data: job, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', currentJobId)
+          .single();
+        
+        if (error) {
+          console.error('Timeout poll error:', error);
+          return;
+        }
+        
+        if (job.status === 'completed' && job.result) {
+          handleJobComplete(job.result);
+        } else if (job.status === 'failed') {
+          handleJobFailed(job.error);
+        }
+      } catch (err) {
+        console.error('Timeout poll failed:', err);
       }
-    }, 3000);
+    }, 60000);
 
     return () => {
-      unsubscribe();
-      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+      clearTimeout(timeoutId);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
     };
   }, [currentJobId, showToast]);
 
@@ -118,78 +194,77 @@ export default function AIPlanBuilder() {
   };
 
   const handleGeneratePlan = async () => {
+    // Validation
     if (selectedPlatforms.length === 0) {
       showToast('Please select at least one platform', 'error');
       return;
     }
 
+    // Reset state
     setIsGenerating(true);
-    setProgress(10);
-    
-    // ==========================================================================
-    // TODO: N8N_WORKFLOW - Replace with workflow call when available
-    // 
-    // When implementing:
-    // 1. Check if workflow is configured:
-    //    if (isWorkflowConfigured(WORKFLOW_NAMES.AI_PLAN_BUILDER)) {
-    //      const result = await generateAIPlan({
-    //        goal: selectedGoal,
-    //        period: selectedPeriod,
-    //        platforms: selectedPlatforms,
-    //        niche: brandProfile?.niche || 'general',
-    //        brandVoice: brandProfile?.brandVoice,
-    //        brandProfile
-    //      });
-    //      if (result.success) {
-    //        setGeneratedPlan(result.plan);
-    //        setIsGenerating(false);
-    //        setProgress(100);
-    //        return;
-    //      }
-    //    }
-    // 2. If workflow not configured or fails, fall through to current implementation
-    // ==========================================================================
-    
-    // Current implementation: Call the backend API to create job
-    const result = await createPlanBuilderJob({
-      goal: selectedGoal,
-      period: selectedPeriod,
-      platforms: selectedPlatforms,
-      niche: brandProfile?.niche || 'general',
-      brandVoiceId: brandProfile?.brandVoice || null // This is a string, not an ID, but API accepts it
-    });
+    setProgress(0);
+    setGeneratedPlan(null);
+    setJobStatus('pending');
 
-    if (result.success) {
-      setCurrentJobId(result.jobId);
-      setProgress(25);
+    try {
+      // Step 1: Create job directly in Supabase
+      const { jobId, error: createError } = await createJobDirectly({
+        goal: selectedGoal,
+        duration: selectedPeriod,
+        platforms: selectedPlatforms,
+        niche: brandProfile?.niche || 'general',
+        brandVoice: brandVoice
+      });
+
+      if (createError || !jobId) {
+        throw new Error(createError?.message || 'Failed to create job');
+      }
+
+      setCurrentJobId(jobId);
+
+      // Step 2: Trigger n8n webhook (fire-and-forget with retry)
+      const { success: webhookSuccess } = await triggerN8nWebhook(jobId);
+      
+      if (!webhookSuccess) {
+        console.warn('n8n webhook trigger failed, but job was created. n8n may pick it up via polling.');
+      }
+
+      // Step 3: Start optimistic progress animation (0% to 90% over 25 seconds)
+      const startTime = Date.now();
+      const duration = 25000; // 25 seconds
+      
+      progressIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progressPercent = Math.min((elapsed / duration) * 90, 90);
+        
+        setProgress(progressPercent);
+        
+        if (progressPercent >= 90) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+      }, 100); // Update every 100ms for smooth animation
+
       showToast('Your AI plan is being generated...', 'info');
-    } else {
+
+    } catch (error) {
+      console.error('handleGeneratePlan error:', error);
       setIsGenerating(false);
       setProgress(0);
-      showToast(result.error || 'Failed to start plan generation', 'error');
+      showToast(error.message || 'Failed to start plan generation', 'error');
     }
   };
 
-  const generateSchedule = (days, postsPerDay, platforms) => {
-    const schedule = [];
-    const contentTypes = ['Educational Post', 'Story/Reel', 'Carousel', 'Video', 'Engagement Post'];
-    const themes = ['Industry Tips', 'Behind the Scenes', 'User Success Story', 'Trending Topic', 'Product Feature'];
-    const times = ['09:00', '12:00', '15:00', '19:00', '20:00'];
-    
-    for (let day = 1; day <= days; day++) {
-      const dayPosts = [];
-      for (let post = 0; post < postsPerDay; post++) {
-        dayPosts.push({
-          time: times[post % times.length],
-          type: contentTypes[Math.floor(Math.random() * contentTypes.length)],
-          theme: themes[Math.floor(Math.random() * themes.length)],
-          platform: platforms[Math.floor(Math.random() * platforms.length)]
-        });
-      }
-      schedule.push({ day, posts: dayPosts });
-    }
-    
-    return schedule;
+  /**
+   * Get human-readable status message for the progress bar
+   */
+  const getStatusMessage = () => {
+    if (progress >= 90) return 'Almost there...';
+    if (progress >= 60) return 'Crafting your content strategy...';
+    if (progress >= 30) return 'Analyzing trends and best practices...';
+    if (jobStatus === 'running') return 'AI is generating your plan...';
+    if (jobStatus === 'pending') return 'Starting generation...';
+    return 'Initializing...';
   };
 
   return (
@@ -294,32 +369,67 @@ export default function AIPlanBuilder() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
-              <select 
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-              >
-                <option>7 days</option>
-                <option>14 days</option>
-              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedPeriod(7)}
+                  className={`flex-1 px-4 py-2 border rounded-lg text-sm font-medium transition-all ${
+                    selectedPeriod === 7
+                      ? 'border-huttle-primary bg-huttle-primary text-white'
+                      : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
+                  }`}
+                >
+                  7 Days
+                </button>
+                <button
+                  onClick={() => setSelectedPeriod(14)}
+                  className={`flex-1 px-4 py-2 border rounded-lg text-sm font-medium transition-all ${
+                    selectedPeriod === 14
+                      ? 'border-huttle-primary bg-huttle-primary text-white'
+                      : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
+                  }`}
+                >
+                  14 Days
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Platform Focus</label>
               <div className="flex flex-wrap gap-2">
-                {preferredPlatforms.map(platform => (
-                  <button
-                    key={platform.id}
-                    onClick={() => handlePlatformToggle(platform.displayName || platform.name)}
-                    className={`px-3 py-1.5 border rounded-lg text-sm transition-all ${
-                      selectedPlatforms.includes(platform.displayName || platform.name)
-                        ? 'border-huttle-primary bg-huttle-primary text-white'
-                        : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
-                    }`}
-                  >
-                    {platform.displayName || platform.name}
-                  </button>
-                ))}
+                {ALLOWED_PLATFORMS.map(platform => {
+                  const Icon = platform.icon;
+                  const isSelected = selectedPlatforms.includes(platform.name);
+                  return (
+                    <button
+                      key={platform.id}
+                      onClick={() => handlePlatformToggle(platform.name)}
+                      className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-all ${
+                        isSelected
+                          ? 'border-huttle-primary bg-huttle-primary text-white'
+                          : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
+                      }`}
+                    >
+                      <span className={isSelected ? 'brightness-0 invert' : ''}>
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      {platform.displayName || platform.name}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <Mic2 className="w-4 h-4 text-huttle-primary" />
+                Brand Voice
+              </label>
+              <input
+                type="text"
+                value={brandVoice}
+                onChange={(e) => setBrandVoice(e.target.value)}
+                placeholder="e.g., Witty, Professional, Empathetic"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">Describe the tone and personality for your content</p>
             </div>
           </div>
         </div>
@@ -375,15 +485,16 @@ export default function AIPlanBuilder() {
         
         {isGenerating && (
           <div className="mb-6 max-w-md mx-auto">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span>{getStatusMessage()}</span>
+              <span className="font-medium">{Math.round(progress)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
               <div 
-                className="bg-huttle-primary h-2 rounded-full transition-all duration-500"
+                className="bg-huttle-gradient h-2.5 rounded-full transition-all duration-150 ease-out"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-sm text-gray-500 mt-2">
-              {jobStatus === 'running' ? 'Processing with AI...' : jobStatus === 'queued' ? 'Queued for processing...' : 'Starting...'}
-            </p>
           </div>
         )}
         
@@ -405,7 +516,7 @@ export default function AIPlanBuilder() {
               <CheckCircle className="w-8 h-8 text-green-600" />
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Your AI-Generated Plan</h2>
-                <p className="text-gray-600">Goal: {generatedPlan.goal} over {generatedPlan.period}</p>
+                <p className="text-gray-600">Goal: {generatedPlan.goal} over {generatedPlan.period} {typeof generatedPlan.period === 'number' ? 'days' : ''}</p>
               </div>
             </div>
 
@@ -437,9 +548,17 @@ export default function AIPlanBuilder() {
             </h3>
             
             <div className="space-y-4">
-              {generatedPlan.schedule.map((daySchedule) => (
-                <div key={daySchedule.day} className="border border-gray-200 rounded-lg p-4 hover:border-huttle-primary transition-all">
-                  <h4 className="font-bold text-gray-900 mb-3">Day {daySchedule.day}</h4>
+              {generatedPlan.schedule.map((daySchedule, dayIdx) => (
+                <div 
+                  key={daySchedule.day} 
+                  className="border border-gray-200 rounded-xl p-4 hover:border-huttle-primary transition-all animate-fadeIn"
+                  style={{ animationDelay: `${dayIdx * 100}ms` }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="px-3 py-1 bg-huttle-gradient text-white text-sm font-bold rounded-lg">
+                      Day {daySchedule.day}
+                    </span>
+                  </div>
                   <div className="space-y-2">
                     {daySchedule.posts.map((post, idx) => (
                       <HoverPreview
@@ -447,46 +566,62 @@ export default function AIPlanBuilder() {
                         preview={
                           <div className="space-y-3">
                             <div>
-                              <h4 className="font-bold text-gray-900 mb-2">{post.type} - {post.theme}</h4>
-                              <p className="text-sm text-gray-600 mb-3">
-                                Suggested caption: "Share your {post.theme.toLowerCase()} story! This is perfect for engaging your audience and building connection."
-                              </p>
+                              <h4 className="font-bold text-gray-900 mb-2">
+                                {post.topic || post.theme || post.type}
+                              </h4>
+                              {post.reasoning && (
+                                <p className="text-sm text-gray-600 mb-3">
+                                  <span className="font-medium">Why this works:</span> {post.reasoning}
+                                </p>
+                              )}
                             </div>
                             <div className="space-y-1 text-sm border-t pt-2">
                               <div className="flex justify-between">
                                 <span className="text-gray-600">Content Type:</span>
-                                <span className="font-semibold">{post.type}</span>
+                                <span className="font-semibold">{post.content_type || post.type}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">Theme:</span>
-                                <span className="font-semibold">{post.theme}</span>
+                                <span className="text-gray-600">Topic:</span>
+                                <span className="font-semibold">{post.topic || post.theme}</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="flex justify-between items-center">
                                 <span className="text-gray-600">Platform:</span>
-                                <span className="font-semibold">{post.platform}</span>
+                                <span className="font-semibold flex items-center gap-1">
+                                  {getPlatformIcon(post.platform, 'w-4 h-4')}
+                                  {post.platform}
+                                </span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-600">Optimal Time:</span>
-                                <span className="font-semibold text-green-600">{formatTo12Hour(post.time)}</span>
+                                <span className="font-semibold text-green-600">
+                                  {formatTo12Hour(post.scheduled_time || post.time)}
+                                </span>
                               </div>
                             </div>
                             <div className="bg-huttle-50 rounded p-2 text-xs text-huttle-primary border-t">
-                              💡 This timing is optimized for maximum engagement based on your audience
+                              💡 Time optimized for {post.platform} peak engagement
                             </div>
                           </div>
                         }
                       >
-                        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all cursor-pointer">
-                          <Clock className="w-5 h-5 text-huttle-primary mt-0.5 flex-shrink-0" />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-sm text-gray-900">{formatTo12Hour(post.time)}</span>
-                              <span className="text-xs px-2 py-0.5 bg-huttle-primary text-white rounded">{post.platform}</span>
+                        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all cursor-pointer group">
+                          <div className="flex-shrink-0 mt-0.5">
+                            {getPlatformIcon(post.platform, 'w-5 h-5')}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="font-semibold text-sm text-gray-900">
+                                {post.platform} • {formatTo12Hour(post.scheduled_time || post.time)}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 bg-huttle-primary/10 text-huttle-primary rounded-full font-medium">
+                                {post.content_type || post.type}
+                              </span>
                             </div>
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">{post.type}</span> • {post.theme}
+                            <p className="text-sm text-gray-700 truncate">
+                              {post.topic || post.theme}
                             </p>
                           </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-huttle-primary transition-colors flex-shrink-0" />
                         </div>
                       </HoverPreview>
                     ))}
@@ -519,7 +654,7 @@ export default function AIPlanBuilder() {
             </button>
             <button 
               onClick={() => {
-                // Add all posts to calendar
+                // Add all posts to calendar with optimized times
                 let count = 0;
                 const today = new Date();
                 generatedPlan.schedule.forEach((daySchedule) => {
@@ -529,22 +664,25 @@ export default function AIPlanBuilder() {
                     const dateStr = postDate.toISOString().split('T')[0];
                     
                     schedulePost({
-                      title: `${post.theme} - ${post.type}`,
+                      title: post.topic || post.theme || `${post.content_type || post.type}`,
                       platforms: [post.platform],
-                      contentType: post.type,
+                      contentType: post.content_type || post.type,
                       scheduledDate: dateStr,
-                      scheduledTime: post.time,
-                      caption: `Generated from AI Plan Builder: ${post.theme}`,
+                      scheduledTime: post.scheduled_time || post.time,
+                      caption: post.reasoning 
+                        ? `${post.topic || post.theme}\n\n${post.reasoning}`
+                        : `Generated from AI Plan Builder: ${post.topic || post.theme}`,
                       hashtags: '',
                       keywords: ''
                     });
                     count++;
                   });
                 });
-                showToast(`${count} posts added to Smart Calendar!`, 'success');
+                showToast(`🎉 ${count} posts added to Smart Calendar!`, 'success');
               }}
-              className="px-6 py-3 bg-huttle-gradient text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium"
+              className="px-6 py-3 bg-huttle-gradient text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium flex items-center gap-2"
             >
+              <Calendar className="w-5 h-5" />
               Export to Calendar
             </button>
           </div>
