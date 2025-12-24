@@ -44,8 +44,10 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
 import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
 
-// N8N Webhook URL for Viral Blueprint generation (from environment variable)
-const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK || '';
+// N8N Webhook URL for Viral Blueprint generation
+// Using test webhook for now - switch back to env var when ready
+const N8N_WEBHOOK_URL = 'https://huttleai.app.n8n.cloud/webhook-test/content-calendar-async';
+// const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK || '';
 
 /**
  * Viral Blueprint Page
