@@ -223,10 +223,22 @@ export default function AIPlanBuilder() {
       setCurrentJobId(jobId);
 
       // Step 2: Trigger n8n webhook (fire-and-forget with retry)
-      const { success: webhookSuccess } = await triggerN8nWebhook(jobId);
+      const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId);
       
       if (!webhookSuccess) {
+        console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);
+        
+        // If it's a configuration error, show user-friendly message
+        if (webhookError?.includes('not configured') || webhookError?.includes('CORS')) {
+          showToast('Webhook configuration error. Please check your environment variables.', 'error');
+          setIsGenerating(false);
+          setCurrentJobId(null);
+          return;
+        }
+        
+        // Otherwise, log warning but continue (n8n may pick it up via polling)
         console.warn('n8n webhook trigger failed, but job was created. n8n may pick it up via polling.');
+        showToast('Job created, but webhook connection failed. The plan may take longer to generate.', 'warning');
       }
 
       // Step 3: Start optimistic progress animation (0% to 90% over 25 seconds)

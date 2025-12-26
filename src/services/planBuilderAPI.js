@@ -20,7 +20,8 @@
 import { supabase } from '../config/supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const N8N_WEBHOOK_URL = 'https://huttleai.app.n8n.cloud/webhook/content-calendar-async';
+// N8N Webhook URL for Plan Builder (via serverless proxy to avoid CORS)
+const N8N_PLAN_BUILDER_WEBHOOK_URL = '/api/plan-builder-proxy';
 
 // ============================================================================
 // NEW: Direct Supabase Job Creation (Fire-and-Forget Architecture)
@@ -86,27 +87,70 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function triggerN8nWebhook(jobId, retries = 2) {
+  // Validate webhook URL is configured
+  if (!N8N_PLAN_BUILDER_WEBHOOK_URL || N8N_PLAN_BUILDER_WEBHOOK_URL.trim() === '') {
+    console.error('[PlanBuilder] Webhook URL is not configured');
+    return { success: false, error: 'Webhook URL not configured' };
+  }
+
+  console.log('[PlanBuilder] ====== WEBHOOK REQUEST DEBUG ======');
+  console.log('[PlanBuilder] Using proxy endpoint:', N8N_PLAN_BUILDER_WEBHOOK_URL);
+  console.log('[PlanBuilder] Job ID:', jobId);
+  console.log('[PlanBuilder] ====================================');
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      console.log(`[PlanBuilder] Attempt ${attempt + 1} of ${retries + 1} - Triggering webhook...`);
+      
+      const response = await fetch(N8N_PLAN_BUILDER_WEBHOOK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ job_id: jobId }),
+        mode: 'cors' // Explicitly set CORS mode
       });
 
+      console.log(`[PlanBuilder] Response status: ${response.status} ${response.statusText}`);
+
       if (response.ok) {
+        const responseText = await response.text().catch(() => '');
         console.log(`[PlanBuilder] n8n webhook triggered successfully for job: ${jobId}`);
+        console.log(`[PlanBuilder] Response:`, responseText.substring(0, 200));
         return { success: true };
       }
 
-      // If not OK but not a network error, log and continue
+      // If not OK, get error details
+      const errorText = await response.text().catch(() => 'No error details');
       console.warn(`[PlanBuilder] n8n webhook returned status ${response.status}, attempt ${attempt + 1}`);
+      console.warn(`[PlanBuilder] Error response:`, errorText.substring(0, 200));
+      
+      // If it's a client error (4xx), don't retry
+      if (response.status >= 400 && response.status < 500) {
+        console.error(`[PlanBuilder] Client error (${response.status}), stopping retries`);
+        return { success: false, error: `Webhook returned ${response.status}: ${errorText.substring(0, 100)}` };
+      }
     } catch (err) {
-      console.warn(`[PlanBuilder] n8n webhook attempt ${attempt + 1} failed:`, err.message);
+      console.error(`[PlanBuilder] ====== FETCH ERROR (Attempt ${attempt + 1}) ======`);
+      console.error(`[PlanBuilder] Error name:`, err.name);
+      console.error(`[PlanBuilder] Error message:`, err.message);
+      console.error(`[PlanBuilder] Error stack:`, err.stack);
+      console.error(`[PlanBuilder] ===============================================`);
+      
+      // Check for CORS errors specifically
+      if (err.message.includes('CORS') || err.message.includes('Failed to fetch')) {
+        console.error('[PlanBuilder] CORS or network error - check webhook URL and CORS settings');
+        if (attempt === retries) {
+          return { success: false, error: 'CORS_ERROR: ' + err.message };
+        }
+      }
       
       if (attempt < retries) {
         // Exponential backoff: 1s, 2s, 4s...
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        const delay = 1000 * Math.pow(2, attempt);
+        console.log(`[PlanBuilder] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }

@@ -44,10 +44,8 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
 import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
 
-// N8N Webhook URL for Viral Blueprint generation
-// Using test webhook for now - switch back to env var when ready
-const N8N_WEBHOOK_URL = 'https://huttleai.app.n8n.cloud/webhook-test/content-calendar-async';
-// const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK || '';
+// N8N Webhook URL for Viral Blueprint generation (via serverless proxy to avoid CORS)
+const N8N_WEBHOOK_URL = '/api/viral-blueprint-proxy';
 
 /**
  * Viral Blueprint Page
@@ -289,9 +287,20 @@ const adaptBlueprintResponse = (data) => {
   let directorsCut = [];
   let isVideo = false;
 
+  // Handle nested response structures: { data: { blueprint: { ... } } } or { blueprint: { ... } }
+  let blueprintData = null;
+  if (data?.data?.blueprint && typeof data.data.blueprint === 'object') {
+    blueprintData = data.data.blueprint;
+  } else if (data?.blueprint && typeof data.blueprint === 'object') {
+    blueprintData = data.blueprint;
+  } else if (data && typeof data === 'object' && (data.hooks || data.content_script || data.seo_keywords)) {
+    // Flat format with blueprint fields at root level
+    blueprintData = data;
+  }
+
   // 0a. NEW: Nested blueprint format: { blueprint: { viral_score, hooks, content_script, seo_keywords, suggested_hashtags } }
-  if (data.blueprint && typeof data.blueprint === 'object') {
-    const bp = data.blueprint;
+  if (blueprintData && (blueprintData.hooks || blueprintData.content_script || blueprintData.seo_keywords || blueprintData.suggested_hashtags)) {
+    const bp = blueprintData;
     
     // Create a single directorsCut entry with the content script
     directorsCut = [{
@@ -627,8 +636,16 @@ export default function ViralBlueprint() {
         identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
       };
 
-      console.log('[N8N] Blueprint Payload:', payload);
-      console.log('[N8N] Calling webhook:', N8N_WEBHOOK_URL);
+      // Validate webhook URL is configured
+      if (!N8N_WEBHOOK_URL || N8N_WEBHOOK_URL.trim() === '') {
+        console.error('[N8N] Webhook URL is not configured');
+        throw new Error('WEBHOOK_NOT_CONFIGURED');
+      }
+
+      console.log('[N8N] ====== WEBHOOK REQUEST DEBUG ======');
+      console.log('[N8N] Using proxy endpoint:', N8N_WEBHOOK_URL);
+      console.log('[N8N] Blueprint Payload:', JSON.stringify(payload, null, 2));
+      console.log('[N8N] ====================================');
 
       // Make POST request with robust 120s timeout (compatible with all browsers)
       const controller = new AbortController();
@@ -639,21 +656,37 @@ export default function ViralBlueprint() {
 
       let response;
       try {
+        console.log('[N8N] Making fetch request to:', N8N_WEBHOOK_URL);
         response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
           body: JSON.stringify(payload),
           signal: controller.signal,
+          mode: 'cors', // Explicitly set CORS mode
         });
+        console.log('[N8N] Fetch completed, status:', response.status, response.statusText);
       } catch (fetchError) {
         clearTimeout(timeoutId);
+        console.error('[N8N] ====== FETCH ERROR ======');
+        console.error('[N8N] Error name:', fetchError.name);
+        console.error('[N8N] Error message:', fetchError.message);
+        console.error('[N8N] Error stack:', fetchError.stack);
+        console.error('[N8N] ========================');
+        
         if (fetchError.name === 'AbortError') {
           console.error('[N8N] Request aborted (timeout after 120s)');
           throw new Error('REQUEST_TIMEOUT');
         }
-        console.error('[N8N] Fetch error:', fetchError);
+        
+        // Check for CORS errors specifically
+        if (fetchError.message.includes('CORS') || fetchError.message.includes('Failed to fetch')) {
+          console.error('[N8N] CORS or network error - check webhook URL and CORS settings');
+          throw new Error('CORS_ERROR: ' + fetchError.message);
+        }
+        
         throw fetchError;
       }
 
@@ -683,33 +716,17 @@ export default function ViralBlueprint() {
         throw new Error('INVALID_JSON');
       }
 
-      // Extract raw data with multiple fallback paths
-      // Try: response.data.blueprint -> response.blueprint -> response.data.content -> response.content -> response itself
-      const rawBlueprint = 
-        responseData?.data?.blueprint || 
-        responseData?.blueprint || 
-        responseData?.data?.content || 
-        responseData?.content || 
-        responseData;
+      console.log('[N8N] ====== RESPONSE PARSING DEBUG ======');
+      console.log('[N8N] Full response keys:', Object.keys(responseData));
+      console.log('[N8N] Has response.data.blueprint:', !!responseData?.data?.blueprint);
+      console.log('[N8N] Has response.blueprint:', !!responseData?.blueprint);
+      console.log('[N8N] Full response structure:', JSON.stringify(responseData, null, 2).substring(0, 1000));
+      console.log('[N8N] ====================================');
 
-      console.log('[N8N] Raw blueprint data:', {
-        keys: rawBlueprint ? Object.keys(rawBlueprint) : 'null',
-        hasNewFormat: !!(rawBlueprint?.hooks || rawBlueprint?.content_script || rawBlueprint?.visual_direction || rawBlueprint?.suggested_hashtags),
-        hasDirectorsCut: !!rawBlueprint?.directors_cut,
-        hasSlideBreakdown: !!rawBlueprint?.slide_breakdown,
-        hasTweetBreakdown: !!rawBlueprint?.tweet_breakdown,
-        hasFrameBreakdown: !!rawBlueprint?.frame_breakdown,
-        hasCaptionStructure: !!rawBlueprint?.caption_structure
-      });
-
-      // Validate that we have at least some blueprint data
-      if (!rawBlueprint || (typeof rawBlueprint !== 'object')) {
-        console.error('[N8N] Invalid blueprint structure:', responseData);
-        throw new Error('INVALID_BLUEPRINT_STRUCTURE');
-      }
-
-      // Use adapter to normalize the response into existing state structure
-      const adaptedBlueprint = adaptBlueprintResponse(rawBlueprint);
+      // Pass the full responseData to adapter - it will handle extraction internally
+      // The adapter checks for nested blueprint format: { blueprint: { ... } }
+      // or flat format: { hooks, content_script, ... }
+      const adaptedBlueprint = adaptBlueprintResponse(responseData);
 
       console.log('[N8N] Adapted blueprint:', {
         isVideoContent: adaptedBlueprint.isVideoContent,
@@ -775,8 +792,11 @@ export default function ViralBlueprint() {
         errorMessage = `Connection error: ${error.message.replace('HTTP_ERROR: ', '')}`;
         console.error('[N8N] HTTP ERROR: n8n returned error status');
       } else if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
-        errorMessage = 'Unable to connect to n8n. Please check CORS settings.';
+        errorMessage = 'Unable to connect to n8n. Please check CORS settings and verify the webhook URL is correct.';
         console.error('[N8N] CORS/NETWORK ERROR: Cannot reach n8n webhook');
+      } else if (error.message === 'WEBHOOK_NOT_CONFIGURED') {
+        errorMessage = 'Webhook URL is not configured. Please set VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK in your .env file and restart the dev server.';
+        console.error('[N8N] CONFIGURATION ERROR: Webhook URL missing');
       }
 
       showToast(errorMessage, 'error');
