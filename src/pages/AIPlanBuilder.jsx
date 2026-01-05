@@ -222,8 +222,21 @@ export default function AIPlanBuilder() {
 
       setCurrentJobId(jobId);
 
-      // Step 2: Trigger n8n webhook (fire-and-forget with retry)
-      const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId);
+      console.log('[PlanBuilder] Job created successfully:', jobId);
+      console.log('[PlanBuilder] Form data:', {
+        contentGoal: selectedGoal,
+        timePeriod: String(selectedPeriod),
+        platformFocus: selectedPlatforms,
+        brandVoice: brandVoice
+      });
+
+      // Step 2: Trigger n8n webhook with job_id AND form data (fire-and-forget with retry)
+      const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
+        contentGoal: selectedGoal,
+        timePeriod: String(selectedPeriod),
+        platformFocus: selectedPlatforms,
+        brandVoice: brandVoice
+      });
       
       if (!webhookSuccess) {
         console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);

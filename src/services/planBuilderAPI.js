@@ -79,23 +79,45 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
 }
 
 /**
- * Trigger n8n webhook with job_id (fire-and-forget)
+ * Trigger n8n webhook with job_id and form data (fire-and-forget)
  * Includes retry logic with exponential backoff.
  * 
- * @param {string} jobId - The job ID to process
+ * @param {string} jobId - The job ID to process (valid UUID)
+ * @param {Object} formData - Form data to send to n8n
+ * @param {string} formData.contentGoal - Content goal (e.g., 'Grow followers')
+ * @param {string} formData.timePeriod - Time period ('7' or '14')
+ * @param {string[]} formData.platformFocus - Selected platforms array
+ * @param {string} formData.brandVoice - Brand voice description
  * @param {number} retries - Number of retry attempts (default: 2)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function triggerN8nWebhook(jobId, retries = 2) {
+export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
   // Validate webhook URL is configured
   if (!N8N_PLAN_BUILDER_WEBHOOK_URL || N8N_PLAN_BUILDER_WEBHOOK_URL.trim() === '') {
     console.error('[PlanBuilder] Webhook URL is not configured');
     return { success: false, error: 'Webhook URL not configured' };
   }
 
+  // Validate job_id is a valid UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!jobId || !uuidRegex.test(jobId)) {
+    console.error('[PlanBuilder] Invalid job_id format. Expected UUID, got:', jobId);
+    return { success: false, error: 'Invalid job_id format. Must be a valid UUID.' };
+  }
+
+  // Build the complete payload
+  const payload = {
+    job_id: jobId,
+    contentGoal: formData.contentGoal || formData.goal || 'Grow followers',
+    timePeriod: String(formData.timePeriod || formData.duration || '7'),
+    platformFocus: formData.platformFocus || formData.platforms || [],
+    brandVoice: formData.brandVoice || ''
+  };
+
   console.log('[PlanBuilder] ====== WEBHOOK REQUEST DEBUG ======');
   console.log('[PlanBuilder] Using proxy endpoint:', N8N_PLAN_BUILDER_WEBHOOK_URL);
   console.log('[PlanBuilder] Job ID:', jobId);
+  console.log('[PlanBuilder] Payload:', JSON.stringify(payload, null, 2));
   console.log('[PlanBuilder] ====================================');
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -108,7 +130,7 @@ export async function triggerN8nWebhook(jobId, retries = 2) {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ job_id: jobId }),
+        body: JSON.stringify(payload),
         mode: 'cors' // Explicitly set CORS mode
       });
 

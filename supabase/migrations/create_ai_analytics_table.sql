@@ -49,3 +49,4 @@ COMMENT ON COLUMN ai_analytics.metadata IS 'Additional metadata like content len
 
 
 
+

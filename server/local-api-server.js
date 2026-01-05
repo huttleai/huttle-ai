@@ -83,6 +83,12 @@ async function setupRoutes() {
   app.all('/api/ai/grok', await loadHandler('api/ai/grok.js'));
   app.all('/api/ai/perplexity', await loadHandler('api/ai/perplexity.js'));
   
+  // Plan Builder routes
+  app.all('/api/plan-builder-proxy', await loadHandler('api/plan-builder-proxy.js'));
+  app.all('/api/viral-blueprint-proxy', await loadHandler('api/viral-blueprint-proxy.js'));
+  app.all('/api/create-plan-builder-job', await loadHandler('api/create-plan-builder-job.js'));
+  app.all('/api/get-job-status', await loadHandler('api/get-job-status.js'));
+  
   // Social media routes
   app.all('/api/update-social-media', await loadHandler('api/update-social-media.js'));
   
