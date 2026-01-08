@@ -826,7 +826,7 @@ export default function ViralBlueprint() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50/50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-gray-50/50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
       {/* Dynamic Background Mesh */}
       <div className="fixed inset-0 pointer-events-none opacity-40 z-0 bg-command-center" />
       

@@ -105,7 +105,7 @@ export default function FeatureAccessList({ compact = false }) {
   };
 
   const handleUpgrade = () => {
-    navigate('/subscription');
+    navigate('/dashboard/subscription');
   };
 
   if (compact) {

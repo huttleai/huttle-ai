@@ -38,47 +38,47 @@ export default function Sidebar() {
     { 
       section: 'MAIN', 
       items: [
-        { name: 'Dashboard', icon: LayoutDashboard, path: '/', color: 'from-blue-500 to-cyan-500' },
-        { name: 'Smart Calendar', icon: Calendar, path: '/calendar', color: 'from-emerald-500 to-teal-500' },
-        { name: 'Content Library', icon: FolderOpen, path: '/library', color: 'from-amber-500 to-orange-500' }
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', color: 'from-blue-500 to-cyan-500' },
+        { name: 'Smart Calendar', icon: Calendar, path: '/dashboard/calendar', color: 'from-emerald-500 to-teal-500' },
+        { name: 'Content Library', icon: FolderOpen, path: '/dashboard/library', color: 'from-amber-500 to-orange-500' }
       ]
     },
     { 
       section: 'AI TOOLS', 
       items: [
-        { name: 'AI Plan Builder', icon: Wand2, path: '/plan-builder', color: 'from-violet-500 to-purple-500' },
-        { name: 'AI Power Tools', icon: Zap, path: '/ai-tools', color: 'from-yellow-500 to-orange-500' },
-        { name: 'Trend Lab', icon: Beaker, path: '/trend-lab', color: 'from-pink-500 to-rose-500' },
-        { name: 'Viral Blueprint', icon: Flame, path: '/viral-blueprint', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
-        // { name: 'Content Repurposer', icon: Repeat, path: '/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' }, // Temporarily disabled - uncomment to re-enable
-        // { name: 'Huttle Agent', icon: Bot, path: '/agent', badge: 'Pro', color: 'from-indigo-500 to-violet-500' } // Temporarily disabled - kept in backend for future implementation
+        { name: 'AI Plan Builder', icon: Wand2, path: '/dashboard/plan-builder', color: 'from-violet-500 to-purple-500' },
+        { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools', color: 'from-yellow-500 to-orange-500' },
+        { name: 'Trend Lab', icon: Beaker, path: '/dashboard/trend-lab', color: 'from-pink-500 to-rose-500' },
+        { name: 'Viral Blueprint', icon: Flame, path: '/dashboard/viral-blueprint', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
+        // { name: 'Content Repurposer', icon: Repeat, path: '/dashboard/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' }, // Temporarily disabled - uncomment to re-enable
+        // { name: 'Huttle Agent', icon: Bot, path: '/dashboard/agent', badge: 'Pro', color: 'from-indigo-500 to-violet-500' } // Temporarily disabled - kept in backend for future implementation
       ]
     },
     { 
       section: 'ACCOUNT', 
       items: [
-        { name: 'Profile', icon: User, path: '/profile', color: 'from-slate-500 to-gray-600' },
-        { name: 'Brand Voice', icon: Waves, path: '/brand-voice', color: 'from-blue-500 to-indigo-500' },
-        { name: 'Subscription', icon: CreditCard, path: '/subscription', color: 'from-emerald-500 to-green-500' },
-        { name: 'Social Updates', icon: Newspaper, path: '/social-updates', color: 'from-orange-500 to-red-500' },
-        { name: 'Settings', icon: Settings, path: '/settings', color: 'from-gray-500 to-slate-600' },
-        { name: 'Help', icon: HelpCircle, path: '/help', color: 'from-blue-400 to-cyan-500' }
+        { name: 'Profile', icon: User, path: '/dashboard/profile', color: 'from-slate-500 to-gray-600' },
+        { name: 'Brand Voice', icon: Waves, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500' },
+        { name: 'Subscription', icon: CreditCard, path: '/dashboard/subscription', color: 'from-emerald-500 to-green-500' },
+        { name: 'Social Updates', icon: Newspaper, path: '/dashboard/social-updates', color: 'from-orange-500 to-red-500' },
+        { name: 'Settings', icon: Settings, path: '/dashboard/settings', color: 'from-gray-500 to-slate-600' },
+        { name: 'Help', icon: HelpCircle, path: '/dashboard/help', color: 'from-blue-400 to-cyan-500' }
       ]
     }
   ];
 
   // Check if path is active
   const isPathActive = (path) => {
-    if (path === '/') return location.pathname === '/';
+    if (path === '/dashboard') return location.pathname === '/dashboard' || location.pathname === '/dashboard/';
     return location.pathname.startsWith(path);
   };
 
   return (
     <>
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button - positioned below safe area for notch/Dynamic Island */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-3.5 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
+        className="lg:hidden fixed top-14 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
       >
         {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
       </button>
@@ -109,7 +109,7 @@ export default function Sidebar() {
           {/* Logo */}
           <div 
             className="mb-8 mt-1 cursor-pointer group"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
           >
             <img 
               src="/huttle-logo.png" 

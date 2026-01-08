@@ -822,7 +822,7 @@ export default function ContentLibrary() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-2 sm:px-4 md:px-8 pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full">
+    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-2 sm:px-4 md:px-8 pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full">
       <div className="max-w-full">
         {/* Header */}
         <div className="mb-8">
@@ -1298,7 +1298,7 @@ export default function ContentLibrary() {
             {/* Upgrade CTA - Compact */}
             {tierStorageInfo[userTier]?.next && (
               <Link
-                to="/subscription"
+                to="/dashboard/subscription"
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-huttle-gradient text-white text-sm font-medium rounded-lg hover:shadow-md transition-all"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1353,7 +1353,7 @@ export default function ContentLibrary() {
           {/* Upgrade button */}
           {tierStorageInfo[userTier]?.next && (
             <Link
-              to="/subscription"
+              to="/dashboard/subscription"
               className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-gradient text-white text-xs font-medium rounded-lg flex-shrink-0 hover:shadow-md transition-shadow"
             >
               <ArrowUpRight className="w-3 h-3" />

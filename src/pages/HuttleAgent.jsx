@@ -2,7 +2,7 @@ import { Bot, Sparkles, Crown, Clock } from 'lucide-react';
 
 export default function HuttleAgent() {
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-8 pb-8 min-h-screen">
+    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-8 pb-8 min-h-screen">
       <div className="max-w-4xl mx-auto">
         
         {/* Main Card - Dark futuristic container */}

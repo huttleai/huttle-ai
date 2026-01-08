@@ -25,7 +25,7 @@ export default function Login() {
 
     if (result.success) {
       addToast('Welcome back!', 'success');
-      navigate('/');
+      navigate('/dashboard');
     } else {
       addToast(result.error || 'Failed to log in', 'error');
     }

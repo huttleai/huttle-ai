@@ -42,7 +42,7 @@ export default function AIFeatureLock({ used, limit }) {
         </div>
         
         <button
-          onClick={() => navigate('/subscription')}
+          onClick={() => navigate('/dashboard/subscription')}
           className="w-full px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 group btn-upgrade-glow"
         >
           <span>Upgrade Now</span>

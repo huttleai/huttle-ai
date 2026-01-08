@@ -461,7 +461,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-16 px-4 sm:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-24 lg:pt-16 px-4 sm:px-6 lg:px-8 pb-12">
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header - Clean & Minimal */}
@@ -544,7 +544,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-xl border border-gray-100/80 bg-white shadow-sm overflow-hidden">
               <MiniCalendar 
-                onDateClick={(dateStr) => navigate('/calendar', { state: { date: dateStr, view: 'day' } })}
+                onDateClick={(dateStr) => navigate('/dashboard/calendar', { state: { date: dateStr, view: 'day' } })}
               />
             </div>
             
@@ -603,7 +603,7 @@ export default function Dashboard() {
                     <p className="text-xs text-gray-500">{sortedPosts.length} scheduled</p>
                   </div>
                 </div>
-                <Link to="/calendar" className="flex items-center gap-1 text-huttle-primary text-sm font-semibold hover:text-huttle-primary-dark transition-colors group">
+                <Link to="/dashboard/calendar" className="flex items-center gap-1 text-huttle-primary text-sm font-semibold hover:text-huttle-primary-dark transition-colors group">
                   View Calendar
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
@@ -638,7 +638,7 @@ export default function Dashboard() {
                     >
                       <div 
                         className="group flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-all cursor-pointer"
-                        onClick={() => navigate('/calendar', { state: { date: post.scheduledDate, view: 'day' } })}
+                        onClick={() => navigate('/dashboard/calendar', { state: { date: post.scheduledDate, view: 'day' } })}
                       >
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900 truncate group-hover:text-huttle-primary transition-colors">
@@ -664,7 +664,7 @@ export default function Dashboard() {
                     </HoverPreview>
                   ))}
                   {sortedPosts.length > 5 && (
-                    <Link to="/calendar" className="block text-center text-sm text-huttle-primary font-semibold pt-2 hover:underline">
+                    <Link to="/dashboard/calendar" className="block text-center text-sm text-huttle-primary font-semibold pt-2 hover:underline">
                       View all {sortedPosts.length} posts →
                     </Link>
                   )}
@@ -696,7 +696,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-sm font-semibold text-gray-900 mb-1">Personalize Your Feed</p>
                       <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
-                      <Link to="/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark group">
+                      <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark group">
                         Setup Brand Voice
                         <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
@@ -801,7 +801,7 @@ export default function Dashboard() {
               </div>
               
               <Link 
-                to="/trend-lab" 
+                to="/dashboard/trend-lab" 
                 className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-sm"
               >
                 <Beaker className="w-4 h-4" />

@@ -46,7 +46,7 @@ export default function Settings() {
   }));
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
@@ -66,7 +66,7 @@ export default function Settings() {
       {/* Quick Settings Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <Link 
-          to="/profile"
+          to="/dashboard/profile"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <User className="w-6 h-6 text-huttle-primary mb-2" />
@@ -74,7 +74,7 @@ export default function Settings() {
           <p className="text-xs text-gray-600">Update your information</p>
         </Link>
         <Link 
-          to="/brand-voice"
+          to="/dashboard/brand-voice"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <Smartphone className="w-6 h-6 text-huttle-primary mb-2" />
@@ -82,7 +82,7 @@ export default function Settings() {
           <p className="text-xs text-gray-600">Customize AI content</p>
         </Link>
         <Link 
-          to="/security"
+          to="/dashboard/security"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <Lock className="w-6 h-6 text-huttle-primary mb-2" />
@@ -90,7 +90,7 @@ export default function Settings() {
           <p className="text-xs text-gray-600">Password & authentication</p>
         </Link>
         <Link 
-          to="/subscription"
+          to="/dashboard/subscription"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
           <CreditCard className="w-6 h-6 text-huttle-primary mb-2" />

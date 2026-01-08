@@ -111,11 +111,11 @@ export default function Security() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {/* Header */}
       <div className="mb-6 md:mb-8">
         <Link 
-          to="/settings" 
+          to="/dashboard/settings" 
           className="inline-flex items-center gap-2 text-gray-600 hover:text-huttle-primary mb-4 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

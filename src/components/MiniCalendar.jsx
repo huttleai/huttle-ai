@@ -52,7 +52,7 @@ export default function MiniCalendar({ onDateClick }) {
     if (onDateClick) {
       onDateClick(dateStr);
     } else {
-      navigate('/calendar', { state: { date: dateStr, view: 'day' } });
+      navigate('/dashboard/calendar', { state: { date: dateStr, view: 'day' } });
     }
   };
 
@@ -154,7 +154,7 @@ export default function MiniCalendar({ onDateClick }) {
           <span className="text-[10px] text-gray-500 font-medium">Posts scheduled</span>
         </div>
         <button
-          onClick={() => navigate('/calendar')}
+          onClick={() => navigate('/dashboard/calendar')}
           className="text-[10px] text-huttle-blue font-medium hover:underline"
         >
           Full Calendar →

@@ -502,11 +502,11 @@ export default function AITools() {
     setScheduledIndex(itemIndex);
     setTimeout(() => setScheduledIndex(null), 2000);
     showToast('Navigating to calendar...', 'info');
-    setTimeout(() => navigate('/calendar'), 500);
+    setTimeout(() => navigate('/dashboard/calendar'), 500);
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-16 md:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden">
       {/* Subtle background pattern */}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       

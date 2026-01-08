@@ -1,0 +1,176 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Minus } from 'lucide-react';
+
+/**
+ * FAQAccordion - Animated accordion for FAQs
+ * Smooth expand/collapse with elegant transitions
+ */
+export function FAQAccordion({ 
+  items, 
+  className = "",
+  allowMultiple = false,
+}) {
+  const [openItems, setOpenItems] = useState([]);
+
+  const toggleItem = (index) => {
+    if (allowMultiple) {
+      setOpenItems((prev) =>
+        prev.includes(index)
+          ? prev.filter((i) => i !== index)
+          : [...prev, index]
+      );
+    } else {
+      setOpenItems((prev) =>
+        prev.includes(index) ? [] : [index]
+      );
+    }
+  };
+
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {items.map((item, index) => (
+        <FAQItem
+          key={index}
+          question={item.question}
+          answer={item.answer}
+          isOpen={openItems.includes(index)}
+          onToggle={() => toggleItem(index)}
+          index={index}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FAQItem({ question, answer, isOpen, onToggle, index }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.1 }}
+      className={`
+        relative overflow-hidden rounded-2xl border transition-all duration-300
+        ${isOpen 
+          ? 'border-[#01bad2]/30 bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 shadow-lg' 
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+        }
+      `}
+    >
+      {/* Animated gradient border on open */}
+      {isOpen && (
+        <motion.div
+          className="absolute inset-0 rounded-2xl pointer-events-none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          style={{
+            background: 'linear-gradient(135deg, rgba(1,186,210,0.1) 0%, rgba(43,143,199,0.1) 100%)',
+          }}
+        />
+      )}
+      
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-6 text-left relative z-10"
+      >
+        <span className={`font-semibold text-lg transition-colors ${isOpen ? 'text-[#01bad2]' : 'text-slate-900'}`}>
+          {question}
+        </span>
+        <motion.div
+          className={`
+            flex items-center justify-center w-10 h-10 rounded-xl transition-colors
+            ${isOpen 
+              ? 'bg-[#01bad2] text-white' 
+              : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+            }
+          `}
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+        >
+          {isOpen ? <Minus size={20} /> : <Plus size={20} />}
+        </motion.div>
+      </button>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ 
+              height: "auto", 
+              opacity: 1,
+              transition: {
+                height: { duration: 0.3, ease: "easeOut" },
+                opacity: { duration: 0.2, delay: 0.1 }
+              }
+            }}
+            exit={{ 
+              height: 0, 
+              opacity: 0,
+              transition: {
+                height: { duration: 0.3, ease: "easeIn" },
+                opacity: { duration: 0.2 }
+              }
+            }}
+            className="overflow-hidden"
+          >
+            <div className="px-6 pb-6 relative z-10">
+              <motion.div
+                initial={{ y: -10 }}
+                animate={{ y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="text-slate-600 leading-relaxed"
+              >
+                {answer}
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/**
+ * FAQSection - Complete FAQ section with header
+ */
+export function FAQSection({ 
+  title = "Frequently Asked Questions",
+  subtitle = "Everything you need to know",
+  items,
+  className = "",
+}) {
+  return (
+    <section className={`py-20 md:py-32 ${className}`}>
+      <div className="container mx-auto max-w-4xl px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-12 md:mb-16"
+        >
+          <motion.span 
+            className="inline-block px-4 py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20"
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+          >
+            FAQ
+          </motion.span>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-4">
+            {title}
+          </h2>
+          <p className="text-lg text-slate-500 max-w-2xl mx-auto">
+            {subtitle}
+          </p>
+        </motion.div>
+        
+        <FAQAccordion items={items} />
+      </div>
+    </section>
+  );
+}
+
+export default FAQAccordion;
+
