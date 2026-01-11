@@ -2,12 +2,15 @@
  * Stripe Webhook Handler
  * 
  * Handles Stripe webhook events to sync subscription status with your database.
+ * Also adds Founders Club members to Mailchimp when they complete checkout.
  * 
  * Required environment variables:
  * - STRIPE_SECRET_KEY: Your Stripe secret key
  * - STRIPE_WEBHOOK_SECRET: Your Stripe webhook signing secret
  * - SUPABASE_URL: Your Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Your Supabase service role key
+ * - MAILCHIMP_FOUNDERS_API_KEY: Your Mailchimp API key (optional)
+ * - MAILCHIMP_FOUNDERS_AUDIENCE_ID: Your Mailchimp Founders Club audience ID (optional)
  */
 
 import Stripe from 'stripe';
@@ -20,6 +23,11 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Mailchimp configuration (optional)
+const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
+const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
+const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_FOUNDERS_API_KEY.split('-')[1] || 'us22';
 
 // Disable body parsing - we need the raw body for webhook verification
 export const config = {
@@ -46,6 +54,56 @@ function getPlanFromPriceId(priceId) {
     [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
   };
   return priceMap[priceId] || 'free';
+}
+
+// Add member to Mailchimp Founders Club
+async function addToFoundersClub(email, firstName = '', lastName = '') {
+  // Skip if Mailchimp is not configured
+  if (!MAILCHIMP_FOUNDERS_API_KEY || !MAILCHIMP_FOUNDERS_AUDIENCE_ID) {
+    console.log('⚠️ Mailchimp Founders Club not configured, skipping...');
+    return { success: false, skipped: true };
+  }
+
+  try {
+    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_FOUNDERS_AUDIENCE_ID}/members`;
+    
+    const memberData = {
+      email_address: email,
+      status: 'subscribed',
+      merge_fields: {
+        FNAME: firstName,
+        LNAME: lastName,
+      },
+      tags: ['Founders Club', 'Stripe Checkout']
+    };
+
+    const response = await fetch(mailchimpUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_FOUNDERS_API_KEY}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(memberData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Member already exists is not an error
+      if (data.title === 'Member Exists') {
+        console.log(`✅ Founders Club: ${email} already in list`);
+        return { success: true, alreadyExists: true };
+      }
+      console.error('Mailchimp error:', data);
+      return { success: false, error: data.detail };
+    }
+
+    console.log(`🎉 Added to Founders Club: ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error adding to Founders Club:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 export default async function handler(req, res) {
@@ -82,6 +140,12 @@ export default async function handler(req, res) {
           const user = authUsers?.users?.find(u => u.email === customerEmail);
           
           if (user) {
+            // Extract customer name from session
+            const customerName = session.customer_details?.name || '';
+            const nameParts = customerName.split(' ');
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ') || '';
+
             // Update or create user profile with Stripe customer ID
             await supabase
               .from('user_profile')
@@ -114,6 +178,11 @@ export default async function handler(req, res) {
                 }, {
                   onConflict: 'user_id',
                 });
+
+              // Add to Mailchimp Founders Club (for Pro/Founder tier members)
+              if (plan === 'pro' || plan === 'founder') {
+                await addToFoundersClub(customerEmail, firstName, lastName);
+              }
             }
           }
         }
