@@ -649,7 +649,7 @@ const ScrollFanSection = () => {
   const opacityBottomRight = useTransform(scrollYProgress, [0.18, 0.33], [0, 1]);
 
   return (
-    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-80 sm:-mt-72 md:-mt-80 lg:-mt-96 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent">
+    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-64 sm:-mt-56 md:-mt-48 lg:-mt-40 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent">
       <div className="sticky top-4 sm:top-8 md:top-12 mx-auto w-full max-w-6xl h-[620px] sm:h-[700px] md:h-[820px] lg:h-[920px] flex justify-center items-center px-4 md:px-4 mt-0 sm:mt-8 md:mt-20" style={{ perspective: '1200px' }}>
         
         {/* Desktop Cards (4 cards) - Hidden on mobile, visible on sm+ */}
@@ -1694,7 +1694,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION - Clean, Spacious Design */}
-      <section className="relative pt-32 sm:pt-36 md:pt-44 lg:pt-48 pb-10 md:pb-16 px-4 text-center overflow-hidden min-h-screen flex flex-col justify-center">
+      <section className="relative pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-8 md:pb-10 px-4 text-center overflow-hidden min-h-[100svh] md:min-h-0 flex flex-col justify-center md:justify-start">
         <HeroBackground />
         
         <div className="container mx-auto max-w-4xl relative z-10 flex flex-col items-center">
@@ -1724,7 +1724,7 @@ export default function LandingPage() {
 
           {/* PRIMARY CTA BUTTON - 40-48px gap from subhead */}
           <BlurFade delay={0.8}>
-            <div className="mt-10 md:mt-12 flex flex-col items-center">
+            <div className="mt-8 md:mt-8 lg:mt-10 flex flex-col items-center">
               <BorderBeamButton 
                 onClick={() => setIsFoundersModalOpen(true)} 
                 className="h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10"
@@ -1741,14 +1741,14 @@ export default function LandingPage() {
 
           {/* COUNTDOWN TIMER - 48-64px gap from CTA */}
           <BlurFade delay={1.0}>
-            <div className="mt-12 md:mt-16">
+            <div className="mt-10 md:mt-10 lg:mt-12">
               <CountdownTimer />
             </div>
           </BlurFade>
 
           {/* SCROLL INDICATOR - 48-64px gap from timer */}
           <BlurFade delay={1.2}>
-            <div className="mt-12 md:mt-16 mb-8 md:mb-12">
+            <div className="mt-10 md:mt-8 lg:mt-10 mb-6 md:mb-8">
               <motion.div
                 className="cursor-pointer"
                 onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
