@@ -5,7 +5,7 @@ import {
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
-  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown
+  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle
 } from "lucide-react";
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
@@ -317,12 +317,15 @@ const WaitlistModal = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.firstName || !formData.email) return;
     
     setIsSubmitting(true);
+    setError(null);
+    
     try {
       const response = await fetch('/api/subscribe-waitlist', {
         method: 'POST',
@@ -330,16 +333,24 @@ const WaitlistModal = ({ isOpen, onClose }) => {
         body: JSON.stringify(formData),
       });
       
+      const data = await response.json();
+      
       if (response.ok) {
         setSubmitSuccess(true);
         setTimeout(() => {
           onClose();
           setSubmitSuccess(false);
           setFormData({ firstName: '', lastName: '', email: '' });
+          setError(null);
         }, 2000);
+      } else {
+        // Handle API errors
+        setError(data.details || data.error || 'Failed to join waitlist. Please try again.');
+        console.error('Waitlist API error:', data);
       }
     } catch (error) {
       console.error('Waitlist submission error:', error);
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -431,6 +442,14 @@ const WaitlistModal = ({ isOpen, onClose }) => {
                     placeholder="john@example.com"
                   />
                 </div>
+                
+                {error && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                    <AlertCircle size={18} className="flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                
                 <MagneticButton 
                   type="submit"
                   disabled={isSubmitting}
