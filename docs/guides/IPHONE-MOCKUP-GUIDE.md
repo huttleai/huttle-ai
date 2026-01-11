@@ -295,3 +295,4 @@ For issues or questions:
 **Version:** 1.0.0  
 **Compatibility:** React 18+, Tailwind CSS 3+
 
+

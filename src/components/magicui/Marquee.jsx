@@ -62,3 +62,4 @@ export function MarqueeItem({ children, className = "" }) {
 
 export default Marquee;
 
+

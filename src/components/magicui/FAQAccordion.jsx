@@ -28,7 +28,7 @@ export function FAQAccordion({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-2 md:space-y-3 ${className}`}>
       {items.map((item, index) => (
         <FAQItem
           key={index}
@@ -49,12 +49,12 @@ function FAQItem({ question, answer, isOpen, onToggle, index }) {
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ delay: index * 0.1 }}
+      transition={{ delay: index * 0.05 }}
       className={`
-        relative overflow-hidden rounded-2xl border transition-all duration-300
+        relative overflow-hidden rounded-xl md:rounded-2xl border transition-all duration-300
         ${isOpen 
-          ? 'border-[#01bad2]/30 bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 shadow-lg' 
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+          ? 'border-[#01bad2]/30 bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 shadow-md' 
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
         }
       `}
     >
@@ -73,14 +73,14 @@ function FAQItem({ question, answer, isOpen, onToggle, index }) {
       
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-6 text-left relative z-10"
+        className="w-full flex items-center justify-between p-4 md:p-5 text-left relative z-10"
       >
-        <span className={`font-semibold text-lg transition-colors ${isOpen ? 'text-[#01bad2]' : 'text-slate-900'}`}>
+        <span className={`font-semibold text-sm md:text-base transition-colors pr-4 ${isOpen ? 'text-[#01bad2]' : 'text-slate-900'}`}>
           {question}
         </span>
         <motion.div
           className={`
-            flex items-center justify-center w-10 h-10 rounded-xl transition-colors
+            flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-lg transition-colors flex-shrink-0
             ${isOpen 
               ? 'bg-[#01bad2] text-white' 
               : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
@@ -89,7 +89,7 @@ function FAQItem({ question, answer, isOpen, onToggle, index }) {
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
         >
-          {isOpen ? <Minus size={20} /> : <Plus size={20} />}
+          {isOpen ? <Minus size={14} className="md:w-4 md:h-4" /> : <Plus size={14} className="md:w-4 md:h-4" />}
         </motion.div>
       </button>
       
@@ -115,12 +115,12 @@ function FAQItem({ question, answer, isOpen, onToggle, index }) {
             }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-6 relative z-10">
+            <div className="px-4 md:px-5 pb-4 md:pb-5 relative z-10">
               <motion.div
                 initial={{ y: -10 }}
                 animate={{ y: 0 }}
                 transition={{ duration: 0.3 }}
-                className="text-slate-600 leading-relaxed"
+                className="text-slate-600 leading-relaxed text-sm md:text-base"
               >
                 {answer}
               </motion.div>
@@ -173,4 +173,5 @@ export function FAQSection({
 }
 
 export default FAQAccordion;
+
 

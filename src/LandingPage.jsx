@@ -5,7 +5,7 @@ import {
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
-  Star, Building2, Rocket, Shield, HeartHandshake
+  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown
 } from "lucide-react";
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
@@ -22,6 +22,7 @@ import { BlurFade } from "./components/magicui/BlurFade";
 import { FAQAccordion } from "./components/magicui/FAQAccordion";
 import { ParticleNetwork } from "./components/magicui/ParticleNetwork";
 import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
+import { CountdownTimer } from "./components/CountdownTimer";
 
 // Custom Feature Icons
 import { 
@@ -629,22 +630,8 @@ const ScrollFanSection = () => {
   const opacityBottomRight = useTransform(scrollYProgress, [0.18, 0.33], [0, 1]);
 
   return (
-    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full pt-10 md:pt-20 pb-16 md:pb-40 overflow-hidden bg-white">
-      <BlurFade delay={0.1}>
-        <div className="text-center mb-6 md:mb-20 px-4">
-          <span className="inline-block px-2.5 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[9px] md:text-xs font-bold uppercase tracking-widest mb-2.5 md:mb-4 border border-[#01bad2]/20">
-            The Feature No One Else Has
-          </span>
-          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-2.5 md:mb-4">
-            Viral Blueprint Generator
-          </h2>
-          <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto px-1">
-            Tell us your topic. We research what's working right now and give you everything—script, visuals, keywords, timing.
-          </p>
-        </div>
-      </BlurFade>
-
-      <div className="sticky top-16 sm:top-20 md:top-24 mx-auto w-full max-w-6xl h-[620px] sm:h-[700px] md:h-[820px] lg:h-[920px] flex justify-center items-center px-4 md:px-4" style={{ perspective: '1200px' }}>
+    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-80 sm:-mt-72 md:-mt-80 lg:-mt-96 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent">
+      <div className="sticky top-4 sm:top-8 md:top-12 mx-auto w-full max-w-6xl h-[620px] sm:h-[700px] md:h-[820px] lg:h-[920px] flex justify-center items-center px-4 md:px-4 mt-0 sm:mt-8 md:mt-20" style={{ perspective: '1200px' }}>
         
         {/* Desktop Cards (4 cards) - Hidden on mobile, visible on sm+ */}
         {/* Top Left Card - Trending */}
@@ -811,8 +798,23 @@ const ScrollFanSection = () => {
         </motion.div>
       </div>
 
+      {/* Title and description - below the mockup */}
+      <BlurFade delay={0.1}>
+        <div className="text-center mt-8 md:mt-16 mb-6 md:mb-10 px-4">
+          <span className="inline-block px-2.5 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[9px] md:text-xs font-bold uppercase tracking-widest mb-2.5 md:mb-4 border border-[#01bad2]/20">
+            The Feature No One Else Has
+          </span>
+          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-2.5 md:mb-4">
+            Viral Blueprint Generator
+          </h2>
+          <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto px-1">
+            Tell us your topic. We research what's working right now and give you everything—script, visuals, keywords, timing.
+          </p>
+        </div>
+      </BlurFade>
+
       <motion.div 
-        className="mt-8 md:mt-16 flex flex-wrap justify-center gap-2 md:gap-4 px-4"
+        className="mt-4 md:mt-8 flex flex-wrap justify-center gap-2 md:gap-4 px-4"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
@@ -1116,7 +1118,11 @@ const FAQSectionComponent = () => {
     },
     {
       question: "How accurate is the Viral Score prediction?",
-      answer: "Our Viral Score is powered by our proprietary algorithm that analyzes real-time trending content, engagement patterns, and platform algorithm behaviors. While no tool can guarantee virality, our users report an average 3x increase in engagement when following our recommendations."
+      answer: "Our Viral Score is powered by our proprietary algorithm that analyzes real-time trending content, engagement patterns, and platform algorithm behaviors. It's important to note that no tool can guarantee virality, as content success depends on many factors including timing, audience engagement, and platform dynamics. The Viral Score is designed to give you data-driven insights to improve your content strategy."
+    },
+    {
+      question: "What is your refund policy?",
+      answer: "All Founders Club memberships are non-refundable. This is a special early-access program with a lifetime price lock at $199/year (normally $420/year), and by joining you're committing to support the development and growth of Huttle AI. We're confident you'll love the platform, but please make sure you're ready to commit before purchasing."
     },
     {
       question: "Is there a free trial available?",
@@ -1166,6 +1172,10 @@ const PricingSection = ({ onOpenFoundersModal }) => {
   return (
     <section id="pricing" className="py-8 md:py-24 px-3 md:px-4">
       <div className="container mx-auto max-w-4xl">
+        {/* Social proof text above pricing */}
+        <p className="text-center text-sm text-slate-500 mb-6 mt-8">
+          🔥 247 creators on the waitlist
+        </p>
         <BlurFade delay={0.1}>
           <motion.div 
             className="relative rounded-2xl md:rounded-[4rem] bg-slate-900 p-5 md:p-16 lg:p-20 text-center overflow-hidden"
@@ -1198,8 +1208,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 Lock in Founders Pricing forever.
               </h2>
 
-              <p className="text-xs md:text-xl text-slate-400 max-w-xl mx-auto mb-5 md:mb-12">
-                Join the first 100 founders. Keep this price for life. Save $221.
+              <p className="text-xs md:text-[25px] text-slate-400 max-w-xl mx-auto mb-5 md:mb-10">
+                100 Spots. First come, first served.
               </p>
               
               <div className="flex flex-row items-center justify-center gap-3 md:gap-8 mb-5 md:mb-12">
@@ -1304,9 +1314,311 @@ const FinalCTASection = ({ onOpenWaitlist, onOpenFoundersModal }) => {
 // MAIN LANDING PAGE
 // ============================================
 
+// ============================================
+// POLICY MODAL COMPONENT
+// ============================================
+
+const PolicyModal = ({ isOpen, onClose, type }) => {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose]);
+
+  const privacyContent = (
+    <>
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">Privacy Policy</h2>
+      <p className="text-sm text-slate-500 italic mb-6">Last updated: January 11, 2026</p>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">1. Introduction</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Huttle AI ("we," "our," or "us") respects your privacy and is committed to protecting your personal data. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website and use our services.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">2. Information We Collect</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          We collect information you provide directly to us, including:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
+          <li><span className="font-bold text-sm">Account Information:</span> Name, email address, and password when you create an account</li>
+          <li><span className="font-bold text-sm">Payment Information:</span> When you make a purchase, our payment processor (Stripe) collects your payment card details. We do not store your full card information on our servers</li>
+          <li><span className="font-bold text-sm">Waitlist Information:</span> Email address when you join our waitlist</li>
+          <li><span className="font-bold text-sm">Usage Data:</span> Information about how you interact with our services, including features used, content generated, and preferences set</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">3. How We Use Your Information</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          We use the information we collect to:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li>Provide, maintain, and improve our services</li>
+          <li>Process transactions and send related information</li>
+          <li>Send you technical notices, updates, and support messages</li>
+          <li>Send marketing communications (you can opt out at any time)</li>
+          <li>Respond to your comments, questions, and customer service requests</li>
+          <li>Monitor and analyze trends, usage, and activities</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">4. Information Sharing</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          We do not sell, trade, or rent your personal information to third parties. We may share your information with:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
+          <li><span className="font-bold text-sm">Service Providers:</span> Third-party vendors who assist us in operating our services (e.g., Stripe for payments, email service providers)</li>
+          <li><span className="font-bold text-sm">Legal Requirements:</span> When required by law or to protect our rights</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">5. Data Security</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">6. Your Rights</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          You have the right to:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li>Access the personal data we hold about you</li>
+          <li>Request correction of inaccurate data</li>
+          <li>Request deletion of your data</li>
+          <li>Opt out of marketing communications</li>
+          <li>Export your data</li>
+        </ul>
+        <p className="text-sm text-slate-600 leading-relaxed mt-3">
+          To exercise these rights, contact us at support@huttleai.com.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">7. Cookies</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          We use essential cookies to ensure our website functions properly. We may also use analytics cookies to understand how visitors interact with our site.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">8. Changes to This Policy</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last updated" date.
+        </p>
+      </section>
+
+      <section>
+        <h3 className="text-base font-bold text-slate-900 mb-3">9. Contact Us</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          If you have any questions about this Privacy Policy, please contact us at support@huttleai.com.
+        </p>
+      </section>
+    </>
+  );
+
+  const termsContent = (
+    <>
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">Terms of Service</h2>
+      <p className="text-sm text-slate-500 italic mb-6">Last updated: January 11, 2026</p>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">1. Acceptance of Terms</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          By accessing or using Huttle AI ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">2. Description of Service</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Huttle AI is an AI-powered content creation platform that helps users plan, create, and optimize social media content. Features include content generation, viral predictions, trend analysis, and scheduling tools.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">3. Account Registration</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          To use certain features, you must create an account. You agree to:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li>Provide accurate and complete information</li>
+          <li>Maintain the security of your account credentials</li>
+          <li>Accept responsibility for all activities under your account</li>
+          <li>Notify us immediately of any unauthorized use</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">4. Subscription and Payments</h3>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li><span className="font-bold text-sm">Founding Member Pricing:</span> $199/year, locked in forever for founding members</li>
+          <li><span className="font-bold text-sm">Regular Pricing:</span> As displayed on our pricing page after the founding member period ends</li>
+          <li>Payments are processed securely through Stripe</li>
+          <li>All fees are non-refundable except as described in our Refund Policy below</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">5. Refund Policy</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">6. Acceptable Use</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          You agree NOT to use the Service to:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li>Violate any laws or regulations</li>
+          <li>Generate content that is illegal, harmful, threatening, abusive, defamatory, or otherwise objectionable</li>
+          <li>Infringe on intellectual property rights of others</li>
+          <li>Attempt to gain unauthorized access to our systems</li>
+          <li>Use the Service to spam or send unsolicited messages</li>
+          <li>Resell or redistribute the Service without permission</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">7. Intellectual Property</h3>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
+          <li><span className="font-bold text-sm">Our Content:</span> The Service, including its design, features, and content created by us, is owned by Huttle AI and protected by intellectual property laws</li>
+          <li><span className="font-bold text-sm">Your Content:</span> You retain ownership of content you create using the Service. By using the Service, you grant us a license to process your content solely to provide the Service to you</li>
+          <li><span className="font-bold text-sm">AI-Generated Content:</span> Content generated by our AI tools is yours to use. However, you are responsible for ensuring your use of generated content complies with applicable laws</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">8. Disclaimer of Warranties</h3>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">
+          The Service is provided "as is" and "as available" without warranties of any kind. We do not guarantee that:
+        </p>
+        <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
+          <li>The Service will be uninterrupted or error-free</li>
+          <li>AI-generated content will be accurate, complete, or suitable for any purpose</li>
+          <li>Viral predictions or trend analysis will guarantee specific results</li>
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">9. Limitation of Liability</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          To the maximum extent permitted by law, Huttle AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">10. Changes to Terms</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          We may modify these Terms at any time. We will notify users of significant changes via email or through the Service. Continued use after changes constitutes acceptance of the new Terms.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">11. Termination</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          We may suspend or terminate your account at any time for violation of these Terms. You may cancel your account at any time by contacting us.
+        </p>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 mb-3">12. Governing Law</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          These Terms shall be governed by the laws of the State of Delaware, United States, without regard to its conflict of law provisions.
+        </p>
+      </section>
+
+      <section>
+        <h3 className="text-base font-bold text-slate-900 mb-3">13. Contact Us</h3>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          If you have any questions about these Terms, please contact us at support@huttleai.com
+        </p>
+      </section>
+    </>
+  );
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          {/* Overlay */}
+          <motion.div 
+            className="absolute inset-0"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={onClose}
+          />
+          
+          {/* Modal Container */}
+          <motion.div 
+            className="relative bg-white rounded-xl shadow-2xl w-[95%] md:w-full md:max-w-[700px] h-[90vh] md:max-h-[80vh] overflow-hidden flex flex-col"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          >
+            {/* Close Button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-slate-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Close modal"
+            >
+              <X size={20} className="text-slate-500" />
+            </button>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-5 md:p-8">
+              {type === 'privacy' ? privacyContent : termsContent}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ============================================
+// MAIN LANDING PAGE
+// ============================================
+
 export default function LandingPage() {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
   const scrollToPricing = () => {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
@@ -1321,17 +1633,19 @@ export default function LandingPage() {
         onClose={() => setIsFoundersModalOpen(false)} 
         onJoinWaitlist={() => setIsWaitlistModalOpen(true)}
       />
+      <PolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} type="privacy" />
+      <PolicyModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} type="terms" />
       
       {/* NAVBAR - Light Theme */}
       <nav className="fixed top-4 md:top-6 left-0 right-0 z-50 flex justify-center px-4">
         <motion.div 
-          className="flex items-center gap-3 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-3 md:px-6 py-2 md:py-2.5 shadow-lg shadow-slate-200/50"
+          className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
           <div className="flex items-center gap-2 font-bold tracking-tight">
-            <img src="/huttle-logo.png" alt="Huttle AI" className="h-5 md:h-7 w-auto" />
+            <img src="/huttle-logo.png" alt="Huttle AI" className="h-6 md:h-8 w-auto" />
           </div>
           <div className="hidden md:flex gap-6 text-sm font-medium text-slate-500">
             <span className="flex items-center gap-1.5 text-slate-700">
@@ -1340,12 +1654,18 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-xs font-bold">73 Founders Live</span>
+              <span className="text-sm font-bold">Launching Jan 23</span>
             </span>
           </div>
+          <button 
+            onClick={() => setIsWaitlistModalOpen(true)}
+            className="text-sm md:text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            Join Waitlist
+          </button>
           <BorderBeamButton 
             onClick={() => setIsFoundersModalOpen(true)} 
-            className="rounded-full px-3 md:px-6 py-1.5 md:py-2.5 text-[10px] md:text-xs font-bold text-white"
+            className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white"
             beamSize={100}
             beamDuration={4}
           >
@@ -1354,83 +1674,81 @@ export default function LandingPage() {
         </motion.div>
       </nav>
 
-      {/* HERO SECTION - Light Theme */}
-      <section className="relative pt-28 sm:pt-32 md:pt-40 pb-12 md:pb-20 px-4 text-center overflow-hidden min-h-[auto] md:min-h-screen flex flex-col justify-start md:justify-center">
+      {/* HERO SECTION - Clean, Spacious Design */}
+      <section className="relative pt-32 sm:pt-36 md:pt-44 lg:pt-48 pb-10 md:pb-16 px-4 text-center overflow-hidden min-h-screen flex flex-col justify-center">
         <HeroBackground />
         
-        <div className="container mx-auto max-w-5xl relative z-10">
-          <BlurFade delay={0.2}>
-            <div className="inline-flex items-center gap-1.5 md:gap-2 rounded-full border border-slate-200 bg-white/80 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-1.5 text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-6 md:mb-8 shadow-sm">
-              <motion.span 
-                className="h-1.5 w-1.5 md:h-2 md:w-2 rounded-full bg-[#01bad2]"
-                animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-              Only <NumberTicker value={27} duration={1} className="text-[#01bad2] font-black mx-0.5 md:mx-1" /> founder spots remaining
-            </div>
-          </BlurFade>
+        <div className="container mx-auto max-w-4xl relative z-10 flex flex-col items-center">
           
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-slate-900 leading-[1.1] tracking-tighter mb-6 md:mb-8">
-            <BlurFade delay={0.3}>
+          {/* HEADLINE */}
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
+            <BlurFade delay={0.2}>
               <span className="block">Know What to Post</span>
             </BlurFade>
-            <BlurFade delay={0.5}>
+            <BlurFade delay={0.4}>
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
                 Before You Create It.
               </span>
             </BlurFade>
           </h1>
 
-          <BlurFade delay={0.7}>
-            <p className="text-sm md:text-lg lg:text-xl text-slate-600 max-w-xl md:max-w-2xl mx-auto mb-6 md:mb-10 leading-relaxed px-1">
+          {/* SUBHEAD - 24-32px gap from headline */}
+          <BlurFade delay={0.6}>
+            <p className="mt-6 md:mt-8 text-base md:text-xl lg:text-2xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
               Stop guessing. Huttle AI tells you exactly what to post, gives you the script, and picks the perfect time for <WordRotate 
-                words={["TikTok.", "Instagram.", "YouTube.", "X.", "Facebook."]} 
+                words={["Instagram.", "TikTok.", "YouTube.", "X.", "Facebook."]} 
                 className="text-[#01bad2] font-semibold inline"
                 duration={2500}
               />
             </p>
           </BlurFade>
 
-          <BlurFade delay={0.9}>
-            <div className="flex flex-col items-center gap-4 mb-5 md:mb-8">
-              <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md sm:max-w-lg">
-                <MagneticButton 
-                  onClick={() => setIsWaitlistModalOpen(true)}
-                  className="w-full sm:flex-1 h-11 md:h-14 px-5 md:px-6 rounded-xl md:rounded-2xl border-2 border-slate-900 text-slate-900 font-bold text-sm hover:bg-slate-900 hover:text-white transition-all"
-                >
-                  Join Waitlist
-                </MagneticButton>
-                <BorderBeamButton 
-                  onClick={() => setIsFoundersModalOpen(true)} 
-                  className="w-full sm:flex-1 h-11 md:h-14 text-white font-bold text-sm rounded-xl md:rounded-2xl px-5 md:px-6"
-                  beamDuration={6}
-                >
-                  <Crown size={14} className="mr-1.5 md:mr-2 md:w-4 md:h-4" />
-                  Founders Club
-                  <ArrowRight size={14} className="ml-1.5 md:ml-2 md:w-4 md:h-4" />
-                </BorderBeamButton>
-              </div>
+          {/* PRIMARY CTA BUTTON - 40-48px gap from subhead */}
+          <BlurFade delay={0.8}>
+            <div className="mt-10 md:mt-12 flex flex-col items-center">
+              <BorderBeamButton 
+                onClick={() => setIsFoundersModalOpen(true)} 
+                className="h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10"
+                beamDuration={6}
+              >
+                Become a Founding Member
+                <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
+              </BorderBeamButton>
+              <span className="mt-3 text-sm text-slate-500">
+                $199/yr forever <span className="text-slate-400">(normally $420)</span>
+              </span>
             </div>
           </BlurFade>
 
-          <BlurFade delay={1.1}>
-            <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Check size={10} className="text-[#01bad2] md:w-3 md:h-3" /> No Credit Card Required
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Sparkles size={10} className="text-[#01bad2] md:w-3 md:h-3" /> Early Access Jan 12
-              </span>
+          {/* COUNTDOWN TIMER - 48-64px gap from CTA */}
+          <BlurFade delay={1.0}>
+            <div className="mt-12 md:mt-16">
+              <CountdownTimer />
             </div>
           </BlurFade>
+
+          {/* SCROLL INDICATOR - 48-64px gap from timer */}
+          <BlurFade delay={1.2}>
+            <div className="mt-12 md:mt-16 mb-8 md:mb-12">
+              <motion.div
+                className="cursor-pointer"
+                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <ChevronDown size={28} className="text-huttle-primary hover:text-huttle-primary-dark transition-colors" />
+              </motion.div>
+            </div>
+          </BlurFade>
+
         </div>
       </section>
 
+      {/* SCROLL FAN SECTION - Viral Blueprint */}
+      <ScrollFanSection />
+
       {/* SOCIAL PROOF MARQUEE */}
       <SocialProofMarquee />
-
-      {/* SCROLL FAN SECTION */}
-      <ScrollFanSection />
 
       {/* PAIN POINTS SECTION */}
       <PainPointsSection />
@@ -1444,11 +1762,11 @@ export default function LandingPage() {
       {/* FEATURE SHOWCASE SECTION */}
       <FeatureShowcaseSection />
 
-      {/* FAQ SECTION */}
-      <FAQSectionComponent />
-
       {/* PRICING SECTION */}
       <PricingSection onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
+
+      {/* FAQ SECTION */}
+      <FAQSectionComponent />
 
       {/* FINAL CTA SECTION */}
       <FinalCTASection 
@@ -1457,12 +1775,22 @@ export default function LandingPage() {
       />
 
       {/* FOOTER */}
-      <footer className="py-8 md:py-12 border-t border-slate-100 bg-white">
-        <div className="container mx-auto px-4 md:px-6 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
+      <footer className="py-12 md:py-16 bg-white">
+        <div className="container mx-auto px-4 md:px-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
+          {/* Logo */}
           <div className="flex items-center gap-2 font-bold text-slate-900">
-            <img src="/huttle-logo.png" alt="Huttle AI" className="h-5 md:h-6 w-auto" />
+            <img src="/huttle-logo.png" alt="Huttle AI" className="h-8 md:h-10 w-auto" />
           </div>
-          <div className="text-slate-400 text-xs md:text-sm">© 2026 Huttle AI</div>
+          
+          {/* Center - Legal Links */}
+          <div className="flex-1 text-center">
+            <p className="text-sm text-slate-500">
+              © 2026 Huttle AI · <button onClick={() => setIsPrivacyModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</button> · <button onClick={() => setIsTermsModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</button>
+            </p>
+          </div>
+          
+          {/* Right - Placeholder for social icons if needed */}
+          <div className="w-8 md:w-10"></div>
         </div>
       </footer>
 
