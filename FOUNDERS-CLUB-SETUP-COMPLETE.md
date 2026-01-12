@@ -244,3 +244,4 @@ If you run into issues:
 **Last Updated:** January 2026  
 **Status:** 🟢 Ready to Deploy and Test
 
+# Rebuild trigger for env vars
