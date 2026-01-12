@@ -1,9 +1,9 @@
-import React, { useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
+import React from 'react';
+import { motion } from 'framer-motion';
 
 /**
  * BlurFade - Text/content that fades in with a blur-to-sharp effect
- * Creates an elegant reveal animation on scroll
+ * Animates on mount (not scroll-triggered) for instant page load feel
  */
 export function BlurFade({ 
   children, 
@@ -12,28 +12,20 @@ export function BlurFade({
   duration = 0.6,
   yOffset = 20,
   blur = "8px",
-  inView = true,
-  inViewMargin = "-100px",
-  once = true,
 }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once, margin: inViewMargin });
-  const shouldAnimate = inView ? isInView : true;
-
   return (
     <motion.div
-      ref={ref}
       className={className}
       initial={{ 
         opacity: 0, 
         y: yOffset,
         filter: `blur(${blur})`,
       }}
-      animate={shouldAnimate ? { 
+      animate={{ 
         opacity: 1, 
         y: 0,
         filter: "blur(0px)",
-      } : {}}
+      }}
       transition={{
         duration,
         delay,

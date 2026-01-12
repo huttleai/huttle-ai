@@ -174,10 +174,6 @@ export function TestimonialGrid({ testimonials, className = "" }) {
       {testimonials.map((testimonial, index) => (
         <motion.div
           key={index}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: index * 0.1 }}
           whileHover={{ y: -4 }}
           className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-[#01bad2]/30 hover:shadow-lg transition-all"
         >

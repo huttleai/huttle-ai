@@ -45,11 +45,7 @@ export function FAQAccordion({
 
 function FAQItem({ question, answer, isOpen, onToggle, index }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: index * 0.05 }}
+    <div
       className={`
         relative overflow-hidden rounded-xl md:rounded-2xl border transition-all duration-300
         ${isOpen 
@@ -128,7 +124,7 @@ function FAQItem({ question, answer, isOpen, onToggle, index }) {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
@@ -144,27 +140,19 @@ export function FAQSection({
   return (
     <section className={`py-20 md:py-32 ${className}`}>
       <div className="container mx-auto max-w-4xl px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-12 md:mb-16"
-        >
-          <motion.span 
+        <div className="text-center mb-12 md:mb-16">
+          <span 
             className="inline-block px-4 py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20"
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
           >
             FAQ
-          </motion.span>
+          </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-4">
             {title}
           </h2>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto">
             {subtitle}
           </p>
-        </motion.div>
+        </div>
         
         <FAQAccordion items={items} />
       </div>

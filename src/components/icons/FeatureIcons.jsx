@@ -432,8 +432,96 @@ export function QualityScorerIcon({ className = "", size = 64 }) {
   );
 }
 
+// Viral Blueprint - Script with sparkles and viral wave
+export function ViralBlueprintIcon({ className = "", size = 64 }) {
+  return (
+    <motion.svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      whileHover={{ scale: 1.05 }}
+    >
+      <defs>
+        <linearGradient id="blueprintGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#8B5CF6" />
+          <stop offset="100%" stopColor="#EC4899" />
+        </linearGradient>
+      </defs>
+      
+      {/* Document/Script background */}
+      <rect x="12" y="8" width="40" height="48" rx="4" fill="url(#blueprintGradient)" />
+      
+      {/* Document header lines */}
+      <rect x="18" y="16" width="16" height="3" rx="1.5" fill="white" fillOpacity="0.9" />
+      <rect x="18" y="22" width="24" height="2" rx="1" fill="white" fillOpacity="0.6" />
+      
+      {/* Script content lines */}
+      <motion.rect x="18" y="30" height="2" rx="1" fill="white" fillOpacity="0.8"
+        initial={{ width: 0 }}
+        animate={{ width: 20 }}
+        transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
+      />
+      <motion.rect x="18" y="35" height="2" rx="1" fill="white" fillOpacity="0.6"
+        initial={{ width: 0 }}
+        animate={{ width: 16 }}
+        transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse", delay: 0.3 }}
+      />
+      <motion.rect x="18" y="40" height="2" rx="1" fill="white" fillOpacity="0.6"
+        initial={{ width: 0 }}
+        animate={{ width: 22 }}
+        transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse", delay: 0.6 }}
+      />
+      
+      {/* Viral wave indicator */}
+      <motion.path
+        d="M 18 48 Q 24 45 30 48 T 42 48"
+        stroke="#00e5ff"
+        strokeWidth="2"
+        strokeLinecap="round"
+        fill="none"
+        animate={{ 
+          d: [
+            "M 18 48 Q 24 45 30 48 T 42 48",
+            "M 18 48 Q 24 51 30 48 T 42 48",
+            "M 18 48 Q 24 45 30 48 T 42 48"
+          ]
+        }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      />
+      
+      {/* Large sparkle - top right */}
+      <motion.path 
+        d="M48 14L50 18L54 20L50 22L48 26L46 22L42 20L46 18L48 14Z" 
+        fill="#FDE047"
+        animate={{ scale: [1, 1.3, 1], rotate: [0, 15, 0] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      />
+      
+      {/* Small sparkle - bottom right */}
+      <motion.path 
+        d="M50 46L51 48L53 49L51 50L50 52L49 50L47 49L49 48L50 46Z" 
+        fill="#F0ABFC"
+        animate={{ scale: [1, 1.2, 1], rotate: [0, -10, 0] }}
+        transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+      />
+      
+      {/* Medium sparkle - left side */}
+      <motion.path 
+        d="M14 38L15.5 41L18.5 42L15.5 43L14 46L12.5 43L9.5 42L12.5 41L14 38Z" 
+        fill="#A78BFA"
+        animate={{ scale: [1, 1.25, 1], opacity: [0.8, 1, 0.8] }}
+        transition={{ duration: 1.8, repeat: Infinity, delay: 1 }}
+      />
+    </motion.svg>
+  );
+}
+
 // Export all icons as a collection
 export const FeatureIcons = {
+  ViralBlueprint: ViralBlueprintIcon,
   SmartCalendar: SmartCalendarIcon,
   AIPlanBuilder: AIPlanBuilderIcon,
   ContentRemix: ContentRemixIcon,

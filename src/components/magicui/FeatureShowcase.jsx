@@ -409,13 +409,13 @@ export function FeatureShowcase({ className = "" }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Auto-advance carousel
+  // Auto-advance carousel - slower transition (8 seconds)
   useEffect(() => {
     if (isPaused) return;
     
     const interval = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % features.length);
-    }, 5000);
+    }, 8000);
     
     return () => clearInterval(interval);
   }, [isPaused]);

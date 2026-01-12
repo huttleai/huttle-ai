@@ -78,7 +78,7 @@ const CircularProgress = ({ value, max, label, size = 80, index }) => {
   );
 };
 
-export function CountdownTimer() {
+export function CountdownTimer({ compact = false }) {
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -117,7 +117,27 @@ export function CountdownTimer() {
     return () => clearInterval(timer);
   }, []);
 
-  const size = isMobile ? 64 : 90;
+  // Compact inline mode for hero section
+  if (compact) {
+    return (
+      <motion.div
+        className="inline-flex items-center gap-1.5 md:gap-2 text-base md:text-lg font-bold text-slate-900"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
+        <span className="tabular-nums">{String(timeLeft.days).padStart(2, '0')}d</span>
+        <span className="text-slate-400">:</span>
+        <span className="tabular-nums">{String(timeLeft.hours).padStart(2, '0')}h</span>
+        <span className="text-slate-400">:</span>
+        <span className="tabular-nums">{String(timeLeft.minutes).padStart(2, '0')}m</span>
+        <span className="text-slate-400">:</span>
+        <span className="tabular-nums">{String(timeLeft.seconds).padStart(2, '0')}s</span>
+      </motion.div>
+    );
+  }
+
+  const size = isMobile ? 64 : 75;
 
   return (
     <motion.div 
@@ -128,7 +148,7 @@ export function CountdownTimer() {
     >
       {/* Label */}
       <motion.div 
-        className="mb-4 md:mb-6"
+        className="mb-3 md:mb-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
@@ -139,7 +159,7 @@ export function CountdownTimer() {
       </motion.div>
 
       {/* Circular timers */}
-      <div className="flex items-center gap-3 md:gap-6">
+      <div className="flex items-center gap-3 md:gap-4">
         <CircularProgress value={timeLeft.days} max={30} label="Days" size={size} index={0} />
         <CircularProgress value={timeLeft.hours} max={24} label="Hours" size={size} index={1} />
         <CircularProgress value={timeLeft.minutes} max={60} label="Min" size={size} index={2} />

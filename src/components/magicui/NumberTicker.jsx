@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, useSpring, useTransform, useInView } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { useSpring, useTransform } from 'framer-motion';
 
 /**
  * NumberTicker - Animated number counter with spring physics
- * Creates smooth counting animation when element comes into view
+ * Animates on mount for instant page load feel
  */
 export function NumberTicker({ 
   value, 
@@ -16,8 +16,6 @@ export function NumberTicker({
   prefix = "",
   suffix = ""
 }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [hasAnimated, setHasAnimated] = useState(false);
   
   // Determine the initial value based on direction or custom startValue
@@ -45,15 +43,16 @@ export function NumberTicker({
     }).format(initialValue)
   );
 
+  // Animate on mount
   useEffect(() => {
-    if (isInView && !hasAnimated) {
+    if (!hasAnimated) {
       const timeout = setTimeout(() => {
         motionValue.set(value);
         setHasAnimated(true);
       }, delay * 1000);
       return () => clearTimeout(timeout);
     }
-  }, [isInView, hasAnimated, motionValue, value, delay]);
+  }, [hasAnimated, motionValue, value, delay]);
 
   useEffect(() => {
     const unsubscribe = displayValue.on("change", (latest) => {
@@ -63,7 +62,7 @@ export function NumberTicker({
   }, [displayValue]);
 
   return (
-    <span ref={ref} className={className}>
+    <span className={className}>
       {prefix}{currentDisplay}{suffix}
     </span>
   );

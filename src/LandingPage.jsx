@@ -23,13 +23,14 @@ import { FAQAccordion } from "./components/magicui/FAQAccordion";
 import { ParticleNetwork } from "./components/magicui/ParticleNetwork";
 import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 import { CountdownTimer } from "./components/CountdownTimer";
+import IPhoneMockup from "./components/IPhoneMockup";
 
 // Custom Feature Icons
 import { 
+  ViralBlueprintIcon,
   SmartCalendarIcon, 
   AIPlanBuilderIcon, 
   ContentRemixIcon, 
-  TrendRadarIcon, 
   CaptionGeneratorIcon, 
   QualityScorerIcon 
 } from "./components/icons/FeatureIcons";
@@ -189,6 +190,14 @@ const HeroBackground = () => {
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, rgba(43,143,199,0.12) 1px, transparent 0)`,
           backgroundSize: '32px 32px',
+        }}
+      />
+
+      {/* Bottom fade to white */}
+      <div 
+        className="absolute bottom-0 left-0 right-0 h-32 md:h-48 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to bottom, transparent, white)'
         }}
       />
     </div>
@@ -651,252 +660,6 @@ const SocialProofMarquee = () => {
 };
 
 // ============================================
-// SCROLL FAN SECTION
-// ============================================
-
-const ScrollFanSection = () => {
-  const containerRef = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start end", "end start"]
-  });
-
-  const yPhone = useTransform(scrollYProgress, [0, 1], [150, -150]);
-  const phoneScale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.9, 1, 1, 0.9]);
-  
-  const xTopLeft = useTransform(scrollYProgress, [0.15, 0.45], [0, -320]); 
-  const yTopLeft = useTransform(scrollYProgress, [0.15, 0.45], [0, -60]);
-  const rotateTopLeft = useTransform(scrollYProgress, [0.15, 0.45], [0, -8]);
-  const opacityTopLeft = useTransform(scrollYProgress, [0.15, 0.3], [0, 1]);
-  
-  const xBottomLeft = useTransform(scrollYProgress, [0.18, 0.48], [0, -300]); 
-  const yBottomLeft = useTransform(scrollYProgress, [0.18, 0.48], [0, 100]);
-  const rotateBottomLeft = useTransform(scrollYProgress, [0.18, 0.48], [0, -12]);
-  const opacityBottomLeft = useTransform(scrollYProgress, [0.18, 0.33], [0, 1]);
-  
-  const xTopRight = useTransform(scrollYProgress, [0.15, 0.45], [0, 320]); 
-  const yTopRight = useTransform(scrollYProgress, [0.15, 0.45], [0, -60]);
-  const rotateTopRight = useTransform(scrollYProgress, [0.15, 0.45], [0, 8]);
-  const opacityTopRight = useTransform(scrollYProgress, [0.15, 0.3], [0, 1]);
-
-  const xBottomRight = useTransform(scrollYProgress, [0.18, 0.48], [0, 300]); 
-  const yBottomRight = useTransform(scrollYProgress, [0.18, 0.48], [0, 100]);
-  const rotateBottomRight = useTransform(scrollYProgress, [0.18, 0.48], [0, 12]);
-  const opacityBottomRight = useTransform(scrollYProgress, [0.18, 0.33], [0, 1]);
-
-  return (
-    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-64 sm:-mt-56 md:-mt-48 lg:-mt-40 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent z-20">
-      <div className="sticky top-4 sm:top-8 md:top-12 mx-auto w-full max-w-6xl h-[620px] sm:h-[700px] md:h-[820px] lg:h-[920px] flex justify-center items-center px-4 md:px-4 mt-0 sm:mt-8 md:mt-20" style={{ perspective: '1200px' }}>
-        
-        {/* Desktop Cards (4 cards) - Hidden on mobile, visible on sm+ */}
-        {/* Top Left Card - Trending */}
-        <motion.div 
-          style={{ x: xTopLeft, y: yTopLeft, rotateZ: rotateTopLeft, opacity: opacityTopLeft }}
-          className="absolute z-10 hidden sm:block"
-        >
-          <GlassCard className="w-[160px] sm:w-[200px] md:w-[260px] p-3 sm:p-4 md:p-5" hover={false}>
-            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-4">
-              <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-11 md:w-11 rounded-xl md:rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
-                <TrendingUp size={14} className="md:hidden" />
-                <TrendingUp size={20} className="hidden md:block" />
-              </div>
-              <div>
-                <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
-                <div className="font-bold text-slate-900 text-xs sm:text-sm md:text-base">#GlowUp</div>
-              </div>
-            </div>
-            <div className="space-y-1 md:space-y-2 text-xs md:text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Posts today</span>
-                <span className="font-bold text-slate-900">12.4k</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Growth</span>
-                <span className="font-bold text-green-500">+340%</span>
-              </div>
-            </div>
-          </GlassCard>
-        </motion.div>
-
-        {/* Bottom Left Card - Scheduled */}
-        <motion.div 
-          style={{ x: xBottomLeft, y: yBottomLeft, rotateZ: rotateBottomLeft, opacity: opacityBottomLeft }}
-          className="absolute z-10 hidden sm:block"
-        >
-          <GlassCard className="w-[150px] sm:w-[180px] md:w-[240px] p-3 sm:p-4 md:p-5" hover={false}>
-            <div className="flex justify-between items-center mb-2 md:mb-4">
-              <span className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
-              <div className="h-4 w-4 md:h-5 md:w-5 rounded-full bg-green-100 flex items-center justify-center">
-                <Check size={8} className="text-green-600 md:hidden" />
-                <Check size={10} className="text-green-600 hidden md:block" />
-              </div>
-            </div>
-            <div className="space-y-2 md:space-y-3">
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
-                  <Instagram size={12} className="md:hidden" />
-                  <Instagram size={16} className="hidden md:block" />
-                </div>
-                <div>
-                  <div className="font-bold text-slate-900 text-xs md:text-sm">Instagram Reel</div>
-                  <div className="text-[10px] md:text-xs text-slate-500">Today, 6:00 PM</div>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-        </motion.div>
-
-        {/* Top Right Card - Viral Score */}
-        <motion.div 
-          style={{ x: xTopRight, y: yTopRight, rotateZ: rotateTopRight, opacity: opacityTopRight }}
-          className="absolute z-10 hidden sm:block"
-        >
-          <GlassCard className="w-[130px] sm:w-[160px] md:w-[200px] p-3 sm:p-4 md:p-5" hover={false}>
-            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
-              <Gauge size={12} className="text-[#01bad2] md:hidden" />
-              <Gauge size={14} className="text-[#01bad2] hidden md:block" />
-              <span className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
-            </div>
-            <div className="flex items-end gap-1 md:gap-2">
-              <span className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900">94</span>
-              <span className="text-sm md:text-lg text-slate-400 mb-0.5 md:mb-1">/100</span>
-            </div>
-            <p className="text-[10px] md:text-xs text-green-600 font-medium mt-1 md:mt-2">High viral potential!</p>
-          </GlassCard>
-        </motion.div>
-
-        {/* Bottom Right Card - Audio Match */}
-        <motion.div 
-          style={{ x: xBottomRight, y: yBottomRight, rotateZ: rotateBottomRight, opacity: opacityBottomRight }}
-          className="absolute z-10 hidden sm:block"
-        >
-          <GlassCard className="w-[150px] sm:w-[180px] md:w-[230px] p-3 sm:p-4 md:p-5" hover={false}>
-            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
-              <Music size={12} className="text-[#01bad2] md:hidden" />
-              <Music size={14} className="text-[#01bad2] hidden md:block" />
-              <span className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
-            </div>
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="h-9 w-9 md:h-12 md:w-12 rounded-lg md:rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                <Play size={12} className="text-white ml-0.5 md:hidden" />
-                <Play size={16} className="text-white ml-0.5 hidden md:block" />
-              </div>
-              <div className="flex-1">
-                <div className="text-xs md:text-sm font-bold text-slate-900">Trending Sound</div>
-                <div className="text-[10px] md:text-xs text-slate-500">2.1M uses</div>
-              </div>
-            </div>
-          </GlassCard>
-        </motion.div>
-
-        {/* Mobile Cards (2 cards) - Only visible on mobile, hidden on sm+ */}
-        {/* Mobile Left Card - Viral Score */}
-        <motion.div 
-          initial={{ opacity: 0, x: -20, rotate: -5 }}
-          whileInView={{ opacity: 1, x: 0, rotate: -6 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
-          className="absolute z-30 sm:hidden left-[5%] top-[32%]"
-        >
-          <GlassCard className="w-[85px] p-2 shadow-xl border border-white/50" hover={false}>
-            <div className="flex items-center gap-1 mb-1">
-              <Gauge size={9} className="text-[#01bad2]" />
-              <span className="text-[6px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
-            </div>
-            <div className="flex items-end gap-0.5">
-              <span className="text-lg font-black text-slate-900">94</span>
-              <span className="text-[10px] text-slate-400 mb-0.5">/100</span>
-            </div>
-            <p className="text-[7px] text-green-600 font-medium">High potential!</p>
-          </GlassCard>
-        </motion.div>
-
-        {/* Mobile Right Card - Scheduled */}
-        <motion.div 
-          initial={{ opacity: 0, x: 20, rotate: 5 }}
-          whileInView={{ opacity: 1, x: 0, rotate: 6 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4, type: "spring", stiffness: 100 }}
-          className="absolute z-30 sm:hidden right-[5%] top-[55%]"
-        >
-          <GlassCard className="w-[90px] p-2 shadow-xl border border-white/50" hover={false}>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[6px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
-              <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
-                <Check size={6} className="text-green-600" />
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-5 w-5 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow">
-                <Instagram size={9} />
-              </div>
-              <div>
-                <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
-                <div className="text-[7px] text-slate-500">6:00 PM</div>
-              </div>
-            </div>
-          </GlassCard>
-        </motion.div>
-
-        {/* Center Phone - Real Screenshot Mockup */}
-        <motion.div 
-          style={{ y: yPhone, scale: phoneScale }}
-          className="relative z-20 flex items-center justify-center"
-        >
-          <div className="relative overflow-hidden w-[280px] h-[560px] sm:w-[320px] sm:h-[640px] md:w-[380px] md:h-[760px] lg:w-[420px] lg:h-[840px]">
-            <img 
-              src="/viral-blueprint-mockup.png"
-              alt="Viral Blueprint Generator - AI-powered content creation"
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] sm:w-[980px] md:w-[1150px] lg:w-[1280px] h-auto max-w-none drop-shadow-2xl"
-            />
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Title and description - below the mockup */}
-      <BlurFade delay={0.1}>
-        <div className="text-center mt-8 md:mt-16 mb-6 md:mb-10 px-4">
-          <span className="inline-block px-2.5 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[9px] md:text-xs font-bold uppercase tracking-widest mb-2.5 md:mb-4 border border-[#01bad2]/20">
-            The Feature No One Else Has
-          </span>
-          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-2.5 md:mb-4">
-            Viral Blueprint Generator
-          </h2>
-          <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto px-1">
-            Tell us your topic. We research what's working right now and give you everything—script, visuals, keywords, timing.
-          </p>
-        </div>
-      </BlurFade>
-
-      <motion.div 
-        className="mt-4 md:mt-8 flex flex-wrap justify-center gap-2 md:gap-4 px-4"
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.3 }}
-      >
-        {[
-          { icon: Film, label: "Director's Cut" },
-          { icon: Hash, label: "Keywords" },
-          { icon: Gauge, label: "Viral Score" },
-          { icon: Music, label: "Audio Match" },
-        ].map((item, i) => (
-          <motion.div 
-            key={i} 
-            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 rounded-full bg-white border border-slate-200 shadow-sm text-xs md:text-sm cursor-pointer"
-            whileHover={{ scale: 1.05, borderColor: '#01bad2' }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <item.icon size={12} className="text-[#01bad2] md:w-[14px] md:h-[14px]" />
-            <span className="font-medium text-slate-700">{item.label}</span>
-          </motion.div>
-        ))}
-      </motion.div>
-    </div>
-  );
-};
-
-// ============================================
 // ORBITING CIRCLES PLATFORM SECTION
 // ============================================
 
@@ -916,21 +679,17 @@ const OrbitingPlatformsSection = () => {
 
       {/* Text content - centered with proper padding */}
       <div className="text-center relative z-20 max-w-3xl mx-auto mb-6 md:mb-16 px-1">
-        <BlurFade delay={0.1}>
-          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 mb-2.5 md:mb-6 tracking-tighter leading-tight">
-            Create for every platform,<br className="hidden sm:block"/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">all in one place.</span>
-          </h2>
-        </BlurFade>
-        <BlurFade delay={0.2}>
-          <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto">
+        <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 mb-2.5 md:mb-6 tracking-tighter leading-tight">
+          Create for every platform,<br className="hidden sm:block"/>
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">all in one place.</span>
+        </h2>
+        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto">
             <WordRotate 
               words={["TikTok,", "Instagram,", "YouTube,", "X,", "Facebook,"]} 
               className="text-[#01bad2] font-semibold inline"
               duration={2000}
             />{" "}and more. We optimize for every algorithm instantly.
           </p>
-        </BlurFade>
       </div>
 
       {/* Orbiting Circles Container - Responsive sizes */}
@@ -982,9 +741,9 @@ const OrbitingPlatformsSection = () => {
 const BentoGrid = () => {
   const features = [
     { 
-      IconComponent: SmartCalendarIcon, 
-      title: "Smart Calendar", 
-      description: "Auto-optimizes your posting times for maximum reach based on your audience." 
+      IconComponent: ViralBlueprintIcon, 
+      title: "Viral Blueprint Generator", 
+      description: "AI analyzes trending content and generates complete scripts with hooks, visuals, keywords, and optimal timing." 
     },
     { 
       IconComponent: AIPlanBuilderIcon, 
@@ -997,9 +756,9 @@ const BentoGrid = () => {
       description: "Turn one post into 5 platform-optimized variations instantly." 
     },
     { 
-      IconComponent: TrendRadarIcon, 
-      title: "Trend Lab", 
-      description: "Real-time discovery of current trends in your niche." 
+      IconComponent: SmartCalendarIcon, 
+      title: "Smart Calendar", 
+      description: "Auto-optimizes your posting times for maximum reach based on your audience." 
     },
     { 
       IconComponent: CaptionGeneratorIcon, 
@@ -1016,26 +775,24 @@ const BentoGrid = () => {
   return (
     <section id="features" className="py-10 md:py-32 px-4 bg-white">
       <div className="container mx-auto max-w-6xl">
-        <BlurFade delay={0.1}>
-          <div className="mb-6 md:mb-16">
-            <motion.div 
-              className="inline-flex items-center gap-1.5 px-2 md:px-3 py-0.5 md:py-1.5 rounded-full bg-purple-100 text-purple-700 text-[9px] md:text-xs font-bold mb-2.5 md:mb-4 border border-purple-200"
-              animate={{ scale: [1, 1.02, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Zap size={10} className="w-2.5 h-2.5 md:w-3 md:h-3" />
-              More than just another smart calendar
-            </motion.div>
-            <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter mb-2 md:mb-4 text-slate-900">
-              Your AI Creative Director.
-            </h2>
-            <p className="text-xs md:text-lg lg:text-xl text-slate-500">Packed with superpowers no one else has.</p>
-          </div>
-        </BlurFade>
+        <div className="mb-6 md:mb-16">
+          <motion.div 
+            className="inline-flex items-center gap-1.5 px-2 md:px-3 py-0.5 md:py-1.5 rounded-full bg-purple-100 text-purple-700 text-[9px] md:text-xs font-bold mb-2.5 md:mb-4 border border-purple-200"
+            animate={{ scale: [1, 1.02, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <Zap size={10} className="w-2.5 h-2.5 md:w-3 md:h-3" />
+            More than just another smart calendar
+          </motion.div>
+          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter mb-2 md:mb-4 text-slate-900">
+            Your AI Creative Director.
+          </h2>
+          <p className="text-xs md:text-lg lg:text-xl text-slate-500">Packed with superpowers no one else has.</p>
+        </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-4">
           {features.map((feature, i) => (
-            <BlurFade key={i} delay={0.1 + i * 0.05}>
+            <div key={i}>
               <MagicCard 
                 className="p-2.5 sm:p-3 md:p-6 h-full border border-slate-200 bg-white"
                 gradientColor="rgba(1, 186, 210, 0.12)"
@@ -1046,7 +803,7 @@ const BentoGrid = () => {
                 <h3 className="text-xs sm:text-sm md:text-lg font-bold mb-1 text-slate-900 leading-tight">{feature.title}</h3>
                 <p className="text-[10px] sm:text-xs md:text-sm leading-relaxed text-slate-500 line-clamp-3">{feature.description}</p>
               </MagicCard>
-            </BlurFade>
+            </div>
           ))}
         </div>
       </div>
@@ -1078,16 +835,14 @@ const PainPointsSection = () => {
       </div>
 
       <div className="container mx-auto max-w-6xl relative z-10">
-        <BlurFade delay={0.1}>
-          <div className="text-center mb-6 md:mb-16">
-            <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-4">Sound Familiar?</h2>
-            <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter text-white">The content struggle is real.</h3>
-          </div>
-        </BlurFade>
+        <div className="text-center mb-6 md:mb-16">
+          <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-4">Sound Familiar?</h2>
+          <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter text-white">The content struggle is real.</h3>
+        </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6">
           {painPoints.map((item, i) => (
-            <BlurFade key={i} delay={0.2 + i * 0.1}>
+            <div key={i}>
               <motion.div 
                 className="group bg-slate-800/60 backdrop-blur-sm p-4 md:p-10 rounded-xl md:rounded-3xl border border-slate-700/50 hover:border-[#01bad2]/50 transition-all duration-300 cursor-pointer h-full flex flex-col"
                 whileHover={{ 
@@ -1105,7 +860,7 @@ const PainPointsSection = () => {
                 <h4 className="text-sm md:text-xl font-bold mb-1.5 md:mb-3 text-white group-hover:text-[#01bad2] transition-colors">{item.title}</h4>
                 <p className="text-slate-300 leading-relaxed text-xs md:text-base flex-1">{item.text}</p>
               </motion.div>
-            </BlurFade>
+            </div>
           ))}
         </div>
       </div>
@@ -1121,29 +876,22 @@ const FeatureShowcaseSection = () => {
   return (
     <section className="py-12 md:py-32 px-4 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
       <div className="container mx-auto max-w-6xl">
-        <BlurFade delay={0.1}>
-          <div className="text-center mb-8 md:mb-16">
-            <motion.span 
+        <div className="text-center mb-8 md:mb-16">
+            <span 
               className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
             >
               <Play size={10} className="inline mr-1 -mt-0.5 md:w-3 md:h-3" />
               See It In Action
-            </motion.span>
+            </span>
             <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
               Features That Make You Go Viral
             </h2>
             <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto px-2">
               Explore the AI-powered tools that will transform your content strategy
             </p>
-          </div>
-        </BlurFade>
+        </div>
         
-        <BlurFade delay={0.2}>
-          <FeatureShowcase />
-        </BlurFade>
+        <FeatureShowcase />
       </div>
     </section>
   );
@@ -1192,28 +940,21 @@ const FAQSectionComponent = () => {
   return (
     <section className="py-12 md:py-32 px-4 bg-white">
       <div className="container mx-auto max-w-4xl">
-        <BlurFade delay={0.1}>
-          <div className="text-center mb-8 md:mb-16">
-            <motion.span 
+        <div className="text-center mb-8 md:mb-16">
+            <span 
               className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
             >
               FAQ
-            </motion.span>
+            </span>
             <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
               Frequently Asked Questions
             </h2>
             <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
               Everything you need to know about Huttle AI
             </p>
-          </div>
-        </BlurFade>
+        </div>
         
-        <BlurFade delay={0.2}>
-          <FAQAccordion items={faqs} />
-        </BlurFade>
+        <FAQAccordion items={faqs} />
       </div>
     </section>
   );
@@ -1231,13 +972,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
         <p className="text-center text-sm text-slate-500 mb-6 mt-8">
           🔥 247 creators on the waitlist
         </p>
-        <BlurFade delay={0.1}>
-          <motion.div 
+        <div 
             className="relative rounded-2xl md:rounded-[4rem] bg-slate-900 p-5 md:p-16 lg:p-20 text-center overflow-hidden"
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
           >
             <div className="absolute inset-0 opacity-20">
               <div 
@@ -1310,8 +1046,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 </motion.span>
               </div>
             </div>
-          </motion.div>
-        </BlurFade>
+          </div>
       </div>
     </section>
   );
@@ -1325,12 +1060,7 @@ const FinalCTASection = ({ onOpenWaitlist, onOpenFoundersModal }) => {
   return (
     <section className="py-10 md:py-32 px-4 bg-gradient-to-b from-white to-slate-50">
       <div className="container mx-auto max-w-4xl text-center">
-        <BlurFade delay={0.1}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
+        <div>
             <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-6 leading-tight">
               Ready to stop guessing<br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
@@ -1358,8 +1088,7 @@ const FinalCTASection = ({ onOpenWaitlist, onOpenFoundersModal }) => {
                 <ArrowRight size={12} className="ml-1.5 md:ml-2 md:w-4 md:h-4" />
               </BorderBeamButton>
             </div>
-          </motion.div>
-        </BlurFade>
+          </div>
       </div>
     </section>
   );
@@ -1737,101 +1466,266 @@ export default function LandingPage() {
         </motion.div>
       </nav>
 
-      {/* HERO SECTION - Clean, Spacious Design */}
-      <section ref={heroRef} className="relative pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-8 md:pb-10 px-4 text-center overflow-hidden min-h-[100svh] md:min-h-0 flex flex-col justify-center md:justify-start">
+      {/* HERO SECTION - Premium Two-Column Layout */}
+      <section ref={heroRef} className="relative pt-32 sm:pt-36 md:pt-28 lg:pt-32 pb-6 md:pb-10 px-4 overflow-hidden min-h-[100svh] md:min-h-0">
         <HeroBackground />
         
-        <div className="container mx-auto max-w-4xl relative z-10 flex flex-col items-center">
-          
-          {/* HEADLINE */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
-            <BlurFade delay={0.2}>
-              <span className="block">Know What to Post</span>
-            </BlurFade>
-            <BlurFade delay={0.4}>
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
-                Before You Create It.
-              </span>
-            </BlurFade>
-          </h1>
+        <div className="container mx-auto max-w-7xl relative z-10">
+          {/* Two-column grid on desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            
+            {/* LEFT COLUMN - Content */}
+            <div className="text-center lg:text-left order-1">
+              
+              {/* HEADLINE */}
+              <h1 className="text-4xl sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
+                <BlurFade delay={0.2}>
+                  <span className="block">Know What to Post</span>
+                </BlurFade>
+                <BlurFade delay={0.4}>
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
+                    Before You Create It.
+                  </span>
+                </BlurFade>
+              </h1>
 
-          {/* SUBHEAD - 24-32px gap from headline */}
-          <BlurFade delay={0.6}>
-            <p className="mt-6 md:mt-8 text-base md:text-xl lg:text-2xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Stop guessing. Huttle AI tells you exactly what to post, gives you the script, and picks the perfect time for <WordRotate 
-                words={["Instagram.", "TikTok.", "YouTube.", "X.", "Facebook."]} 
-                className="text-[#01bad2] font-semibold inline"
-                duration={2500}
-              />
-            </p>
-          </BlurFade>
+              {/* SUBHEAD */}
+              <BlurFade delay={0.6}>
+                <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                  Stop guessing. Huttle AI tells you exactly what to post, gives you the script, and picks the perfect time for <WordRotate 
+                    words={["Instagram.", "TikTok.", "YouTube.", "X.", "Facebook."]} 
+                    className="text-[#01bad2] font-semibold inline"
+                    duration={2500}
+                  />
+                </p>
+              </BlurFade>
 
-          {/* PRIMARY CTA BUTTON - 40-48px gap from subhead */}
-          <BlurFade delay={0.8}>
-            <div className="mt-8 md:mt-8 lg:mt-10 flex flex-col items-center">
-              <BorderBeamButton 
-                onClick={() => setIsFoundersModalOpen(true)} 
-                className="h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10"
-                beamDuration={6}
-              >
-                Become a Founding Member
-                <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
-              </BorderBeamButton>
-              <span className="mt-3 text-sm text-slate-500">
-                $199/yr forever <span className="text-slate-400">(normally $420)</span>
-              </span>
+              {/* PRIMARY CTA BUTTON */}
+              <BlurFade delay={0.8}>
+                <div className="mt-6 md:mt-8 flex flex-col items-center lg:items-start">
+                  <BorderBeamButton 
+                    onClick={() => setIsFoundersModalOpen(true)} 
+                    className="h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10"
+                    beamDuration={6}
+                  >
+                    Become a Founding Member
+                    <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
+                  </BorderBeamButton>
+                  <span className="mt-3 text-base md:text-lg font-semibold text-slate-700 text-center lg:text-left">
+                    $199/yr forever <span className="text-slate-500 font-normal">(normally $420)</span>
+                  </span>
+                </div>
+              </BlurFade>
+
+              {/* COUNTDOWN TIMER - Beautiful animated circles */}
+              <BlurFade delay={1.0}>
+                <motion.div 
+                  className="mt-8 md:mt-10 lg:mt-12 flex justify-center lg:justify-start"
+                  style={{ opacity: countdownOpacity }}
+                >
+                  <CountdownTimer />
+                </motion.div>
+              </BlurFade>
             </div>
-          </BlurFade>
+            
+            {/* RIGHT COLUMN - iPhone Mockup with Floating Cards */}
+            <div className="relative flex justify-center lg:justify-end order-2 mt-8 lg:mt-0">
+              <div className="relative w-full max-w-[500px] h-[600px] lg:h-[700px] flex items-center justify-center" style={{ perspective: '1200px' }}>
+                
+                {/* Top Left Card - Trending */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: -200, y: -40, rotateZ: -8 }}
+                  transition={{ duration: 1.2, delay: 1.2, ease: "easeOut" }}
+                  className="absolute z-10 hidden md:block"
+                >
+                  <GlassCard className="w-[200px] md:w-[240px] p-4 md:p-5" hover={false}>
+                    <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+                      <div className="h-9 w-9 md:h-11 md:w-11 rounded-xl md:rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
+                        <TrendingUp size={18} className="md:hidden" />
+                        <TrendingUp size={20} className="hidden md:block" />
+                      </div>
+                      <div>
+                        <div className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
+                        <div className="font-bold text-slate-900 text-sm md:text-base">#GlowUp</div>
+                      </div>
+                    </div>
+                    <div className="space-y-1 md:space-y-2 text-xs md:text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Posts today</span>
+                        <span className="font-bold text-slate-900">12.4k</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Growth</span>
+                        <span className="font-bold text-green-500">+340%</span>
+                      </div>
+                    </div>
+                  </GlassCard>
+                </motion.div>
 
-          {/* COUNTDOWN TIMER - with scroll fade effect */}
-          <BlurFade delay={1.0}>
-            <motion.div 
-              className="mt-10 md:mt-10 lg:mt-12"
-              style={{ opacity: countdownOpacity }}
-            >
-              <CountdownTimer />
-            </motion.div>
-          </BlurFade>
+                {/* Bottom Left Card - Scheduled */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: -180, y: 80, rotateZ: -12 }}
+                  transition={{ duration: 1.2, delay: 1.6, ease: "easeOut" }}
+                  className="absolute z-10 hidden md:block"
+                >
+                  <GlassCard className="w-[180px] md:w-[220px] p-4 md:p-5" hover={false}>
+                    <div className="flex justify-between items-center mb-3 md:mb-4">
+                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                      <div className="h-4 w-4 md:h-5 md:w-5 rounded-full bg-green-100 flex items-center justify-center">
+                        <Check size={9} className="text-green-600 md:hidden" />
+                        <Check size={10} className="text-green-600 hidden md:block" />
+                      </div>
+                    </div>
+                    <div className="space-y-2 md:space-y-3">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="h-9 w-9 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
+                          <Instagram size={14} className="md:hidden" />
+                          <Instagram size={16} className="hidden md:block" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs md:text-sm">Instagram Reel</div>
+                          <div className="text-[10px] md:text-xs text-slate-500">Today, 6:00 PM</div>
+                        </div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                </motion.div>
 
-          {/* SCROLL INDICATOR - with scroll fade effect */}
-          <BlurFade delay={1.2}>
-            <motion.div 
-              className="mt-10 md:mt-8 lg:mt-10 mb-6 md:mb-8"
-              style={{ opacity: countdownOpacity }}
-            >
-              <motion.div
-                className="cursor-pointer"
-                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-                animate={{ y: [0, 8, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <ChevronDown size={28} className="text-huttle-primary hover:text-huttle-primary-dark transition-colors" />
-              </motion.div>
-            </motion.div>
-          </BlurFade>
+                {/* Top Right Card - Viral Score */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: 200, y: -40, rotateZ: 8 }}
+                  transition={{ duration: 1.2, delay: 1.4, ease: "easeOut" }}
+                  className="absolute z-10 hidden md:block"
+                >
+                  <GlassCard className="w-[160px] md:w-[190px] p-4 md:p-5" hover={false}>
+                    <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
+                      <Gauge size={13} className="text-[#01bad2] md:hidden" />
+                      <Gauge size={14} className="text-[#01bad2] hidden md:block" />
+                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
+                    </div>
+                    <div className="flex items-end gap-1 md:gap-2">
+                      <span className="text-3xl md:text-4xl font-black text-slate-900">94</span>
+                      <span className="text-base md:text-lg text-slate-400 mb-0.5 md:mb-1">/100</span>
+                    </div>
+                    <p className="text-[10px] md:text-xs text-green-600 font-medium mt-1 md:mt-2">High viral potential!</p>
+                  </GlassCard>
+                </motion.div>
 
+                {/* Bottom Right Card - Audio Match */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: 190, y: 80, rotateZ: 12 }}
+                  transition={{ duration: 1.2, delay: 1.8, ease: "easeOut" }}
+                  className="absolute z-10 hidden md:block"
+                >
+                  <GlassCard className="w-[180px] md:w-[220px] p-4 md:p-5" hover={false}>
+                    <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
+                      <Music size={13} className="text-[#01bad2] md:hidden" />
+                      <Music size={14} className="text-[#01bad2] hidden md:block" />
+                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
+                    </div>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-lg md:rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                        <Play size={14} className="text-white ml-0.5 md:hidden" />
+                        <Play size={16} className="text-white ml-0.5 hidden md:block" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs md:text-sm font-bold text-slate-900">Trending Sound</div>
+                        <div className="text-[10px] md:text-xs text-slate-500">2.1M uses</div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                </motion.div>
+
+                {/* Mobile Cards - Only visible on mobile, hidden on md+ */}
+                {/* Mobile Left Card - Viral Score */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: -60, y: -100, rotateZ: -6 }}
+                  transition={{ duration: 1.2, delay: 1.2, ease: "easeOut" }}
+                  className="absolute z-30 md:hidden left-[10%] top-[25%]"
+                >
+                  <GlassCard className="w-[90px] p-2.5 shadow-xl border border-white/50" hover={false}>
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <Gauge size={10} className="text-[#01bad2]" />
+                      <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
+                    </div>
+                    <div className="flex items-end gap-0.5">
+                      <span className="text-xl font-black text-slate-900">94</span>
+                      <span className="text-[11px] text-slate-400 mb-0.5">/100</span>
+                    </div>
+                    <p className="text-[7px] text-green-600 font-medium mt-0.5">High potential!</p>
+                  </GlassCard>
+                </motion.div>
+
+                {/* Mobile Right Card - Scheduled */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
+                  animate={{ opacity: 1, x: 60, y: 80, rotateZ: 6 }}
+                  transition={{ duration: 1.2, delay: 1.6, ease: "easeOut" }}
+                  className="absolute z-30 md:hidden right-[10%] top-[55%]"
+                >
+                  <GlassCard className="w-[95px] p-2.5 shadow-xl border border-white/50" hover={false}>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                      <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
+                        <Check size={7} className="text-green-600" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-6 w-6 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow">
+                        <Instagram size={10} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
+                        <div className="text-[7px] text-slate-500">6:00 PM</div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                </motion.div>
+
+                {/* Center Phone - iPhone Mockup */}
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="relative z-20 flex items-center justify-center"
+                >
+                  <div className="relative w-[280px] h-[560px] md:w-[320px] md:h-[640px]">
+                    <img 
+                      src="/viral-blueprint-mockup.png"
+                      alt="Huttle AI Viral Blueprint feature"
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] md:w-[980px] h-auto max-w-none drop-shadow-2xl"
+                    />
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+            
+          </div>
         </div>
       </section>
 
-      {/* SCROLL FAN SECTION - Viral Blueprint */}
-      <ScrollFanSection />
 
-      {/* SOCIAL PROOF MARQUEE */}
+      {/* FEATURE MARQUEE - Show breadth of features */}
       <SocialProofMarquee />
 
-      {/* PAIN POINTS SECTION */}
+      {/* PAIN POINTS SECTION - Agitate the problem */}
       <PainPointsSection />
 
-      {/* ORBITING PLATFORMS SECTION - PRESERVED */}
-      <OrbitingPlatformsSection />
-
-      {/* BENTO FEATURE GRID */}
+      {/* BENTO FEATURE GRID - Show the solution */}
       <BentoGrid />
 
-      {/* FEATURE SHOWCASE SECTION */}
+      {/* FEATURE SHOWCASE SECTION - Deep dive on features */}
       <FeatureShowcaseSection />
 
-      {/* PRICING SECTION */}
+      {/* ORBITING PLATFORMS SECTION - Platform support */}
+      <OrbitingPlatformsSection />
+
+      {/* PRICING SECTION - Make the offer */}
       <PricingSection onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
 
       {/* FAQ SECTION */}

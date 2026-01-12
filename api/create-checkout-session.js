@@ -44,6 +44,7 @@ export default async function handler(req, res) {
     // Get user from Authorization header if available
     let customerId = null;
     let customerEmail = null;
+    let userId = null;
     const authHeader = req.headers.authorization;
     
     if (authHeader && supabase) {
@@ -52,6 +53,7 @@ export default async function handler(req, res) {
         const { data: { user }, error } = await supabase.auth.getUser(token);
         
         if (user && !error) {
+          userId = user.id;
           customerEmail = user.email;
           
           // Check if user already has a Stripe customer ID
@@ -85,11 +87,15 @@ export default async function handler(req, res) {
       metadata: {
         planId,
         billingCycle,
+        // Only add supabase_user_id if user exists (not guest checkout)
+        ...(userId && { supabase_user_id: userId }),
       },
       subscription_data: {
         metadata: {
           planId,
           billingCycle,
+          // Only add supabase_user_id if user exists (not guest checkout)
+          ...(userId && { supabase_user_id: userId }),
         },
       },
       // Allow promotion codes
