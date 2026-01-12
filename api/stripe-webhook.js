@@ -52,6 +52,7 @@ function getPlanFromPriceId(priceId) {
     [process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
     [process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]: 'pro',
     [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
+    [process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
   };
   return priceMap[priceId] || 'free';
 }

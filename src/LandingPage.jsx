@@ -476,8 +476,44 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 // ============================================
 
 const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
-  const handleProceedToCheckout = () => {
-    window.location.href = '/api/create-checkout-session?plan=founder';
+  const handleProceedToCheckout = async () => {
+    // Get the Founder price ID from environment
+    const founderPriceId = import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL;
+    
+    if (!founderPriceId) {
+      console.error('Founder price ID not configured');
+      alert('Payment system is being configured. Please try again shortly.');
+      return;
+    }
+
+    try {
+      // Call the API with proper POST request
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priceId: founderPriceId,
+          planId: 'founder',
+          billingCycle: 'annual',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+
+      const data = await response.json();
+      
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Failed to start checkout. Please try again.');
+    }
   };
 
   return (
@@ -649,7 +685,7 @@ const ScrollFanSection = () => {
   const opacityBottomRight = useTransform(scrollYProgress, [0.18, 0.33], [0, 1]);
 
   return (
-    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-64 sm:-mt-56 md:-mt-48 lg:-mt-40 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent">
+    <div ref={containerRef} className="relative min-h-[700px] md:min-h-[1200px] lg:min-h-[1400px] w-full -mt-64 sm:-mt-56 md:-mt-48 lg:-mt-40 pt-0 pb-16 md:pb-40 overflow-hidden bg-transparent z-20">
       <div className="sticky top-4 sm:top-8 md:top-12 mx-auto w-full max-w-6xl h-[620px] sm:h-[700px] md:h-[820px] lg:h-[920px] flex justify-center items-center px-4 md:px-4 mt-0 sm:mt-8 md:mt-20" style={{ perspective: '1200px' }}>
         
         {/* Desktop Cards (4 cards) - Hidden on mobile, visible on sm+ */}
@@ -1639,6 +1675,14 @@ export default function LandingPage() {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
+  // Scroll-based fade effect for countdown timer
+  const heroRef = useRef(null);
+  const { scrollYProgress: heroScrollProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"]
+  });
+  const countdownOpacity = useTransform(heroScrollProgress, [0, 0.4], [1, 0]);
+
   const scrollToPricing = () => {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -1694,7 +1738,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION - Clean, Spacious Design */}
-      <section className="relative pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-8 md:pb-10 px-4 text-center overflow-hidden min-h-[100svh] md:min-h-0 flex flex-col justify-center md:justify-start">
+      <section ref={heroRef} className="relative pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-8 md:pb-10 px-4 text-center overflow-hidden min-h-[100svh] md:min-h-0 flex flex-col justify-center md:justify-start">
         <HeroBackground />
         
         <div className="container mx-auto max-w-4xl relative z-10 flex flex-col items-center">
@@ -1739,16 +1783,22 @@ export default function LandingPage() {
             </div>
           </BlurFade>
 
-          {/* COUNTDOWN TIMER - 48-64px gap from CTA */}
+          {/* COUNTDOWN TIMER - with scroll fade effect */}
           <BlurFade delay={1.0}>
-            <div className="mt-10 md:mt-10 lg:mt-12">
+            <motion.div 
+              className="mt-10 md:mt-10 lg:mt-12"
+              style={{ opacity: countdownOpacity }}
+            >
               <CountdownTimer />
-            </div>
+            </motion.div>
           </BlurFade>
 
-          {/* SCROLL INDICATOR - 48-64px gap from timer */}
+          {/* SCROLL INDICATOR - with scroll fade effect */}
           <BlurFade delay={1.2}>
-            <div className="mt-10 md:mt-8 lg:mt-10 mb-6 md:mb-8">
+            <motion.div 
+              className="mt-10 md:mt-8 lg:mt-10 mb-6 md:mb-8"
+              style={{ opacity: countdownOpacity }}
+            >
               <motion.div
                 className="cursor-pointer"
                 onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
@@ -1757,7 +1807,7 @@ export default function LandingPage() {
               >
                 <ChevronDown size={28} className="text-huttle-primary hover:text-huttle-primary-dark transition-colors" />
               </motion.div>
-            </div>
+            </motion.div>
           </BlurFade>
 
         </div>
