@@ -92,6 +92,9 @@ async function setupRoutes() {
   // Social media routes
   app.all('/api/update-social-media', await loadHandler('api/update-social-media.js'));
   
+  // Waitlist route
+  app.all('/api/subscribe-waitlist', await loadHandler('api/subscribe-waitlist.js'));
+  
   // Stripe routes (optional - gracefully handle missing Stripe package)
   try {
     app.all('/api/create-checkout-session', await loadHandler('api/create-checkout-session.js'));
