@@ -106,9 +106,14 @@ export default function PaymentSuccess() {
               <div className="w-8 h-8 rounded-lg bg-huttle-cyan/10 flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-4 h-4 text-huttle-cyan" />
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                <span className="font-medium text-gray-900">Check your inbox.</span> You're officially on the inside. Look out for your login details and a few VIP sneak peeks we're sharing only with Founding Members before we go live.
-              </p>
+              <div className="text-sm text-gray-600 leading-relaxed">
+                <p>
+                  <span className="font-medium text-gray-900">Check your inbox (and spam folder).</span> You're officially on the inside. Look out for your login details and a few VIP sneak peeks we're sharing only with Founding Members before we go live.
+                </p>
+                <p className="text-xs text-gray-500 mt-2 italic">
+                  Tip: If you don't see our email, check your spam or junk folder and mark us as safe.
+                </p>
+              </div>
             </div>
           </div>
 
