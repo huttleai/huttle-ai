@@ -13,7 +13,12 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Validate Stripe key exists
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY is not configured in environment variables');
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 // Initialize Supabase client for user lookup
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -32,11 +37,28 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('🚀 Checkout session request received');
+    console.log('📦 Request body:', req.body);
+    
+    // Validate Stripe key at runtime
+    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
+      console.error('❌ STRIPE_SECRET_KEY not configured');
+      return res.status(500).json({ 
+        error: 'Stripe configuration error',
+        details: 'STRIPE_SECRET_KEY is not set in environment variables'
+      });
+    }
+
     const { priceId, planId, billingCycle } = req.body;
 
     if (!priceId) {
+      console.error('❌ No price ID provided in request');
       return res.status(400).json({ error: 'Price ID is required' });
     }
+    
+    console.log('💰 Price ID:', priceId);
+    console.log('📋 Plan ID:', planId);
+    console.log('📅 Billing Cycle:', billingCycle);
 
     // Get the app URL for redirects
     const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
@@ -112,16 +134,26 @@ export default async function handler(req, res) {
       sessionOptions.customer_email = customerEmail;
     }
 
+    console.log('🎫 Creating Stripe checkout session...');
     const session = await stripe.checkout.sessions.create(sessionOptions);
 
+    console.log('✅ Stripe session created successfully:', session.id);
     return res.status(200).json({
       sessionId: session.id,
       url: session.url,
     });
   } catch (error) {
-    console.error('Stripe Checkout Error:', error);
+    console.error('💥 Stripe Checkout Error:', error);
+    console.error('Error type:', error.type);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    console.error('Full error:', JSON.stringify(error, null, 2));
+    
     return res.status(500).json({
       error: error.message || 'Failed to create checkout session',
+      type: error.type,
+      code: error.code,
+      details: 'Check server logs for more information'
     });
   }
 }

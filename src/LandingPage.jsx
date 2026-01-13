@@ -485,17 +485,29 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 // ============================================
 
 const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
-  const handleProceedToCheckout = async () => {
+  const handleProceedToCheckout = async (e) => {
+    // Prevent any default behavior or form submission
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    console.log('🚀 Starting checkout process...');
+    
     // Get the Founder price ID from environment
     const founderPriceId = import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL;
     
+    console.log('💰 Founder Price ID:', founderPriceId);
+    
     if (!founderPriceId) {
-      console.error('Founder price ID not configured');
-      alert('Payment system is being configured. Please try again shortly.');
+      console.error('❌ Founder price ID not configured in environment variables');
+      alert('Payment system is being configured. Please try again shortly or contact support@huttleai.com');
       return;
     }
 
     try {
+      console.log('📡 Calling API endpoint: /api/create-checkout-session');
+      
       // Call the API with proper POST request
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -509,19 +521,28 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
         }),
       });
 
+      console.log('📥 API Response Status:', response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error('Failed to create checkout session');
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', errorText);
+        throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Checkout session created:', data);
       
       // Redirect to Stripe Checkout
       if (data.url) {
+        console.log('🔗 Redirecting to Stripe:', data.url);
         window.location.href = data.url;
+      } else {
+        console.error('❌ No redirect URL in response:', data);
+        throw new Error('No checkout URL received from server');
       }
     } catch (error) {
-      console.error('Checkout error:', error);
-      alert('Failed to start checkout. Please try again.');
+      console.error('💥 Checkout error:', error);
+      alert(`Failed to start checkout: ${error.message}\n\nPlease contact support@huttleai.com if this persists.`);
     }
   };
 
@@ -604,7 +625,7 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
                 Join Waitlist
               </button>
               <MagneticButton 
-                onClick={handleProceedToCheckout}
+                onClick={(e) => handleProceedToCheckout(e)}
                 className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow flex items-center justify-center gap-2"
               >
                 Checkout
