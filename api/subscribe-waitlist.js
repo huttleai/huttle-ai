@@ -16,6 +16,10 @@ const MAILCHIMP_AUDIENCE_ID = process.env.MAILCHIMP_WAITLIST_AUDIENCE_ID || '';
 const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_API_KEY.split('-')[1] || 'us22';
 
 export default async function handler(req, res) {
+  console.log('📧 Waitlist API called');
+  console.log('📧 Request method:', req.method);
+  console.log('📧 Request origin:', req.headers.origin);
+  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -23,11 +27,13 @@ export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
+    console.log('❌ Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     const { firstName, lastName, email } = req.body;
+    console.log('📧 Processing signup for:', email);
 
     // Validate required fields
     if (!firstName || !email) {
@@ -47,12 +53,17 @@ export default async function handler(req, res) {
 
     // Check if Mailchimp credentials are configured
     if (!MAILCHIMP_API_KEY || !MAILCHIMP_AUDIENCE_ID) {
-      console.error('Mailchimp credentials not configured');
+      console.error('❌ Mailchimp credentials not configured');
+      console.error('❌ API Key exists:', !!MAILCHIMP_API_KEY);
+      console.error('❌ Audience ID exists:', !!MAILCHIMP_AUDIENCE_ID);
       return res.status(500).json({ 
         error: 'Service configuration error',
         details: 'Mailchimp waitlist is not configured' 
       });
     }
+    
+    console.log('✅ Mailchimp credentials found');
+    console.log('📧 Server prefix:', MAILCHIMP_SERVER_PREFIX);
 
     // Prepare Mailchimp API request
     const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_AUDIENCE_ID}/members`;
@@ -67,6 +78,8 @@ export default async function handler(req, res) {
       tags: ['Waitlist', 'Landing Page']
     };
 
+    console.log('📧 Calling Mailchimp API:', mailchimpUrl);
+    
     // Add subscriber to Mailchimp
     const mailchimpResponse = await fetch(mailchimpUrl, {
       method: 'POST',
@@ -77,7 +90,9 @@ export default async function handler(req, res) {
       body: JSON.stringify(memberData),
     });
 
+    console.log('📧 Mailchimp response status:', mailchimpResponse.status);
     const mailchimpData = await mailchimpResponse.json();
+    console.log('📧 Mailchimp response:', JSON.stringify(mailchimpData, null, 2));
 
     // Handle Mailchimp errors
     if (!mailchimpResponse.ok) {

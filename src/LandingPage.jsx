@@ -328,6 +328,17 @@ const WaitlistModal = ({ isOpen, onClose }) => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [error, setError] = useState(null);
 
+  // Reset state when modal is closed
+  const handleClose = () => {
+    onClose();
+    // Reset after animation completes
+    setTimeout(() => {
+      setSubmitSuccess(false);
+      setFormData({ firstName: '', lastName: '', email: '' });
+      setError(null);
+    }, 300);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.firstName || !formData.email) return;
@@ -346,12 +357,7 @@ const WaitlistModal = ({ isOpen, onClose }) => {
       
       if (response.ok) {
         setSubmitSuccess(true);
-        setTimeout(() => {
-          onClose();
-          setSubmitSuccess(false);
-          setFormData({ firstName: '', lastName: '', email: '' });
-          setError(null);
-        }, 2000);
+        // Don't auto-close - let user read the success message and close manually
       } else {
         // Handle API errors
         setError(data.details || data.error || 'Failed to join waitlist. Please try again.');
@@ -376,7 +382,7 @@ const WaitlistModal = ({ isOpen, onClose }) => {
         >
           <motion.div 
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={handleClose}
           />
           
           <motion.div 
@@ -389,7 +395,7 @@ const WaitlistModal = ({ isOpen, onClose }) => {
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]" />
             
             <button 
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors"
             >
               <X size={20} className="text-slate-400" />
@@ -415,7 +421,13 @@ const WaitlistModal = ({ isOpen, onClose }) => {
                   <Check className="text-green-600" size={32} />
                 </div>
                 <h4 className="text-lg font-bold text-slate-900 mb-2">You're on the list!</h4>
-                <p className="text-slate-500">We'll notify you when Huttle AI launches.</p>
+                <p className="text-slate-500 mb-6">We'll notify you when Huttle AI launches.</p>
+                <button
+                  onClick={handleClose}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow"
+                >
+                  Got it!
+                </button>
               </motion.div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -1467,7 +1479,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Launching Jan 23</span>
+              <span className="text-sm font-bold">Early Access Jan 23</span>
             </span>
           </div>
           <button 
