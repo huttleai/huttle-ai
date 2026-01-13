@@ -130,8 +130,6 @@ export default async function handler(req, res) {
       phone_number_collection: {
         enabled: true,
       },
-      // Ensure customer is always created in Stripe
-      customer_creation: 'always',
       // Custom text for the checkout page
       custom_text: {
         submit: {
@@ -140,10 +138,9 @@ export default async function handler(req, res) {
       },
     };
 
-    // If we have an existing customer, use it (skip customer_creation in this case)
+    // If we have an existing customer, use it
     if (customerId) {
       sessionOptions.customer = customerId;
-      delete sessionOptions.customer_creation; // Can't use both customer and customer_creation
     } else if (customerEmail) {
       // Pre-fill email for new customers
       sessionOptions.customer_email = customerEmail;
