@@ -1012,7 +1012,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 <div className="text-center md:text-left">
                   <div className="text-[#01bad2] text-[8px] md:text-sm font-bold uppercase tracking-wider">Founding Member</div>
                   <div className="text-2xl md:text-6xl font-black text-white">
-                    $<NumberTicker value={199} startValue={420} duration={1.5} /><span className="text-xs md:text-lg text-slate-500 font-medium">/yr</span>
+                    $<NumberTicker value={199} startValue={420} duration={1.5} triggerOnView={true} /><span className="text-xs md:text-lg text-slate-500 font-medium">/yr</span>
                   </div>
                 </div>
               </div>
@@ -1467,18 +1467,18 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION - Premium Two-Column Layout */}
-      <section ref={heroRef} className="relative pt-32 sm:pt-36 md:pt-28 lg:pt-32 pb-6 md:pb-10 px-4 overflow-hidden min-h-[100svh] md:min-h-0">
+      <section ref={heroRef} className="relative pt-40 sm:pt-44 md:pt-48 lg:pt-44 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip">
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">
           {/* Two-column grid on desktop */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 xl:gap-16 items-center">
             
             {/* LEFT COLUMN - Content */}
             <div className="text-center lg:text-left order-1">
               
               {/* HEADLINE */}
-              <h1 className="text-4xl sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
                 <BlurFade delay={0.2}>
                   <span className="block">Know What to Post</span>
                 </BlurFade>
@@ -1511,13 +1511,13 @@ export default function LandingPage() {
                     Become a Founding Member
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
-                  <span className="mt-3 text-base md:text-lg font-semibold text-slate-700 text-center lg:text-left">
-                    $199/yr forever <span className="text-slate-500 font-normal">(normally $420)</span>
+                  <span className="mt-3 text-base md:text-lg font-semibold text-slate-700 w-full flex justify-center lg:justify-start lg:pl-5">
+                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $420)</span>
                   </span>
                 </div>
               </BlurFade>
 
-              {/* COUNTDOWN TIMER - Beautiful animated circles */}
+              {/* COUNTDOWN TIMER */}
               <BlurFade delay={1.0}>
                 <motion.div 
                   className="mt-8 md:mt-10 lg:mt-12 flex justify-center lg:justify-start"
@@ -1529,179 +1529,202 @@ export default function LandingPage() {
             </div>
             
             {/* RIGHT COLUMN - iPhone Mockup with Floating Cards */}
-            <div className="relative flex justify-center lg:justify-end order-2 mt-8 lg:mt-0">
-              <div className="relative w-full max-w-[500px] h-[600px] lg:h-[700px] flex items-center justify-center" style={{ perspective: '1200px' }}>
+            <div className="relative flex justify-center order-2 mt-6 lg:mt-0">
+              {/* Container - sized to fit phone and cards */}
+              <div className="relative w-[340px] sm:w-[400px] md:w-[520px] lg:w-[560px] xl:w-[620px] h-[480px] sm:h-[520px] md:h-[560px] lg:h-[600px]">
                 
-                {/* Top Left Card - Trending */}
+                {/* Floating Cards - Desktop/Tablet (md+) - Start from CENTER/BEHIND phone, then slide outward */}
+                {/* Top Left Card - Trending - Starts from center-right, slides to left */}
                 <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: -200, y: -40, rotateZ: -8 }}
-                  transition={{ duration: 1.2, delay: 1.2, ease: "easeOut" }}
+                  initial={{ opacity: 0, x: 180, y: 60, scale: 0.7 }}
+                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: -5 }}
+                  transition={{ duration: 1.3, delay: 0.9, ease: [0.34, 1.56, 0.64, 1] }}
                   className="absolute z-10 hidden md:block"
+                  style={{ left: '-8%', top: '12%' }}
                 >
-                  <GlassCard className="w-[200px] md:w-[240px] p-4 md:p-5" hover={false}>
-                    <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-                      <div className="h-9 w-9 md:h-11 md:w-11 rounded-xl md:rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
-                        <TrendingUp size={18} className="md:hidden" />
-                        <TrendingUp size={20} className="hidden md:block" />
-                      </div>
-                      <div>
-                        <div className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
-                        <div className="font-bold text-slate-900 text-sm md:text-base">#GlowUp</div>
-                      </div>
-                    </div>
-                    <div className="space-y-1 md:space-y-2 text-xs md:text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Posts today</span>
-                        <span className="font-bold text-slate-900">12.4k</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Growth</span>
-                        <span className="font-bold text-green-500">+340%</span>
-                      </div>
-                    </div>
-                  </GlassCard>
-                </motion.div>
-
-                {/* Bottom Left Card - Scheduled */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: -180, y: 80, rotateZ: -12 }}
-                  transition={{ duration: 1.2, delay: 1.6, ease: "easeOut" }}
-                  className="absolute z-10 hidden md:block"
-                >
-                  <GlassCard className="w-[180px] md:w-[220px] p-4 md:p-5" hover={false}>
-                    <div className="flex justify-between items-center mb-3 md:mb-4">
-                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
-                      <div className="h-4 w-4 md:h-5 md:w-5 rounded-full bg-green-100 flex items-center justify-center">
-                        <Check size={9} className="text-green-600 md:hidden" />
-                        <Check size={10} className="text-green-600 hidden md:block" />
-                      </div>
-                    </div>
-                    <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 md:gap-3">
-                        <div className="h-9 w-9 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
-                          <Instagram size={14} className="md:hidden" />
-                          <Instagram size={16} className="hidden md:block" />
+                  <motion.div 
+                    animate={{ y: [0, -8, 0], rotate: [-5, -3, -5] }} 
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <GlassCard className="w-[175px] lg:w-[190px] xl:w-[205px] p-3.5 lg:p-4" hover={false}>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg lg:rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
+                          <TrendingUp size={16} />
                         </div>
                         <div>
-                          <div className="font-bold text-slate-900 text-xs md:text-sm">Instagram Reel</div>
-                          <div className="text-[10px] md:text-xs text-slate-500">Today, 6:00 PM</div>
+                          <div className="text-[8px] lg:text-[9px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
+                          <div className="font-bold text-slate-900 text-xs lg:text-sm">#GlowUp</div>
                         </div>
                       </div>
-                    </div>
-                  </GlassCard>
-                </motion.div>
-
-                {/* Top Right Card - Viral Score */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: 200, y: -40, rotateZ: 8 }}
-                  transition={{ duration: 1.2, delay: 1.4, ease: "easeOut" }}
-                  className="absolute z-10 hidden md:block"
-                >
-                  <GlassCard className="w-[160px] md:w-[190px] p-4 md:p-5" hover={false}>
-                    <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
-                      <Gauge size={13} className="text-[#01bad2] md:hidden" />
-                      <Gauge size={14} className="text-[#01bad2] hidden md:block" />
-                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
-                    </div>
-                    <div className="flex items-end gap-1 md:gap-2">
-                      <span className="text-3xl md:text-4xl font-black text-slate-900">94</span>
-                      <span className="text-base md:text-lg text-slate-400 mb-0.5 md:mb-1">/100</span>
-                    </div>
-                    <p className="text-[10px] md:text-xs text-green-600 font-medium mt-1 md:mt-2">High viral potential!</p>
-                  </GlassCard>
-                </motion.div>
-
-                {/* Bottom Right Card - Audio Match */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: 190, y: 80, rotateZ: 12 }}
-                  transition={{ duration: 1.2, delay: 1.8, ease: "easeOut" }}
-                  className="absolute z-10 hidden md:block"
-                >
-                  <GlassCard className="w-[180px] md:w-[220px] p-4 md:p-5" hover={false}>
-                    <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
-                      <Music size={13} className="text-[#01bad2] md:hidden" />
-                      <Music size={14} className="text-[#01bad2] hidden md:block" />
-                      <span className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
-                    </div>
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-lg md:rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                        <Play size={14} className="text-white ml-0.5 md:hidden" />
-                        <Play size={16} className="text-white ml-0.5 hidden md:block" />
+                      <div className="space-y-1 text-[11px] lg:text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Posts today</span>
+                          <span className="font-bold text-slate-900">12.4k</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Growth</span>
+                          <span className="font-bold text-green-500">+340%</span>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="text-xs md:text-sm font-bold text-slate-900">Trending Sound</div>
-                        <div className="text-[10px] md:text-xs text-slate-500">2.1M uses</div>
-                      </div>
-                    </div>
-                  </GlassCard>
+                    </GlassCard>
+                  </motion.div>
                 </motion.div>
 
-                {/* Mobile Cards - Only visible on mobile, hidden on md+ */}
+                {/* Bottom Left Card - Scheduled - Starts from center-right, slides to left-bottom */}
+                <motion.div 
+                  initial={{ opacity: 0, x: 160, y: -40, scale: 0.7 }}
+                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: -6 }}
+                  transition={{ duration: 1.3, delay: 1.1, ease: [0.34, 1.56, 0.64, 1] }}
+                  className="absolute z-10 hidden md:block"
+                  style={{ left: '0%', bottom: '15%' }}
+                >
+                  <motion.div 
+                    animate={{ y: [0, 6, 0], rotate: [-6, -4, -6] }} 
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                  >
+                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4" hover={false}>
+                      <div className="flex justify-between items-center mb-2.5">
+                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                        <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
+                          <Check size={9} className="text-green-600" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
+                          <Instagram size={14} />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-[11px] lg:text-xs">Instagram Reel</div>
+                          <div className="text-[10px] lg:text-[11px] text-slate-500">Today, 6:00 PM</div>
+                        </div>
+                      </div>
+                    </GlassCard>
+                  </motion.div>
+                </motion.div>
+
+                {/* Top Right Card - Viral Score - Starts from center-left, slides to right */}
+                <motion.div 
+                  initial={{ opacity: 0, x: -180, y: 60, scale: 0.7 }}
+                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: 5 }}
+                  transition={{ duration: 1.3, delay: 1.0, ease: [0.34, 1.56, 0.64, 1] }}
+                  className="absolute z-10 hidden md:block"
+                  style={{ right: '-8%', top: '10%' }}
+                >
+                  <motion.div 
+                    animate={{ y: [0, -6, 0], rotate: [5, 7, 5] }} 
+                    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+                  >
+                    <GlassCard className="w-[150px] lg:w-[165px] xl:w-[180px] p-3.5 lg:p-4" hover={false}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Gauge size={12} className="text-[#01bad2]" />
+                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <span className="text-2xl lg:text-3xl font-black text-slate-900">94</span>
+                        <span className="text-xs lg:text-sm text-slate-400 mb-0.5">/100</span>
+                      </div>
+                      <p className="text-[9px] lg:text-[10px] text-green-600 font-medium mt-1">High viral potential!</p>
+                    </GlassCard>
+                  </motion.div>
+                </motion.div>
+
+                {/* Bottom Right Card - Audio Match - Starts from center-left, slides to right-bottom */}
+                <motion.div 
+                  initial={{ opacity: 0, x: -160, y: -40, scale: 0.7 }}
+                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: 6 }}
+                  transition={{ duration: 1.3, delay: 1.2, ease: [0.34, 1.56, 0.64, 1] }}
+                  className="absolute z-10 hidden md:block"
+                  style={{ right: '0%', bottom: '18%' }}
+                >
+                  <motion.div 
+                    animate={{ y: [0, 8, 0], rotate: [6, 8, 6] }} 
+                    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
+                  >
+                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4" hover={false}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Music size={12} className="text-[#01bad2]" />
+                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                          <Play size={14} className="text-white ml-0.5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[11px] lg:text-xs font-bold text-slate-900">Trending Sound</div>
+                          <div className="text-[10px] lg:text-[11px] text-slate-500">2.1M uses</div>
+                        </div>
+                      </div>
+                    </GlassCard>
+                  </motion.div>
+                </motion.div>
+
+                {/* iPhone Mockup - ON TOP with higher z-index so cards appear behind */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="absolute z-30 inset-0 flex items-center justify-center pointer-events-none"
+                >
+                  <img 
+                    src="/viral-blueprint-mockup.png"
+                    alt="Huttle AI Viral Blueprint feature"
+                    className="w-[580px] sm:w-[680px] md:w-[820px] lg:w-[920px] xl:w-[1020px] max-w-none h-auto drop-shadow-2xl"
+                  />
+                </motion.div>
+
+                {/* Mobile Cards - Only visible on mobile (hidden on md+) */}
                 {/* Mobile Left Card - Viral Score */}
                 <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: -60, y: -100, rotateZ: -6 }}
-                  transition={{ duration: 1.2, delay: 1.2, ease: "easeOut" }}
-                  className="absolute z-30 md:hidden left-[10%] top-[25%]"
+                  initial={{ opacity: 0, x: 30, scale: 0.9 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
+                  className="absolute z-10 md:hidden left-0 top-[15%]"
+                  style={{ transform: 'rotate(-6deg)' }}
                 >
-                  <GlassCard className="w-[90px] p-2.5 shadow-xl border border-white/50" hover={false}>
-                    <div className="flex items-center gap-1 mb-1.5">
-                      <Gauge size={10} className="text-[#01bad2]" />
-                      <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
-                    </div>
-                    <div className="flex items-end gap-0.5">
-                      <span className="text-xl font-black text-slate-900">94</span>
-                      <span className="text-[11px] text-slate-400 mb-0.5">/100</span>
-                    </div>
-                    <p className="text-[7px] text-green-600 font-medium mt-0.5">High potential!</p>
-                  </GlassCard>
+                  <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <Gauge size={10} className="text-[#01bad2]" />
+                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Viral</span>
+                      </div>
+                      <div className="flex items-end gap-0.5">
+                        <span className="text-xl font-black text-slate-900">94</span>
+                        <span className="text-[10px] text-slate-400 mb-0.5">/100</span>
+                      </div>
+                      <p className="text-[7px] text-green-600 font-medium mt-0.5">High potential!</p>
+                    </GlassCard>
+                  </motion.div>
                 </motion.div>
 
                 {/* Mobile Right Card - Scheduled */}
                 <motion.div 
-                  initial={{ opacity: 0, x: 0, y: 0, rotateZ: 0 }}
-                  animate={{ opacity: 1, x: 60, y: 80, rotateZ: 6 }}
-                  transition={{ duration: 1.2, delay: 1.6, ease: "easeOut" }}
-                  className="absolute z-30 md:hidden right-[10%] top-[55%]"
+                  initial={{ opacity: 0, x: -30, scale: 0.9 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
+                  className="absolute z-10 md:hidden right-0 bottom-[18%]"
+                  style={{ transform: 'rotate(6deg)' }}
                 >
-                  <GlassCard className="w-[95px] p-2.5 shadow-xl border border-white/50" hover={false}>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
-                      <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
-                        <Check size={7} className="text-green-600" />
+                  <motion.div animate={{ y: [0, 5, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                        <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
+                          <Check size={7} className="text-green-600" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-6 w-6 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow">
-                        <Instagram size={10} />
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-6 w-6 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow">
+                          <Instagram size={10} />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
+                          <div className="text-[7px] text-slate-500">6:00 PM</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
-                        <div className="text-[7px] text-slate-500">6:00 PM</div>
-                      </div>
-                    </div>
-                  </GlassCard>
+                    </GlassCard>
+                  </motion.div>
                 </motion.div>
 
-                {/* Center Phone - iPhone Mockup */}
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="relative z-20 flex items-center justify-center"
-                >
-                  <div className="relative w-[280px] h-[560px] md:w-[320px] md:h-[640px]">
-                    <img 
-                      src="/viral-blueprint-mockup.png"
-                      alt="Huttle AI Viral Blueprint feature"
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] md:w-[980px] h-auto max-w-none drop-shadow-2xl"
-                    />
-                  </div>
-                </motion.div>
               </div>
             </div>
             

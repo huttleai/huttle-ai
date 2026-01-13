@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useSpring, useTransform } from 'framer-motion';
+import React, { useEffect, useState, useRef } from 'react';
+import { useSpring, useTransform, useInView } from 'framer-motion';
 
 /**
  * NumberTicker - Animated number counter with spring physics
- * Animates on mount for instant page load feel
+ * Can animate on mount or when element comes into view
  */
 export function NumberTicker({ 
   value, 
@@ -14,8 +14,12 @@ export function NumberTicker({
   decimalPlaces = 0,
   duration = 2,
   prefix = "",
-  suffix = ""
+  suffix = "",
+  triggerOnView = false, // New prop: if true, animate when in view instead of on mount
+  viewOnce = true // Only animate once when in view
 }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: viewOnce, margin: "-100px" });
   const [hasAnimated, setHasAnimated] = useState(false);
   
   // Determine the initial value based on direction or custom startValue
@@ -43,16 +47,20 @@ export function NumberTicker({
     }).format(initialValue)
   );
 
-  // Animate on mount
+  // Animate based on trigger mode
   useEffect(() => {
-    if (!hasAnimated) {
-      const timeout = setTimeout(() => {
-        motionValue.set(value);
-        setHasAnimated(true);
-      }, delay * 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [hasAnimated, motionValue, value, delay]);
+    if (hasAnimated) return;
+    
+    // If triggerOnView is true, wait for element to be in view
+    if (triggerOnView && !isInView) return;
+    
+    const timeout = setTimeout(() => {
+      motionValue.set(value);
+      setHasAnimated(true);
+    }, delay * 1000);
+    
+    return () => clearTimeout(timeout);
+  }, [hasAnimated, motionValue, value, delay, triggerOnView, isInView]);
 
   useEffect(() => {
     const unsubscribe = displayValue.on("change", (latest) => {
@@ -62,11 +70,10 @@ export function NumberTicker({
   }, [displayValue]);
 
   return (
-    <span className={className}>
+    <span ref={ref} className={className}>
       {prefix}{currentDisplay}{suffix}
     </span>
   );
 }
 
 export default NumberTicker;
-
