@@ -1,7 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './LandingPage';
-import DashboardManager from './dashboard/Dashboard'; 
+import DashboardManager from './dashboard/Dashboard';
+import PaymentSuccess from './pages/PaymentSuccess'; 
 
 function App() {
   return (
@@ -9,6 +10,9 @@ function App() {
       <Routes>
         {/* Public Landing Page */}
         <Route path="/" element={<LandingPage />} />
+        
+        {/* Payment Success Page */}
+        <Route path="/payment-success" element={<PaymentSuccess />} />
         
         {/* Main Dashboard App */}
         <Route path="/dashboard/*" element={<DashboardManager />} />
