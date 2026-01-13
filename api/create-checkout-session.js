@@ -105,10 +105,11 @@ export default async function handler(req, res) {
         },
       ],
       success_url: `${appUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/subscription?canceled=true`,
+      cancel_url: `${appUrl}/?canceled=true`,
       metadata: {
         planId,
         billingCycle,
+        source: 'founders_club',
         // Only add supabase_user_id if user exists (not guest checkout)
         ...(userId && { supabase_user_id: userId }),
       },
@@ -116,19 +117,33 @@ export default async function handler(req, res) {
         metadata: {
           planId,
           billingCycle,
+          source: 'founders_club',
           // Only add supabase_user_id if user exists (not guest checkout)
           ...(userId && { supabase_user_id: userId }),
         },
       },
       // Allow promotion codes
       allow_promotion_codes: true,
-      // Collect billing address
+      // Collect billing address (this includes name)
       billing_address_collection: 'required',
+      // Collect phone number for better customer data
+      phone_number_collection: {
+        enabled: true,
+      },
+      // Ensure customer is always created in Stripe
+      customer_creation: 'always',
+      // Custom text for the checkout page
+      custom_text: {
+        submit: {
+          message: 'Welcome to the Huttle AI Founders Club! Your membership will be activated immediately after payment.',
+        },
+      },
     };
 
-    // If we have an existing customer, use it
+    // If we have an existing customer, use it (skip customer_creation in this case)
     if (customerId) {
       sessionOptions.customer = customerId;
+      delete sessionOptions.customer_creation; // Can't use both customer and customer_creation
     } else if (customerEmail) {
       // Pre-fill email for new customers
       sessionOptions.customer_email = customerEmail;
