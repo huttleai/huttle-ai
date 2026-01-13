@@ -179,8 +179,8 @@ export default function HuttleAgent() {
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500">
             Have ideas for Huttle Agent? We'd love to hear from you at{' '}
-            <a href="mailto:support@huttle.ai" className="text-huttle-primary hover:underline font-medium">
-              support@huttle.ai
+            <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline font-medium">
+              support@huttleai.com
             </a>
           </p>
         </div>

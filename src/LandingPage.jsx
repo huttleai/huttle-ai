@@ -1544,7 +1544,7 @@ export default function LandingPage() {
                     Become a Founding Member
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
-                  <span className="mt-3 text-base md:text-lg font-semibold text-slate-700 w-full flex justify-center lg:justify-start lg:pl-5">
+                  <span className="mt-2.5 text-base md:text-lg font-semibold text-slate-700 w-full flex justify-center lg:justify-start lg:pl-5">
                     $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $420)</span>
                   </span>
                 </div>
