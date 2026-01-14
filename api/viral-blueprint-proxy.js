@@ -10,8 +10,8 @@
 
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK || 
-                       'https://huttleai.app.n8n.cloud/webhook-test/viral-blueprint';
+const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK || 
+                       'https://huttleai.app.n8n.cloud/webhook/viral-blueprint';
 
 /**
  * Main handler function
