@@ -98,7 +98,13 @@ export default function Subscription() {
     
     setLoading(planId);
     try {
+      console.log('🔵 [Subscription] Starting upgrade for plan:', planId);
+      console.log('🔵 [Subscription] Current tier:', userTier);
+      console.log('🔵 [Subscription] Target plan:', planId);
+      console.log('🔵 [Subscription] Billing cycle:', billingCycle);
+      
       const result = await createCheckoutSession(planId, billingCycle);
+      console.log('🔵 [Subscription] Checkout result:', result);
       
       // Handle demo mode response
       if (result.demo) {
@@ -107,17 +113,30 @@ export default function Subscription() {
           const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
           setDemoTier(tierMap[planId] || TIERS.PRO);
         }
-        addToast(`Demo: Upgraded to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+        addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+        setLoading(null);
         return;
       }
       
       if (!result.success) {
+        console.error('❌ [Subscription] Checkout failed:', result.error);
         addToast(result.error || 'Failed to start checkout. Please try again.', 'error');
+        setLoading(null);
+        return;
       }
+      
+      // If successful, the page should redirect to Stripe Checkout
+      // If we reach here without redirecting, something went wrong
+      if (result.success && !result.url) {
+        console.error('❌ [Subscription] No redirect URL in successful response');
+        addToast('Checkout session created but no redirect URL. Please try again.', 'error');
+        setLoading(null);
+      }
+      // If there's a URL, the redirect happens in stripeAPI.js
+      // Keep loading state active during redirect
     } catch (error) {
-      console.error('Upgrade error:', error);
+      console.error('❌ [Subscription] Upgrade error:', error);
       addToast('Something went wrong. Please try again.', 'error');
-    } finally {
       setLoading(null);
     }
   };
@@ -207,14 +226,40 @@ export default function Subscription() {
       // For paid plan downgrades, use checkout
       setLoading(planId);
       try {
+        console.log('🔵 [Subscription] Starting downgrade for plan:', planId);
+        console.log('🔵 [Subscription] Current tier:', userTier);
+        console.log('🔵 [Subscription] Billing cycle:', billingCycle);
+        
         const result = await createCheckoutSession(planId, billingCycle);
-        if (!result.success) {
-          addToast(result.error || 'Failed to start downgrade. Please try again.', 'error');
+        console.log('🔵 [Subscription] Downgrade result:', result);
+        
+        if (result.demo) {
+          if (setDemoTier) {
+            const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
+            setDemoTier(tierMap[planId] || TIERS.FREE);
+          }
+          addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+          setLoading(null);
+          return;
         }
+        
+        if (!result.success) {
+          console.error('❌ [Subscription] Downgrade failed:', result.error);
+          addToast(result.error || 'Failed to start downgrade. Please try again.', 'error');
+          setLoading(null);
+          return;
+        }
+        
+        // If successful, the page should redirect to Stripe Checkout
+        if (result.success && !result.url) {
+          console.error('❌ [Subscription] No redirect URL in successful response');
+          addToast('Checkout session created but no redirect URL. Please try again.', 'error');
+          setLoading(null);
+        }
+        // If there's a URL, the redirect happens in stripeAPI.js
       } catch (error) {
-        console.error('Downgrade error:', error);
+        console.error('❌ [Subscription] Downgrade error:', error);
         addToast('Something went wrong. Please try again.', 'error');
-      } finally {
         setLoading(null);
       }
     }

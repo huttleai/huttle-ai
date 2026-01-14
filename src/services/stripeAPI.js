@@ -136,6 +136,9 @@ export const SUBSCRIPTION_PLANS = {
  */
 export async function createCheckoutSession(planId, billingCycle = 'monthly') {
   try {
+    console.log('🔵 Stripe Key Loaded:', import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+    console.log('🔵 Creating checkout session for plan:', planId, 'billing:', billingCycle);
+    
     const plan = Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId);
     
     if (!plan) {
@@ -145,6 +148,9 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     // Get the correct price ID based on billing cycle
     const priceId = billingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
     
+    console.log('🔵 Price ID:', priceId);
+    console.log('🔵 Is Demo Mode:', isDemoMode());
+    
     // Demo mode: Simulate successful checkout without Stripe
     if (!priceId || isDemoMode()) {
       console.log('🎭 Demo Mode: Simulating checkout for', planId);
@@ -153,6 +159,9 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
 
     // Call your backend API to create a checkout session
     const headers = await getAuthHeaders();
+    console.log('🔵 Calling API: /api/create-checkout-session');
+    console.log('🔵 Request payload:', { priceId, planId: plan.id, billingCycle });
+    
     const response = await fetch('/api/create-checkout-session', {
       method: 'POST',
       headers,
@@ -163,14 +172,19 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
       }),
     });
 
+    console.log('🔵 Response status:', response.status);
+    
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('❌ API Error:', errorData);
       throw new Error(errorData.error || 'Failed to create checkout session');
     }
 
     const data = await response.json();
+    console.log('✅ Checkout session created:', data);
     
     if (data.url) {
+      console.log('🔵 Redirecting to Stripe Checkout:', data.url);
       // Redirect to Stripe Checkout
       window.location.href = data.url;
     }
@@ -181,7 +195,12 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
       url: data.url
     };
   } catch (error) {
-    console.error('Stripe Checkout Error:', error);
+    console.error('❌ Stripe Checkout Error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     return {
       success: false,
       error: error.message
