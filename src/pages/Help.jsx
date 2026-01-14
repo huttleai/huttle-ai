@@ -58,7 +58,7 @@ export default function Help() {
     },
     {
       question: 'What are the differences between subscription tiers?',
-      answer: 'Free tier includes 20 AI generations/month and basic features. Essentials ($9/mo) offers 300 generations and full calendar access. Pro ($19/mo) includes 500 generations, Content Repurposer, priority support, and advanced analytics.'
+      answer: 'Free tier includes 20 AI generations/month and basic features. Essentials ($15/mo) offers 300 generations and full calendar access. Pro ($35/mo) includes 500 generations, Content Repurposer, priority support, and advanced analytics.'
     },
     {
       question: 'How do I save content to my Content Library?',

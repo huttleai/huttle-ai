@@ -194,7 +194,7 @@ export default function Login() {
           </div>
 
           {/* Sign Up Link */}
-          <Link to="/signup" className="block w-full btn-secondary py-2.5 text-center text-sm">
+          <Link to="/dashboard/signup" className="block w-full btn-secondary py-2.5 text-center text-sm">
             Create an account
           </Link>
 

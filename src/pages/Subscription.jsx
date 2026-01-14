@@ -53,8 +53,8 @@ export default function Subscription() {
     {
       id: 'essentials',
       name: 'Essentials',
-      monthlyPrice: 9,
-      annualPrice: 90,
+      monthlyPrice: 15,
+      annualPrice: 150,
       icon: Zap,
       popular: true,
       description: 'Best for growing creators',
@@ -72,8 +72,8 @@ export default function Subscription() {
     {
       id: 'pro',
       name: 'Pro',
-      monthlyPrice: 19,
-      annualPrice: 190,
+      monthlyPrice: 35,
+      annualPrice: 350,
       icon: Crown,
       description: 'For power users & teams',
       features: [

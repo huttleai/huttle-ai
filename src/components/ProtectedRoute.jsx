@@ -9,7 +9,7 @@ export default function ProtectedRoute({ children }) {
   // Safety check
   if (!authContext) {
     console.error('AuthContext not available in ProtectedRoute');
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/dashboard/login" replace />;
   }
 
   const { user, loading } = authContext;
@@ -19,7 +19,7 @@ export default function ProtectedRoute({ children }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/dashboard/login" replace />;
   }
 
   return children;

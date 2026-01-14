@@ -108,7 +108,7 @@ export default function Signup() {
 
     if (result.success) {
       addToast('Account created! Please check your email to verify.', 'success');
-      navigate('/login');
+      navigate('/dashboard/login');
     } else {
       addToast(result.error || 'Failed to create account', 'error');
     }
@@ -345,7 +345,7 @@ export default function Signup() {
           </div>
 
           {/* Login Link */}
-          <Link to="/login" className="block w-full btn-secondary py-2.5 text-center text-sm">
+          <Link to="/dashboard/login" className="block w-full btn-secondary py-2.5 text-center text-sm">
             Sign in instead
           </Link>
 

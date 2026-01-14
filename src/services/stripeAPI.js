@@ -61,8 +61,8 @@ export const SUBSCRIPTION_PLANS = {
   ESSENTIALS: {
     id: 'essentials',
     name: 'Essentials',
-    monthlyPrice: 9,
-    annualPrice: 90,
+    monthlyPrice: 15,
+    annualPrice: 150,
     priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || '',
     features: {
@@ -81,8 +81,8 @@ export const SUBSCRIPTION_PLANS = {
   PRO: {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 19,
-    annualPrice: 190,
+    monthlyPrice: 35,
+    annualPrice: 350,
     priceId: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {

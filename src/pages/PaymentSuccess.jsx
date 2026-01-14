@@ -119,7 +119,7 @@ export default function PaymentSuccess() {
 
           {/* CTA Button */}
           <Link
-            to="/success"
+            to="/"
             className="group w-full btn-primary py-4 text-base font-semibold stagger-item inline-flex"
             style={{ animationDelay: '300ms' }}
           >

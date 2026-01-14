@@ -1,10 +1,13 @@
 import { X, Sparkles, Check, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * UpgradeModal Component
  * Simple modal for upgrading subscription tiers
  */
 export default function UpgradeModal({ isOpen, onClose, feature, featureName }) {
+  const navigate = useNavigate();
+  
   if (!isOpen) return null;
 
   const features = {
@@ -152,9 +155,8 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
             {/* CTA */}
             <button 
               onClick={() => {
-                // Navigate to subscription page in production
-                // TODO: Implement navigation to /subscription page
                 onClose();
+                navigate('/dashboard/subscription');
               }}
               className="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 btn-upgrade-glow"
             >

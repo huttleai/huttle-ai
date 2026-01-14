@@ -24,6 +24,7 @@ import { ParticleNetwork } from "./components/magicui/ParticleNetwork";
 import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 import { CountdownTimer } from "./components/CountdownTimer";
 import IPhoneMockup from "./components/IPhoneMockup";
+import PricingAnchor from "./components/PricingAnchor";
 
 // Custom Feature Icons
 import { 
@@ -716,10 +717,10 @@ const OrbitingPlatformsSection = () => {
           Create for every platform,<br className="hidden sm:block"/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">all in one place.</span>
         </h2>
-        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto">
+        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto whitespace-nowrap">
             <WordRotate 
               words={["TikTok,", "Instagram,", "YouTube,", "X,", "Facebook,"]} 
-              className="text-[#01bad2] font-semibold inline"
+              className="text-[#01bad2] font-semibold inline min-w-[90px] md:min-w-[120px] inline-block text-left"
               duration={2000}
             />{" "}and more. We optimize for every algorithm instantly.
           </p>
@@ -1545,7 +1546,7 @@ export default function LandingPage() {
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
                   <span className="mt-2.5 text-base md:text-lg font-semibold text-slate-700 w-full flex justify-center lg:justify-start lg:pl-5">
-                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $420)</span>
+                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $336)</span>
                   </span>
                 </div>
               </BlurFade>
@@ -1780,6 +1781,9 @@ export default function LandingPage() {
 
       {/* ORBITING PLATFORMS SECTION - Platform support */}
       <OrbitingPlatformsSection />
+
+      {/* PRICE ANCHORING SECTION - Compare options */}
+      <PricingAnchor onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
 
       {/* PRICING SECTION - Make the offer */}
       <PricingSection onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
