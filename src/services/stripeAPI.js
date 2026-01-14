@@ -16,6 +16,32 @@ const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
 // This file provides client-side helpers for Stripe Checkout and Portal
 
 /**
+ * Check if running in demo mode (Stripe not configured)
+ * Demo mode allows testing the UI without real Stripe integration
+ */
+export function isDemoMode() {
+  const essentialsMonthly = import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY;
+  const proMonthly = import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY;
+  // Demo mode if either price ID is missing or empty
+  return !essentialsMonthly || !proMonthly;
+}
+
+/**
+ * Simulate a successful checkout in demo mode
+ * Stores the selected plan in localStorage for demo purposes
+ */
+export function simulateDemoCheckout(planId) {
+  localStorage.setItem('demo_subscription_tier', planId);
+  localStorage.setItem('demo_subscription_updated', Date.now().toString());
+  return {
+    success: true,
+    demo: true,
+    message: `Demo mode: Simulated upgrade to ${planId}`,
+    planId
+  };
+}
+
+/**
  * Get auth headers for API requests
  */
 async function getAuthHeaders() {
@@ -119,8 +145,10 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     // Get the correct price ID based on billing cycle
     const priceId = billingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
     
-    if (!priceId) {
-      throw new Error('Price not configured for this plan. Please contact support.');
+    // Demo mode: Simulate successful checkout without Stripe
+    if (!priceId || isDemoMode()) {
+      console.log('🎭 Demo Mode: Simulating checkout for', planId);
+      return simulateDemoCheckout(planId);
     }
 
     // Call your backend API to create a checkout session
@@ -171,6 +199,16 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
  */
 export async function createPortalSession() {
   try {
+    // Demo mode: Show message instead of opening portal
+    if (isDemoMode()) {
+      console.log('🎭 Demo Mode: Billing portal not available');
+      return {
+        success: true,
+        demo: true,
+        message: 'Demo mode: Billing portal simulated. In production, this opens Stripe Customer Portal.'
+      };
+    }
+
     const headers = await getAuthHeaders();
     const response = await fetch('/api/create-portal-session', {
       method: 'POST',

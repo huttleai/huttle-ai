@@ -16,13 +16,27 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-// Initialize Supabase with service role key for admin access
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+// Validate required environment variables at startup
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Log warnings for missing config (helps with debugging in Vercel logs)
+if (!STRIPE_SECRET_KEY) {
+  console.error('❌ CRITICAL: STRIPE_SECRET_KEY is not configured');
+}
+if (!STRIPE_WEBHOOK_SECRET) {
+  console.error('❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not configured');
+}
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('❌ CRITICAL: Supabase credentials are not configured');
+}
+
+// Initialize clients only if credentials are available
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const endpointSecret = STRIPE_WEBHOOK_SECRET;
+const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 // Mailchimp configuration (optional)
 const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
@@ -46,15 +60,29 @@ async function getRawBody(req) {
 }
 
 // Map Stripe price IDs to plan tiers
+// Note: Server-side code should use non-VITE_ prefixed env vars
+// We check both for backwards compatibility during migration
 function getPlanFromPriceId(priceId) {
+  if (!priceId) return 'free';
+  
   const priceMap = {
-    [process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
-    [process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
-    [process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]: 'pro',
-    [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
-    [process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
+    // Essentials tier
+    [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
+    [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
+    // Pro tier
+    [process.env.STRIPE_PRICE_PRO_MONTHLY || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]: 'pro',
+    [process.env.STRIPE_PRICE_PRO_ANNUAL || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
+    // Founder tier
+    [process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
   };
-  return priceMap[priceId] || 'free';
+  
+  // Remove undefined keys that might have been added
+  const plan = priceMap[priceId];
+  if (plan) return plan;
+  
+  // Log unknown price IDs for debugging
+  console.warn(`Unknown price ID: ${priceId} - defaulting to free tier`);
+  return 'free';
 }
 
 // Add member to Mailchimp Founders Club
@@ -110,6 +138,20 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Validate required services are configured
+  if (!stripe) {
+    console.error('❌ Stripe webhook called but STRIPE_SECRET_KEY is not configured');
+    return res.status(500).json({ error: 'Payment service not configured' });
+  }
+  if (!endpointSecret) {
+    console.error('❌ Stripe webhook called but STRIPE_WEBHOOK_SECRET is not configured');
+    return res.status(500).json({ error: 'Webhook verification not configured' });
+  }
+  if (!supabase) {
+    console.error('❌ Stripe webhook called but Supabase is not configured');
+    return res.status(500).json({ error: 'Database service not configured' });
   }
 
   try {

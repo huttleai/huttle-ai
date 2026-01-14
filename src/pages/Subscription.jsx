@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle } from 'lucide-react';
+import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical } from 'lucide-react';
 import Badge from '../components/Badge';
-import { createCheckoutSession, createPortalSession, getSubscriptionStatus } from '../services/stripeAPI';
+import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -9,13 +9,16 @@ import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import { supabase } from '../config/supabase';
 
 export default function Subscription() {
-  const { userTier, TIERS } = useSubscription();
+  const { userTier, TIERS, setDemoTier, isDemoMode: contextDemoMode } = useSubscription();
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
   const [loading, setLoading] = useState(null);
   const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  
+  // Check if in demo mode
+  const demoMode = isDemoMode() || contextDemoMode;
 
   useEffect(() => {
     const fetchSubscriptionInfo = async () => {
@@ -96,6 +99,18 @@ export default function Subscription() {
     setLoading(planId);
     try {
       const result = await createCheckoutSession(planId, billingCycle);
+      
+      // Handle demo mode response
+      if (result.demo) {
+        // Update tier in demo mode
+        if (setDemoTier) {
+          const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
+          setDemoTier(tierMap[planId] || TIERS.PRO);
+        }
+        addToast(`Demo: Upgraded to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+        return;
+      }
+      
       if (!result.success) {
         addToast(result.error || 'Failed to start checkout. Please try again.', 'error');
       }
@@ -111,6 +126,13 @@ export default function Subscription() {
     setLoading('portal');
     try {
       const result = await createPortalSession();
+      
+      // Handle demo mode response
+      if (result.demo) {
+        addToast('Demo: Billing portal would open here in production.', 'info');
+        return;
+      }
+      
       if (!result.success) {
         addToast(result.error || 'Failed to open billing portal. Please try again.', 'error');
       }
@@ -251,6 +273,31 @@ export default function Subscription() {
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="max-w-7xl mx-auto">
+        {/* Demo Mode Banner */}
+        {demoMode && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <FlaskConical className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-amber-800">Demo Mode Active</p>
+              <p className="text-sm text-amber-700">Stripe is not configured. Upgrades are simulated for testing.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-600 font-medium">Test as:</span>
+              <select
+                value={userTier}
+                onChange={(e) => setDemoTier && setDemoTier(e.target.value)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-medium focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                <option value={TIERS.FREE}>Free</option>
+                <option value={TIERS.ESSENTIALS}>Essentials</option>
+                <option value={TIERS.PRO}>Pro</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">

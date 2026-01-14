@@ -60,8 +60,15 @@ export default async function handler(req, res) {
     console.log('📋 Plan ID:', planId);
     console.log('📅 Billing Cycle:', billingCycle);
 
-    // Get the app URL for redirects
-    const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
+    // Get the app URL for redirects - REQUIRED in production
+    const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl) {
+      console.error('❌ VITE_APP_URL or NEXT_PUBLIC_APP_URL must be configured for redirects');
+      return res.status(500).json({ 
+        error: 'App URL not configured',
+        details: 'VITE_APP_URL or NEXT_PUBLIC_APP_URL must be set in environment variables'
+      });
+    }
 
     // Get user from Authorization header if available
     let customerId = null;

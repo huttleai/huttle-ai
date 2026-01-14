@@ -11,12 +11,17 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Validate and initialize Stripe
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (!STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY is not configured');
+}
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 // Initialize Supabase client for user lookup
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -32,6 +37,18 @@ export default async function handler(req, res) {
   try {
     // Get user from Authorization header
     const authHeader = req.headers.authorization;
+    
+    // If Stripe is not configured, return free tier (graceful degradation)
+    if (!stripe) {
+      console.warn('Stripe not configured - returning freemium status');
+      return res.status(200).json({
+        subscription: null,
+        plan: 'freemium',
+        status: 'active',
+        currentPeriodEnd: null,
+        _warning: 'Stripe not configured'
+      });
+    }
     
     if (!authHeader || !supabase) {
       // Return free tier status for unauthenticated users

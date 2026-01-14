@@ -6,7 +6,15 @@ const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Important: Use service_role key, not anon key
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Validate required credentials
+if (!PERPLEXITY_API_KEY) {
+  console.error('❌ PERPLEXITY_API_KEY is not configured');
+}
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('❌ Supabase credentials are not configured');
+}
+
+const supabase = (SUPABASE_URL && SUPABASE_SERVICE_KEY) ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null;
 
 // Allowed platforms only
 const ALLOWED_PLATFORMS = ['Facebook', 'Instagram', 'TikTok', 'X', 'Twitter', 'YouTube'];
@@ -25,10 +33,21 @@ export default async function handler(req, res) {
   const providedSecret = req.headers['x-cron-secret'] || req.headers['authorization']?.replace('Bearer ', '');
   
   if (!CRON_SECRET) {
-    console.warn('CRON_SECRET not configured - endpoint is unprotected!');
-  } else if (providedSecret !== CRON_SECRET) {
+    console.error('❌ CRON_SECRET not configured - rejecting request for security');
+    return res.status(500).json({ error: 'Endpoint not configured. CRON_SECRET must be set.' });
+  }
+  
+  if (providedSecret !== CRON_SECRET) {
     console.warn('Unauthorized access attempt to update-social-media endpoint');
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Validate services are configured
+  if (!PERPLEXITY_API_KEY) {
+    return res.status(500).json({ error: 'PERPLEXITY_API_KEY is not configured' });
+  }
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase is not configured' });
   }
 
   try {

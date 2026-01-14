@@ -10,8 +10,8 @@
 
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK || 
-                       'https://huttleai.app.n8n.cloud/webhook/viral-blueprint';
+// SECURITY: No hardcoded fallback - must be configured via environment variable
+const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK;
 
 /**
  * Main handler function

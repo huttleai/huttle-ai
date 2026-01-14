@@ -17,7 +17,6 @@ import {
   generateCTAs,
   generateVisualIdeas 
 } from '../services/grokAPI';
-import { generateWithN8n } from '../services/n8nGeneratorAPI';
 import { useNavigate } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
@@ -151,28 +150,26 @@ export default function AITools() {
 
     setIsLoadingCaptions(true);
     try {
-      const brandVoice = applyBrandVoice && brandData?.brandVoice 
-        ? brandData.brandVoice 
-        : captionTone;
-
-      const result = await generateWithN8n({
-        userId: user.id,
+      // Build content data for Grok API
+      const contentData = {
         topic: captionInput,
         platform: captionPlatform,
-        contentType: 'caption',
-        brandVoice: brandVoice,
-        additionalContext: brandData
-      });
+        tone: applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : captionTone,
+        length: captionLength
+      };
 
-      if (result.success && result.content) {
-        const captions = result.content.split(/\d+\./).filter(c => c.trim()).slice(0, 4);
+      const result = await generateCaption(contentData, brandData);
+
+      if (result.success && result.caption) {
+        // Parse numbered captions from response
+        const captions = result.caption.split(/\d+\./).filter(c => c.trim()).slice(0, 4);
         
         if (captions.length > 0) {
           setGeneratedCaptions(captions);
           incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
-        } else if (result.content.trim()) {
-          setGeneratedCaptions([result.content.trim()]);
+        } else if (result.caption.trim()) {
+          setGeneratedCaptions([result.caption.trim()]);
           incrementAIUsage();
           showToast(`Caption generated! ${getToastDisclaimer('general')}`, 'success');
         } else {
@@ -186,12 +183,7 @@ export default function AITools() {
         }
       } else {
         // Handle error with user-friendly messages
-        let errorMessage = 'API error - using fallback captions';
-        if (result.errorType === 'TIMEOUT') {
-          errorMessage = 'AI generation took too long. Using fallback captions.';
-        } else if (result.errorType === 'NETWORK') {
-          errorMessage = 'Connection failed. Using fallback captions.';
-        }
+        const errorMessage = result.error || 'API error - using fallback captions';
         
         setGeneratedCaptions([
           `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
@@ -275,31 +267,17 @@ export default function AITools() {
 
     setIsLoadingHooks(true);
     try {
-      const result = await generateWithN8n({
-        userId: user.id,
-        topic: hookInput,
-        platform: hookPlatform,
-        contentType: 'hook',
-        brandVoice: brandData?.brandVoice || 'engaging',
-        theme: hookTheme,
-        additionalContext: brandData
-      });
-
+      const result = await generateHooks(hookInput, brandData, hookTheme, hookPlatform);
       const platformData = getPlatform(hookPlatform);
 
-      if (result.success && result.content) {
-        const hooks = result.content.split(/\d+\./).filter(h => h.trim());
-        setGeneratedHooks(hooks.length > 0 ? hooks : [result.content]);
+      if (result.success && result.hooks) {
+        const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
+        setGeneratedHooks(hooks.length > 0 ? hooks : [result.hooks]);
         incrementAIUsage();
         showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         // Handle error with user-friendly messages
-        let errorMessage = 'Failed to generate hooks';
-        if (result.errorType === 'TIMEOUT') {
-          errorMessage = 'AI generation took too long. Please try again.';
-        } else if (result.errorType === 'NETWORK') {
-          errorMessage = 'Connection failed. Please check your internet.';
-        }
+        const errorMessage = result.error || 'Failed to generate hooks';
         showToast(errorMessage, 'error');
       }
     } catch (error) {

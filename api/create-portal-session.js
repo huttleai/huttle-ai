@@ -13,12 +13,17 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Validate and initialize Stripe
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (!STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY is not configured');
+}
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 // Initialize Supabase client for user lookup
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -31,9 +36,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Validate Stripe is configured
+  if (!stripe) {
+    console.error('❌ Portal session requested but STRIPE_SECRET_KEY is not configured');
+    return res.status(500).json({ error: 'Payment service not configured' });
+  }
+
   try {
-    // Get the app URL for redirects
-    const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
+    // Get the app URL for redirects - REQUIRED in production
+    const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl) {
+      console.error('❌ VITE_APP_URL or NEXT_PUBLIC_APP_URL must be configured for redirects');
+      return res.status(500).json({ error: 'App URL not configured for redirects' });
+    }
 
     // Get user from Authorization header
     const authHeader = req.headers.authorization;

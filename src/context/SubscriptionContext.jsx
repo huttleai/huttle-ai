@@ -1,9 +1,13 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { getUserTier, getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { useToast } from './ToastContext';
 import { AuthContext } from './AuthContext';
+import { isDemoMode } from '../services/stripeAPI';
 
 export const SubscriptionContext = createContext();
+
+// Demo mode storage key
+const DEMO_TIER_KEY = 'demo_subscription_tier';
 
 export function SubscriptionProvider({ children }) {
   const { addToast: showToast } = useToast();
@@ -14,7 +18,22 @@ export function SubscriptionProvider({ children }) {
   // SECURITY: Only allow via explicit environment variable in development
   const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
   
-  const [userTier, setUserTier] = useState(skipAuth ? TIERS.PRO : TIERS.FREE);
+  // Check if in demo mode (Stripe not configured)
+  const demoMode = isDemoMode();
+  
+  // Get initial tier from localStorage if in demo mode
+  const getInitialTier = () => {
+    if (skipAuth || demoMode) {
+      const savedTier = localStorage.getItem(DEMO_TIER_KEY);
+      if (savedTier && Object.values(TIERS).includes(savedTier)) {
+        return savedTier;
+      }
+      return TIERS.PRO; // Default to Pro in dev/demo mode
+    }
+    return TIERS.FREE;
+  };
+  
+  const [userTier, setUserTier] = useState(getInitialTier);
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -22,12 +41,51 @@ export function SubscriptionProvider({ children }) {
   // Get actual user ID from AuthContext
   const userId = user?.id || null;
 
+  // Function to change tier in demo mode
+  const setDemoTier = useCallback((newTier) => {
+    if (!skipAuth && !demoMode) {
+      console.warn('setDemoTier only works in demo/dev mode');
+      return false;
+    }
+    if (!Object.values(TIERS).includes(newTier)) {
+      console.error('Invalid tier:', newTier);
+      return false;
+    }
+    localStorage.setItem(DEMO_TIER_KEY, newTier);
+    setUserTier(newTier);
+    console.log('🎭 Demo Mode: Tier changed to', newTier);
+    return true;
+  }, [skipAuth, demoMode]);
+
+  // Listen for demo tier changes from other components (e.g., checkout simulation)
   useEffect(() => {
-    if (skipAuth) {
-      // Dev mode: Set to Pro tier immediately
-      setUserTier(TIERS.PRO);
+    if (!skipAuth && !demoMode) return;
+    
+    const handleStorageChange = (e) => {
+      if (e.key === DEMO_TIER_KEY && e.newValue) {
+        if (Object.values(TIERS).includes(e.newValue)) {
+          setUserTier(e.newValue);
+          console.log('🎭 Demo Mode: Tier synced to', e.newValue);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [skipAuth, demoMode]);
+
+  useEffect(() => {
+    if (skipAuth || demoMode) {
+      // Dev/Demo mode: Use saved tier or default to Pro
+      const savedTier = localStorage.getItem(DEMO_TIER_KEY);
+      if (savedTier && Object.values(TIERS).includes(savedTier)) {
+        setUserTier(savedTier);
+      } else {
+        setUserTier(TIERS.PRO);
+        localStorage.setItem(DEMO_TIER_KEY, TIERS.PRO);
+      }
       setLoading(false);
-      console.log('🚀 Development mode: Subscription tier set to Pro');
+      console.log('🚀 Demo mode: Subscription tier set to', savedTier || TIERS.PRO);
       return;
     }
     
@@ -41,7 +99,7 @@ export function SubscriptionProvider({ children }) {
       setStorageUsage(0);
       setLoading(false);
     }
-  }, [userId, skipAuth]);
+  }, [userId, skipAuth, demoMode]);
 
   const loadUserTier = async () => {
     try {
@@ -212,6 +270,9 @@ export function SubscriptionProvider({ children }) {
         TIERS,
         TIER_LIMITS,
         FEATURES,
+        // Demo mode helpers
+        isDemoMode: demoMode,
+        setDemoTier,
       }}
     >
       {children}

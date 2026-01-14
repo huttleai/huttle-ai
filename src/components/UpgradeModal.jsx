@@ -1,5 +1,8 @@
 import { X, Sparkles, Check, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { isDemoMode, simulateDemoCheckout } from '../services/stripeAPI';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useToast } from '../context/ToastContext';
 
 /**
  * UpgradeModal Component
@@ -7,6 +10,9 @@ import { useNavigate } from 'react-router-dom';
  */
 export default function UpgradeModal({ isOpen, onClose, feature, featureName }) {
   const navigate = useNavigate();
+  const { setDemoTier, TIERS } = useSubscription();
+  const { addToast } = useToast();
+  const demoMode = isDemoMode();
   
   if (!isOpen) return null;
 
@@ -155,13 +161,24 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
             {/* CTA */}
             <button 
               onClick={() => {
-                onClose();
-                navigate('/dashboard/subscription');
+                if (demoMode) {
+                  // In demo mode, simulate upgrade and show success
+                  const targetTier = config.tier.includes('Pro') ? 'pro' : 'essentials';
+                  simulateDemoCheckout(targetTier);
+                  if (setDemoTier) {
+                    setDemoTier(targetTier === 'pro' ? TIERS.PRO : TIERS.ESSENTIALS);
+                  }
+                  addToast(`Demo: Upgraded to ${config.tier}! Feature unlocked. 🎉`, 'success');
+                  onClose();
+                } else {
+                  onClose();
+                  navigate('/dashboard/subscription');
+                }
               }}
               className="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 btn-upgrade-glow"
             >
               <Sparkles className="w-5 h-5" />
-              Upgrade to {config.tier}
+              {demoMode ? `Demo: Unlock ${config.tier}` : `Upgrade to ${config.tier}`}
             </button>
 
             {/* Footer */}

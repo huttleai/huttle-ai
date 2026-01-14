@@ -19,8 +19,9 @@
 
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK || 
-                       'https://huttleai.app.n8n.cloud/webhook/plan-builder-async';
+// SECURITY: No hardcoded fallback - must be configured via environment variable
+// Note: Using non-VITE_ prefix for server-side code
+const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK || process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
 
 /**
  * Validate UUID format
