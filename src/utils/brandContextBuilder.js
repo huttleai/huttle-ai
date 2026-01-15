@@ -52,6 +52,22 @@ export function isCreatorProfile(brandData) {
 }
 
 /**
+ * Formats a display name to ensure a capitalized leading character
+ * @param {string} name - Raw name string
+ * @returns {string} Formatted name
+ */
+export function formatDisplayName(name = '') {
+  if (typeof name !== 'string') return '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  return trimmed
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-zA-Z]*[a-z]/, (match) => match.toUpperCase()))
+    .join(' ');
+}
+
+/**
  * Gets archetype traits for a creator
  * @param {string} archetype - Creator archetype value
  * @returns {Object|null} Archetype traits object or null
@@ -270,7 +286,7 @@ export function buildBriefBrandContext(brandData) {
  */
 export function getPersonalizedGreeting(brandData, fallbackName = 'there') {
   const isCreator = isCreatorProfile(brandData);
-  const name = brandData?.brandName || fallbackName;
+  const name = formatDisplayName(brandData?.brandName || fallbackName);
   
   // Extract first name if full name provided
   const firstName = name.split(' ')[0].replace('@', '');

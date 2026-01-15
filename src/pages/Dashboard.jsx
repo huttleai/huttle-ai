@@ -37,7 +37,7 @@ import { socialUpdates } from '../data/socialUpdates';
 import { mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
-import { getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
+import { formatDisplayName, getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getPlatformIcon } from '../components/SocialIcons';
 
 // TODO: N8N_WORKFLOW - Import workflow services when ready
@@ -420,7 +420,14 @@ export default function Dashboard() {
   // Build display name - for creators, use first name; for brands, use brand name
   const displayName = isCreator 
     ? personalizedGreeting.name
-    : brandProfile?.brandName || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator';
+    : formatDisplayName(
+      brandProfile?.brandName 
+        || user?.user_metadata?.name 
+        || user?.user_metadata?.full_name 
+        || user?.name 
+        || user?.email?.split('@')[0] 
+        || 'Creator'
+    );
 
   // Stats configuration - clean monochrome style
   const stats = [

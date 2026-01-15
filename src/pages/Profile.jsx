@@ -1,24 +1,70 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { User, Mail, Phone, MapPin, Save } from 'lucide-react';
+import { useBrand } from '../context/BrandContext';
+import { formatDisplayName } from '../utils/brandContextBuilder';
 
 export default function Profile() {
-  const { user } = useContext(AuthContext);
+  const { user, updateUser, updateEmail } = useContext(AuthContext);
+  const { brandProfile, updateBrandData } = useBrand();
   const { showToast } = useToast();
   
+  const defaultName = useMemo(() => (
+    brandProfile?.brandName
+      || user?.user_metadata?.name
+      || user?.user_metadata?.full_name
+      || user?.name
+      || user?.email?.split('@')[0]
+      || ''
+  ), [brandProfile?.brandName, user?.user_metadata?.name, user?.user_metadata?.full_name, user?.name, user?.email]);
+
+  const defaultEmail = user?.email || '';
+
   const [formData, setFormData] = useState({
-    name: user?.name || 'Zach',
-    email: user?.email || 'zach@example.com',
+    name: defaultName,
+    email: defaultEmail,
     phone: '',
     location: ''
   });
 
-  const handleSave = () => {
-    // Note: Profile updates are handled via AuthContext/BrandContext
-    // Backend sync happens automatically through context providers
-    showToast('Profile updated successfully!', 'success');
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      name: defaultName,
+      email: defaultEmail
+    }));
+  }, [defaultName, defaultEmail]);
+
+  const handleSave = async () => {
+    const trimmedName = formData.name.trim();
+    const trimmedEmail = formData.email.trim();
+
+    try {
+      if (trimmedName) {
+        await updateBrandData({ brandName: trimmedName });
+        await updateUser({ name: trimmedName, full_name: trimmedName });
+      }
+
+      if (trimmedEmail && trimmedEmail !== user?.email) {
+        const result = await updateEmail(trimmedEmail);
+        if (!result.success) {
+          showToast(result.error || 'Failed to update email', 'error');
+          return;
+        }
+        if (result.message) {
+          showToast(result.message, 'info');
+        }
+      }
+
+      showToast('Profile updated successfully!', 'success');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      showToast('Failed to update profile. Please try again.', 'error');
+    }
   };
+
+  const displayName = formatDisplayName(defaultName || 'Zach');
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
@@ -42,11 +88,11 @@ export default function Profile() {
         <div className="card p-5 md:p-6 mb-6">
           <div className="flex items-center gap-6 mb-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-huttle-primary to-huttle-primary-dark flex items-center justify-center text-white text-2xl font-bold">
-              {user?.name?.[0] || 'Z'}
+              {displayName?.[0] || 'Z'}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{user?.name || 'Zach'}</h2>
-              <p className="text-gray-600">{user?.email || 'zach@example.com'}</p>
+              <h2 className="text-xl font-bold text-gray-900">{displayName || 'Zach'}</h2>
+              <p className="text-gray-600">{defaultEmail || 'zach@example.com'}</p>
             </div>
           </div>
 
@@ -116,8 +162,8 @@ export default function Profile() {
             </button>
             <button 
               onClick={() => setFormData({
-                name: user?.name || 'Zach',
-                email: user?.email || 'zach@example.com',
+                name: defaultName,
+                email: defaultEmail,
                 phone: '',
                 location: ''
               })}
