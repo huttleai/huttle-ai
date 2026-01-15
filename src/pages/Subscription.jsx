@@ -96,54 +96,72 @@ export default function Subscription() {
   const handleUpgrade = async (planId) => {
     if (planId === 'freemium') return;
     
-    setLoading(planId);
-    console.log('🔵 [Subscription] Starting upgrade for plan:', planId);
-    console.log('🔵 [Subscription] Current tier:', userTier);
-    console.log('🔵 [Subscription] Target plan:', planId);
-    console.log('🔵 [Subscription] Billing cycle:', billingCycle);
-    console.log('🔵 [Subscription] User:', user?.email || 'Not logged in');
-    
     try {
-      const result = await createCheckoutSession(planId, billingCycle);
-      console.log('🔵 [Subscription] Checkout result:', JSON.stringify(result));
+      // STEP 1: Check User
+      if (!user) {
+        alert("ERROR: The app thinks you are NOT logged in. Please log out and back in.");
+        return;
+      }
       
-      // Handle demo mode response
-      if (result.demo) {
-        // Update tier in demo mode
-        if (setDemoTier) {
-          const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
-          setDemoTier(tierMap[planId] || TIERS.PRO);
+      // STEP 2: Announce Start
+      alert(`Debug: Starting Upgrade for User ${user.id} (${user.email})...\nPlan: ${planId}\nBilling: ${billingCycle}`);
+      setLoading(planId);
+
+      // STEP 3: Get the price ID
+      const plan = {
+        essentials: {
+          monthly: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY,
+          annual: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL
+        },
+        pro: {
+          monthly: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY,
+          annual: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL
         }
-        addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+      };
+      
+      const priceId = plan[planId]?.[billingCycle];
+      
+      if (!priceId) {
+        alert(`ERROR: No price ID found for ${planId} (${billingCycle}). Check your .env file!\n\nExpected env vars:\nVITE_STRIPE_PRICE_ESSENTIALS_MONTHLY\nVITE_STRIPE_PRICE_PRO_MONTHLY`);
         setLoading(null);
         return;
       }
       
-      if (!result.success) {
-        console.error('❌ [Subscription] Checkout failed:', result.error);
-        addToast(result.error || 'Failed to start checkout. Please try again.', 'error');
+      alert(`Debug: Price ID found: ${priceId}\nAbout to call /api/create-checkout-session...`);
+
+      // STEP 4: The Fetch
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          priceId,
+          planId,
+          billingCycle,
+          quantity: 1 
+        })
+      });
+
+      // STEP 5: Check Response
+      const data = await response.json();
+      console.log("Server Response:", data);
+
+      if (!response.ok) {
+        alert(`SERVER ERROR (${response.status}): ${data.error || JSON.stringify(data)}`);
         setLoading(null);
         return;
       }
-      
-      // If successful with URL, the redirect should happen in stripeAPI.js
-      // Set a timeout to clear loading state if redirect doesn't happen
-      if (result.success && result.url) {
-        console.log('✅ [Subscription] Redirect should happen to:', result.url);
-        // Give 5 seconds for redirect to happen, then clear loading
-        setTimeout(() => {
-          console.warn('⚠️ [Subscription] Redirect timeout - clearing loading state');
-          setLoading(null);
-        }, 5000);
-      } else if (result.success && !result.url) {
-        console.error('❌ [Subscription] No redirect URL in successful response');
-        addToast('Checkout session created but no redirect URL. Please try again.', 'error');
+
+      if (data.url) {
+        alert("SUCCESS! Redirecting to Stripe Checkout...");
+        window.location.href = data.url;
+      } else {
+        alert(`WEIRD: Success but no URL?\nResponse: ${JSON.stringify(data)}\nCheck Console for details.`);
         setLoading(null);
       }
-    } catch (error) {
-      console.error('❌ [Subscription] Upgrade error:', error);
-      console.error('❌ [Subscription] Error stack:', error.stack);
-      addToast('Something went wrong. Please try again.', 'error');
+
+    } catch (err) {
+      alert(`CRASH: ${err.message}\n\nStack: ${err.stack}`);
+      console.error('Full error:', err);
       setLoading(null);
     }
   };
