@@ -26,6 +26,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
+  console.log('🚀 [create-checkout-session] Handler started');
+  console.log('📋 Method:', req.method);
+  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -33,12 +37,13 @@ export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
+    console.log('❌ Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     console.log('🚀 Checkout session request received');
-    console.log('📦 Request body:', req.body);
+    console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
     
     // Validate Stripe key at runtime
     if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
@@ -154,24 +159,42 @@ export default async function handler(req, res) {
     }
 
     console.log('🎫 Creating Stripe checkout session...');
-    const session = await stripe.checkout.sessions.create(sessionOptions);
+    console.log('📋 Session options:', JSON.stringify(sessionOptions, null, 2));
+    
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionOptions);
+    } catch (stripeError) {
+      console.error('💥 Stripe API Error:', stripeError);
+      console.error('Stripe Error type:', stripeError.type);
+      console.error('Stripe Error code:', stripeError.code);
+      console.error('Stripe Error message:', stripeError.message);
+      
+      return res.status(500).json({
+        error: stripeError.message || 'Stripe API error',
+        type: stripeError.type,
+        code: stripeError.code,
+        details: 'Error creating Stripe checkout session'
+      });
+    }
 
     console.log('✅ Stripe session created successfully:', session.id);
+    console.log('✅ Session URL:', session.url);
+    
     return res.status(200).json({
       sessionId: session.id,
       url: session.url,
     });
   } catch (error) {
-    console.error('💥 Stripe Checkout Error:', error);
-    console.error('Error type:', error.type);
-    console.error('Error code:', error.code);
+    console.error('💥 General Checkout Error:', error);
+    console.error('Error name:', error.name);
     console.error('Error message:', error.message);
-    console.error('Full error:', JSON.stringify(error, null, 2));
+    console.error('Error stack:', error.stack);
     
     return res.status(500).json({
       error: error.message || 'Failed to create checkout session',
-      type: error.type,
-      code: error.code,
+      type: error.type || error.name,
+      code: error.code || 'UNKNOWN',
       details: 'Check server logs for more information'
     });
   }

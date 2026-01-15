@@ -50,12 +50,19 @@ async function getAuthHeaders() {
   };
   
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
+    console.log('🔵 Getting auth session...');
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.warn('⚠️ Auth session error:', error.message);
+    } else if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
+      console.log('✅ Auth token added to headers');
+    } else {
+      console.warn('⚠️ No auth session available - proceeding without auth');
     }
   } catch (e) {
-    console.warn('Could not get auth session:', e);
+    console.warn('⚠️ Could not get auth session:', e.message);
   }
   
   return headers;
@@ -161,32 +168,60 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     const headers = await getAuthHeaders();
     console.log('🔵 Calling API: /api/create-checkout-session');
     console.log('🔵 Request payload:', { priceId, planId: plan.id, billingCycle });
+    console.log('🔵 Headers:', JSON.stringify(headers));
     
-    const response = await fetch('/api/create-checkout-session', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        priceId,
-        planId: plan.id,
-        billingCycle,
-      }),
-    });
-
-    console.log('🔵 Response status:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('❌ API Error:', errorData);
-      throw new Error(errorData.error || 'Failed to create checkout session');
+    let response;
+    try {
+      response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          priceId,
+          planId: plan.id,
+          billingCycle,
+        }),
+      });
+      console.log('🔵 Fetch completed');
+    } catch (fetchError) {
+      console.error('❌ Fetch failed:', fetchError);
+      throw new Error(`Network error: ${fetchError.message}`);
     }
 
-    const data = await response.json();
+    console.log('🔵 Response status:', response.status);
+    console.log('🔵 Response headers:', JSON.stringify([...response.headers.entries()]));
+    
+    if (!response.ok) {
+      let errorData = {};
+      try {
+        const errorText = await response.text();
+        console.error('❌ API Error Response Text:', errorText);
+        errorData = JSON.parse(errorText);
+      } catch (parseError) {
+        console.error('❌ Could not parse error response:', parseError);
+      }
+      console.error('❌ API Error:', errorData);
+      throw new Error(errorData.error || `Failed to create checkout session (${response.status})`);
+    }
+
+    let data;
+    try {
+      const responseText = await response.text();
+      console.log('🔵 Response text:', responseText);
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Could not parse response:', parseError);
+      throw new Error('Invalid response from server');
+    }
+    
     console.log('✅ Checkout session created:', data);
     
     if (data.url) {
       console.log('🔵 Redirecting to Stripe Checkout:', data.url);
       // Redirect to Stripe Checkout
       window.location.href = data.url;
+    } else {
+      console.error('❌ No URL in response:', data);
+      throw new Error('No checkout URL received from server');
     }
 
     return {

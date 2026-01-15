@@ -97,14 +97,15 @@ export default function Subscription() {
     if (planId === 'freemium') return;
     
     setLoading(planId);
+    console.log('🔵 [Subscription] Starting upgrade for plan:', planId);
+    console.log('🔵 [Subscription] Current tier:', userTier);
+    console.log('🔵 [Subscription] Target plan:', planId);
+    console.log('🔵 [Subscription] Billing cycle:', billingCycle);
+    console.log('🔵 [Subscription] User:', user?.email || 'Not logged in');
+    
     try {
-      console.log('🔵 [Subscription] Starting upgrade for plan:', planId);
-      console.log('🔵 [Subscription] Current tier:', userTier);
-      console.log('🔵 [Subscription] Target plan:', planId);
-      console.log('🔵 [Subscription] Billing cycle:', billingCycle);
-      
       const result = await createCheckoutSession(planId, billingCycle);
-      console.log('🔵 [Subscription] Checkout result:', result);
+      console.log('🔵 [Subscription] Checkout result:', JSON.stringify(result));
       
       // Handle demo mode response
       if (result.demo) {
@@ -125,17 +126,23 @@ export default function Subscription() {
         return;
       }
       
-      // If successful, the page should redirect to Stripe Checkout
-      // If we reach here without redirecting, something went wrong
-      if (result.success && !result.url) {
+      // If successful with URL, the redirect should happen in stripeAPI.js
+      // Set a timeout to clear loading state if redirect doesn't happen
+      if (result.success && result.url) {
+        console.log('✅ [Subscription] Redirect should happen to:', result.url);
+        // Give 5 seconds for redirect to happen, then clear loading
+        setTimeout(() => {
+          console.warn('⚠️ [Subscription] Redirect timeout - clearing loading state');
+          setLoading(null);
+        }, 5000);
+      } else if (result.success && !result.url) {
         console.error('❌ [Subscription] No redirect URL in successful response');
         addToast('Checkout session created but no redirect URL. Please try again.', 'error');
         setLoading(null);
       }
-      // If there's a URL, the redirect happens in stripeAPI.js
-      // Keep loading state active during redirect
     } catch (error) {
       console.error('❌ [Subscription] Upgrade error:', error);
+      console.error('❌ [Subscription] Error stack:', error.stack);
       addToast('Something went wrong. Please try again.', 'error');
       setLoading(null);
     }
