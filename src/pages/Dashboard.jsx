@@ -3,7 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useContent } from '../context/ContentContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useBrand } from '../context/BrandContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar,
   TrendingUp,
@@ -36,6 +36,7 @@ import { AIDisclaimerFooter, HowWePredictModal } from '../components/AIDisclaime
 import { socialUpdates } from '../data/socialUpdates';
 import { mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
+import confetti from 'canvas-confetti';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { formatDisplayName, getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getPlatformIcon } from '../components/SocialIcons';
@@ -58,7 +59,8 @@ export default function Dashboard() {
     addSocialUpdate,
     addScheduledPostReminder,
   } = useNotifications();
-  const { userTier, getFeatureLimit } = useSubscription();
+  const { userTier, getFeatureLimit, getTierDisplayName } = useSubscription();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [aiGensUsed, setAiGensUsed] = useState(0);
   const [aiGensLimit, setAiGensLimit] = useState(Infinity);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -110,6 +112,43 @@ export default function Dashboard() {
     else if (hour < 17) setTimeGreeting('Good afternoon');
     else setTimeGreeting('Good evening');
   }, []);
+
+  // Handle payment success/cancel query parameters
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const canceled = searchParams.get('canceled');
+    
+    if (success === 'true') {
+      // Show success toast
+      showToast(`Welcome to ${getTierDisplayName(userTier)}! Your upgrade is now active.`, 'success');
+      
+      // Fire celebratory confetti
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReducedMotion) {
+        const brandColors = ['#01bad2', '#2B8FC7', '#00ACC1', '#4DD0E1', '#ffffff'];
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: brandColors,
+          disableForReducedMotion: true,
+        });
+      }
+      
+      // Clear the query parameter from URL
+      searchParams.delete('success');
+      setSearchParams(searchParams, { replace: true });
+    }
+    
+    if (canceled === 'true') {
+      // Show info toast for canceled checkout
+      showToast('Checkout canceled. No changes were made to your subscription.', 'info');
+      
+      // Clear the query parameter from URL
+      searchParams.delete('canceled');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, showToast, userTier, getTierDisplayName]);
 
   // Get personalized greeting based on profile type
   const isCreator = isCreatorProfile(brandProfile);
@@ -323,10 +362,14 @@ export default function Dashboard() {
   // { success: true, hashtags: [{ tag: '#hashtag', score: '95%' }] }
   // ==========================================================================
   const keywords = useMemo(() => {
-    // TODO: N8N_WORKFLOW - Replace with workflow data when available
-    // Current implementation: Industry-based hashtag fallback
+    // Only show hashtags if user has completed their profile setup
     const industry = brandProfile?.industry?.toLowerCase() || '';
     const niche = brandProfile?.niche?.toLowerCase() || '';
+    
+    // If user hasn't set up their profile, return empty array
+    if (!industry && !niche) {
+      return [];
+    }
     
     const hashtagsByIndustry = {
       'medical spa': [
@@ -346,22 +389,66 @@ export default function Dashboard() {
         { tag: '#ai', score: '92%' },
         { tag: '#innovation', score: '88%' },
         { tag: '#technews', score: '85%' },
+      ],
+      'fitness': [
+        { tag: '#fitness', score: '95%' },
+        { tag: '#workout', score: '91%' },
+        { tag: '#fitnessmotivation', score: '87%' },
+        { tag: '#gym', score: '84%' },
+      ],
+      'food': [
+        { tag: '#foodie', score: '95%' },
+        { tag: '#cooking', score: '91%' },
+        { tag: '#recipe', score: '87%' },
+        { tag: '#homemade', score: '84%' },
+      ],
+      'travel': [
+        { tag: '#travel', score: '95%' },
+        { tag: '#wanderlust', score: '91%' },
+        { tag: '#adventure', score: '87%' },
+        { tag: '#explore', score: '84%' },
+      ],
+      'fashion': [
+        { tag: '#fashion', score: '95%' },
+        { tag: '#style', score: '91%' },
+        { tag: '#ootd', score: '87%' },
+        { tag: '#fashionista', score: '84%' },
+      ],
+      'business': [
+        { tag: '#business', score: '95%' },
+        { tag: '#entrepreneur', score: '91%' },
+        { tag: '#success', score: '87%' },
+        { tag: '#startup', score: '84%' },
+      ],
+      'lifestyle': [
+        { tag: '#lifestyle', score: '95%' },
+        { tag: '#dailylife', score: '91%' },
+        { tag: '#motivation', score: '87%' },
+        { tag: '#inspiration', score: '84%' },
+      ],
+      'education': [
+        { tag: '#education', score: '95%' },
+        { tag: '#learning', score: '91%' },
+        { tag: '#knowledge', score: '87%' },
+        { tag: '#study', score: '84%' },
+      ],
+      'entertainment': [
+        { tag: '#entertainment', score: '95%' },
+        { tag: '#gaming', score: '91%' },
+        { tag: '#fun', score: '87%' },
+        { tag: '#viral', score: '84%' },
+      ],
+      'art': [
+        { tag: '#art', score: '95%' },
+        { tag: '#artist', score: '91%' },
+        { tag: '#creative', score: '87%' },
+        { tag: '#artwork', score: '84%' },
       ]
     };
     
-    const defaultHashtags = [
-      { tag: '#socialmedia', score: '93%' },
-      { tag: '#marketing', score: '88%' },
-      { tag: '#contentcreation', score: '85%' },
-      { tag: '#business', score: '82%' },
-    ];
-    
     const industryHashtags = hashtagsByIndustry[industry] || hashtagsByIndustry[niche] || [];
     
-    if (industryHashtags.length > 0) {
-      return industryHashtags.slice(0, 4);
-    }
-    return defaultHashtags.slice(0, 4);
+    return industryHashtags.slice(0, 4);
   }, [brandProfile?.industry, brandProfile?.niche]);
 
   // Monitor panel updates
@@ -786,26 +873,28 @@ export default function Dashboard() {
                 })}
               </div>
 
-              {/* Trending Keywords (no hashtags) */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Trending Keywords</p>
-                  <span className="text-[10px] text-gray-400">{keywords.length} keywords</span>
+              {/* Trending Keywords (no hashtags) - only show if user has profile set up */}
+              {keywords.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Trending Keywords</p>
+                    <span className="text-[10px] text-gray-400">{keywords.length} keywords</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {keywords.map((keyword, idx) => {
+                      const cleanKeyword = keyword.tag?.replace(/^#/, '') || keyword.tag;
+                      return (
+                        <span 
+                          key={idx}
+                          className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700"
+                        >
+                          {cleanKeyword}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {keywords.map((keyword, idx) => {
-                    const cleanKeyword = keyword.tag?.replace(/^#/, '') || keyword.tag;
-                    return (
-                      <span 
-                        key={idx}
-                        className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700"
-                      >
-                        {cleanKeyword}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
+              )}
               
               <Link 
                 to="/dashboard/trend-lab" 
@@ -866,29 +955,45 @@ export default function Dashboard() {
               </div>
             </div>
             
-            <div className="space-y-2">
-              {keywords.map((keyword, i) => {
-                const isCopied = copiedHashtag === keyword.tag;
-                return (
-                  <div 
-                    key={i} 
-                    onClick={() => copyHashtag(keyword.tag)}
-                    className="group flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="font-medium text-gray-700 text-sm group-hover:text-gray-900">{keyword.tag}</span>
-                      {isCopied ? (
-                        <Check className="w-3.5 h-3.5 text-green-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </div>
-                    <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">{keyword.score}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <AIDisclaimerFooter phraseIndex={1} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
+            {keywords.length === 0 ? (
+              <div className="text-center py-6">
+                <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                  <Target className="w-5 h-5 text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">Set up your profile</p>
+                <p className="text-xs text-gray-500 mb-3">Complete your brand voice to get personalized hashtags</p>
+                <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark">
+                  Setup Brand Voice
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {keywords.map((keyword, i) => {
+                    const isCopied = copiedHashtag === keyword.tag;
+                    return (
+                      <div 
+                        key={i} 
+                        onClick={() => copyHashtag(keyword.tag)}
+                        className="group flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="font-medium text-gray-700 text-sm group-hover:text-gray-900">{keyword.tag}</span>
+                          {isCopied ? (
+                            <Check className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </div>
+                        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">{keyword.score}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <AIDisclaimerFooter phraseIndex={1} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
+              </>
+            )}
           </div>
         </div>
 

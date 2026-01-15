@@ -115,22 +115,30 @@ export function AuthProvider({ children }) {
         .from('user_profile')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single() for new users
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 is "not found" error, which is expected for new users
+      if (error) {
         console.error('Error checking user profile:', error);
+        // On error, assume user needs onboarding to be safe
+        setUserProfile(null);
+        setNeedsOnboarding(true);
+        return;
       }
 
-      if (data) {
+      if (data && data.quiz_completed_at) {
+        // User has completed onboarding
         setUserProfile(data);
-        setNeedsOnboarding(!data.quiz_completed_at);
+        setNeedsOnboarding(false);
       } else {
-        setUserProfile(null);
+        // User exists but hasn't completed quiz, OR no profile exists
+        // Either way, they need onboarding
+        setUserProfile(data || null);
         setNeedsOnboarding(true);
       }
     } catch (error) {
       console.error('Error in checkUserProfile:', error);
+      // On error, force onboarding to be safe
+      setUserProfile(null);
       setNeedsOnboarding(true);
     }
   };
@@ -170,10 +178,17 @@ export function AuthProvider({ children }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      // Clear all auth-related state
       setUser(null);
+      setUserProfile(null);
+      setNeedsOnboarding(false);
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
+      // Still clear state even on error to ensure user is logged out locally
+      setUser(null);
+      setUserProfile(null);
+      setNeedsOnboarding(false);
       return { success: false, error: error.message };
     }
   };

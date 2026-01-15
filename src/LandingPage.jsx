@@ -1040,7 +1040,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               <div className="flex flex-row items-center justify-center gap-3 md:gap-8 mb-5 md:mb-12">
                 <div className="text-center md:text-right">
                   <div className="text-slate-500 text-[10px] md:text-lg font-bold">Regular Pro</div>
-                  <div className="text-slate-400 text-base md:text-2xl font-bold line-through">$420/yr</div>
+                  <div className="text-slate-400 text-base md:text-2xl font-bold line-through">$357/yr</div>
                 </div>
                 <div className="h-10 w-px md:h-16 md:w-px bg-white/10" />
                 <div className="text-center md:text-left">
@@ -1480,7 +1480,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Jan 23</span>
+              <span className="text-sm font-bold">Early Access Jan 25</span>
             </span>
           </div>
           <button 
@@ -1546,7 +1546,7 @@ export default function LandingPage() {
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
                   <span className="mt-2.5 text-base md:text-lg font-semibold text-slate-700 w-full flex justify-center lg:justify-start lg:pl-5">
-                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $336)</span>
+                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $357/yr)</span>
                   </span>
                 </div>
               </BlurFade>

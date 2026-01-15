@@ -64,7 +64,7 @@ export default function Profile() {
     }
   };
 
-  const displayName = formatDisplayName(defaultName || 'Zach');
+  const displayName = formatDisplayName(defaultName);
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
@@ -88,11 +88,11 @@ export default function Profile() {
         <div className="card p-5 md:p-6 mb-6">
           <div className="flex items-center gap-6 mb-6">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-huttle-primary to-huttle-primary-dark flex items-center justify-center text-white text-2xl font-bold">
-              {displayName?.[0] || 'Z'}
+              {displayName?.[0]?.toUpperCase() || <User className="w-8 h-8" />}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{displayName || 'Zach'}</h2>
-              <p className="text-gray-600">{defaultEmail || 'zach@example.com'}</p>
+              <h2 className="text-xl font-bold text-gray-900">{displayName || 'Your Name'}</h2>
+              <p className="text-gray-600">{defaultEmail || 'No email set'}</p>
             </div>
           </div>
 

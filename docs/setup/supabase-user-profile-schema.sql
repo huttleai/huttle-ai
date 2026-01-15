@@ -1,5 +1,12 @@
 -- User Profile Schema for Onboarding Quiz Data
 -- Stores personalization data collected during onboarding to customize AI generations
+--
+-- IMPORTANT: Onboarding Flow
+-- - New users will NOT have a row in this table until they complete onboarding
+-- - The `quiz_completed_at` field determines if onboarding is complete:
+--   - NULL or missing row = user needs to complete onboarding
+--   - Has timestamp = user has completed onboarding
+-- - The frontend checks this field to redirect new users to the onboarding quiz
 
 CREATE TABLE IF NOT EXISTS public.user_profile (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -12,7 +19,9 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   posting_frequency TEXT, -- How often they plan to post (e.g., "daily", "3-5 times per week")
   
   -- Onboarding tracking
-  quiz_completed_at TIMESTAMP WITH TIME ZONE,
+  -- CRITICAL: quiz_completed_at = NULL means user has NOT completed onboarding
+  -- The frontend uses this to force new users to the onboarding quiz
+  quiz_completed_at TIMESTAMP WITH TIME ZONE, -- NULL = needs onboarding, timestamp = completed
   onboarding_step INTEGER DEFAULT 0, -- Track which step of onboarding they're on
   has_seen_tour BOOLEAN DEFAULT false NOT NULL, -- Track if user has completed the guided tour
   

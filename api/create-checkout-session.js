@@ -116,8 +116,8 @@ export default async function handler(req, res) {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/?canceled=true`,
+      success_url: `${appUrl}/dashboard?success=true`,
+      cancel_url: `${appUrl}/dashboard?canceled=true`,
       metadata: {
         planId,
         billingCycle,

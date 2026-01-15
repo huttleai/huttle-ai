@@ -30,8 +30,24 @@ export default function Sidebar() {
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/dashboard/login');
+    try {
+      const result = await logout();
+      if (result.success) {
+        // Clear any local storage data
+        localStorage.removeItem('brandData');
+        localStorage.removeItem('hasSeenWelcome');
+        // Navigate to login
+        navigate('/dashboard/login', { replace: true });
+      } else {
+        console.error('Logout failed:', result.error);
+        // Force navigation even if logout had issues
+        navigate('/dashboard/login', { replace: true });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force navigation on error
+      navigate('/dashboard/login', { replace: true });
+    }
   };
 
   const navItems = [
