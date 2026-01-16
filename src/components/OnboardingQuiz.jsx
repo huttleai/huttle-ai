@@ -163,6 +163,7 @@ export default function OnboardingQuiz({ onComplete }) {
     creator_archetype: '',
     brand_name: '',
     industry: '',
+    industry_custom: '', // Custom text when "Other" is selected
     niche: '',
     target_audience: '',
     content_goals: [],
@@ -172,16 +173,15 @@ export default function OnboardingQuiz({ onComplete }) {
     // New viral content strategy fields
     content_strengths: [],
     biggest_challenge: '',
-    hook_style_preference: '',
     emotional_triggers: []
   });
   const [saving, setSaving] = useState(false);
 
   const isCreator = formData.profile_type === 'creator';
   
-  // Total steps: 11 for brand, 12 for creator (includes archetype step)
-  // Steps: Profile Type, (Archetype for creators), Name, Industry, Niche, Audience, Goals, Strengths, Challenge, Hook Style, Emotional Triggers, Voice
-  const totalSteps = isCreator ? 12 : 11;
+  // Total steps: 10 for both brand and creator
+  // Steps: Profile Type, (Archetype for creators), Name, (Industry for brands), Niche/Focus, Audience/Community, Goals, Strengths, Challenge, Emotional Triggers, Voice
+  const totalSteps = 10;
   const progress = (step / totalSteps) * 100;
 
   // Get step icons based on profile type
@@ -197,13 +197,12 @@ export default function OnboardingQuiz({ onComplete }) {
     return [
       ...baseIcons,
       { icon: AtSign, label: 'Name' },
-      { icon: Building2, label: isCreator ? 'Category' : 'Industry' },
+      ...(isCreator ? [] : [{ icon: Building2, label: 'Industry' }]),
       { icon: Palette, label: isCreator ? 'Focus' : 'Niche' },
       { icon: Users, label: isCreator ? 'Community' : 'Audience' },
       { icon: Target, label: 'Goals' },
       { icon: Zap, label: 'Strengths' },
       { icon: AlertCircle, label: 'Challenge' },
-      { icon: Eye, label: 'Hooks' },
       { icon: Heart, label: 'Emotions' },
       { icon: MessageSquare, label: isCreator ? 'Vibe' : 'Voice' }
     ];
@@ -220,6 +219,17 @@ export default function OnboardingQuiz({ onComplete }) {
     }));
   };
 
+  // Helper to get the logical step number (accounts for skipped steps)
+  const getLogicalStep = (displayStep) => {
+    // For creators: skip step 3 (industry), so step 4 becomes logical step 4
+    // For brands: all steps are shown
+    if (isCreator && displayStep >= 3) {
+      // Step 3 is skipped for creators, so step 3 in display = step 4 logically
+      return displayStep;
+    }
+    return displayStep;
+  };
+
   const handleNext = () => {
     // Validation based on current step
     if (step === 1 && !formData.profile_type) {
@@ -228,27 +238,32 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Calculate step numbers based on profile type
-    // For creators: 1=Profile, 2=Archetype, 3=Name, 4=Industry, 5=Niche, 6=Audience, 7=Goals, 8=Strengths, 9=Challenge, 10=Hooks, 11=Emotions, 12=Voice
-    // For brands: 1=Profile, 2=Name, 3=Industry, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Hooks, 10=Emotions, 11=Voice
+    // For creators: 1=Profile, 2=Archetype, 3=Name, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Emotions, 10=Voice
+    // For brands: 1=Profile, 2=Name, 3=Industry, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Emotions, 10=Voice
     const nameStep = isCreator ? 3 : 2;
-    const industryStep = isCreator ? 4 : 3;
-    const nicheStep = isCreator ? 5 : 4;
-    const audienceStep = isCreator ? 6 : 5;
-    const goalsStep = isCreator ? 7 : 6;
-    const strengthsStep = isCreator ? 8 : 7;
-    const challengeStep = isCreator ? 9 : 8;
-    const hookStyleStep = isCreator ? 10 : 9;
-    const emotionalStep = isCreator ? 11 : 10;
+    const industryStep = 3; // Only for brands
+    const nicheStep = isCreator ? 4 : 4;
+    const audienceStep = isCreator ? 5 : 5;
+    const goalsStep = isCreator ? 6 : 6;
+    const strengthsStep = isCreator ? 7 : 7;
+    const challengeStep = isCreator ? 8 : 8;
+    const emotionalStep = isCreator ? 9 : 9;
     
     // Name step validation (required)
     if (step === nameStep && !formData.brand_name.trim()) {
       addToast(isCreator ? 'Please enter your name or handle' : 'Please enter your brand name', 'warning');
       return;
     }
-    // Industry step is optional for creators, required for brands
-    if (step === industryStep && !isCreator && !formData.industry) {
-      addToast('Please select your industry', 'warning');
-      return;
+    // Industry step - required for brands, and if "Other" is selected, require custom text
+    if (step === industryStep && !isCreator) {
+      if (!formData.industry) {
+        addToast('Please select your industry', 'warning');
+        return;
+      }
+      if (formData.industry === 'other' && !formData.industry_custom.trim()) {
+        addToast('Please specify your industry', 'warning');
+        return;
+      }
     }
     if (step === nicheStep && !formData.niche) {
       addToast(isCreator ? 'Please select your content focus' : 'Please select your content niche', 'warning');
@@ -270,11 +285,6 @@ export default function OnboardingQuiz({ onComplete }) {
     // Challenge step - required
     if (step === challengeStep && !formData.biggest_challenge) {
       addToast('Please select your biggest challenge', 'warning');
-      return;
-    }
-    // Hook style step - required
-    if (step === hookStyleStep && !formData.hook_style_preference) {
-      addToast('Please select your preferred hook style', 'warning');
       return;
     }
     // Emotional triggers - require at least one
@@ -323,7 +333,7 @@ export default function OnboardingQuiz({ onComplete }) {
         profile_type: formData.profile_type,
         creator_archetype: formData.creator_archetype || null,
         brand_name: formData.brand_name || null,
-        industry: formData.industry || null,
+        industry: formData.industry === 'other' && formData.industry_custom ? formData.industry_custom.trim() : (formData.industry || null),
         niche: formData.niche,
         target_audience: formData.target_audience,
         content_goals: formData.content_goals,
@@ -333,7 +343,6 @@ export default function OnboardingQuiz({ onComplete }) {
         // New viral content strategy fields
         content_strengths: formData.content_strengths,
         biggest_challenge: formData.biggest_challenge || null,
-        hook_style_preference: formData.hook_style_preference || null,
         emotional_triggers: formData.emotional_triggers,
         quiz_completed_at: new Date().toISOString(),
         onboarding_step: totalSteps
@@ -370,7 +379,6 @@ export default function OnboardingQuiz({ onComplete }) {
         // New viral content strategy fields
         contentStrengths: formData.content_strengths,
         biggestChallenge: formData.biggest_challenge || '',
-        hookStylePreference: formData.hook_style_preference || '',
         emotionalTriggers: formData.emotional_triggers,
       });
 
@@ -520,20 +528,19 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Industry step
-    const industryStep = isCreator ? 4 : 3;
-    if (step === industryStep) {
+    // Industry step (only for brands, not creators)
+    const industryStep = 3;
+    if (step === industryStep && !isCreator) {
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            {isCreator ? "What category are you in?" : "What industry are you in?"}
+            What industry are you in?
           </h2>
           <p className="text-slate-500 mb-6">
-            {isCreator ? 'This helps AI understand your space' : 'This helps AI understand your competitive landscape'}
-            {isCreator && <span className="text-slate-400 ml-1">(optional)</span>}
+            This helps AI understand your competitive landscape
           </p>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {INDUSTRIES.map(industry => {
               const Icon = industry.icon;
               const isSelected = formData.industry === industry.value;
@@ -541,7 +548,7 @@ export default function OnboardingQuiz({ onComplete }) {
               return (
                 <button
                   key={industry.value}
-                  onClick={() => setFormData({ ...formData, industry: industry.value })}
+                  onClick={() => setFormData({ ...formData, industry: industry.value, industry_custom: '' })}
                   className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
@@ -565,12 +572,29 @@ export default function OnboardingQuiz({ onComplete }) {
               );
             })}
           </div>
+          
+          {/* Show text input when "Other" is selected */}
+          {formData.industry === 'other' && (
+            <div className="mt-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Please specify your industry
+              </label>
+              <input
+                type="text"
+                value={formData.industry_custom}
+                onChange={(e) => setFormData({ ...formData, industry_custom: e.target.value })}
+                placeholder="e.g., Digital Marketing Agency"
+                className="w-full px-4 py-3 text-base border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
       );
     }
     
     // Niche step
-    const nicheStep = isCreator ? 5 : 4;
+    const nicheStep = isCreator ? 4 : 4;
     if (step === nicheStep) {
       return (
         <div className="animate-fadeIn">
@@ -618,7 +642,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Audience step
-    const audienceStep = isCreator ? 6 : 5;
+    const audienceStep = isCreator ? 5 : 5;
     if (step === audienceStep) {
       return (
         <div className="animate-fadeIn">
@@ -664,7 +688,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Goals step
-    const goalsStep = isCreator ? 7 : 6;
+    const goalsStep = isCreator ? 6 : 6;
     if (step === goalsStep) {
       const goals = isCreator ? CREATOR_CONTENT_GOALS : BRAND_CONTENT_GOALS;
       
@@ -710,7 +734,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Strengths step - what users are best at
-    const strengthsStep = isCreator ? 8 : 7;
+    const strengthsStep = isCreator ? 7 : 7;
     if (step === strengthsStep) {
       return (
         <div className="animate-fadeIn">
@@ -758,7 +782,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Challenge step - biggest content struggle
-    const challengeStep = isCreator ? 9 : 8;
+    const challengeStep = isCreator ? 8 : 8;
     if (step === challengeStep) {
       return (
         <div className="animate-fadeIn">
@@ -799,53 +823,9 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Hook style step - preferred viral hook style
-    const hookStyleStep = isCreator ? 10 : 9;
-    if (step === hookStyleStep) {
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What hook style feels most like you?</h2>
-          <p className="text-slate-500 mb-6">This shapes how AI grabs attention for your content</p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {HOOK_STYLES.map(hookStyle => {
-              const Icon = hookStyle.icon;
-              const isSelected = formData.hook_style_preference === hookStyle.value;
-              return (
-                <button
-                  key={hookStyle.value}
-                  onClick={() => setFormData({ ...formData, hook_style_preference: hookStyle.value })}
-                  className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                    isSelected
-                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
-                  }`}
-                >
-                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
-                  }`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">{hookStyle.label}</p>
-                    <p className="text-sm text-slate-500">{hookStyle.description}</p>
-                  </div>
-                  {isSelected && (
-                    <Check className="w-5 h-5 text-huttle-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-center text-sm text-slate-400 mt-4">
-            Great hooks are key to viral content
-          </p>
-        </div>
-      );
-    }
     
     // Emotional triggers step - how audience should feel
-    const emotionalStep = isCreator ? 11 : 10;
+    const emotionalStep = isCreator ? 9 : 9;
     if (step === emotionalStep) {
       return (
         <div className="animate-fadeIn">
@@ -893,7 +873,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Voice step (final) - includes platform selection
-    const voiceStep = isCreator ? 12 : 11;
+    const voiceStep = 10;
     if (step === voiceStep) {
       return (
         <div className="animate-fadeIn">
