@@ -1,50 +1,46 @@
 import { useState, useContext } from 'react';
-import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 
-// Profile types
+// Profile types - clean monochrome design
 const PROFILE_TYPES = [
   { 
     value: 'brand', 
     label: 'Brand / Business', 
     description: 'Small business, agency, or company account',
-    icon: Briefcase,
-    gradient: 'from-slate-600 to-blue-600',
-    bgPattern: 'bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.1),transparent_50%)]'
+    icon: Briefcase
   },
   { 
     value: 'creator', 
     label: 'Solo Creator', 
     description: 'Building your personal brand & community',
-    icon: Sparkles,
-    gradient: 'from-violet-500 to-pink-500',
-    bgPattern: 'bg-[radial-gradient(circle_at_70%_70%,rgba(236,72,153,0.1),transparent_50%)]'
+    icon: Sparkles
   }
 ];
 
-// Creator archetypes (for solo creators only)
+// Creator archetypes (for solo creators only) - clean icons
 const CREATOR_ARCHETYPES = [
-  { value: 'educator', label: 'The Educator', description: 'You teach and explain', emoji: '📚', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-  { value: 'entertainer', label: 'The Entertainer', description: 'You make people smile', emoji: '🎭', icon: Smile, color: 'from-pink-500 to-rose-500' },
-  { value: 'storyteller', label: 'The Storyteller', description: 'You share experiences', emoji: '✨', icon: PenTool, color: 'from-amber-500 to-orange-500' },
-  { value: 'inspirer', label: 'The Inspirer', description: 'You motivate others', emoji: '🔥', icon: Heart, color: 'from-red-500 to-pink-500' },
-  { value: 'curator', label: 'The Curator', description: 'You discover and share gems', emoji: '💎', icon: Search, color: 'from-purple-500 to-indigo-500' }
+  { value: 'educator', label: 'The Educator', description: 'You teach and explain', icon: BookOpen },
+  { value: 'entertainer', label: 'The Entertainer', description: 'You make people smile', icon: Smile },
+  { value: 'storyteller', label: 'The Storyteller', description: 'You share experiences', icon: PenTool },
+  { value: 'inspirer', label: 'The Inspirer', description: 'You motivate others', icon: Heart },
+  { value: 'curator', label: 'The Curator', description: 'You discover and share gems', icon: Search }
 ];
 
 const NICHES = [
-  { value: 'fitness', label: 'Fitness & Wellness', emoji: '💪', color: 'from-red-500 to-orange-500' },
-  { value: 'food', label: 'Food & Cooking', emoji: '🍳', color: 'from-orange-500 to-yellow-500' },
-  { value: 'travel', label: 'Travel & Adventure', emoji: '✈️', color: 'from-blue-500 to-cyan-500' },
-  { value: 'fashion', label: 'Fashion & Beauty', emoji: '👗', color: 'from-pink-500 to-rose-500' },
-  { value: 'tech', label: 'Technology & Gadgets', emoji: '💻', color: 'from-violet-500 to-purple-500' },
-  { value: 'business', label: 'Business & Entrepreneurship', emoji: '💼', color: 'from-slate-600 to-slate-800' },
-  { value: 'lifestyle', label: 'Lifestyle & Personal', emoji: '🌟', color: 'from-amber-500 to-yellow-500' },
-  { value: 'education', label: 'Education & Learning', emoji: '📚', color: 'from-emerald-500 to-green-500' },
-  { value: 'entertainment', label: 'Entertainment & Gaming', emoji: '🎮', color: 'from-purple-500 to-indigo-500' },
-  { value: 'art', label: 'Art & Creativity', emoji: '🎨', color: 'from-rose-500 to-pink-500' },
-  { value: 'other', label: 'Other', emoji: '📌', color: 'from-gray-500 to-gray-600' }
+  { value: 'fitness', label: 'Fitness & Wellness', icon: Heart },
+  { value: 'food', label: 'Food & Cooking', icon: Sparkles },
+  { value: 'travel', label: 'Travel & Adventure', icon: Rocket },
+  { value: 'fashion', label: 'Fashion & Beauty', icon: Palette },
+  { value: 'tech', label: 'Technology & Gadgets', icon: Zap },
+  { value: 'business', label: 'Business & Entrepreneurship', icon: Briefcase },
+  { value: 'lifestyle', label: 'Lifestyle & Personal', icon: User },
+  { value: 'education', label: 'Education & Learning', icon: BookOpen },
+  { value: 'entertainment', label: 'Entertainment & Gaming', icon: Smile },
+  { value: 'art', label: 'Art & Creativity', icon: PenTool },
+  { value: 'other', label: 'Other', icon: Target }
 ];
 
 const AUDIENCES = [
@@ -52,52 +48,53 @@ const AUDIENCES = [
   { value: 'millennials', label: 'Millennials (25-40)', description: 'Career-focused, diverse interests', icon: TrendingUp },
   { value: 'gen-x', label: 'Gen X (41-56)', description: 'Established, family-oriented', icon: Users },
   { value: 'boomers', label: 'Baby Boomers (57+)', description: 'Experienced, value-driven', icon: Target },
-  { value: 'professionals', label: 'Professionals', description: 'Industry experts and leaders', icon: Sparkles },
+  { value: 'professionals', label: 'Professionals', description: 'Industry experts and leaders', icon: Briefcase },
   { value: 'entrepreneurs', label: 'Entrepreneurs', description: 'Business owners and startups', icon: Rocket },
-  { value: 'students', label: 'Students', description: 'Learning-focused audience', icon: Calendar },
+  { value: 'students', label: 'Students', description: 'Learning-focused audience', icon: BookOpen },
   { value: 'general', label: 'General Audience', description: 'Broad, mixed demographic', icon: Users }
 ];
 
-// Content goals - different for brand vs creator
+// Content goals - clean teal icons
 const BRAND_CONTENT_GOALS = [
-  { value: 'grow_followers', label: 'Grow Followers', icon: Users, color: 'bg-huttle-primary' },
-  { value: 'increase_engagement', label: 'Increase Engagement', icon: MessageSquare, color: 'bg-green-500' },
-  { value: 'drive_sales', label: 'Drive Sales', icon: Target, color: 'bg-purple-500' },
-  { value: 'build_brand', label: 'Build Brand Awareness', icon: Sparkles, color: 'bg-amber-500' },
-  { value: 'educate', label: 'Educate Audience', icon: Calendar, color: 'bg-cyan-500' },
-  { value: 'generate_leads', label: 'Generate Leads', icon: Rocket, color: 'bg-pink-500' }
+  { value: 'grow_followers', label: 'Grow Followers', icon: Users },
+  { value: 'increase_engagement', label: 'Increase Engagement', icon: MessageSquare },
+  { value: 'drive_sales', label: 'Drive Sales', icon: Target },
+  { value: 'build_brand', label: 'Build Brand Awareness', icon: Sparkles },
+  { value: 'educate', label: 'Educate Audience', icon: BookOpen },
+  { value: 'generate_leads', label: 'Generate Leads', icon: Rocket }
 ];
 
 const CREATOR_CONTENT_GOALS = [
-  { value: 'grow_followers', label: 'Grow My Following', icon: Users, color: 'bg-huttle-primary' },
-  { value: 'increase_engagement', label: 'Boost Engagement', icon: MessageSquare, color: 'bg-green-500' },
-  { value: 'build_community', label: 'Build Community', icon: Heart, color: 'bg-pink-500' },
-  { value: 'share_story', label: 'Share My Story', icon: PenTool, color: 'bg-amber-500' },
-  { value: 'express_myself', label: 'Express Myself', icon: Sparkles, color: 'bg-purple-500' },
-  { value: 'monetize', label: 'Monetize Content', icon: Target, color: 'bg-emerald-500' }
+  { value: 'grow_followers', label: 'Grow My Following', icon: Users },
+  { value: 'increase_engagement', label: 'Boost Engagement', icon: MessageSquare },
+  { value: 'build_community', label: 'Build Community', icon: Heart },
+  { value: 'share_story', label: 'Share My Story', icon: PenTool },
+  { value: 'express_myself', label: 'Express Myself', icon: Sparkles },
+  { value: 'monetize', label: 'Monetize Content', icon: Target }
 ];
 
 const POSTING_FREQUENCIES = [
-  { value: 'daily', label: 'Daily', description: '7+ posts per week', icon: '🔥' },
-  { value: 'frequent', label: '3-5 times per week', description: 'Regular posting schedule', icon: '⚡' },
-  { value: 'moderate', label: '1-2 times per week', description: 'Consistent but flexible', icon: '✨' },
-  { value: 'occasional', label: 'A few times per month', description: 'Quality over quantity', icon: '💎' }
+  { value: 'daily', label: 'Daily', description: '7+ posts per week', icon: Zap },
+  { value: 'frequent', label: '3-5 times per week', description: 'Regular posting schedule', icon: TrendingUp },
+  { value: 'moderate', label: '1-2 times per week', description: 'Consistent but flexible', icon: Calendar },
+  { value: 'occasional', label: 'A few times per month', description: 'Quality over quantity', icon: Sparkles }
 ];
 
+// Platforms with Lucide icons (monochrome)
 const PLATFORMS = [
-  { value: 'instagram', label: 'Instagram', emoji: '📸', color: 'from-pink-500 via-purple-500 to-indigo-500' },
-  { value: 'facebook', label: 'Facebook', emoji: '👥', color: 'from-blue-600 to-blue-700' },
-  { value: 'tiktok', label: 'TikTok', emoji: '🎵', color: 'from-gray-900 to-black' },
-  { value: 'twitter', label: 'X (Twitter)', emoji: '𝕏', color: 'from-gray-800 to-black' },
-  { value: 'youtube', label: 'YouTube', emoji: '▶️', color: 'from-red-600 to-red-700' }
+  { value: 'instagram', label: 'Instagram', icon: Instagram },
+  { value: 'facebook', label: 'Facebook', icon: Facebook },
+  { value: 'tiktok', label: 'TikTok', icon: Video },
+  { value: 'twitter', label: 'X (Twitter)', icon: Twitter },
+  { value: 'youtube', label: 'YouTube', icon: Youtube }
 ];
 
 const BRAND_VOICES = [
-  { value: 'casual', label: 'Casual & Friendly', description: 'Relaxed, conversational tone', emoji: '😊', color: 'from-yellow-400 to-orange-400' },
-  { value: 'professional', label: 'Professional & Polished', description: 'Formal, authoritative', emoji: '💼', color: 'from-slate-600 to-slate-800' },
-  { value: 'humorous', label: 'Humorous & Playful', description: 'Fun, lighthearted', emoji: '😄', color: 'from-pink-500 to-rose-500' },
-  { value: 'inspirational', label: 'Inspirational & Motivating', description: 'Uplifting, encouraging', emoji: '🌟', color: 'from-amber-400 to-yellow-500' },
-  { value: 'educational', label: 'Educational & Informative', description: 'Clear, instructive', emoji: '📚', color: 'from-blue-500 to-cyan-500' }
+  { value: 'casual', label: 'Casual & Friendly', description: 'Relaxed, conversational tone', icon: Smile },
+  { value: 'professional', label: 'Professional & Polished', description: 'Formal, authoritative', icon: Briefcase },
+  { value: 'humorous', label: 'Humorous & Playful', description: 'Fun, lighthearted', icon: Sparkles },
+  { value: 'inspirational', label: 'Inspirational & Motivating', description: 'Uplifting, encouraging', icon: Heart },
+  { value: 'educational', label: 'Educational & Informative', description: 'Clear, instructive', icon: BookOpen }
 ];
 
 export default function OnboardingQuiz({ onComplete }) {
@@ -224,8 +221,6 @@ export default function OnboardingQuiz({ onComplete }) {
       console.log('Saving profile for user:', userId);
 
       // Prepare profile data - using upsert to handle both new users and existing rows
-      // The onConflict: 'user_id' ensures we UPDATE if a row exists (e.g., from auth trigger)
-      // instead of throwing a 409 Conflict error
       const profileData = {
         user_id: userId,
         profile_type: formData.profile_type,
@@ -244,15 +239,13 @@ export default function OnboardingQuiz({ onComplete }) {
         .from('user_profile')
         .upsert(profileData, {
           onConflict: 'user_id',
-          ignoreDuplicates: false // Ensure we update existing rows
+          ignoreDuplicates: false
         })
         .select();
 
       if (profileError) {
         console.error('Profile save error:', profileError);
-        // Handle specific error codes
         if (profileError.code === '23505') {
-          // Unique constraint violation - try update instead
           console.log('Duplicate detected, attempting update...');
           const { error: updateError } = await supabase
             .from('user_profile')
@@ -316,20 +309,24 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => setFormData({ ...formData, profile_type: type.value, creator_archetype: '' })}
                   className={`group relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-lg'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-lg'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
                   <div className="relative">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${type.gradient} flex items-center justify-center mb-4 transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
-                      <Icon className="w-6 h-6 text-white" />
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all ${
+                      isSelected 
+                        ? 'bg-huttle-primary text-white' 
+                        : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                    }`}>
+                      <Icon className="w-6 h-6" />
                     </div>
                     <h3 className="text-lg font-bold text-slate-900 mb-1">{type.label}</h3>
                     <p className="text-sm text-slate-500">{type.description}</p>
                   </div>
                   
                   {isSelected && (
-                    <div className="absolute top-3 right-3 w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center">
+                    <div className="absolute top-3 right-3 w-6 h-6 bg-huttle-primary rounded-full flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
@@ -350,6 +347,7 @@ export default function OnboardingQuiz({ onComplete }) {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {CREATOR_ARCHETYPES.map(archetype => {
+              const Icon = archetype.icon;
               const isSelected = formData.creator_archetype === archetype.value;
               
               return (
@@ -358,19 +356,23 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => setFormData({ ...formData, creator_archetype: archetype.value })}
                   className={`group relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${archetype.color} flex items-center justify-center text-lg transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
-                    {archetype.emoji}
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-slate-900">{archetype.label}</p>
                     <p className="text-sm text-slate-500 truncate">{archetype.description}</p>
                   </div>
                   {isSelected && (
-                    <Check className="w-5 h-5 text-cyan-500 flex-shrink-0" />
+                    <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />
                   )}
                 </button>
               );
@@ -397,27 +399,36 @@ export default function OnboardingQuiz({ onComplete }) {
           </p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {NICHES.map(niche => (
-              <button
-                key={niche.value}
-                onClick={() => setFormData({ ...formData, niche: niche.value })}
-                className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
-                  formData.niche === niche.value
-                    ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
-                }`}
-              >
-                <div className={`text-2xl mb-2 transition-transform group-hover:scale-110 ${formData.niche === niche.value ? 'scale-110' : ''}`}>
-                  {niche.emoji}
-                </div>
-                <p className="text-sm font-semibold text-slate-900">{niche.label}</p>
-                {formData.niche === niche.value && (
-                  <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
-                    <Check className="w-3 h-3 text-white" />
+            {NICHES.map(niche => {
+              const Icon = niche.icon;
+              const isSelected = formData.niche === niche.value;
+              
+              return (
+                <button
+                  key={niche.value}
+                  onClick={() => setFormData({ ...formData, niche: niche.value })}
+                  className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-2 transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
                   </div>
-                )}
-              </button>
-            ))}
+                  <p className="text-sm font-semibold text-slate-900 text-center">{niche.label}</p>
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       );
@@ -445,12 +456,12 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => setFormData({ ...formData, target_audience: audience.value })}
                   className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-cyan-500 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
+                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
                   }`}>
                     <Icon className="w-5 h-5" />
                   </div>
@@ -459,7 +470,7 @@ export default function OnboardingQuiz({ onComplete }) {
                     <p className="text-sm text-slate-500">{audience.description}</p>
                   </div>
                   {isSelected && (
-                    <Check className="w-5 h-5 text-cyan-500" />
+                    <Check className="w-5 h-5 text-huttle-primary" />
                   )}
                 </button>
               );
@@ -490,16 +501,20 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => handleMultiSelect('content_goals', goal.value)}
                   className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-lg ${goal.color} flex items-center justify-center mx-auto mb-3 transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
-                    <Icon className="w-5 h-5 text-white" />
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center mx-auto mb-3 transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
                   </div>
                   <p className="text-sm font-semibold text-slate-900 text-center">{goal.label}</p>
                   {isSelected && (
-                    <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
                       <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
@@ -521,6 +536,7 @@ export default function OnboardingQuiz({ onComplete }) {
           
           <div className="space-y-3">
             {POSTING_FREQUENCIES.map(freq => {
+              const Icon = freq.icon;
               const isSelected = formData.posting_frequency === freq.value;
               return (
                 <button
@@ -528,21 +544,21 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => setFormData({ ...formData, posting_frequency: freq.value })}
                   className={`group w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center text-xl transition-transform group-hover:scale-105 ${
-                    isSelected ? 'scale-105 bg-cyan-100' : ''
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                   }`}>
-                    {freq.icon}
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-slate-900">{freq.label}</p>
                     <p className="text-sm text-slate-500">{freq.description}</p>
                   </div>
                   {isSelected && (
-                    <Check className="w-5 h-5 text-cyan-500" />
+                    <Check className="w-5 h-5 text-huttle-primary" />
                   )}
                 </button>
               );
@@ -552,7 +568,7 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Platforms step
+    // Platforms step - monochrome icons
     const platformsStep = isCreator ? 7 : 6;
     if (step === platformsStep) {
       return (
@@ -562,6 +578,7 @@ export default function OnboardingQuiz({ onComplete }) {
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {PLATFORMS.map(platform => {
+              const Icon = platform.icon;
               const isSelected = formData.preferred_platforms.includes(platform.value);
               
               return (
@@ -570,16 +587,20 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => handleMultiSelect('preferred_platforms', platform.value)}
                   className={`group relative p-5 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${platform.color} flex items-center justify-center mx-auto mb-3 text-xl transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
-                    <span className="text-white">{platform.emoji}</span>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-6 h-6" />
                   </div>
                   <p className="text-sm font-semibold text-slate-900 text-center">{platform.label}</p>
                   {isSelected && (
-                    <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
                       <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
@@ -605,6 +626,7 @@ export default function OnboardingQuiz({ onComplete }) {
           
           <div className="space-y-3">
             {BRAND_VOICES.map(voice => {
+              const Icon = voice.icon;
               const isSelected = formData.brand_voice_preference === voice.value;
               return (
                 <button
@@ -612,21 +634,21 @@ export default function OnboardingQuiz({ onComplete }) {
                   onClick={() => setFormData({ ...formData, brand_voice_preference: voice.value })}
                   className={`group w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${voice.color} flex items-center justify-center text-xl transition-transform group-hover:scale-105 ${
-                    isSelected ? 'scale-105' : ''
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                   }`}>
-                    {voice.emoji}
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-slate-900">{voice.label}</p>
                     <p className="text-sm text-slate-500">{voice.description}</p>
                   </div>
                   {isSelected && (
-                    <Check className="w-5 h-5 text-cyan-500" />
+                    <Check className="w-5 h-5 text-huttle-primary" />
                   )}
                 </button>
               );
@@ -641,15 +663,11 @@ export default function OnboardingQuiz({ onComplete }) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Premium Light Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-cyan-50/30">
-        {/* Subtle decorative elements */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-cyan-100/40 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-slate-100/60 to-transparent rounded-full blur-3xl" />
-        
+      {/* Clean Light Background */}
+      <div className="absolute inset-0 bg-slate-50">
         {/* Subtle dot pattern */}
         <div 
-          className="absolute inset-0 opacity-[0.4]"
+          className="absolute inset-0 opacity-40"
           style={{
             backgroundImage: `radial-gradient(circle, #cbd5e1 1px, transparent 1px)`,
             backgroundSize: '24px 24px'
@@ -661,15 +679,11 @@ export default function OnboardingQuiz({ onComplete }) {
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
         <div className="w-full max-w-2xl">
           {/* Main Card */}
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
             {/* Clean Header */}
             <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-5 bg-white border-b border-slate-100">
               <div className="flex items-center gap-3 mb-5">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-300 ${
-                  isCreator 
-                    ? 'bg-gradient-to-br from-violet-500 to-pink-500' 
-                    : 'bg-gradient-to-br from-cyan-500 to-huttle-primary'
-                }`}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-huttle-primary">
                   {isCreator ? <Sparkles className="w-5 h-5 text-white" /> : <Briefcase className="w-5 h-5 text-white" />}
                 </div>
                 <div>
@@ -686,11 +700,7 @@ export default function OnboardingQuiz({ onComplete }) {
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      isCreator 
-                        ? 'bg-gradient-to-r from-violet-500 to-pink-500' 
-                        : 'bg-gradient-to-r from-cyan-500 to-huttle-primary'
-                    }`}
+                    className="h-full rounded-full transition-all duration-500 ease-out bg-huttle-primary"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -711,9 +721,7 @@ export default function OnboardingQuiz({ onComplete }) {
                     <div key={index} className="flex-1 flex flex-col items-center">
                       <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center transition-all duration-300 ${
                         isActive 
-                          ? isCreator 
-                            ? 'bg-gradient-to-br from-violet-500 to-pink-500 text-white shadow-md' 
-                            : 'bg-gradient-to-br from-cyan-500 to-huttle-primary text-white shadow-md'
+                          ? 'bg-huttle-primary text-white shadow-md'
                           : isCompleted 
                             ? 'bg-emerald-100 text-emerald-600' 
                             : 'bg-slate-100 text-slate-400'
@@ -737,7 +745,7 @@ export default function OnboardingQuiz({ onComplete }) {
             </div>
 
             {/* Footer with Navigation */}
-            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 bg-slate-50/50 border-t border-slate-100 flex gap-3">
+            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 bg-slate-50 border-t border-slate-100 flex gap-3">
               {step > 1 && (
                 <button
                   onClick={handleBack}
@@ -751,11 +759,7 @@ export default function OnboardingQuiz({ onComplete }) {
               {step < totalSteps ? (
                 <button
                   onClick={handleNext}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
-                    isCreator 
-                      ? 'bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600' 
-                      : 'bg-gradient-to-r from-cyan-500 to-huttle-primary hover:from-cyan-600 hover:to-huttle-primary-dark'
-                  }`}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-huttle-primary hover:bg-huttle-primary-dark"
                 >
                   {isCreator && step === 2 && !formData.creator_archetype ? 'Skip' : 'Continue'}
                   <ChevronRight className="w-4 h-4" />
@@ -764,7 +768,7 @@ export default function OnboardingQuiz({ onComplete }) {
                 <button
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold bg-emerald-500 hover:bg-emerald-600 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                 >
                   {saving ? (
                     <>

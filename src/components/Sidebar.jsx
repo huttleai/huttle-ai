@@ -31,22 +31,23 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
+      // Clear any local storage data first
+      localStorage.removeItem('brandData');
+      localStorage.removeItem('hasSeenWelcome');
+      
       const result = await logout();
       if (result.success) {
-        // Clear any local storage data
-        localStorage.removeItem('brandData');
-        localStorage.removeItem('hasSeenWelcome');
-        // Navigate to login
-        navigate('/dashboard/login', { replace: true });
+        // Force full page reload to clear all state and redirect to login
+        window.location.href = '/dashboard/login';
       } else {
         console.error('Logout failed:', result.error);
         // Force navigation even if logout had issues
-        navigate('/dashboard/login', { replace: true });
+        window.location.href = '/dashboard/login';
       }
     } catch (error) {
       console.error('Logout error:', error);
       // Force navigation on error
-      navigate('/dashboard/login', { replace: true });
+      window.location.href = '/dashboard/login';
     }
   };
 

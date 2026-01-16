@@ -107,8 +107,8 @@ export default function Signup() {
     setLoading(false);
 
     if (result.success) {
-      addToast('Account created! Please check your email to verify.', 'success');
-      navigate('/dashboard/login');
+      addToast('Account created! Welcome to Huttle.', 'success');
+      navigate('/dashboard');
     } else {
       addToast(result.error || 'Failed to create account', 'error');
     }
