@@ -151,3 +151,4 @@ If you've verified all variables and redeployed but it still doesn't work:
 
 The issue is almost certainly missing Supabase environment variables in Vercel. Once you add them and redeploy, checkout should work immediately.
 
+

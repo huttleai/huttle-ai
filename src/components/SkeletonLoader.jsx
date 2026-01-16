@@ -23,3 +23,4 @@ export default function SkeletonLoader({ variant = 'text', className = '' }) {
 
 
 
+

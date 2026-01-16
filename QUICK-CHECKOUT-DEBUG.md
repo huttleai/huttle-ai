@@ -111,3 +111,4 @@ You could temporarily enable demo mode, but this would bypass authentication ent
 
 **Summary:** The checkout is failing because Supabase can't authenticate users. This is almost certainly because `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not set in Vercel. Add them, redeploy, and test again.
 
+

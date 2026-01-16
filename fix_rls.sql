@@ -34,3 +34,4 @@ WITH CHECK ((select auth.uid()) = id);
 -- But these policies ensure the frontend can update it if needed
 -- The frontend should use UPSERT to handle both cases gracefully
 
+

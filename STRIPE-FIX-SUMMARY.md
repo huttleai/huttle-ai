@@ -160,3 +160,4 @@ If the button still spins forever after checking all the above:
 4. Verify all environment variables are set correctly
 5. Try running in **Vercel dev mode**: `vercel dev` instead of `npm run dev`
 
+
