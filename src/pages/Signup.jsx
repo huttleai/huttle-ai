@@ -142,12 +142,12 @@ export default function Signup() {
           {/* Headline */}
           <div className="mb-12">
             <h1 className="text-4xl font-semibold text-white mb-4 leading-tight">
-              Start creating
+              Your AI Creative Director
               <br />
-              <span className="text-huttle-cyan">amazing content</span>
+              <span className="text-huttle-cyan">is Ready.</span>
             </h1>
             <p className="text-gray-400 max-w-md">
-              Join thousands of creators using AI to supercharge their content strategy.
+              Stop burning out. Start growing. Experience the AI workflow designed for serious creators.
             </p>
           </div>
 
@@ -167,19 +167,19 @@ export default function Signup() {
             ))}
           </div>
 
-          {/* Stats */}
+          {/* Launch Status */}
           <div className="mt-16 pt-8 border-t border-white/10 grid grid-cols-3 gap-8">
             <div>
-              <p className="text-2xl font-semibold text-white">10K+</p>
-              <p className="text-gray-500 text-xs">Active Users</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
+              <p className="text-lg font-semibold text-huttle-cyan">Early Access</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-white">500K+</p>
-              <p className="text-gray-500 text-xs">Posts Created</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
+              <p className="text-lg font-semibold text-white">Jan 25, 2026</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-white">98%</p>
-              <p className="text-gray-500 text-xs">Satisfaction</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
+              <p className="text-lg font-semibold text-white">Pro Beta</p>
             </div>
           </div>
         </div>

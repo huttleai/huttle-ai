@@ -211,32 +211,66 @@ export default function OnboardingQuiz({ onComplete }) {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       
-      if (userError || !userData?.user) {
-        throw new Error('Not authenticated');
+      if (userError) {
+        console.error('Auth error:', userError);
+        throw new Error('Authentication error. Please try logging in again.');
+      }
+      
+      if (!userData?.user) {
+        throw new Error('Not authenticated. Please log in to continue.');
       }
 
-      const { error: profileError } = await supabase
+      const userId = userData.user.id;
+      console.log('Saving profile for user:', userId);
+
+      // Prepare profile data - using upsert to handle both new users and existing rows
+      // The onConflict: 'user_id' ensures we UPDATE if a row exists (e.g., from auth trigger)
+      // instead of throwing a 409 Conflict error
+      const profileData = {
+        user_id: userId,
+        profile_type: formData.profile_type,
+        creator_archetype: formData.creator_archetype || null,
+        niche: formData.niche,
+        target_audience: formData.target_audience,
+        content_goals: formData.content_goals,
+        posting_frequency: formData.posting_frequency,
+        preferred_platforms: formData.preferred_platforms,
+        brand_voice_preference: formData.brand_voice_preference,
+        quiz_completed_at: new Date().toISOString(),
+        onboarding_step: totalSteps
+      };
+
+      const { data: profileResult, error: profileError } = await supabase
         .from('user_profile')
-        .upsert({
-          user_id: userData.user.id,
-          profile_type: formData.profile_type,
-          creator_archetype: formData.creator_archetype || null,
-          niche: formData.niche,
-          target_audience: formData.target_audience,
-          content_goals: formData.content_goals,
-          posting_frequency: formData.posting_frequency,
-          preferred_platforms: formData.preferred_platforms,
-          brand_voice_preference: formData.brand_voice_preference,
-          quiz_completed_at: new Date().toISOString(),
-          onboarding_step: totalSteps
-        }, {
-          onConflict: 'user_id'
-        });
+        .upsert(profileData, {
+          onConflict: 'user_id',
+          ignoreDuplicates: false // Ensure we update existing rows
+        })
+        .select();
 
       if (profileError) {
-        throw profileError;
+        console.error('Profile save error:', profileError);
+        // Handle specific error codes
+        if (profileError.code === '23505') {
+          // Unique constraint violation - try update instead
+          console.log('Duplicate detected, attempting update...');
+          const { error: updateError } = await supabase
+            .from('user_profile')
+            .update(profileData)
+            .eq('user_id', userId);
+          
+          if (updateError) {
+            console.error('Update fallback error:', updateError);
+            throw updateError;
+          }
+        } else {
+          throw profileError;
+        }
       }
 
+      console.log('Profile saved successfully:', profileResult);
+
+      // Update local brand context
       updateBrandData({
         profileType: formData.profile_type,
         creatorArchetype: formData.creator_archetype,
@@ -255,7 +289,8 @@ export default function OnboardingQuiz({ onComplete }) {
 
     } catch (error) {
       console.error('Error saving profile:', error);
-      addToast('Failed to save profile. Please try again.', 'error');
+      const errorMessage = error.message || 'Failed to save profile. Please try again.';
+      addToast(errorMessage, 'error');
     } finally {
       setSaving(false);
     }
@@ -267,8 +302,8 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === 1) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">How do you create content?</h2>
-          <p className="text-gray-600 mb-8">This helps us personalize your entire experience</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">How do you create content?</h2>
+          <p className="text-slate-500 mb-8">This helps us personalize your entire experience</p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {PROFILE_TYPES.map(type => {
@@ -279,26 +314,23 @@ export default function OnboardingQuiz({ onComplete }) {
                 <button
                   key={type.value}
                   onClick={() => setFormData({ ...formData, profile_type: type.value, creator_archetype: '' })}
-                  className={`group relative p-6 rounded-2xl border-2 transition-all duration-300 text-left overflow-hidden ${
+                  className={`group relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-huttle-primary shadow-xl scale-[1.02]'
-                      : 'border-gray-200 hover:border-gray-300 hover:shadow-lg'
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-lg'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${type.gradient} opacity-${isSelected ? '10' : '0'} group-hover:opacity-5 transition-opacity`} />
-                  <div className={`absolute inset-0 ${type.bgPattern}`} />
-                  
                   <div className="relative">
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${type.gradient} flex items-center justify-center mb-4 transition-transform group-hover:scale-110 ${isSelected ? 'scale-110 shadow-lg' : ''}`}>
-                      <Icon className="w-7 h-7 text-white" />
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${type.gradient} flex items-center justify-center mb-4 transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
+                      <Icon className="w-6 h-6 text-white" />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{type.label}</h3>
-                    <p className="text-sm text-gray-500">{type.description}</p>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">{type.label}</h3>
+                    <p className="text-sm text-slate-500">{type.description}</p>
                   </div>
                   
                   {isSelected && (
-                    <div className="absolute top-3 right-3 w-7 h-7 bg-huttle-primary rounded-full flex items-center justify-center shadow-lg">
-                      <Check className="w-4 h-4 text-white" />
+                    <div className="absolute top-3 right-3 w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
                 </button>
@@ -313,8 +345,8 @@ export default function OnboardingQuiz({ onComplete }) {
     if (isCreator && step === 2) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">What kind of creator are you?</h2>
-          <p className="text-gray-600 mb-6">Pick the style that resonates most with you <span className="text-gray-400">(optional)</span></p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What kind of creator are you?</h2>
+          <p className="text-slate-500 mb-6">Pick the style that resonates most with you <span className="text-slate-400">(optional)</span></p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {CREATOR_ARCHETYPES.map(archetype => {
@@ -324,28 +356,28 @@ export default function OnboardingQuiz({ onComplete }) {
                 <button
                   key={archetype.value}
                   onClick={() => setFormData({ ...formData, creator_archetype: archetype.value })}
-                  className={`group relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
+                  className={`group relative flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
-                      ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${archetype.color} flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${isSelected ? 'scale-110 shadow-md' : ''}`}>
+                  <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${archetype.color} flex items-center justify-center text-lg transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
                     {archetype.emoji}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900">{archetype.label}</p>
-                    <p className="text-sm text-gray-500 truncate">{archetype.description}</p>
+                    <p className="font-semibold text-slate-900">{archetype.label}</p>
+                    <p className="text-sm text-slate-500 truncate">{archetype.description}</p>
                   </div>
                   {isSelected && (
-                    <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />
+                    <Check className="w-5 h-5 text-cyan-500 flex-shrink-0" />
                   )}
                 </button>
               );
             })}
           </div>
           
-          <p className="text-center text-sm text-gray-400 mt-4">
+          <p className="text-center text-sm text-slate-400 mt-4">
             This helps AI understand your unique style
           </p>
         </div>
@@ -357,10 +389,10 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === nicheStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
             {isCreator ? "What's your content focus?" : "What's your content niche?"}
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-slate-500 mb-6">
             {isCreator ? 'Choose what you mostly create content about' : 'Choose the category that best describes your content'}
           </p>
           
@@ -369,19 +401,19 @@ export default function OnboardingQuiz({ onComplete }) {
               <button
                 key={niche.value}
                 onClick={() => setFormData({ ...formData, niche: niche.value })}
-                className={`group relative p-4 rounded-2xl border-2 transition-all duration-200 ${
+                className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                   formData.niche === niche.value
-                    ? 'border-huttle-primary bg-huttle-50 shadow-lg scale-[1.02]'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                 }`}
               >
-                <div className={`text-3xl mb-2 transition-transform group-hover:scale-110 ${formData.niche === niche.value ? 'scale-110' : ''}`}>
+                <div className={`text-2xl mb-2 transition-transform group-hover:scale-110 ${formData.niche === niche.value ? 'scale-110' : ''}`}>
                   {niche.emoji}
                 </div>
-                <p className="text-sm font-semibold text-gray-900">{niche.label}</p>
+                <p className="text-sm font-semibold text-slate-900">{niche.label}</p>
                 {formData.niche === niche.value && (
-                  <div className="absolute top-2 right-2 w-6 h-6 bg-huttle-primary rounded-full flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" />
                   </div>
                 )}
               </button>
@@ -396,37 +428,38 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === audienceStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
             {isCreator ? "Who's your community?" : "Who's your target audience?"}
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-slate-500 mb-6">
             {isCreator ? 'Select who you want to connect with' : 'Select the primary demographic you want to reach'}
           </p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {AUDIENCES.map(audience => {
               const Icon = audience.icon;
+              const isSelected = formData.target_audience === audience.value;
               return (
                 <button
                   key={audience.value}
                   onClick={() => setFormData({ ...formData, target_audience: audience.value })}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                    formData.target_audience === audience.value
-                      ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-                    formData.target_audience === audience.value ? 'bg-huttle-primary text-white' : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-cyan-500 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
                   }`}>
-                    <Icon className="w-6 h-6" />
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{audience.label}</p>
-                    <p className="text-sm text-gray-500">{audience.description}</p>
+                    <p className="font-semibold text-slate-900">{audience.label}</p>
+                    <p className="text-sm text-slate-500">{audience.description}</p>
                   </div>
-                  {formData.target_audience === audience.value && (
-                    <Check className="w-5 h-5 text-huttle-primary" />
+                  {isSelected && (
+                    <Check className="w-5 h-5 text-cyan-500" />
                   )}
                 </button>
               );
@@ -443,8 +476,8 @@ export default function OnboardingQuiz({ onComplete }) {
       
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">What are your content goals?</h2>
-          <p className="text-gray-600 mb-6">Select all that apply (choose at least one)</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What are your content goals?</h2>
+          <p className="text-slate-500 mb-6">Select all that apply (choose at least one)</p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {goals.map(goal => {
@@ -455,19 +488,19 @@ export default function OnboardingQuiz({ onComplete }) {
                 <button
                   key={goal.value}
                   onClick={() => handleMultiSelect('content_goals', goal.value)}
-                  className={`group relative p-4 rounded-2xl border-2 transition-all duration-200 ${
+                  className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl ${goal.color} flex items-center justify-center mx-auto mb-3 transition-transform group-hover:scale-110 ${isSelected ? 'scale-110' : ''}`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`w-11 h-11 rounded-lg ${goal.color} flex items-center justify-center mx-auto mb-3 transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
+                    <Icon className="w-5 h-5 text-white" />
                   </div>
-                  <p className="text-sm font-semibold text-gray-900 text-center">{goal.label}</p>
+                  <p className="text-sm font-semibold text-slate-900 text-center">{goal.label}</p>
                   {isSelected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-huttle-primary rounded-full flex items-center justify-center">
-                      <Check className="w-4 h-4 text-white" />
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
                 </button>
@@ -483,34 +516,37 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === frequencyStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">How often do you plan to post?</h2>
-          <p className="text-gray-600 mb-6">This helps us tailor content suggestions to your schedule</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">How often do you plan to post?</h2>
+          <p className="text-slate-500 mb-6">This helps us tailor content suggestions to your schedule</p>
           
           <div className="space-y-3">
-            {POSTING_FREQUENCIES.map(freq => (
-              <button
-                key={freq.value}
-                onClick={() => setFormData({ ...formData, posting_frequency: freq.value })}
-                className={`group w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                  formData.posting_frequency === freq.value
-                    ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-transform group-hover:scale-110 ${
-                  formData.posting_frequency === freq.value ? 'scale-110' : ''
-                }`}>
-                  {freq.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{freq.label}</p>
-                  <p className="text-sm text-gray-500">{freq.description}</p>
-                </div>
-                {formData.posting_frequency === freq.value && (
-                  <Check className="w-5 h-5 text-huttle-primary" />
-                )}
-              </button>
-            ))}
+            {POSTING_FREQUENCIES.map(freq => {
+              const isSelected = formData.posting_frequency === freq.value;
+              return (
+                <button
+                  key={freq.value}
+                  onClick={() => setFormData({ ...formData, posting_frequency: freq.value })}
+                  className={`group w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center text-xl transition-transform group-hover:scale-105 ${
+                    isSelected ? 'scale-105 bg-cyan-100' : ''
+                  }`}>
+                    {freq.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">{freq.label}</p>
+                    <p className="text-sm text-slate-500">{freq.description}</p>
+                  </div>
+                  {isSelected && (
+                    <Check className="w-5 h-5 text-cyan-500" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       );
@@ -521,8 +557,8 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === platformsStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">Which platforms do you use?</h2>
-          <p className="text-gray-600 mb-6">Select all platforms you create content for</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">Which platforms do you use?</h2>
+          <p className="text-slate-500 mb-6">Select all platforms you create content for</p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {PLATFORMS.map(platform => {
@@ -532,19 +568,19 @@ export default function OnboardingQuiz({ onComplete }) {
                 <button
                   key={platform.value}
                   onClick={() => handleMultiSelect('preferred_platforms', platform.value)}
-                  className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 ${
+                  className={`group relative p-5 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${platform.color} flex items-center justify-center mx-auto mb-3 text-2xl transition-transform group-hover:scale-110 ${isSelected ? 'scale-110 shadow-lg' : ''}`}>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${platform.color} flex items-center justify-center mx-auto mb-3 text-xl transition-transform group-hover:scale-105 ${isSelected ? 'scale-105' : ''}`}>
                     <span className="text-white">{platform.emoji}</span>
                   </div>
-                  <p className="text-sm font-semibold text-gray-900 text-center">{platform.label}</p>
+                  <p className="text-sm font-semibold text-slate-900 text-center">{platform.label}</p>
                   {isSelected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 bg-huttle-primary rounded-full flex items-center justify-center">
-                      <Check className="w-4 h-4 text-white" />
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
                 </button>
@@ -560,38 +596,41 @@ export default function OnboardingQuiz({ onComplete }) {
     if (step === voiceStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-gray-900 mb-2">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
             {isCreator ? "What's your vibe?" : "What's your brand voice?"}
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-slate-500 mb-6">
             {isCreator ? 'Choose the tone that feels most like you' : 'Choose the tone that best matches your content style'}
           </p>
           
           <div className="space-y-3">
-            {BRAND_VOICES.map(voice => (
-              <button
-                key={voice.value}
-                onClick={() => setFormData({ ...formData, brand_voice_preference: voice.value })}
-                className={`group w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                  formData.brand_voice_preference === voice.value
-                    ? 'border-huttle-primary bg-huttle-50 shadow-lg'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${voice.color} flex items-center justify-center text-2xl transition-transform group-hover:scale-110 ${
-                  formData.brand_voice_preference === voice.value ? 'scale-110' : ''
-                }`}>
-                  {voice.emoji}
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{voice.label}</p>
-                  <p className="text-sm text-gray-500">{voice.description}</p>
-                </div>
-                {formData.brand_voice_preference === voice.value && (
-                  <Check className="w-5 h-5 text-huttle-primary" />
-                )}
-              </button>
-            ))}
+            {BRAND_VOICES.map(voice => {
+              const isSelected = formData.brand_voice_preference === voice.value;
+              return (
+                <button
+                  key={voice.value}
+                  onClick={() => setFormData({ ...formData, brand_voice_preference: voice.value })}
+                  className={`group w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-cyan-500 bg-cyan-50/50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${voice.color} flex items-center justify-center text-xl transition-transform group-hover:scale-105 ${
+                    isSelected ? 'scale-105' : ''
+                  }`}>
+                    {voice.emoji}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">{voice.label}</p>
+                    <p className="text-sm text-slate-500">{voice.description}</p>
+                  </div>
+                  {isSelected && (
+                    <Check className="w-5 h-5 text-cyan-500" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       );
@@ -601,57 +640,67 @@ export default function OnboardingQuiz({ onComplete }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        {/* Animated orbs - color changes based on profile type */}
-        <div className={`absolute top-1/4 -left-20 w-96 h-96 rounded-full blur-3xl animate-pulse transition-colors duration-1000 ${
-          isCreator ? 'bg-pink-500/20' : 'bg-huttle-primary/20'
-        }`} />
-        <div className={`absolute bottom-1/4 -right-20 w-80 h-80 rounded-full blur-3xl animate-pulse transition-colors duration-1000 ${
-          isCreator ? 'bg-violet-500/15' : 'bg-purple-500/15'
-        }`} style={{ animationDelay: '1s' }} />
-        <div className={`absolute top-2/3 left-1/3 w-64 h-64 rounded-full blur-3xl animate-pulse transition-colors duration-1000 ${
-          isCreator ? 'bg-amber-400/10' : 'bg-pink-400/10'
-        }`} style={{ animationDelay: '2s' }} />
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Premium Light Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-cyan-50/30">
+        {/* Subtle decorative elements */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-cyan-100/40 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-slate-100/60 to-transparent rounded-full blur-3xl" />
         
-        {/* Grid pattern */}
+        {/* Subtle dot pattern */}
         <div 
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.4]"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
+            backgroundImage: `radial-gradient(circle, #cbd5e1 1px, transparent 1px)`,
+            backgroundSize: '24px 24px'
           }}
         />
       </div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 overflow-y-auto">
-        <div className="w-full max-w-3xl">
-          {/* Card */}
-          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className={`p-6 sm:p-8 transition-all duration-500 ${
-              isCreator 
-                ? 'bg-gradient-to-r from-violet-500 to-pink-500' 
-                : 'bg-gradient-to-r from-huttle-primary to-cyan-400'
-            }`}>
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                  {isCreator ? <Sparkles className="w-7 h-7 text-white" /> : <Briefcase className="w-7 h-7 text-white" />}
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
+        <div className="w-full max-w-2xl">
+          {/* Main Card */}
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+            {/* Clean Header */}
+            <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-5 bg-white border-b border-slate-100">
+              <div className="flex items-center gap-3 mb-5">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-300 ${
+                  isCreator 
+                    ? 'bg-gradient-to-br from-violet-500 to-pink-500' 
+                    : 'bg-gradient-to-br from-cyan-500 to-huttle-primary'
+                }`}>
+                  {isCreator ? <Sparkles className="w-5 h-5 text-white" /> : <Briefcase className="w-5 h-5 text-white" />}
                 </div>
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">
+                  <h1 className="text-xl sm:text-2xl font-display font-bold text-slate-900">
                     {step === 1 ? "Let's Personalize Your Experience" : isCreator ? "Building Your Creator Profile" : "Setting Up Your Brand"}
                   </h1>
-                  <p className="text-white/80 text-sm sm:text-base">
+                  <p className="text-slate-500 text-sm">
                     {step === 1 ? 'First, tell us how you create content' : 'Help us tailor AI suggestions just for you'}
                   </p>
                 </div>
               </div>
 
-              {/* Step Progress */}
-              <div className="flex items-center justify-between gap-1 sm:gap-2">
+              {/* Progress Bar */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${
+                      isCreator 
+                        ? 'bg-gradient-to-r from-violet-500 to-pink-500' 
+                        : 'bg-gradient-to-r from-cyan-500 to-huttle-primary'
+                    }`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-slate-500 tabular-nums">
+                  {step}/{totalSteps}
+                </span>
+              </div>
+
+              {/* Step Indicators */}
+              <div className="flex items-center justify-between mt-4 gap-1">
                 {STEP_ICONS.map((stepItem, index) => {
                   const StepIcon = stepItem.icon;
                   const stepNum = index + 1;
@@ -660,44 +709,41 @@ export default function OnboardingQuiz({ onComplete }) {
                   
                   return (
                     <div key={index} className="flex-1 flex flex-col items-center">
-                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                        isActive ? 'bg-white text-huttle-primary scale-110 shadow-lg' :
-                        isCompleted ? 'bg-white/30 text-white' : 'bg-white/10 text-white/50'
+                      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center transition-all duration-300 ${
+                        isActive 
+                          ? isCreator 
+                            ? 'bg-gradient-to-br from-violet-500 to-pink-500 text-white shadow-md' 
+                            : 'bg-gradient-to-br from-cyan-500 to-huttle-primary text-white shadow-md'
+                          : isCompleted 
+                            ? 'bg-emerald-100 text-emerald-600' 
+                            : 'bg-slate-100 text-slate-400'
                       }`}>
-                        {isCompleted ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : <StepIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                        {isCompleted ? <Check className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
                       </div>
-                      <span className={`text-[10px] sm:text-xs mt-1 hidden sm:block ${isActive ? 'text-white font-semibold' : 'text-white/60'}`}>
+                      <span className={`text-[10px] mt-1.5 hidden sm:block font-medium ${
+                        isActive ? 'text-slate-900' : isCompleted ? 'text-emerald-600' : 'text-slate-400'
+                      }`}>
                         {stepItem.label}
                       </span>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-white h-1.5 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Step Content */}
-            <div className="p-6 sm:p-8 min-h-[400px]">
+            <div className="p-6 sm:p-8 min-h-[420px] bg-white">
               {renderStepContent()}
             </div>
 
             {/* Footer with Navigation */}
-            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 border-t border-gray-100 flex gap-3">
+            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 bg-slate-50/50 border-t border-slate-100 flex gap-3">
               {step > 1 && (
                 <button
                   onClick={handleBack}
-                  className="btn-secondary px-6 py-3"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="w-4 h-4" />
                   Back
                 </button>
               )}
@@ -705,27 +751,29 @@ export default function OnboardingQuiz({ onComplete }) {
               {step < totalSteps ? (
                 <button
                   onClick={handleNext}
-                  className={`flex-1 btn-primary py-3 ${
-                    isCreator ? 'bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600' : ''
+                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+                    isCreator 
+                      ? 'bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600' 
+                      : 'bg-gradient-to-r from-cyan-500 to-huttle-primary hover:from-cyan-600 hover:to-huttle-primary-dark'
                   }`}
                 >
                   {isCreator && step === 2 && !formData.creator_archetype ? 'Skip' : 'Continue'}
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
                 <button
                   onClick={handleSubmit}
                   disabled={saving}
-                  className="flex-1 btn-primary py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                 >
                   {saving ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
                       Saving...
                     </>
                   ) : (
                     <>
-                      <Check className="w-5 h-5" />
+                      <Check className="w-4 h-4" />
                       Complete Setup
                     </>
                   )}

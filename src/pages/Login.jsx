@@ -59,12 +59,12 @@ export default function Login() {
           {/* Headline */}
           <div className="mb-12">
             <h1 className="text-4xl font-semibold text-white mb-4 leading-tight">
-              Your AI-powered
+              Your AI Creative Director
               <br />
-              <span className="text-huttle-cyan">content engine</span>
+              <span className="text-huttle-cyan">is Ready.</span>
             </h1>
             <p className="text-gray-400 max-w-md">
-              Create scroll-stopping content, predict trends, and grow your audience with the power of AI.
+              Stop burning out. Start growing. Experience the AI workflow designed for serious creators.
             </p>
           </div>
 
@@ -84,19 +84,19 @@ export default function Login() {
             ))}
           </div>
 
-          {/* Testimonial */}
-          <div className="mt-16 pt-8 border-t border-white/10">
-            <p className="text-gray-400 text-sm italic mb-4">
-              "Huttle AI has completely transformed how I create content. I save hours every week!"
-            </p>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-huttle-cyan/20 flex items-center justify-center text-huttle-cyan font-semibold text-sm">
-                SK
-              </div>
-              <div>
-                <p className="text-white font-medium text-sm">Sarah Kim</p>
-                <p className="text-gray-500 text-xs">Content Creator, 50K+ followers</p>
-              </div>
+          {/* Launch Status */}
+          <div className="mt-16 pt-8 border-t border-white/10 grid grid-cols-3 gap-8">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
+              <p className="text-lg font-semibold text-huttle-cyan">Early Access</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
+              <p className="text-lg font-semibold text-white">Jan 25, 2026</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
+              <p className="text-lg font-semibold text-white">Pro Beta</p>
             </div>
           </div>
         </div>
