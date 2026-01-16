@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../config/supabase';
 
 export const AuthContext = createContext();
@@ -8,6 +8,52 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
+
+  // Memoized checkUserProfile to prevent recreation on every render
+  const checkUserProfile = useCallback(async (userId) => {
+    console.log('🔍 [Auth] Checking user profile for:', userId);
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_profile')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle(); // Use maybeSingle() instead of single() for new users
+
+      if (error) {
+        console.error('❌ [Auth] Error checking user profile:', error);
+        // On error, assume user needs onboarding to be safe
+        setUserProfile(null);
+        setNeedsOnboarding(true);
+        setProfileChecked(true);
+        return;
+      }
+
+      console.log('📋 [Auth] Profile data:', data);
+      console.log('📋 [Auth] quiz_completed_at:', data?.quiz_completed_at);
+
+      if (data && data.quiz_completed_at) {
+        // User has completed onboarding
+        console.log('✅ [Auth] User has completed onboarding');
+        setUserProfile(data);
+        setNeedsOnboarding(false);
+      } else {
+        // User exists but hasn't completed quiz, OR no profile exists
+        // Either way, they need onboarding
+        console.log('⚠️ [Auth] User NEEDS onboarding - quiz_completed_at is null or profile missing');
+        setUserProfile(data || null);
+        setNeedsOnboarding(true);
+      }
+      setProfileChecked(true);
+    } catch (error) {
+      console.error('❌ [Auth] Error in checkUserProfile:', error);
+      // On error, force onboarding to be safe
+      setUserProfile(null);
+      setNeedsOnboarding(true);
+      setProfileChecked(true);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,6 +64,8 @@ export function AuthProvider({ children }) {
     const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
 
     const initializeSession = async () => {
+      console.log('🚀 [Auth] Initializing session...');
+      
       try {
         // If skip auth is enabled (DEV mode only with explicit env var), create a mock user
         if (skipAuth) {
@@ -31,21 +79,23 @@ export function AuthProvider({ children }) {
             setUser(mockUser);
             setUserProfile(null);
             setNeedsOnboarding(false);
+            setProfileChecked(true);
             setLoading(false);
           }
           return;
         }
 
-        // Set a timeout to prevent infinite loading (5 seconds)
+        // Set a timeout to prevent infinite loading (8 seconds - increased for Resend auth)
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('⚠️ Auth check timed out after 5 seconds. Proceeding without session.');
+            console.warn('⚠️ [Auth] Auth check timed out after 8 seconds. Proceeding without session.');
             setLoading(false);
             setUser(null);
             setUserProfile(null);
             setNeedsOnboarding(false);
+            setProfileChecked(true);
           }
-        }, 5000);
+        }, 8000);
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -53,26 +103,32 @@ export function AuthProvider({ children }) {
         clearTimeout(timeoutId);
 
         const session = data?.session;
+        console.log('🔐 [Auth] Session found:', !!session, session?.user?.email);
+        
         if (!isMounted) return;
 
-        setUser(session?.user ?? null);
-
         if (session?.user) {
+          setUser(session.user);
+          // CRITICAL: Wait for profile check to complete before setting loading to false
           await checkUserProfile(session.user.id);
         } else {
+          setUser(null);
           setUserProfile(null);
           setNeedsOnboarding(false);
+          setProfileChecked(true);
         }
       } catch (error) {
         clearTimeout(timeoutId);
-        console.error('Error loading Supabase session:', error);
+        console.error('❌ [Auth] Error loading Supabase session:', error);
         if (isMounted) {
           setUser(null);
           setUserProfile(null);
           setNeedsOnboarding(false);
+          setProfileChecked(true);
         }
       } finally {
         if (isMounted && !skipAuth) {
+          console.log('✅ [Auth] Setting loading to false');
           setLoading(false);
         }
       }
@@ -80,21 +136,29 @@ export function AuthProvider({ children }) {
 
     initializeSession();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth changes (handles Resend magic links, email confirmations, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 [Auth] Auth state changed:', event, session?.user?.email);
+      
       try {
         if (!isMounted) return;
 
-        setUser(session?.user ?? null);
+        // Reset profile checked state when auth changes
+        setProfileChecked(false);
         
         if (session?.user) {
+          setUser(session.user);
+          // CRITICAL: Wait for profile check to complete
           await checkUserProfile(session.user.id);
         } else {
+          setUser(null);
           setUserProfile(null);
           setNeedsOnboarding(false);
+          setProfileChecked(true);
         }
       } catch (error) {
-        console.error('Error handling auth state change:', error);
+        console.error('❌ [Auth] Error handling auth state change:', error);
+        setProfileChecked(true);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -107,41 +171,7 @@ export function AuthProvider({ children }) {
       if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, []);
-
-  const checkUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profile')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle(); // Use maybeSingle() instead of single() for new users
-
-      if (error) {
-        console.error('Error checking user profile:', error);
-        // On error, assume user needs onboarding to be safe
-        setUserProfile(null);
-        setNeedsOnboarding(true);
-        return;
-      }
-
-      if (data && data.quiz_completed_at) {
-        // User has completed onboarding
-        setUserProfile(data);
-        setNeedsOnboarding(false);
-      } else {
-        // User exists but hasn't completed quiz, OR no profile exists
-        // Either way, they need onboarding
-        setUserProfile(data || null);
-        setNeedsOnboarding(true);
-      }
-    } catch (error) {
-      console.error('Error in checkUserProfile:', error);
-      // On error, force onboarding to be safe
-      setUserProfile(null);
-      setNeedsOnboarding(true);
-    }
-  };
+  }, [checkUserProfile]);
 
   const login = async (email, password) => {
     try {
@@ -250,7 +280,8 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{ 
       user, 
       userProfile, 
-      needsOnboarding, 
+      needsOnboarding,
+      profileChecked, // Expose this so components can wait for profile check
       login, 
       signup, 
       logout, 

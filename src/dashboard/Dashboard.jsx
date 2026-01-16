@@ -48,15 +48,27 @@ function AppContent() {
     );
   }
 
-  const { user, loading, needsOnboarding, completeOnboarding } = authContext;
+  const { user, loading, needsOnboarding, profileChecked, completeOnboarding } = authContext;
 
-  // Show loading state while checking auth (with timeout fallback)
-  if (loading) {
+  // Debug logging for onboarding gatekeeper
+  console.log('🚦 [Dashboard] Gatekeeper check:', { 
+    user: !!user, 
+    loading, 
+    needsOnboarding, 
+    profileChecked,
+    userEmail: user?.email 
+  });
+
+  // Show loading state while checking auth OR while profile is being checked
+  // CRITICAL: Wait for BOTH auth loading AND profile check to complete
+  if (loading || (user && !profileChecked)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-huttle-primary mx-auto mb-4"></div>
-          <p className="text-sm text-gray-600">Loading...</p>
+          <p className="text-sm text-gray-600">
+            {loading ? 'Loading...' : 'Checking your profile...'}
+          </p>
           <p className="text-xs text-gray-400 mt-2">
             If this takes too long, check console for errors
           </p>
@@ -67,8 +79,10 @@ function AppContent() {
 
   // If user is logged in, show the main app layout
   if (user) {
-    // Show onboarding quiz if user hasn't completed it
+    // GATEKEEPER: Force redirect to onboarding if user hasn't completed it
+    // This check runs AFTER profileChecked is true, so we know the profile status
     if (needsOnboarding) {
+      console.log('🚨 [Dashboard] GATEKEEPER: Redirecting to onboarding quiz');
       return <OnboardingQuiz onComplete={completeOnboarding} />;
     }
 

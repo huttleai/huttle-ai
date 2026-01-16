@@ -220,11 +220,11 @@ export default function OnboardingQuiz({ onComplete }) {
       const userId = userData.user.id;
       console.log('Saving profile for user:', userId);
 
-      // Prepare profile data - using upsert to handle both new users and existing rows
+      // Prepare base profile data - using upsert to handle both new users and existing rows
+      // Note: creator_archetype may not exist in older database schemas
       const profileData = {
         user_id: userId,
         profile_type: formData.profile_type,
-        creator_archetype: formData.creator_archetype || null,
         niche: formData.niche,
         target_audience: formData.target_audience,
         content_goals: formData.content_goals,
@@ -235,38 +235,90 @@ export default function OnboardingQuiz({ onComplete }) {
         onboarding_step: totalSteps
       };
 
-      const { data: profileResult, error: profileError } = await supabase
+      // Try to save with creator_archetype first
+      let profileResult = null;
+      let saveError = null;
+
+      // First attempt: include creator_archetype
+      const profileDataWithArchetype = {
+        ...profileData,
+        creator_archetype: formData.creator_archetype || null,
+      };
+
+      const { data: result1, error: error1 } = await supabase
         .from('user_profile')
-        .upsert(profileData, {
+        .upsert(profileDataWithArchetype, {
           onConflict: 'user_id',
           ignoreDuplicates: false
         })
         .select();
 
-      if (profileError) {
-        console.error('Profile save error:', profileError);
-        if (profileError.code === '23505') {
-          console.log('Duplicate detected, attempting update...');
-          const { error: updateError } = await supabase
-            .from('user_profile')
-            .update(profileData)
-            .eq('user_id', userId);
+      if (error1) {
+        // Check if error is about missing creator_archetype column
+        if (error1.message?.includes('creator_archetype') || error1.code === '42703') {
+          console.warn('creator_archetype column not found, saving without it...');
           
-          if (updateError) {
-            console.error('Update fallback error:', updateError);
-            throw updateError;
+          // Second attempt: save without creator_archetype
+          const { data: result2, error: error2 } = await supabase
+            .from('user_profile')
+            .upsert(profileData, {
+              onConflict: 'user_id',
+              ignoreDuplicates: false
+            })
+            .select();
+
+          if (error2) {
+            saveError = error2;
+          } else {
+            profileResult = result2;
+          }
+        } else if (error1.code === '23505') {
+          // Duplicate key - try update instead
+          console.log('Duplicate detected, attempting update...');
+          const { data: result3, error: error3 } = await supabase
+            .from('user_profile')
+            .update(profileDataWithArchetype)
+            .eq('user_id', userId)
+            .select();
+          
+          if (error3) {
+            // Try without creator_archetype
+            if (error3.message?.includes('creator_archetype') || error3.code === '42703') {
+              const { data: result4, error: error4 } = await supabase
+                .from('user_profile')
+                .update(profileData)
+                .eq('user_id', userId)
+                .select();
+              
+              if (error4) {
+                saveError = error4;
+              } else {
+                profileResult = result4;
+              }
+            } else {
+              saveError = error3;
+            }
+          } else {
+            profileResult = result3;
           }
         } else {
-          throw profileError;
+          saveError = error1;
         }
+      } else {
+        profileResult = result1;
+      }
+
+      if (saveError) {
+        console.error('Profile save error:', saveError);
+        throw saveError;
       }
 
       console.log('Profile saved successfully:', profileResult);
 
-      // Update local brand context
+      // Update local brand context with all quiz data
       updateBrandData({
         profileType: formData.profile_type,
-        creatorArchetype: formData.creator_archetype,
+        creatorArchetype: formData.creator_archetype || '',
         niche: formData.niche,
         targetAudience: formData.target_audience,
         brandVoice: formData.brand_voice_preference,
