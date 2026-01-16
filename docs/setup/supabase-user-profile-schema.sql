@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   brand_name TEXT, -- Brand name or creator handle
   industry TEXT, -- Industry or category
   
+  -- Viral content strategy fields (for AI personalization)
+  content_strengths TEXT[], -- What user is best at: ['storytelling', 'education', 'entertainment', 'visuals', 'trends', 'authenticity']
+  biggest_challenge TEXT, -- Main content struggle: 'consistency', 'ideas', 'engagement', 'growth', 'time', 'quality'
+  hook_style_preference TEXT, -- Preferred hook style: 'question', 'bold_statement', 'story', 'statistic', 'controversy', 'curiosity_gap'
+  emotional_triggers TEXT[], -- How they want audience to feel: ['inspired', 'entertained', 'educated', 'connected', 'motivated', 'understood']
+  
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
@@ -89,4 +95,8 @@ COMMENT ON TABLE public.user_profile IS 'Stores user onboarding quiz data and pr
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS creator_archetype TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS brand_name TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS industry TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS content_strengths TEXT[];
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS biggest_challenge TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS hook_style_preference TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS emotional_triggers TEXT[];
 -- CREATE INDEX IF NOT EXISTS idx_user_profile_profile_type ON public.user_profile(profile_type);

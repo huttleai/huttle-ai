@@ -32,6 +32,11 @@ export function BrandProvider({ children }) {
     brandVoice: '',
     platforms: [],
     goals: [],
+    // Viral content strategy fields
+    contentStrengths: [], // What user is best at
+    biggestChallenge: '', // Main content struggle
+    hookStylePreference: '', // Preferred hook style for viral content
+    emotionalTriggers: [], // How they want audience to feel
   });
   const [loading, setLoading] = useState(true);
 
@@ -75,6 +80,11 @@ export function BrandProvider({ children }) {
             brandVoice: data.brand_voice_preference || '',
             platforms: data.preferred_platforms || [],
             goals: data.content_goals || [],
+            // Viral content strategy fields
+            contentStrengths: data.content_strengths || [],
+            biggestChallenge: data.biggest_challenge || '',
+            hookStylePreference: data.hook_style_preference || '',
+            emotionalTriggers: data.emotional_triggers || [],
           };
           setBrandData(mappedData);
           // Also sync to localStorage as backup
@@ -111,48 +121,34 @@ export function BrandProvider({ children }) {
     // Save to Supabase if user is authenticated
     if (user?.id) {
       try {
-        // Base data without creator_archetype (for backward compatibility)
-        const baseData = {
+        // Complete data with all fields
+        const profileData = {
           user_id: user.id,
           profile_type: updated.profileType || 'brand',
+          creator_archetype: updated.creatorArchetype || null,
+          brand_name: updated.brandName || null,
+          industry: updated.industry || null,
           niche: updated.niche,
           target_audience: updated.targetAudience,
           brand_voice_preference: updated.brandVoice,
           preferred_platforms: updated.platforms,
           content_goals: updated.goals,
-          brand_name: updated.brandName,
-          industry: updated.industry,
+          // Viral content strategy fields
+          content_strengths: updated.contentStrengths || [],
+          biggest_challenge: updated.biggestChallenge || null,
+          hook_style_preference: updated.hookStylePreference || null,
+          emotional_triggers: updated.emotionalTriggers || [],
           updated_at: new Date().toISOString(),
-        };
-
-        // Try with creator_archetype first
-        const dataWithArchetype = {
-          ...baseData,
-          creator_archetype: updated.creatorArchetype || null,
         };
 
         const { error } = await supabase
           .from('user_profile')
-          .upsert(dataWithArchetype, {
+          .upsert(profileData, {
             onConflict: 'user_id'
           });
 
         if (error) {
-          // If error is about missing creator_archetype column, retry without it
-          if (error.message?.includes('creator_archetype') || error.code === '42703') {
-            console.warn('creator_archetype column not found, saving without it...');
-            const { error: retryError } = await supabase
-              .from('user_profile')
-              .upsert(baseData, {
-                onConflict: 'user_id'
-              });
-            
-            if (retryError) {
-              console.error('Error saving brand data to Supabase:', retryError);
-            }
-          } else {
-            console.error('Error saving brand data to Supabase:', error);
-          }
+          console.error('Error saving brand data to Supabase:', error);
           // Data is still saved to localStorage, so user can continue
         }
       } catch (error) {
@@ -173,6 +169,11 @@ export function BrandProvider({ children }) {
       brandVoice: '',
       platforms: [],
       goals: [],
+      // Viral content strategy fields
+      contentStrengths: [],
+      biggestChallenge: '',
+      hookStylePreference: '',
+      emotionalTriggers: [],
     };
     setBrandData(resetData);
     localStorage.removeItem('brandData');
@@ -180,35 +181,30 @@ export function BrandProvider({ children }) {
     // Also reset in Supabase if user is authenticated
     if (user?.id) {
       try {
-        // Base reset data without creator_archetype (for backward compatibility)
-        const baseResetData = {
+        const resetProfileData = {
           profile_type: 'brand',
+          creator_archetype: null,
+          brand_name: null,
+          industry: null,
           niche: null,
           target_audience: null,
           brand_voice_preference: null,
           preferred_platforms: [],
           content_goals: [],
-          brand_name: null,
-          industry: null,
+          // Viral content strategy fields
+          content_strengths: [],
+          biggest_challenge: null,
+          hook_style_preference: null,
+          emotional_triggers: [],
         };
 
-        // Try with creator_archetype first
         const { error } = await supabase
           .from('user_profile')
-          .update({
-            ...baseResetData,
-            creator_archetype: null,
-          })
+          .update(resetProfileData)
           .eq('user_id', user.id);
 
         if (error) {
-          // If error is about missing creator_archetype column, retry without it
-          if (error.message?.includes('creator_archetype') || error.code === '42703') {
-            await supabase
-              .from('user_profile')
-              .update(baseResetData)
-              .eq('user_id', user.id);
-          }
+          console.error('Error resetting brand data in Supabase:', error);
         }
       } catch (error) {
         console.error('Error resetting brand data:', error);

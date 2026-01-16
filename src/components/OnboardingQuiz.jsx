@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video, AlertCircle, Eye, Clock, Lightbulb, HelpCircle, Building2, AtSign } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
@@ -97,6 +97,63 @@ const BRAND_VOICES = [
   { value: 'educational', label: 'Educational & Informative', description: 'Clear, instructive', icon: BookOpen }
 ];
 
+// Industries for brands
+const INDUSTRIES = [
+  { value: 'healthcare', label: 'Healthcare & Wellness', icon: Heart },
+  { value: 'beauty', label: 'Beauty & Cosmetics', icon: Sparkles },
+  { value: 'fitness', label: 'Fitness & Sports', icon: Zap },
+  { value: 'food', label: 'Food & Beverage', icon: Target },
+  { value: 'fashion', label: 'Fashion & Apparel', icon: Palette },
+  { value: 'technology', label: 'Technology & Software', icon: Lightbulb },
+  { value: 'finance', label: 'Finance & Insurance', icon: Briefcase },
+  { value: 'real_estate', label: 'Real Estate', icon: Building2 },
+  { value: 'education', label: 'Education & Training', icon: BookOpen },
+  { value: 'entertainment', label: 'Entertainment & Media', icon: Video },
+  { value: 'retail', label: 'Retail & E-commerce', icon: Target },
+  { value: 'services', label: 'Professional Services', icon: Users },
+  { value: 'other', label: 'Other', icon: HelpCircle }
+];
+
+// Content strengths - what users are best at
+const CONTENT_STRENGTHS = [
+  { value: 'storytelling', label: 'Storytelling', description: 'Sharing compelling narratives', icon: PenTool },
+  { value: 'education', label: 'Education', description: 'Teaching and explaining', icon: BookOpen },
+  { value: 'entertainment', label: 'Entertainment', description: 'Making people laugh or smile', icon: Smile },
+  { value: 'visuals', label: 'Visuals', description: 'Creating eye-catching content', icon: Eye },
+  { value: 'trends', label: 'Trends', description: 'Jumping on what\'s hot', icon: TrendingUp },
+  { value: 'authenticity', label: 'Authenticity', description: 'Being real and relatable', icon: Heart }
+];
+
+// Biggest challenges
+const CONTENT_CHALLENGES = [
+  { value: 'consistency', label: 'Staying Consistent', description: 'Posting regularly is hard', icon: Calendar },
+  { value: 'ideas', label: 'Coming Up With Ideas', description: 'Running out of content ideas', icon: Lightbulb },
+  { value: 'engagement', label: 'Getting Engagement', description: 'Not enough likes/comments', icon: MessageSquare },
+  { value: 'growth', label: 'Growing My Audience', description: 'Gaining new followers', icon: TrendingUp },
+  { value: 'time', label: 'Finding Time', description: 'Too busy to create', icon: Clock },
+  { value: 'quality', label: 'Creating Quality Content', description: 'Making content look professional', icon: Sparkles }
+];
+
+// Hook style preferences for viral content
+const HOOK_STYLES = [
+  { value: 'question', label: 'Question Hook', description: '"Did you know...?" or "What if...?"', icon: HelpCircle },
+  { value: 'bold_statement', label: 'Bold Statement', description: 'Strong opinion or claim', icon: AlertCircle },
+  { value: 'story', label: 'Story Hook', description: '"Let me tell you about..."', icon: PenTool },
+  { value: 'statistic', label: 'Statistic Hook', description: 'Numbers that shock or surprise', icon: TrendingUp },
+  { value: 'controversy', label: 'Controversy Hook', description: 'Unpopular opinion or debate', icon: Zap },
+  { value: 'curiosity_gap', label: 'Curiosity Gap', description: '"The secret that no one tells you..."', icon: Eye }
+];
+
+// Emotional triggers - how audience should feel
+const EMOTIONAL_TRIGGERS = [
+  { value: 'inspired', label: 'Inspired', description: 'Motivated to take action', icon: Rocket },
+  { value: 'entertained', label: 'Entertained', description: 'Amused and engaged', icon: Smile },
+  { value: 'educated', label: 'Educated', description: 'Learning something new', icon: BookOpen },
+  { value: 'connected', label: 'Connected', description: 'Part of a community', icon: Users },
+  { value: 'motivated', label: 'Motivated', description: 'Ready to achieve goals', icon: Target },
+  { value: 'understood', label: 'Understood', description: 'Seen and validated', icon: Heart }
+];
+
 export default function OnboardingQuiz({ onComplete }) {
   const { addToast } = useToast();
   const { updateBrandData } = useContext(BrandContext);
@@ -104,19 +161,27 @@ export default function OnboardingQuiz({ onComplete }) {
   const [formData, setFormData] = useState({
     profile_type: '',
     creator_archetype: '',
+    brand_name: '',
+    industry: '',
     niche: '',
     target_audience: '',
     content_goals: [],
     posting_frequency: '',
     preferred_platforms: [],
-    brand_voice_preference: ''
+    brand_voice_preference: '',
+    // New viral content strategy fields
+    content_strengths: [],
+    biggest_challenge: '',
+    hook_style_preference: '',
+    emotional_triggers: []
   });
   const [saving, setSaving] = useState(false);
 
   const isCreator = formData.profile_type === 'creator';
   
-  // Total steps: 7 for brand, 8 for creator (includes archetype step)
-  const totalSteps = isCreator ? 8 : 7;
+  // Total steps: 11 for brand, 12 for creator (includes archetype step)
+  // Steps: Profile Type, (Archetype for creators), Name, Industry, Niche, Audience, Goals, Strengths, Challenge, Hook Style, Emotional Triggers, Voice
+  const totalSteps = isCreator ? 12 : 11;
   const progress = (step / totalSteps) * 100;
 
   // Get step icons based on profile type
@@ -131,11 +196,15 @@ export default function OnboardingQuiz({ onComplete }) {
     
     return [
       ...baseIcons,
+      { icon: AtSign, label: 'Name' },
+      { icon: Building2, label: isCreator ? 'Category' : 'Industry' },
       { icon: Palette, label: isCreator ? 'Focus' : 'Niche' },
       { icon: Users, label: isCreator ? 'Community' : 'Audience' },
       { icon: Target, label: 'Goals' },
-      { icon: Calendar, label: 'Frequency' },
-      { icon: Rocket, label: 'Platforms' },
+      { icon: Zap, label: 'Strengths' },
+      { icon: AlertCircle, label: 'Challenge' },
+      { icon: Eye, label: 'Hooks' },
+      { icon: Heart, label: 'Emotions' },
       { icon: MessageSquare, label: isCreator ? 'Vibe' : 'Voice' }
     ];
   };
@@ -158,13 +227,29 @@ export default function OnboardingQuiz({ onComplete }) {
       return;
     }
     
-    // Archetype step for creators is optional
-    const nicheStep = isCreator ? 3 : 2;
-    const audienceStep = isCreator ? 4 : 3;
-    const goalsStep = isCreator ? 5 : 4;
-    const frequencyStep = isCreator ? 6 : 5;
-    const platformsStep = isCreator ? 7 : 6;
+    // Calculate step numbers based on profile type
+    // For creators: 1=Profile, 2=Archetype, 3=Name, 4=Industry, 5=Niche, 6=Audience, 7=Goals, 8=Strengths, 9=Challenge, 10=Hooks, 11=Emotions, 12=Voice
+    // For brands: 1=Profile, 2=Name, 3=Industry, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Hooks, 10=Emotions, 11=Voice
+    const nameStep = isCreator ? 3 : 2;
+    const industryStep = isCreator ? 4 : 3;
+    const nicheStep = isCreator ? 5 : 4;
+    const audienceStep = isCreator ? 6 : 5;
+    const goalsStep = isCreator ? 7 : 6;
+    const strengthsStep = isCreator ? 8 : 7;
+    const challengeStep = isCreator ? 9 : 8;
+    const hookStyleStep = isCreator ? 10 : 9;
+    const emotionalStep = isCreator ? 11 : 10;
     
+    // Name step validation (required)
+    if (step === nameStep && !formData.brand_name.trim()) {
+      addToast(isCreator ? 'Please enter your name or handle' : 'Please enter your brand name', 'warning');
+      return;
+    }
+    // Industry step is optional for creators, required for brands
+    if (step === industryStep && !isCreator && !formData.industry) {
+      addToast('Please select your industry', 'warning');
+      return;
+    }
     if (step === nicheStep && !formData.niche) {
       addToast(isCreator ? 'Please select your content focus' : 'Please select your content niche', 'warning');
       return;
@@ -177,12 +262,24 @@ export default function OnboardingQuiz({ onComplete }) {
       addToast('Please select at least one content goal', 'warning');
       return;
     }
-    if (step === frequencyStep && !formData.posting_frequency) {
-      addToast('Please select your posting frequency', 'warning');
+    // Strengths step - require at least one
+    if (step === strengthsStep && formData.content_strengths.length === 0) {
+      addToast('Please select at least one strength', 'warning');
       return;
     }
-    if (step === platformsStep && formData.preferred_platforms.length === 0) {
-      addToast('Please select at least one platform', 'warning');
+    // Challenge step - required
+    if (step === challengeStep && !formData.biggest_challenge) {
+      addToast('Please select your biggest challenge', 'warning');
+      return;
+    }
+    // Hook style step - required
+    if (step === hookStyleStep && !formData.hook_style_preference) {
+      addToast('Please select your preferred hook style', 'warning');
+      return;
+    }
+    // Emotional triggers - require at least one
+    if (step === emotionalStep && formData.emotional_triggers.length === 0) {
+      addToast('Please select at least one emotional trigger', 'warning');
       return;
     }
 
@@ -220,93 +317,37 @@ export default function OnboardingQuiz({ onComplete }) {
       const userId = userData.user.id;
       console.log('Saving profile for user:', userId);
 
-      // Prepare base profile data - using upsert to handle both new users and existing rows
-      // Note: creator_archetype may not exist in older database schemas
+      // Prepare complete profile data with all fields
       const profileData = {
         user_id: userId,
         profile_type: formData.profile_type,
+        creator_archetype: formData.creator_archetype || null,
+        brand_name: formData.brand_name || null,
+        industry: formData.industry || null,
         niche: formData.niche,
         target_audience: formData.target_audience,
         content_goals: formData.content_goals,
         posting_frequency: formData.posting_frequency,
         preferred_platforms: formData.preferred_platforms,
         brand_voice_preference: formData.brand_voice_preference,
+        // New viral content strategy fields
+        content_strengths: formData.content_strengths,
+        biggest_challenge: formData.biggest_challenge || null,
+        hook_style_preference: formData.hook_style_preference || null,
+        emotional_triggers: formData.emotional_triggers,
         quiz_completed_at: new Date().toISOString(),
         onboarding_step: totalSteps
       };
 
-      // Try to save with creator_archetype first
-      let profileResult = null;
-      let saveError = null;
+      console.log('Saving profile data:', profileData);
 
-      // First attempt: include creator_archetype
-      const profileDataWithArchetype = {
-        ...profileData,
-        creator_archetype: formData.creator_archetype || null,
-      };
-
-      const { data: result1, error: error1 } = await supabase
+      const { data: profileResult, error: saveError } = await supabase
         .from('user_profile')
-        .upsert(profileDataWithArchetype, {
+        .upsert(profileData, {
           onConflict: 'user_id',
           ignoreDuplicates: false
         })
         .select();
-
-      if (error1) {
-        // Check if error is about missing creator_archetype column
-        if (error1.message?.includes('creator_archetype') || error1.code === '42703') {
-          console.warn('creator_archetype column not found, saving without it...');
-          
-          // Second attempt: save without creator_archetype
-          const { data: result2, error: error2 } = await supabase
-            .from('user_profile')
-            .upsert(profileData, {
-              onConflict: 'user_id',
-              ignoreDuplicates: false
-            })
-            .select();
-
-          if (error2) {
-            saveError = error2;
-          } else {
-            profileResult = result2;
-          }
-        } else if (error1.code === '23505') {
-          // Duplicate key - try update instead
-          console.log('Duplicate detected, attempting update...');
-          const { data: result3, error: error3 } = await supabase
-            .from('user_profile')
-            .update(profileDataWithArchetype)
-            .eq('user_id', userId)
-            .select();
-          
-          if (error3) {
-            // Try without creator_archetype
-            if (error3.message?.includes('creator_archetype') || error3.code === '42703') {
-              const { data: result4, error: error4 } = await supabase
-                .from('user_profile')
-                .update(profileData)
-                .eq('user_id', userId)
-                .select();
-              
-              if (error4) {
-                saveError = error4;
-              } else {
-                profileResult = result4;
-              }
-            } else {
-              saveError = error3;
-            }
-          } else {
-            profileResult = result3;
-          }
-        } else {
-          saveError = error1;
-        }
-      } else {
-        profileResult = result1;
-      }
 
       if (saveError) {
         console.error('Profile save error:', saveError);
@@ -319,11 +360,18 @@ export default function OnboardingQuiz({ onComplete }) {
       updateBrandData({
         profileType: formData.profile_type,
         creatorArchetype: formData.creator_archetype || '',
+        brandName: formData.brand_name || '',
+        industry: formData.industry || '',
         niche: formData.niche,
         targetAudience: formData.target_audience,
         brandVoice: formData.brand_voice_preference,
         platforms: formData.preferred_platforms,
         goals: formData.content_goals,
+        // New viral content strategy fields
+        contentStrengths: formData.content_strengths,
+        biggestChallenge: formData.biggest_challenge || '',
+        hookStylePreference: formData.hook_style_preference || '',
+        emotionalTriggers: formData.emotional_triggers,
       });
 
       addToast('Profile setup complete! 🎉', 'success');
@@ -438,8 +486,91 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
+    // Name step
+    const nameStep = isCreator ? 3 : 2;
+    if (step === nameStep) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
+            {isCreator ? "What's your name or handle?" : "What's your brand name?"}
+          </h2>
+          <p className="text-slate-500 mb-6">
+            {isCreator ? 'This is how we\'ll personalize your experience' : 'This helps us personalize AI-generated content for your brand'}
+          </p>
+          
+          <div className="space-y-4">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                {isCreator ? <AtSign className="w-5 h-5 text-slate-400" /> : <Building2 className="w-5 h-5 text-slate-400" />}
+              </div>
+              <input
+                type="text"
+                value={formData.brand_name}
+                onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
+                className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                autoFocus
+              />
+            </div>
+            <p className="text-sm text-slate-400 text-center">
+              {isCreator ? 'AI will write content in first person as you' : 'AI will write content on behalf of your brand'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Industry step
+    const industryStep = isCreator ? 4 : 3;
+    if (step === industryStep) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
+            {isCreator ? "What category are you in?" : "What industry are you in?"}
+          </h2>
+          <p className="text-slate-500 mb-6">
+            {isCreator ? 'This helps AI understand your space' : 'This helps AI understand your competitive landscape'}
+            {isCreator && <span className="text-slate-400 ml-1">(optional)</span>}
+          </p>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {INDUSTRIES.map(industry => {
+              const Icon = industry.icon;
+              const isSelected = formData.industry === industry.value;
+              
+              return (
+                <button
+                  key={industry.value}
+                  onClick={() => setFormData({ ...formData, industry: industry.value })}
+                  className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-2 transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-900 text-center">{industry.label}</p>
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    
     // Niche step
-    const nicheStep = isCreator ? 3 : 2;
+    const nicheStep = isCreator ? 5 : 4;
     if (step === nicheStep) {
       return (
         <div className="animate-fadeIn">
@@ -487,7 +618,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Audience step
-    const audienceStep = isCreator ? 4 : 3;
+    const audienceStep = isCreator ? 6 : 5;
     if (step === audienceStep) {
       return (
         <div className="animate-fadeIn">
@@ -533,7 +664,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
     
     // Goals step
-    const goalsStep = isCreator ? 5 : 4;
+    const goalsStep = isCreator ? 7 : 6;
     if (step === goalsStep) {
       const goals = isCreator ? CREATOR_CONTENT_GOALS : BRAND_CONTENT_GOALS;
       
@@ -578,23 +709,71 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Frequency step
-    const frequencyStep = isCreator ? 6 : 5;
-    if (step === frequencyStep) {
+    // Strengths step - what users are best at
+    const strengthsStep = isCreator ? 8 : 7;
+    if (step === strengthsStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">How often do you plan to post?</h2>
-          <p className="text-slate-500 mb-6">This helps us tailor content suggestions to your schedule</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What are you best at?</h2>
+          <p className="text-slate-500 mb-6">Select your top strengths (choose at least one)</p>
           
-          <div className="space-y-3">
-            {POSTING_FREQUENCIES.map(freq => {
-              const Icon = freq.icon;
-              const isSelected = formData.posting_frequency === freq.value;
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {CONTENT_STRENGTHS.map(strength => {
+              const Icon = strength.icon;
+              const isSelected = formData.content_strengths.includes(strength.value);
+              
               return (
                 <button
-                  key={freq.value}
-                  onClick={() => setFormData({ ...formData, posting_frequency: freq.value })}
-                  className={`group w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                  key={strength.value}
+                  onClick={() => handleMultiSelect('content_strengths', strength.value)}
+                  className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center mx-auto mb-3 transition-all ${
+                    isSelected 
+                      ? 'bg-huttle-primary text-white' 
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-900 text-center">{strength.label}</p>
+                  <p className="text-xs text-slate-500 text-center mt-1">{strength.description}</p>
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-center text-sm text-slate-400 mt-4">
+            AI will emphasize these in your content
+          </p>
+        </div>
+      );
+    }
+    
+    // Challenge step - biggest content struggle
+    const challengeStep = isCreator ? 9 : 8;
+    if (step === challengeStep) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What's your biggest challenge?</h2>
+          <p className="text-slate-500 mb-6">We'll help you overcome this</p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CONTENT_CHALLENGES.map(challenge => {
+              const Icon = challenge.icon;
+              const isSelected = formData.biggest_challenge === challenge.value;
+              return (
+                <button
+                  key={challenge.value}
+                  onClick={() => setFormData({ ...formData, biggest_challenge: challenge.value })}
+                  className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
@@ -606,8 +785,8 @@ export default function OnboardingQuiz({ onComplete }) {
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-900">{freq.label}</p>
-                    <p className="text-sm text-slate-500">{freq.description}</p>
+                    <p className="font-semibold text-slate-900">{challenge.label}</p>
+                    <p className="text-sm text-slate-500">{challenge.description}</p>
                   </div>
                   {isSelected && (
                     <Check className="w-5 h-5 text-huttle-primary" />
@@ -620,37 +799,83 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Platforms step - monochrome icons
-    const platformsStep = isCreator ? 7 : 6;
-    if (step === platformsStep) {
+    // Hook style step - preferred viral hook style
+    const hookStyleStep = isCreator ? 10 : 9;
+    if (step === hookStyleStep) {
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">Which platforms do you use?</h2>
-          <p className="text-slate-500 mb-6">Select all platforms you create content for</p>
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">What hook style feels most like you?</h2>
+          <p className="text-slate-500 mb-6">This shapes how AI grabs attention for your content</p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {HOOK_STYLES.map(hookStyle => {
+              const Icon = hookStyle.icon;
+              const isSelected = formData.hook_style_preference === hookStyle.value;
+              return (
+                <button
+                  key={hookStyle.value}
+                  onClick={() => setFormData({ ...formData, hook_style_preference: hookStyle.value })}
+                  className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">{hookStyle.label}</p>
+                    <p className="text-sm text-slate-500">{hookStyle.description}</p>
+                  </div>
+                  {isSelected && (
+                    <Check className="w-5 h-5 text-huttle-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-center text-sm text-slate-400 mt-4">
+            Great hooks are key to viral content
+          </p>
+        </div>
+      );
+    }
+    
+    // Emotional triggers step - how audience should feel
+    const emotionalStep = isCreator ? 11 : 10;
+    if (step === emotionalStep) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">How do you want your audience to feel?</h2>
+          <p className="text-slate-500 mb-6">Select the emotions you want to evoke (choose at least one)</p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {PLATFORMS.map(platform => {
-              const Icon = platform.icon;
-              const isSelected = formData.preferred_platforms.includes(platform.value);
+            {EMOTIONAL_TRIGGERS.map(emotion => {
+              const Icon = emotion.icon;
+              const isSelected = formData.emotional_triggers.includes(emotion.value);
               
               return (
                 <button
-                  key={platform.value}
-                  onClick={() => handleMultiSelect('preferred_platforms', platform.value)}
-                  className={`group relative p-5 rounded-xl border-2 transition-all duration-200 ${
+                  key={emotion.value}
+                  onClick={() => handleMultiSelect('emotional_triggers', emotion.value)}
+                  className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 transition-all ${
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center mx-auto mb-3 transition-all ${
                     isSelected 
                       ? 'bg-huttle-primary text-white' 
                       : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                   }`}>
-                    <Icon className="w-6 h-6" />
+                    <Icon className="w-5 h-5" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-900 text-center">{platform.label}</p>
+                  <p className="text-sm font-semibold text-slate-900 text-center">{emotion.label}</p>
+                  <p className="text-xs text-slate-500 text-center mt-1">{emotion.description}</p>
                   {isSelected && (
                     <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center">
                       <Check className="w-3 h-3 text-white" />
@@ -660,12 +885,15 @@ export default function OnboardingQuiz({ onComplete }) {
               );
             })}
           </div>
+          <p className="text-center text-sm text-slate-400 mt-4">
+            Emotional content gets more engagement
+          </p>
         </div>
       );
     }
     
-    // Voice step (final)
-    const voiceStep = isCreator ? 8 : 7;
+    // Voice step (final) - includes platform selection
+    const voiceStep = isCreator ? 12 : 11;
     if (step === voiceStep) {
       return (
         <div className="animate-fadeIn">
@@ -676,7 +904,7 @@ export default function OnboardingQuiz({ onComplete }) {
             {isCreator ? 'Choose the tone that feels most like you' : 'Choose the tone that best matches your content style'}
           </p>
           
-          <div className="space-y-3">
+          <div className="space-y-3 mb-8">
             {BRAND_VOICES.map(voice => {
               const Icon = voice.icon;
               const isSelected = formData.brand_voice_preference === voice.value;
@@ -705,6 +933,35 @@ export default function OnboardingQuiz({ onComplete }) {
                 </button>
               );
             })}
+          </div>
+          
+          {/* Platform selection - inline on final step */}
+          <div className="border-t border-slate-200 pt-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">
+              Which platforms do you use? <span className="text-slate-400 font-normal normal-case">(optional)</span>
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORMS.map(platform => {
+                const Icon = platform.icon;
+                const isSelected = formData.preferred_platforms.includes(platform.value);
+                
+                return (
+                  <button
+                    key={platform.value}
+                    onClick={() => handleMultiSelect('preferred_platforms', platform.value)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all duration-200 ${
+                      isSelected
+                        ? 'border-huttle-primary bg-huttle-50 text-huttle-primary'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm font-medium">{platform.label}</span>
+                    {isSelected && <Check className="w-4 h-4" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       );

@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect, useMemo } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
-import { Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile, PenTool, Heart, Search, Info } from 'lucide-react';
+import { Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile, PenTool, Heart, Search, Info, Eye, TrendingUp, Calendar, MessageSquare, Lightbulb, Clock, AlertCircle, HelpCircle, Rocket, Target, Zap, Users } from 'lucide-react';
 import AIVoicePreview from '../components/AIVoicePreview';
 
 // Profile types
@@ -58,6 +58,46 @@ const CREATOR_GOALS = [
   { value: 'monetize', label: 'Monetize content' }
 ];
 
+// Content strengths - what users are best at
+const CONTENT_STRENGTHS = [
+  { value: 'storytelling', label: 'Storytelling', icon: PenTool },
+  { value: 'education', label: 'Education', icon: BookOpen },
+  { value: 'entertainment', label: 'Entertainment', icon: Smile },
+  { value: 'visuals', label: 'Visuals', icon: Eye },
+  { value: 'trends', label: 'Trends', icon: TrendingUp },
+  { value: 'authenticity', label: 'Authenticity', icon: Heart }
+];
+
+// Biggest challenges
+const CONTENT_CHALLENGES = [
+  { value: 'consistency', label: 'Staying Consistent', icon: Calendar },
+  { value: 'ideas', label: 'Coming Up With Ideas', icon: Lightbulb },
+  { value: 'engagement', label: 'Getting Engagement', icon: MessageSquare },
+  { value: 'growth', label: 'Growing My Audience', icon: TrendingUp },
+  { value: 'time', label: 'Finding Time', icon: Clock },
+  { value: 'quality', label: 'Creating Quality Content', icon: Sparkles }
+];
+
+// Hook style preferences for viral content
+const HOOK_STYLES = [
+  { value: 'question', label: 'Question Hook', icon: HelpCircle },
+  { value: 'bold_statement', label: 'Bold Statement', icon: AlertCircle },
+  { value: 'story', label: 'Story Hook', icon: PenTool },
+  { value: 'statistic', label: 'Statistic Hook', icon: TrendingUp },
+  { value: 'controversy', label: 'Controversy Hook', icon: Zap },
+  { value: 'curiosity_gap', label: 'Curiosity Gap', icon: Eye }
+];
+
+// Emotional triggers - how audience should feel
+const EMOTIONAL_TRIGGERS = [
+  { value: 'inspired', label: 'Inspired', icon: Rocket },
+  { value: 'entertained', label: 'Entertained', icon: Smile },
+  { value: 'educated', label: 'Educated', icon: BookOpen },
+  { value: 'connected', label: 'Connected', icon: Users },
+  { value: 'motivated', label: 'Motivated', icon: Target },
+  { value: 'understood', label: 'Understood', icon: Heart }
+];
+
 export default function BrandVoice() {
   const { brandData, updateBrandData } = useContext(BrandContext);
   const { addToast } = useToast();
@@ -71,7 +111,12 @@ export default function BrandVoice() {
     targetAudience: brandData?.targetAudience || '',
     brandVoice: brandData?.brandVoice || '',
     platforms: brandData?.platforms || [],
-    goals: brandData?.goals || []
+    goals: brandData?.goals || [],
+    // Viral content strategy fields
+    contentStrengths: brandData?.contentStrengths || [],
+    biggestChallenge: brandData?.biggestChallenge || '',
+    hookStylePreference: brandData?.hookStylePreference || '',
+    emotionalTriggers: brandData?.emotionalTriggers || []
   });
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -88,7 +133,12 @@ export default function BrandVoice() {
         targetAudience: brandData.targetAudience || '',
         brandVoice: brandData.brandVoice || '',
         platforms: brandData.platforms || [],
-        goals: brandData.goals || []
+        goals: brandData.goals || [],
+        // Viral content strategy fields
+        contentStrengths: brandData.contentStrengths || [],
+        biggestChallenge: brandData.biggestChallenge || '',
+        hookStylePreference: brandData.hookStylePreference || '',
+        emotionalTriggers: brandData.emotionalTriggers || []
       });
     }
   }, [brandData]);
@@ -104,7 +154,12 @@ export default function BrandVoice() {
       targetAudience: brandData?.targetAudience || '',
       brandVoice: brandData?.brandVoice || '',
       platforms: brandData?.platforms || [],
-      goals: brandData?.goals || []
+      goals: brandData?.goals || [],
+      // Viral content strategy fields
+      contentStrengths: brandData?.contentStrengths || [],
+      biggestChallenge: brandData?.biggestChallenge || '',
+      hookStylePreference: brandData?.hookStylePreference || '',
+      emotionalTriggers: brandData?.emotionalTriggers || []
     });
     setHasUnsavedChanges(hasChanges);
   }, [formData, brandData]);
@@ -114,18 +169,23 @@ export default function BrandVoice() {
   // Calculate profile completeness
   const completeness = useMemo(() => {
     const fields = [
-      { key: 'profileType', weight: 10, filled: !!formData.profileType },
-      { key: 'brandName', weight: 20, filled: !!formData.brandName },
-      { key: 'niche', weight: 15, filled: !!formData.niche },
-      { key: 'industry', weight: 10, filled: !!formData.industry },
-      { key: 'targetAudience', weight: 15, filled: !!formData.targetAudience },
-      { key: 'brandVoice', weight: 15, filled: !!formData.brandVoice },
-      { key: 'platforms', weight: 10, filled: formData.platforms?.length > 0 },
+      { key: 'profileType', weight: 8, filled: !!formData.profileType },
+      { key: 'brandName', weight: 15, filled: !!formData.brandName },
+      { key: 'niche', weight: 10, filled: !!formData.niche },
+      { key: 'industry', weight: 8, filled: !!formData.industry },
+      { key: 'targetAudience', weight: 10, filled: !!formData.targetAudience },
+      { key: 'brandVoice', weight: 10, filled: !!formData.brandVoice },
+      { key: 'platforms', weight: 8, filled: formData.platforms?.length > 0 },
       { key: 'goals', weight: 5, filled: formData.goals?.length > 0 },
+      // Viral content strategy fields
+      { key: 'contentStrengths', weight: 8, filled: formData.contentStrengths?.length > 0 },
+      { key: 'biggestChallenge', weight: 6, filled: !!formData.biggestChallenge },
+      { key: 'hookStylePreference', weight: 6, filled: !!formData.hookStylePreference },
+      { key: 'emotionalTriggers', weight: 6, filled: formData.emotionalTriggers?.length > 0 },
     ];
     
     if (isCreator) {
-      fields.push({ key: 'creatorArchetype', weight: 10, filled: !!formData.creatorArchetype });
+      fields.push({ key: 'creatorArchetype', weight: 8, filled: !!formData.creatorArchetype });
     }
     
     const totalWeight = fields.reduce((sum, f) => sum + f.weight, 0);
@@ -150,7 +210,12 @@ export default function BrandVoice() {
       targetAudience: '',
       brandVoice: '',
       platforms: [],
-      goals: []
+      goals: [],
+      // Viral content strategy fields
+      contentStrengths: [],
+      biggestChallenge: '',
+      hookStylePreference: '',
+      emotionalTriggers: []
     };
     setFormData(resetData);
     addToast('Form reset successfully', 'info');
@@ -171,6 +236,24 @@ export default function BrandVoice() {
       goals: prev.goals.includes(goal)
         ? prev.goals.filter(g => g !== goal)
         : [...prev.goals, goal]
+    }));
+  };
+
+  const handleStrengthToggle = (strength) => {
+    setFormData(prev => ({
+      ...prev,
+      contentStrengths: prev.contentStrengths.includes(strength)
+        ? prev.contentStrengths.filter(s => s !== strength)
+        : [...prev.contentStrengths, strength]
+    }));
+  };
+
+  const handleEmotionalTriggerToggle = (trigger) => {
+    setFormData(prev => ({
+      ...prev,
+      emotionalTriggers: prev.emotionalTriggers.includes(trigger)
+        ? prev.emotionalTriggers.filter(t => t !== trigger)
+        : [...prev.emotionalTriggers, trigger]
     }));
   };
 
@@ -469,6 +552,129 @@ export default function BrandVoice() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Viral Content Strategy Section */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-6">
+              <Zap className="w-5 h-5 text-huttle-primary" />
+              <h3 className="text-lg font-bold text-gray-900">Viral Content Strategy</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">These settings help AI create content optimized for maximum engagement and virality.</p>
+            
+            <div className="space-y-6">
+              {/* Content Strengths */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                  Your Content Strengths
+                </label>
+                <p className="text-sm text-gray-500 mb-3">What are you best at? AI will emphasize these.</p>
+                <div className="flex flex-wrap gap-2">
+                  {CONTENT_STRENGTHS.map(strength => {
+                    const Icon = strength.icon;
+                    const isSelected = formData.contentStrengths.includes(strength.value);
+                    return (
+                      <button
+                        key={strength.value}
+                        onClick={() => handleStrengthToggle(strength.value)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                          isSelected
+                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {strength.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Biggest Challenge */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                  Biggest Challenge
+                </label>
+                <p className="text-sm text-gray-500 mb-3">We'll help you overcome this.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {CONTENT_CHALLENGES.map(challenge => {
+                    const Icon = challenge.icon;
+                    const isSelected = formData.biggestChallenge === challenge.value;
+                    return (
+                      <button
+                        key={challenge.value}
+                        onClick={() => setFormData(prev => ({ ...prev, biggestChallenge: challenge.value }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                          isSelected
+                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{challenge.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Hook Style Preference */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                  Preferred Hook Style
+                </label>
+                <p className="text-sm text-gray-500 mb-3">How AI grabs attention for your content.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {HOOK_STYLES.map(hookStyle => {
+                    const Icon = hookStyle.icon;
+                    const isSelected = formData.hookStylePreference === hookStyle.value;
+                    return (
+                      <button
+                        key={hookStyle.value}
+                        onClick={() => setFormData(prev => ({ ...prev, hookStylePreference: hookStyle.value }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                          isSelected
+                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{hookStyle.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Emotional Triggers */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                  Emotional Triggers
+                </label>
+                <p className="text-sm text-gray-500 mb-3">How do you want your audience to feel?</p>
+                <div className="flex flex-wrap gap-2">
+                  {EMOTIONAL_TRIGGERS.map(emotion => {
+                    const Icon = emotion.icon;
+                    const isSelected = formData.emotionalTriggers.includes(emotion.value);
+                    return (
+                      <button
+                        key={emotion.value}
+                        onClick={() => handleEmotionalTriggerToggle(emotion.value)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                          isSelected
+                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {emotion.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
