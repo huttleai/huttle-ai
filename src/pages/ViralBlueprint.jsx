@@ -511,25 +511,111 @@ const adaptBlueprintResponse = (data) => {
   };
 };
 
+// Mock fitness blueprint for marketing demo
+const generateFitnessMockBlueprint = () => {
+  return {
+    isVideoContent: true,
+    directorsCut: [
+      {
+        step: 1,
+        title: 'The Hook',
+        script: '"If you\'re still doing cardio for fat loss in 2026, you\'re wasting your time. Here\'s why..."',
+        visual: 'Intense close-up of your face with gym background slightly out of focus. Quick zoom on the words "STOP CARDIO" overlaid in bold red Impact font. Neon gym lights add drama.'
+      },
+      {
+        step: 2,
+        title: 'The Problem',
+        script: '"Most gym-goers spend 45 minutes on the treadmill thinking they\'re burning fat. But here\'s the truth: they\'re actually losing muscle and slowing down their metabolism."',
+        visual: 'B-roll split screen: Left shows someone exhausted on treadmill, Right shows your face explaining with genuine concern. Use slow-motion effect on treadmill footage. Add text: "Muscle Loss = Slower Metabolism"'
+      },
+      {
+        step: 3,
+        title: 'The Science',
+        script: '"Research shows that strength training with progressive overload burns more calories for up to 48 hours AFTER your workout. That\'s called EPOC - and cardio doesn\'t touch it."',
+        visual: 'Quick cuts of explosive strength training movements: deadlifts, squats, bench press. Use dynamic angles and slow-motion on the concentric phase. Overlay text: "EPOC Effect: 48hr Fat Burn 🔥"'
+      },
+      {
+        step: 4,
+        title: 'The Solution',
+        script: '"Here\'s the game plan: 3-4 days strength training, 10-15 minutes HIIT max. Build muscle, keep your metabolism high, and actually enjoy your workouts. That\'s how you transform."',
+        visual: 'Show yourself demonstrating a compound movement with perfect form. Cut to energetic HIIT sequence. End with before/after transformation photo with arrow animation. Text overlay: "The Real Formula ⚡"'
+      },
+      {
+        step: 5,
+        title: 'The CTA',
+        script: '"Follow for more evidence-based fitness truth. Drop a 💪 if you\'re ready to ditch the treadmill and build real strength!"',
+        visual: 'Return to face cam, point at camera with confident energy. Animate follow button bouncing in corner. Show comment section with fire emojis. End with branded gym logo fade.'
+      }
+    ],
+    seoStrategy: {
+      visualKeywords: [
+        'gym transformation',
+        'strength training benefits',
+        'fat loss science',
+        'muscle building tips',
+        'EPOC effect',
+        'cardio vs weights'
+      ],
+      spokenHooks: [
+        'Stop doing cardio',
+        'The truth about fat loss',
+        'What the fitness industry won\'t tell you',
+        'The science behind muscle gain',
+        'Evidence-based training'
+      ],
+      captionKeywords: [
+        '#gymtok',
+        '#fitnesstips',
+        '#strengthtraining',
+        '#fatloss',
+        '#musclebuilding',
+        '#gymmotivation',
+        '#fitnesstransformation',
+        '#sciencebasedfitness',
+        '#gymlife',
+        '#workout',
+        '#personaltrainer',
+        '#fitfam'
+      ]
+    },
+    audioVibe: {
+      mood: 'High-Energy Phonk with Heavy Bass Drops',
+      bpm: '140-160',
+      suggestion: 'Use trending gym motivation sounds from TikTok - Phonk beats perform incredibly well for fitness content. Look for "Gym Phonk" or "Aggressive Workout Music" in your audio library.'
+    },
+    viralScore: 92,
+    hooks: [
+      'If you\'re still doing cardio for fat loss in 2026, you\'re wasting your time...',
+      'The fitness industry doesn\'t want you to know this about "fat burning zones"',
+      'Why bodybuilders never do hours of cardio (and you shouldn\'t either)',
+      'I stopped doing cardio 6 months ago. Here\'s what happened to my body...',
+      'POV: You just learned that cardio is sabotaging your transformation'
+    ]
+  };
+};
+
 export default function ViralBlueprint() {
   const { brandProfile, isCreator, isBrand } = useBrand();
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
 
-  // Form state
-  const [selectedPlatform, setSelectedPlatform] = useState(null);
-  const [selectedPostType, setSelectedPostType] = useState(null);
+  // Form state - Pre-filled with fitness demo data
+  const [selectedPlatform, setSelectedPlatform] = useState('TikTok');
+  const [selectedPostType, setSelectedPostType] = useState('Video');
   const [objective, setObjective] = useState('views');
-  const [topic, setTopic] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
+  const [topic, setTopic] = useState('Why cardio is overrated for fat loss and strength training is the key');
+  const [targetAudience, setTargetAudience] = useState('Gym-goers, fitness beginners, people trying to lose weight');
 
-  // UI state
+  // UI state - Pre-loaded with fitness mock blueprint
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedBlueprint, setGeneratedBlueprint] = useState(null);
+  const [generatedBlueprint, setGeneratedBlueprint] = useState(generateFitnessMockBlueprint());
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
   const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
+  
+  // View state - Controls whether to show input form or results
+  const [currentView, setCurrentView] = useState('results'); // 'input' | 'results' - Start with 'results' to show demo
 
   // Usage tracking
   const [usageCount, setUsageCount] = useState(0);
@@ -760,13 +846,9 @@ export default function ViralBlueprint() {
 
       showToast('Viral Blueprint generated! 🚀', 'success');
       
-      // Scroll to results
-      setTimeout(() => {
-        const resultsElement = document.getElementById('blueprint-results');
-        if (resultsElement) {
-          resultsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 100);
+      // Switch to results view and scroll to top
+      setCurrentView('results');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       
     } catch (error) {
       // Log detailed error information for debugging
@@ -814,7 +896,7 @@ export default function ViralBlueprint() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
-  // Reset form
+  // Reset form and switch back to input view
   const handleReset = () => {
     setSelectedPlatform(null);
     setSelectedPostType(null);
@@ -822,6 +904,7 @@ export default function ViralBlueprint() {
     setTopic('');
     setTargetAudience('');
     setGeneratedBlueprint(null);
+    setCurrentView('input');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -888,8 +971,9 @@ export default function ViralBlueprint() {
           </div>
         </div>
 
-        {/* Input Console - The Briefing */}
-        <div className="card-glass overflow-hidden relative">
+        {/* Input Console - The Briefing (only shown in input view) */}
+        {currentView === 'input' && (
+        <div className="card-glass overflow-hidden relative animate-fadeIn">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-50" />
           
           <div className="p-6 md:p-8 space-y-8 relative z-10">
@@ -1140,24 +1224,66 @@ export default function ViralBlueprint() {
                     ⚡ Deep research & strategy generation takes 60-90 seconds. Please keep this tab open.
                   </p>
                   
-                  {generatedBlueprint && (
-                    <button
-                      onClick={handleReset}
-                      className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-2 transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Reset Generator
-                    </button>
-                  )}
                 </div>
               </>
             )}
           </div>
         </div>
+        )}
 
-        {/* Results Section - The Blueprint */}
-        {generatedBlueprint && hasAccess && (
-          <div id="blueprint-results" className="space-y-8 animate-reveal-up">
+        {/* Results Section - The Blueprint (only shown in results view) */}
+        {currentView === 'results' && generatedBlueprint && hasAccess && (
+          <div id="blueprint-results" className="space-y-8 animate-fadeIn">
+            {/* Create New Blueprint Button + Context Summary */}
+            <div className="relative overflow-hidden rounded-2xl glass-panel p-6 md:p-8 transition-all duration-500">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                {/* Generation Context Summary */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                      <Check className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Blueprint Generated!</h2>
+                      <p className="text-sm text-gray-500">Your viral content strategy is ready</p>
+                    </div>
+                  </div>
+                  {/* Context Tags */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {selectedPlatform && (
+                      <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold flex items-center gap-1.5">
+                        {(() => {
+                          const platform = PLATFORMS.find(p => p.id === selectedPlatform);
+                          const PlatformIcon = platform?.icon;
+                          return PlatformIcon ? <PlatformIcon className="w-3.5 h-3.5" /> : null;
+                        })()}
+                        {selectedPlatform}
+                      </span>
+                    )}
+                    {selectedPostType && (
+                      <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
+                        {selectedPostType}
+                      </span>
+                    )}
+                    {topic && (
+                      <span className="px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold max-w-xs truncate">
+                        {topic.length > 40 ? topic.substring(0, 40) + '...' : topic}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Create New Blueprint Button */}
+                <button
+                  onClick={handleReset}
+                  className="group flex items-center gap-3 px-6 py-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                >
+                  <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                  <span>Create New Blueprint</span>
+                </button>
+              </div>
+            </div>
+
             {/* Header with Viral Score Badge */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4 flex-1">

@@ -622,8 +622,8 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
                 <p className="text-2xl font-bold text-slate-900">$199<span className="text-sm font-normal text-slate-500">/year</span></p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-slate-400 line-through">$420/year</p>
-                <p className="text-sm font-bold text-green-600">Save $221</p>
+                <p className="text-sm text-slate-400 line-through">$357/year</p>
+                <p className="text-sm font-bold text-green-600">Save $158</p>
               </div>
             </div>
 
@@ -959,7 +959,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "What is your refund policy?",
-      answer: "All Founders Club memberships are non-refundable. This is a special early-access program with a lifetime price lock at $199/year (normally $420/year), and by joining you're committing to support the development and growth of Huttle AI. We're confident you'll love the platform, but please make sure you're ready to commit before purchasing."
+      answer: "All Founders Club memberships are non-refundable. This is a special early-access program with a lifetime price lock at $199/year (normally $357/year), and by joining you're committing to support the development and growth of Huttle AI. We're confident you'll love the platform, but please make sure you're ready to commit before purchasing."
     },
     {
       question: "Is there a free trial available?",
@@ -1480,7 +1480,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Jan 25</span>
+              <span className="text-sm font-bold">Early Access Jan 26</span>
             </span>
           </div>
           <button 

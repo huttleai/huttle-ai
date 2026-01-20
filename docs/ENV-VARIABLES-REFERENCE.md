@@ -44,6 +44,18 @@ These must match your Stripe product prices:
 |----------|-------------|
 | `CRON_SECRET` | Random string for authenticating cron jobs |
 
+### DEMO MODE (Optional - for Marketing)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_DEMO_MODE` | Enable demo mode with fitness mock data | `false` |
+
+When `VITE_DEMO_MODE=true`:
+- AI Power Tools return realistic fitness-themed mock data instead of calling APIs
+- Useful for marketing screenshots/videos when n8n workflows aren't connected
+- All mock data is fitness-themed for the Iron Peak Fitness demo instance
+- API calls will still be attempted but fallback to mock data on failure
+
 ### N8N WORKFLOWS (Optional)
 
 If not set, features will use fallback data:

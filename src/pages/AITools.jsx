@@ -332,22 +332,33 @@ export default function AITools() {
       const result = await scoreContentQuality(contentToScore, brandData);
 
       if (result.success) {
-        setContentScore({
-          overall: 78,
-          breakdown: {
-            hook: 85,
-            engagement: 72,
-            cta: 80,
-            readability: 75
-          },
-          suggestions: [
-            'Add a stronger hook in the first sentence',
-            'Include 2-3 relevant emojis for visual appeal',
-            'Shorten paragraphs for better mobile readability',
-            'End with a clear call-to-action question'
-          ],
-          rawAnalysis: result.analysis
-        });
+        // Check if we have pre-parsed score data (from demo mode)
+        if (result.score) {
+          setContentScore({
+            overall: result.score.overall,
+            breakdown: result.score.breakdown,
+            suggestions: result.score.suggestions,
+            rawAnalysis: result.analysis
+          });
+        } else {
+          // Parse from raw analysis or use fallback
+          setContentScore({
+            overall: 78,
+            breakdown: {
+              hook: 85,
+              engagement: 72,
+              cta: 80,
+              readability: 75
+            },
+            suggestions: [
+              'Add a stronger hook in the first sentence',
+              'Include 2-3 relevant emojis for visual appeal',
+              'Shorten paragraphs for better mobile readability',
+              'End with a clear call-to-action question'
+            ],
+            rawAnalysis: result.analysis
+          });
+        }
         incrementAIUsage();
         showToast(`Content scored! ${getToastDisclaimer('general')}`, 'success');
       } else {

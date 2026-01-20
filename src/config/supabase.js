@@ -700,8 +700,11 @@ export async function createScheduledPost(userId, postData) {
 
 /**
  * Get user's scheduled posts with filters
+ * Includes timeout protection to prevent hanging queries
  */
 export async function getScheduledPosts(userId, filters = {}) {
+  const QUERY_TIMEOUT_MS = 10000; // 10 seconds
+  
   try {
     let query = supabase
       .from(TABLES.SCHEDULED_POSTS)
@@ -721,9 +724,20 @@ export async function getScheduledPosts(userId, filters = {}) {
       query = query.lte('scheduled_for', filters.endDate);
     }
 
-    const { data, error } = await query;
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Query timed out - scheduled_posts table may not exist or RLS is misconfigured')), QUERY_TIMEOUT_MS);
+    });
 
-    if (error) throw error;
+    const { data, error } = await Promise.race([query, timeoutPromise]);
+
+    if (error) {
+      // Check for table not existing
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.error('❌ The scheduled_posts table does not exist! Run the SQL schema in Supabase.');
+      }
+      throw error;
+    }
     return { success: true, data: data || [] };
   } catch (error) {
     console.error('Error getting scheduled posts:', error);
@@ -857,25 +871,48 @@ export async function updatePostStatus(postId, status, userId) {
 
 /**
  * Get user timezone preferences
+ * Includes timeout protection and graceful fallback to defaults
  */
 export async function getUserPreferences(userId) {
+  const QUERY_TIMEOUT_MS = 8000;
+  const defaultPreferences = {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    calendar_view: 'month',
+    notification_settings: { reminders: [30, 15, 5] }
+  };
+
   try {
-    const { data, error } = await supabase
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Query timed out')), QUERY_TIMEOUT_MS);
+    });
+
+    const queryPromise = supabase
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error;
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+    // PGRST116 = no rows found, which is expected for new users
+    // 42P01 = table doesn't exist
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No preferences found, return defaults
+        return { success: true, data: defaultPreferences };
+      }
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.warn('⚠️ user_preferences table does not exist, using defaults');
+        return { success: true, data: defaultPreferences };
+      }
+      throw error;
+    }
     
     // Return defaults if no preferences exist
     return { 
       success: true, 
-      data: data || {
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        calendar_view: 'month',
-        notification_settings: { reminders: [30, 15, 5] }
-      }
+      data: data || defaultPreferences
     };
   } catch (error) {
     console.error('Error getting user preferences:', error);

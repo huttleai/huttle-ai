@@ -11,18 +11,43 @@ export function AuthProvider({ children }) {
   const [profileChecked, setProfileChecked] = useState(false);
 
   // Memoized checkUserProfile to prevent recreation on every render
+  // Includes timeout protection to prevent infinite loading if Supabase query hangs
   const checkUserProfile = useCallback(async (userId) => {
     console.log('🔍 [Auth] Checking user profile for:', userId);
     
+    // Create a timeout promise to prevent hanging queries
+    const QUERY_TIMEOUT_MS = 10000; // 10 seconds
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Profile query timed out after ${QUERY_TIMEOUT_MS / 1000} seconds. This may indicate the user_profile table doesn't exist or RLS policies are misconfigured.`));
+      }, QUERY_TIMEOUT_MS);
+    });
+
     try {
-      const { data, error } = await supabase
+      // Race between the actual query and the timeout
+      const queryPromise = supabase
         .from('user_profile')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle(); // Use maybeSingle() instead of single() for new users
 
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
       if (error) {
         console.error('❌ [Auth] Error checking user profile:', error);
+        console.error('❌ [Auth] Error details:', {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+          details: error.details
+        });
+        
+        // Check for specific error codes that indicate table doesn't exist
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.error('❌ [Auth] The user_profile table does not exist! Please run the SQL schema in Supabase.');
+          console.error('❌ [Auth] Run: docs/setup/supabase-user-profile-schema.sql');
+        }
+        
         // On error, assume user needs onboarding to be safe
         setUserProfile(null);
         setNeedsOnboarding(true);
@@ -48,6 +73,12 @@ export function AuthProvider({ children }) {
       setProfileChecked(true);
     } catch (error) {
       console.error('❌ [Auth] Error in checkUserProfile:', error);
+      console.error('❌ [Auth] This may indicate:');
+      console.error('   1. The user_profile table does not exist in Supabase');
+      console.error('   2. RLS policies are blocking the query');
+      console.error('   3. Network connectivity issues');
+      console.error('❌ [Auth] Please run the SQL scripts in docs/setup/ in your Supabase SQL Editor');
+      
       // On error, force onboarding to be safe
       setUserProfile(null);
       setNeedsOnboarding(true);
@@ -73,7 +104,7 @@ export function AuthProvider({ children }) {
           const mockUser = {
             id: 'dev-user-123',
             email: 'dev@huttle.ai',
-            name: 'Dev User'
+            name: 'Sean'
           };
           if (isMounted) {
             setUser(mockUser);
@@ -137,8 +168,15 @@ export function AuthProvider({ children }) {
     initializeSession();
 
     // Listen for auth changes (handles Resend magic links, email confirmations, etc.)
+    // Skip auth listener if in dev mode with VITE_SKIP_AUTH
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 [Auth] Auth state changed:', event, session?.user?.email);
+      
+      // If skip auth is enabled, ignore auth state changes to maintain mock user
+      if (skipAuth) {
+        console.log('🔄 [Auth] Ignoring auth state change in skip auth mode');
+        return;
+      }
       
       try {
         if (!isMounted) return;
@@ -267,11 +305,16 @@ export function AuthProvider({ children }) {
   const completeOnboarding = async (profileData) => {
     if (!user) return { success: false, error: 'Not authenticated' };
     
-    setUserProfile(profileData);
+    console.log('✅ [Auth] completeOnboarding called with:', profileData);
+    
+    // First refresh the profile from database to get the complete data
+    await checkUserProfile(user.id);
+    
+    // The checkUserProfile will set needsOnboarding to false if quiz_completed_at is set
+    // But we also set it explicitly here for immediate UI update
     setNeedsOnboarding(false);
     
-    // Refresh profile from database
-    await checkUserProfile(user.id);
+    console.log('✅ [Auth] Onboarding marked as complete');
     
     return { success: true };
   };

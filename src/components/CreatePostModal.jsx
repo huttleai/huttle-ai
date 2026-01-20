@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Mic, MicOff, Loader2 } from 'lucide-react';
+import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Mic, MicOff, Loader2, AlertTriangle } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
@@ -9,6 +9,14 @@ import EngagementPredictor from './EngagementPredictor';
 import VoiceInput from './VoiceInput';
 import SmartTimeSuggestion from './SmartTimeSuggestion';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
+
+// Helper to check if a date/time is in the past
+const isPastDateTime = (dateStr, timeStr) => {
+  if (!dateStr) return false;
+  const scheduledDateTime = new Date(`${dateStr}T${timeStr || '00:00'}:00`);
+  const now = new Date();
+  return scheduledDateTime < now;
+};
 
 export default function CreatePostModal({ isOpen, onClose, preselectedDate = null, postToEdit = null }) {
   const { schedulePost, updateScheduledPost } = useContent();
@@ -90,6 +98,16 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
   const [captionVariations, setCaptionVariations] = useState([]);
   const [showVariations, setShowVariations] = useState(false);
+  const [pastDateError, setPastDateError] = useState(false);
+
+  // Check for past date whenever date or time changes
+  useEffect(() => {
+    if (postData.scheduledDate && postData.scheduledTime) {
+      setPastDateError(isPastDateTime(postData.scheduledDate, postData.scheduledTime));
+    } else {
+      setPastDateError(false);
+    }
+  }, [postData.scheduledDate, postData.scheduledTime]);
 
   if (!isOpen) return null;
 
@@ -128,17 +146,20 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     
     try {
       // Generate caption with brand context
-      const platform = postData.platforms.length > 0 ? postData.platforms[0] : 'social media';
+      const platform = postData.platforms.length > 0 ? postData.platforms[0] : 'instagram';
+      
+      console.log('Generating AI content for:', postData.title, 'platform:', platform);
+      
       const captionResult = await generateCaption(
-        { topic: postData.title, platform },
+        { topic: postData.title, platform, length: 'medium' },
         brandData
       );
 
       // Generate hashtags with brand context
-      const hashtagResult = await generateHashtags(postData.title, brandData);
+      const hashtagResult = await generateHashtags(postData.title, brandData, platform);
 
       // Generate visual ideas with brand context
-      const visualResult = await generateVisualIdeas(postData.title, brandData);
+      const visualResult = await generateVisualIdeas(postData.title, brandData, platform);
 
       // Parse visual ideas for image and video prompts
       let imagePrompt = '';
@@ -156,11 +177,36 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         }
       }
 
+      // Parse caption - handle numbered list format
+      let captionText = '';
+      if (captionResult.success && captionResult.caption) {
+        // If it's a numbered list, take the first caption
+        const captions = captionResult.caption.split(/\d+\./).filter(c => c.trim());
+        captionText = captions.length > 0 ? captions[0].trim() : captionResult.caption.trim();
+      } else {
+        captionText = `Check out this amazing ${postData.title}! 🚀\n\nDiscover how you can elevate your experience. What are your thoughts? Drop a comment below! 👇`;
+      }
+
+      // Parse hashtags - extract just the hashtag tags if in detailed format
+      let hashtagsText = '';
+      if (hashtagResult.success && hashtagResult.hashtags) {
+        // Check if we have pre-parsed hashtag data
+        if (hashtagResult.hashtagData) {
+          hashtagsText = hashtagResult.hashtagData.map(h => h.tag).join(' ');
+        } else {
+          // Extract hashtags from text
+          const hashtagMatches = hashtagResult.hashtags.match(/#\w+/g);
+          hashtagsText = hashtagMatches ? hashtagMatches.slice(0, 10).join(' ') : hashtagResult.hashtags.split('\n')[0];
+        }
+      } else {
+        hashtagsText = '#fitness #workout #motivation #health #gym';
+      }
+
       // Update post data with AI-generated content
       setPostData(prev => ({
         ...prev,
-        caption: captionResult.success ? captionResult.caption : `Check out this amazing ${prev.title}! 🚀\n\nDiscover how you can elevate your experience. What are your thoughts? Drop a comment below! 👇`,
-        hashtags: hashtagResult.success ? hashtagResult.hashtags.split('\n')[0] : '#content #socialmedia #engagement',
+        caption: captionText,
+        hashtags: hashtagsText,
         keywords: postData.title.split(' ').slice(0, 5).join(', '),
         imagePrompt: imagePrompt || `Create a vibrant, eye-catching image featuring ${prev.title}. Modern design, professional quality.`,
         videoPrompt: videoPrompt || `Short-form video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
@@ -169,7 +215,18 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       showToast('AI content generated with your brand voice!', 'success');
     } catch (error) {
       console.error('AI generation error:', error);
-      showToast('Failed to generate AI content. Please try again.', 'error');
+      
+      // Provide fallback fitness-themed content on error
+      setPostData(prev => ({
+        ...prev,
+        caption: `Ready to crush your ${postData.title} goals? 💪\n\nConsistency is key to success. Every rep, every set, every day brings you closer to your best self!\n\nWhat's your motivation today? Drop it below! 👇`,
+        hashtags: '#fitness #motivation #workout #healthylifestyle #gymlife',
+        keywords: postData.title.split(' ').slice(0, 5).join(', '),
+        imagePrompt: `Create a motivational fitness image featuring ${prev.title}. High energy, professional quality, inspiring composition.`,
+        videoPrompt: `Short-form fitness video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
+      }));
+      
+      showToast('Generated content with fallback data. API may be temporarily unavailable.', 'info');
     } finally {
       setIsGenerating(false);
     }
@@ -343,6 +400,12 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       showToast('Please select a date and time', 'error');
       return;
     }
+    
+    // Validate that the date/time is not in the past
+    if (isPastDateTime(postData.scheduledDate, postData.scheduledTime)) {
+      showToast('Cannot schedule posts for past dates. Please select a future date and time.', 'error');
+      return;
+    }
 
     if (postToEdit && (postToEdit.id || postToEdit.originalPost?.id)) {
       // Update existing post - use originalPost.id if available, otherwise use postToEdit.id
@@ -439,59 +502,69 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             )}
           </div>
 
-          {/* Post Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Post Title</label>
-            <input
-              type="text"
-              value={postData.title}
-              onChange={(e) => setPostData({ ...postData, title: e.target.value })}
-              placeholder="Enter post title..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-            />
-          </div>
-
-          {/* Platforms */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Select Platform</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {platforms.map((platform) => (
-                <button
-                  key={platform.name}
-                  onClick={() => handlePlatformToggle(platform.name)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
-                    postData.platforms[0] === platform.name
-                      ? 'border-huttle-primary bg-huttle-primary/10'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded flex items-center justify-center bg-white border border-gray-100`}>
-                    <platform.icon className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm">{platform.name}</span>
-                </button>
-              ))}
+          {/* SECTION 1: Basic Info */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
+                <Type className="w-4 h-4 text-huttle-primary" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Basic Info</h3>
             </div>
-          </div>
+            
+            {/* Post Title */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Post Title <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={postData.title}
+                onChange={(e) => setPostData({ ...postData, title: e.target.value })}
+                placeholder="e.g., Morning workout motivation, New protein shake recipe..."
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
+              />
+            </div>
 
-          {/* Content Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Content Type</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {contentTypes.map((type) => (
-                <button
-                  key={type.name}
-                  onClick={() => setPostData({ ...postData, contentType: type.name })}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
-                    postData.contentType === type.name
-                      ? 'border-huttle-primary bg-huttle-primary/10'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <type.icon className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-sm">{type.name}</span>
-                </button>
-              ))}
+            {/* Platforms */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Select Platform <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {platforms.map((platform) => (
+                  <button
+                    key={platform.name}
+                    onClick={() => handlePlatformToggle(platform.name)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
+                      postData.platforms[0] === platform.name
+                        ? 'border-huttle-primary bg-huttle-primary/10'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded flex items-center justify-center bg-white border border-gray-100`}>
+                      <platform.icon className="w-5 h-5" />
+                    </div>
+                    <span className="font-medium text-sm">{platform.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Content Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Content Type</label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {contentTypes.map((type) => (
+                  <button
+                    key={type.name}
+                    onClick={() => setPostData({ ...postData, contentType: type.name })}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
+                      postData.contentType === type.name
+                        ? 'border-huttle-primary bg-huttle-primary/10'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <type.icon className="w-5 h-5 text-gray-600" />
+                    <span className="font-medium text-sm">{type.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -508,51 +581,75 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           )}
 
           {/* Scheduling */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="w-4 h-4 inline mr-2" />
-                Scheduled Date
-              </label>
-              <input
-                type="date"
-                value={postData.scheduledDate}
-                onChange={(e) => setPostData({ ...postData, scheduledDate: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-              />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
+                <Calendar className="w-4 h-4 text-huttle-primary" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Schedule</h3>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Clock className="w-4 h-4 inline mr-2" />
-                Scheduled Time
-                {postData.scheduledTime && postData.scheduledTime.trim() !== '' && (
-                  <span className="ml-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded animate-fadeIn">
-                    ✓ Auto-filled from suggestion
-                  </span>
-                )}
-              </label>
-              <select
-                value={postData.scheduledTime}
-                onChange={(e) => setPostData({ ...postData, scheduledTime: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-              >
-                <option value="">Select time...</option>
-                {optimalTimes.map((time) => {
-                  const option = timeOptions.find(t => t.value === time.time);
-                  return (
-                    <option key={time.time} value={time.time}>
-                      {option?.label} {time.optimal && `⭐ ${time.label}`}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-2" />
+                  Scheduled Date
+                </label>
+                <input
+                  type="date"
+                  value={postData.scheduledDate}
+                  onChange={(e) => setPostData({ ...postData, scheduledDate: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none ${
+                    pastDateError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Clock className="w-4 h-4 inline mr-2" />
+                  Scheduled Time
+                  {postData.scheduledTime && postData.scheduledTime.trim() !== '' && !pastDateError && (
+                    <span className="ml-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded animate-fadeIn">
+                      ✓ Auto-filled from suggestion
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={postData.scheduledTime}
+                  onChange={(e) => setPostData({ ...postData, scheduledTime: e.target.value })}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none ${
+                    pastDateError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Select time...</option>
+                  {optimalTimes.map((time) => {
+                    const option = timeOptions.find(t => t.value === time.time);
+                    return (
+                      <option key={time.time} value={time.time}>
+                        {option?.label} {time.optimal && `⭐ ${time.label}`}
+                      </option>
+                    );
+                  })}
+                  <option disabled>──────────</option>
+                  {timeOptions.map((time) => (
+                    <option key={time.value} value={time.value}>
+                      {time.label}
                     </option>
-                  );
-                })}
-                <option disabled>──────────</option>
-                {timeOptions.map((time) => (
-                  <option key={time.value} value={time.value}>
-                    {time.label}
-                  </option>
-                ))}
-              </select>
+                  ))}
+                </select>
+              </div>
             </div>
+            
+            {/* Past Date Warning */}
+            {pastDateError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm font-medium">
+                  Cannot schedule posts for past dates. Please select a future date and time.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Media Upload */}
@@ -611,9 +708,14 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             )}
           </div>
 
-          {/* Content & Keywords */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Content & Keywords</h3>
+          {/* SECTION 2: Content & Keywords */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Type className="w-4 h-4 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Content & Keywords</h3>
+            </div>
             
             {/* Voice Input */}
             <VoiceInput
@@ -640,7 +742,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 onChange={(e) => setPostData({ ...postData, caption: e.target.value })}
                 placeholder="Write your caption or use voice input above..."
                 rows="4"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
               />
             </div>
 
@@ -696,7 +798,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 value={postData.hashtags}
                 onChange={(e) => setPostData({ ...postData, hashtags: e.target.value })}
                 placeholder="#hashtag1 #hashtag2 #hashtag3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
               />
             </div>
 
@@ -707,10 +809,10 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 value={postData.keywords}
                 onChange={(e) => setPostData({ ...postData, keywords: e.target.value })}
                 placeholder="keyword1, keyword2, keyword3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
               />
             </div>
-          </div>
+          </div> {/* End Content & Keywords section */}
 
           {/* Engagement Predictor */}
           {(postData.caption || postData.title) && (
@@ -723,9 +825,14 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             />
           )}
 
-          {/* Media Concepts */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Media Concepts</h3>
+          {/* SECTION 3: Media Concepts */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
+                <Image className="w-4 h-4 text-pink-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Media Concepts</h3>
+            </div>
             
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -748,7 +855,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 onChange={(e) => setPostData({ ...postData, imagePrompt: e.target.value })}
                 placeholder="Describe the image concept or let AI suggest..."
                 rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
               />
             </div>
 
@@ -773,7 +880,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 onChange={(e) => setPostData({ ...postData, videoPrompt: e.target.value })}
                 placeholder="Describe the video concept or let AI suggest..."
                 rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
               />
             </div>
           </div>

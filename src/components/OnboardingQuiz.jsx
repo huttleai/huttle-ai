@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video, AlertCircle, Eye, Clock, Lightbulb, HelpCircle, Building2, AtSign } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
-import { BrandContext } from '../context/BrandContext';
+import { BrandContext, useBrand } from '../context/BrandContext';
 
 // Profile types - clean monochrome design
 const PROFILE_TYPES = [
@@ -156,7 +156,7 @@ const EMOTIONAL_TRIGGERS = [
 
 export default function OnboardingQuiz({ onComplete }) {
   const { addToast } = useToast();
-  const { updateBrandData } = useContext(BrandContext);
+  const { updateBrandData, refreshBrandData } = useContext(BrandContext);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     profile_type: '',
@@ -382,10 +382,16 @@ export default function OnboardingQuiz({ onComplete }) {
         emotionalTriggers: formData.emotional_triggers,
       });
 
+      // Force BrandContext to reload from database to ensure sync
+      if (refreshBrandData) {
+        refreshBrandData();
+      }
+
       addToast('Profile setup complete! 🎉', 'success');
       
+      // Call onComplete callback - must await since it may be async
       if (onComplete) {
-        onComplete(formData);
+        await onComplete(formData);
       }
 
     } catch (error) {

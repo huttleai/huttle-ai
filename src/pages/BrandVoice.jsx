@@ -78,16 +78,6 @@ const CONTENT_CHALLENGES = [
   { value: 'quality', label: 'Creating Quality Content', icon: Sparkles }
 ];
 
-// Hook style preferences for viral content
-const HOOK_STYLES = [
-  { value: 'question', label: 'Question Hook', icon: HelpCircle },
-  { value: 'bold_statement', label: 'Bold Statement', icon: AlertCircle },
-  { value: 'story', label: 'Story Hook', icon: PenTool },
-  { value: 'statistic', label: 'Statistic Hook', icon: TrendingUp },
-  { value: 'controversy', label: 'Controversy Hook', icon: Zap },
-  { value: 'curiosity_gap', label: 'Curiosity Gap', icon: Eye }
-];
-
 // Emotional triggers - how audience should feel
 const EMOTIONAL_TRIGGERS = [
   { value: 'inspired', label: 'Inspired', icon: Rocket },
@@ -115,7 +105,6 @@ export default function BrandVoice() {
     // Viral content strategy fields
     contentStrengths: brandData?.contentStrengths || [],
     biggestChallenge: brandData?.biggestChallenge || '',
-    hookStylePreference: brandData?.hookStylePreference || '',
     emotionalTriggers: brandData?.emotionalTriggers || []
   });
 
@@ -137,7 +126,6 @@ export default function BrandVoice() {
         // Viral content strategy fields
         contentStrengths: brandData.contentStrengths || [],
         biggestChallenge: brandData.biggestChallenge || '',
-        hookStylePreference: brandData.hookStylePreference || '',
         emotionalTriggers: brandData.emotionalTriggers || []
       });
     }
@@ -158,7 +146,6 @@ export default function BrandVoice() {
       // Viral content strategy fields
       contentStrengths: brandData?.contentStrengths || [],
       biggestChallenge: brandData?.biggestChallenge || '',
-      hookStylePreference: brandData?.hookStylePreference || '',
       emotionalTriggers: brandData?.emotionalTriggers || []
     });
     setHasUnsavedChanges(hasChanges);
@@ -180,7 +167,6 @@ export default function BrandVoice() {
       // Viral content strategy fields
       { key: 'contentStrengths', weight: 8, filled: formData.contentStrengths?.length > 0 },
       { key: 'biggestChallenge', weight: 6, filled: !!formData.biggestChallenge },
-      { key: 'hookStylePreference', weight: 6, filled: !!formData.hookStylePreference },
       { key: 'emotionalTriggers', weight: 6, filled: formData.emotionalTriggers?.length > 0 },
     ];
     
@@ -214,7 +200,6 @@ export default function BrandVoice() {
       // Viral content strategy fields
       contentStrengths: [],
       biggestChallenge: '',
-      hookStylePreference: '',
       emotionalTriggers: []
     };
     setFormData(resetData);
@@ -454,7 +439,12 @@ export default function BrandVoice() {
               <input
                 type="text"
                 value={formData.niche}
-                onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Capitalize first letter
+                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
+                  setFormData(prev => ({ ...prev, niche: capitalized }));
+                }}
                 placeholder={labels.nichePlaceholder}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
               />
@@ -469,7 +459,12 @@ export default function BrandVoice() {
               <input
                 type="text"
                 value={formData.industry}
-                onChange={(e) => setFormData(prev => ({ ...prev, industry: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Capitalize first letter
+                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
+                  setFormData(prev => ({ ...prev, industry: capitalized }));
+                }}
                 placeholder={labels.industryPlaceholder}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
               />
@@ -482,7 +477,12 @@ export default function BrandVoice() {
               </label>
               <textarea
                 value={formData.targetAudience}
-                onChange={(e) => setFormData(prev => ({ ...prev, targetAudience: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Capitalize first letter
+                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
+                  setFormData(prev => ({ ...prev, targetAudience: capitalized }));
+                }}
                 placeholder={labels.audiencePlaceholder}
                 rows="3"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none resize-none transition-all shadow-sm"
@@ -496,7 +496,12 @@ export default function BrandVoice() {
               </label>
               <textarea
                 value={formData.brandVoice}
-                onChange={(e) => setFormData(prev => ({ ...prev, brandVoice: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Capitalize first letter
+                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
+                  setFormData(prev => ({ ...prev, brandVoice: capitalized }));
+                }}
                 placeholder={labels.voicePlaceholder}
                 rows="3"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none resize-none transition-all shadow-sm"
@@ -615,34 +620,6 @@ export default function BrandVoice() {
                       >
                         <Icon className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{challenge.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Hook Style Preference */}
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                  Preferred Hook Style
-                </label>
-                <p className="text-sm text-gray-500 mb-3">How AI grabs attention for your content.</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {HOOK_STYLES.map(hookStyle => {
-                    const Icon = hookStyle.icon;
-                    const isSelected = formData.hookStylePreference === hookStyle.value;
-                    return (
-                      <button
-                        key={hookStyle.value}
-                        onClick={() => setFormData(prev => ({ ...prev, hookStylePreference: hookStyle.value }))}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                          isSelected
-                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{hookStyle.label}</span>
                       </button>
                     );
                   })}

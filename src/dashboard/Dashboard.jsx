@@ -16,6 +16,7 @@ import ContentLibrary from '../pages/ContentLibrary';
 import AIPlanBuilder from '../pages/AIPlanBuilder';
 import TrendLab from '../pages/TrendLab';
 import ViralBlueprint from '../pages/ViralBlueprint';
+import ContentRemix from '../pages/ContentRemix';
 // import HuttleAgent from './pages/HuttleAgent'; // Temporarily disabled - kept in backend for future implementation
 import Profile from '../pages/Profile';
 import BrandVoice from '../pages/BrandVoice';
@@ -97,6 +98,7 @@ function AppContent() {
           <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
           <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
           <Route path="/viral-blueprint" element={<ProtectedRoute><ViralBlueprint /></ProtectedRoute>} />
+          <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
           <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
           {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
           {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}

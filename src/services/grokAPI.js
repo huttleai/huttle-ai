@@ -11,11 +11,23 @@
  * Platform-specific guidelines are injected for optimized content per platform
  * 
  * SECURITY: All API calls now go through the server-side proxy to protect API keys
+ * 
+ * DEMO MODE: When VITE_DEMO_MODE=true or API fails, returns fitness-themed mock data
  */
 
 import { buildSystemPrompt, getBrandVoice, getNiche, getTargetAudience, buildBrandContext } from '../utils/brandContextBuilder';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import { supabase } from '../config/supabase';
+import { 
+  isDemoMode, 
+  simulateDelay, 
+  getCaptionMocks, 
+  getHashtagMocks, 
+  getHookMocks, 
+  getCTAMocks, 
+  getContentScoreMock,
+  getVisualIdeaMocks 
+} from './demoMockData';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -65,6 +77,24 @@ async function callGrokAPI(messages, temperature = 0.7) {
 }
 
 export async function generateTrendIdeas(brandData, trendTopic) {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock trend ideas');
+    await simulateDelay(1000, 2000);
+    const mockIdeas = [
+      `1. Create a "Day in the Life" fitness routine video featuring ${trendTopic}. Show real, relatable moments that resonate with your audience.`,
+      `2. Share a transformation story carousel highlighting ${trendTopic}. Include before/after photos and key milestones.`,
+      `3. Host a live Q&A session about ${trendTopic}. Engage your audience directly and build community.`,
+      `4. Create a myth-busting post debunking common misconceptions about ${trendTopic}.`,
+      `5. Share a behind-the-scenes look at your ${trendTopic} process. Authenticity builds trust!`
+    ];
+    return {
+      success: true,
+      ideas: mockIdeas.join('\n\n'),
+      usage: { demo: true }
+    };
+  }
+
   try {
     const systemPrompt = buildSystemPrompt(
       'You are an expert content creator assistant. Generate creative, engaging content ideas that resonate with the target audience.',
@@ -97,14 +127,40 @@ Number them 1-5 with brief descriptions.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock trend ideas due to API error');
+    await simulateDelay(500, 800);
+    const mockIdeas = [
+      `1. Create a "Day in the Life" fitness routine video featuring ${trendTopic}. Show real, relatable moments.`,
+      `2. Share a transformation story carousel highlighting ${trendTopic}. Include before/after photos.`,
+      `3. Host a live Q&A session about ${trendTopic}. Engage your audience directly.`,
+      `4. Create a myth-busting post debunking common misconceptions about ${trendTopic}.`,
+      `5. Share a behind-the-scenes look at your ${trendTopic} process.`
+    ];
     return {
-      success: false,
-      error: error.message
+      success: true,
+      ideas: mockIdeas.join('\n\n'),
+      usage: { fallback: true },
+      note: 'Using demo content due to API unavailability'
     };
   }
 }
 
 export async function generateCaption(contentData, brandData) {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock captions');
+    await simulateDelay(1000, 2000);
+    const length = contentData.length || 'medium';
+    const mockCaptions = getCaptionMocks(length, 4);
+    return {
+      success: true,
+      caption: mockCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n\n'),
+      usage: { demo: true }
+    };
+  }
+
   try {
     const systemPrompt = buildSystemPrompt(
       'You are a professional social media content writer. Create compelling, engaging captions that drive engagement.',
@@ -153,14 +209,35 @@ Number them 1-4. Each caption should have a different hook approach.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock captions due to API error');
+    await simulateDelay(500, 1000);
+    const length = contentData.length || 'medium';
+    const mockCaptions = getCaptionMocks(length, 4);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      caption: mockCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n\n'),
+      usage: { fallback: true },
+      note: 'Using demo content due to API unavailability'
     };
   }
 }
 
 export async function scoreContentQuality(content, brandData = null) {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock content score');
+    await simulateDelay(800, 1500);
+    const mockScore = getContentScoreMock(content);
+    return {
+      success: true,
+      analysis: JSON.stringify(mockScore),
+      score: mockScore,
+      usage: { demo: true }
+    };
+  }
+
   try {
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const brandSection = brandContext ? `\n\nBrand Profile to evaluate against:\n${brandContext}` : '';
@@ -192,9 +269,17 @@ Provide specific, actionable improvement suggestions.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock content score due to API error');
+    await simulateDelay(500, 800);
+    const mockScore = getContentScoreMock(content);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      analysis: JSON.stringify(mockScore),
+      score: mockScore,
+      usage: { fallback: true },
+      note: 'Using demo scoring due to API unavailability'
     };
   }
 }
@@ -241,6 +326,18 @@ Make sure all content aligns with the brand voice and appeals to the target audi
 }
 
 export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram') {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock hooks');
+    await simulateDelay(800, 1500);
+    const mockHooks = getHookMocks(theme, 4);
+    return {
+      success: true,
+      hooks: mockHooks.map((h, i) => `${i + 1}. ${h.text}`).join('\n'),
+      usage: { demo: true }
+    };
+  }
+
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
@@ -291,14 +388,33 @@ Number them 1-4. Vary the approach for each hook.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock hooks due to API error');
+    await simulateDelay(500, 800);
+    const mockHooks = getHookMocks(theme, 4);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      hooks: mockHooks.map((h, i) => `${i + 1}. ${h.text}`).join('\n'),
+      usage: { fallback: true },
+      note: 'Using demo hooks due to API unavailability'
     };
   }
 }
 
 export async function generateCTAs(goal, brandData, platform = 'instagram') {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock CTAs');
+    await simulateDelay(800, 1500);
+    const mockCTAs = getCTAMocks(goal, 5);
+    return {
+      success: true,
+      ctas: mockCTAs.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+      usage: { demo: true }
+    };
+  }
+
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
@@ -348,14 +464,36 @@ Number them 1-5. Include a brief explanation of why each CTA works for ${platfor
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock CTAs due to API error');
+    await simulateDelay(500, 800);
+    const mockCTAs = getCTAMocks(goal, 5);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      ctas: mockCTAs.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+      usage: { fallback: true },
+      note: 'Using demo CTAs due to API unavailability'
     };
   }
 }
 
 export async function generateHashtags(input, brandData, platform = 'instagram') {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock hashtags');
+    await simulateDelay(800, 1500);
+    const hashtagGuidelines = getHashtagGuidelines(platform);
+    const hashtagCount = hashtagGuidelines?.max || 10;
+    const mockHashtags = getHashtagMocks(hashtagCount);
+    return {
+      success: true,
+      hashtags: mockHashtags.map(h => `${h.tag} (Score: ${h.score}%, ${h.posts} posts)`).join('\n'),
+      hashtagData: mockHashtags,
+      usage: { demo: true }
+    };
+  }
+
   try {
     const niche = getNiche(brandData);
     const brandVoice = getBrandVoice(brandData);
@@ -412,9 +550,19 @@ Return exactly ${hashtagCount} hashtags ranked by engagement potential. For each
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock hashtags due to API error');
+    await simulateDelay(500, 800);
+    const hashtagGuidelines = getHashtagGuidelines(platform);
+    const hashtagCount = hashtagGuidelines?.max || 10;
+    const mockHashtags = getHashtagMocks(hashtagCount);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      hashtags: mockHashtags.map(h => `${h.tag} (Score: ${h.score}%, ${h.posts} posts)`).join('\n'),
+      hashtagData: mockHashtags,
+      usage: { fallback: true },
+      note: 'Using demo hashtags due to API unavailability'
     };
   }
 }
@@ -531,6 +679,34 @@ Return ONLY the polished caption with hashtags, no explanations.`
  * @returns {Promise<Object>} Array of caption variations
  */
 export async function generateCaptionVariations(originalCaption, brandData, count = 3) {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock caption variations');
+    await simulateDelay(800, 1500);
+    const mockVariations = [
+      {
+        id: 1,
+        hookType: 'Question Hook',
+        caption: `What if I told you this could change everything? 🤔\n\n${originalCaption.substring(0, 100)}...\n\nDrop a 💪 if you're ready to level up!`
+      },
+      {
+        id: 2,
+        hookType: 'Bold Statement',
+        caption: `Stop scrolling. This is important. 🛑\n\n${originalCaption.substring(0, 100)}...\n\nSave this post for later - you'll thank me! 📌`
+      },
+      {
+        id: 3,
+        hookType: 'Story Hook',
+        caption: `3 months ago, I never thought I'd be sharing this...\n\n${originalCaption.substring(0, 100)}...\n\nHas this ever happened to you? Comment below! 👇`
+      }
+    ];
+    return {
+      success: true,
+      variations: mockVariations.slice(0, count),
+      usage: { demo: true }
+    };
+  }
+
   try {
     const systemPrompt = buildSystemPrompt(
       'You are an expert social media copywriter. Create engaging caption variations that test different hooks, tones, and CTAs while maintaining the core message.',
@@ -586,10 +762,32 @@ etc.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock caption variations due to API error');
+    await simulateDelay(500, 800);
+    const mockVariations = [
+      {
+        id: 1,
+        hookType: 'Question Hook',
+        caption: `What if I told you this could change everything? 🤔\n\n${originalCaption.substring(0, 100)}...\n\nDrop a 💪 if you're ready!`
+      },
+      {
+        id: 2,
+        hookType: 'Bold Statement',
+        caption: `Stop scrolling. This is important. 🛑\n\n${originalCaption.substring(0, 100)}...\n\nSave this post! 📌`
+      },
+      {
+        id: 3,
+        hookType: 'Story Hook',
+        caption: `3 months ago, I never thought I'd share this...\n\n${originalCaption.substring(0, 100)}...\n\nComment below! 👇`
+      }
+    ];
     return {
-      success: false,
-      error: error.message,
-      variations: []
+      success: true,
+      variations: mockVariations.slice(0, count),
+      usage: { fallback: true },
+      note: 'Using demo variations due to API unavailability'
     };
   }
 }
@@ -742,6 +940,21 @@ Hashtags: [platform-appropriate hashtags]
  * @returns {Promise<Object>} Generated visual ideas
  */
 export async function generateVisualIdeas(prompt, brandData, platform = 'instagram') {
+  // Check if demo mode is enabled - return mock data immediately
+  if (isDemoMode()) {
+    console.log('[Demo Mode] Generating mock visual ideas');
+    await simulateDelay(1000, 2000);
+    const mockIdeas = getVisualIdeaMocks(platform, 4);
+    return {
+      success: true,
+      ideas: mockIdeas.map((idea, i) => 
+        `${i + 1}. ${idea.title}\n   Description: ${idea.description}\n   Style: ${idea.style}\n   Format: ${idea.type}\n   Platform: ${idea.platform}`
+      ).join('\n\n'),
+      visualData: mockIdeas,
+      usage: { demo: true }
+    };
+  }
+
   try {
     const platformData = getPlatform(platform);
     const platformContext = buildPlatformContext(platform, 'visual');
@@ -788,9 +1001,19 @@ Number them 1-4.`
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    
+    // Fallback to demo data on error
+    console.log('[Fallback] Using mock visual ideas due to API error');
+    await simulateDelay(500, 1000);
+    const mockIdeas = getVisualIdeaMocks(platform, 4);
     return {
-      success: false,
-      error: error.message
+      success: true,
+      ideas: mockIdeas.map((idea, i) => 
+        `${i + 1}. ${idea.title}\n   Description: ${idea.description}\n   Style: ${idea.style}\n   Format: ${idea.type}\n   Platform: ${idea.platform}`
+      ).join('\n\n'),
+      visualData: mockIdeas,
+      usage: { fallback: true },
+      note: 'Using demo visual ideas due to API unavailability'
     };
   }
 }

@@ -264,85 +264,112 @@ export default function ContentLibrary() {
     addToast(message, 'error');
   };
 
-  // Seed dev mode data
+  // Seed dev mode data - Iron Peak Fitness
   const seedDevModeData = () => {
     const demoProjects = [
-      { id: 'all', name: 'All Content', count: 5, color: '#6366f1' },
-      { id: 'proj-1', name: 'Spring Campaign', count: 2, color: '#EC4899' },
-      { id: 'proj-2', name: 'Evergreen Tips', count: 3, color: '#10B981' },
+      { id: 'all', name: 'All Content', count: 7, color: '#6366f1' },
+      { id: 'proj-1', name: 'Transformation Challenge', count: 3, color: '#EC4899' },
+      { id: 'proj-2', name: 'Workout Tips', count: 2, color: '#10B981' },
+      { id: 'proj-3', name: 'Nutrition Content', count: 2, color: '#F59E0B' },
     ];
 
     const demoItems = [
       {
         id: 'demo-1',
         type: 'image',
-        name: 'Glow Serum Carousel',
-        url: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=300&fit=crop',
+        name: 'Before/After Transformation',
+        url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop',
         storage_path: '',
-        content: 'Swipe-through carousel covering the top 5 benefits of our Glow Serum with CTA on the last slide.',
-        date: '2024-02-05',
-        size: '2.4 MB',
-        sizeBytes: 2516582,
+        content: 'Member transformation photo carousel - Marcus lost 45 lbs in 6 months. Perfect for testimonial posts.',
+        date: '2026-01-15',
+        size: '3.2 MB',
+        sizeBytes: 3355443,
         project: 'proj-1',
-        description: 'High-performing content for IG carousel slots.',
+        description: 'High-performing transformation content for IG carousel.',
       },
       {
         id: 'demo-2',
         type: 'video',
-        name: 'Behind the Scenes Reel',
-        url: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=400&h=300&fit=crop',
+        name: 'HIIT Class Highlight Reel',
+        url: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&h=300&fit=crop',
         storage_path: '',
-        content: 'Vertical clip showing a 10-sec BTS shot in the studio.',
-        date: '2024-02-04',
-        size: '18.1 MB',
-        sizeBytes: 18979635,
+        content: '45-second highlight reel of our HIIT class with energetic music. Shows trainer leading group through high-intensity intervals.',
+        date: '2026-01-12',
+        size: '24.5 MB',
+        sizeBytes: 25690112,
         project: 'proj-1',
-        description: 'Use for TikTok and IG Reels.',
+        description: 'Use for TikTok and IG Reels to promote classes.',
       },
       {
         id: 'demo-3',
         type: 'text',
-        name: 'Newsletter Hook Ideas',
+        name: 'Workout Motivation Hooks',
         url: null,
         storage_path: '',
-        content: 'Three newsletter openers about skincare myths vs facts:\n\n1. "Think you know everything about SPF? Think again..."\n2. "The 5-minute morning routine that changed my skin"\n3. "Why your expensive serum might be doing nothing"',
-        date: '2024-02-01',
+        content: 'Three powerful hooks for workout motivation posts:\n\n1. "The only bad workout is the one that didn\'t happen..."\n2. "6 months from now, you\'ll wish you started today"\n3. "Your body can stand almost anything. It\'s your mind you have to convince."',
+        date: '2026-01-10',
         size: null,
         sizeBytes: 0,
         project: 'proj-2',
-        description: 'Copy snippets for the February campaign.',
+        description: 'Motivational copy for Monday posts.',
       },
       {
         id: 'demo-4',
         type: 'image',
-        name: 'UGC Testimonial Graphic',
-        url: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=300&fit=crop',
+        name: 'New Equipment Announcement',
+        url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop',
         storage_path: '',
-        content: 'Template PSD with editable testimonial quote and CTA button.',
-        date: '2024-01-28',
-        size: '4.7 MB',
-        sizeBytes: 4927693,
-        project: 'proj-2',
-        description: 'Use as template for testimonials.',
+        content: 'Photo of new Rogue power racks and Eleiko competition plates. Announcement graphic with Iron Peak branding.',
+        date: '2026-01-08',
+        size: '4.1 MB',
+        sizeBytes: 4299161,
+        project: 'proj-1',
+        description: 'Equipment upgrade announcement content.',
       },
       {
         id: 'demo-5',
         type: 'text',
-        name: 'Instagram Caption Templates',
+        name: 'Leg Day Workout Plan',
         url: null,
         storage_path: '',
-        content: 'Caption template for product launches:\n\nIntroducing [PRODUCT NAME] ✨\n\nWe spent [X months] perfecting this formula because you deserve nothing but the best.\n\n🌟 Key benefits:\n• Benefit 1\n• Benefit 2\n• Benefit 3\n\nTap the link in bio to shop now! 🛒',
-        date: '2024-01-25',
+        content: 'LEG DAY DESTROYER 🦵\n\n4x12 Barbell Squats\n4x10 Romanian Deadlifts\n3x15 Leg Press\n3x12 Walking Lunges\n4x15 Leg Curls\n3x20 Calf Raises\n\nRest 2-3 min between heavy compound sets. Tag your workout partner!',
+        date: '2026-01-05',
         size: null,
         sizeBytes: 0,
         project: 'proj-2',
-        description: 'Reusable caption templates.',
+        description: 'Reusable workout template for leg day posts.',
+      },
+      {
+        id: 'demo-6',
+        type: 'video',
+        name: 'Protein Shake Recipe',
+        url: 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?w=400&h=300&fit=crop',
+        storage_path: '',
+        content: 'Quick recipe video: chocolate protein, banana, peanut butter, almond milk. 30-second TikTok format with text overlays.',
+        date: '2026-01-03',
+        size: '12.8 MB',
+        sizeBytes: 13421773,
+        project: 'proj-3',
+        description: 'Nutrition content for post-workout fuel.',
+      },
+      {
+        id: 'demo-7',
+        type: 'image',
+        name: 'Meal Prep Guide Carousel',
+        url: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&h=300&fit=crop',
+        storage_path: '',
+        content: '8-slide carousel covering weekly meal prep basics: shopping list, protein sources, carb timing, and storage tips.',
+        date: '2026-01-01',
+        size: '5.6 MB',
+        sizeBytes: 5872026,
+        project: 'proj-3',
+        description: 'Nutrition education carousel for Instagram.',
       },
     ];
 
     setProjects(demoProjects);
     setContentItems(demoItems);
-    setStorageUsed(32);
+    setStorageUsed(56);
     setLoading(false);
   };
 
@@ -478,7 +505,13 @@ export default function ContentLibrary() {
       setShowUploadModal(false);
     } catch (error) {
       console.error('Upload failed:', error);
-      handleSupabaseError(error, 'upload file');
+      // Provide more specific error messages
+      if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
+        addToast('Database setup error. Please contact support.', 'error');
+        console.error('Foreign key constraint error - likely missing user record in public.users table');
+      } else {
+        handleSupabaseError(error, 'upload file');
+      }
     } finally {
       setUploading(false);
     }

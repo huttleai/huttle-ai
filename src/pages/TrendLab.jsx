@@ -1,18 +1,14 @@
 import { useState, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, Download, TrendingUp, Lightbulb, Users, Shuffle, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight, Zap, Flame, DollarSign } from 'lucide-react';
+import { Download, TrendingUp, Lightbulb, Users, Bell, Calendar, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight, Zap } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
-import RemixContentDisplay from '../components/RemixContentDisplay';
 import UpgradeModal from '../components/UpgradeModal';
 import { forecastTrends, getAudienceInsights } from '../services/perplexityAPI';
-import { generateTrendIdeas, remixContentWithMode } from '../services/grokAPI';
-import { generateWithN8n } from '../services/n8nGeneratorAPI';
-import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
+import { generateTrendIdeas } from '../services/grokAPI';
 import TrendDiscoveryHub from '../components/TrendDiscoveryHub';
 import { useToast } from '../context/ToastContext';
-import { AuthContext } from '../context/AuthContext';
-import { AIDisclaimerTooltip, AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
+import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 
 // TODO: N8N_WORKFLOW - Import workflow services for features moving to n8n
 import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
@@ -35,7 +31,6 @@ import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants
 
 export default function TrendLab() {
   const { brandData } = useContext(BrandContext);
-  const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getUpgradeMessage, TIERS, userTier } = useSubscription();
   const [, setActiveFeature] = useState(null);
@@ -49,21 +44,16 @@ export default function TrendLab() {
   // Collapsible card states
   const [collapsedCards, setCollapsedCards] = useState({
     audienceInsight: false,
-    remixEngine: false,
     trendForecaster: false,
   });
   
   // Loading states for individual cards
   const [loadingStates, setLoadingStates] = useState({
     audienceInsight: false,
-    remixEngine: false,
   });
   
   // Data states for cards
   const [audienceData, setAudienceData] = useState(null);
-  const [remixInput, setRemixInput] = useState('');
-  const [remixOutput, setRemixOutput] = useState(null);
-  const [remixMode, setRemixMode] = useState('viral'); // 'viral' or 'sales'
   
   // Mobile swipe functionality
   const [touchStart, setTouchStart] = useState(null);
@@ -303,65 +293,6 @@ export default function TrendLab() {
     }
   };
 
-  // ==========================================================================
-  // Content Remix Studio - STAYS IN-CODE (uses existing n8n generator)
-  // This feature does NOT move to the new n8n workflows.
-  // It uses the existing n8nGeneratorAPI.js for content remixing.
-  // See: src/services/n8nGeneratorAPI.js -> generateWithN8n()
-  // ==========================================================================
-  const handleRemixContent = async () => {
-    if (!remixInput.trim()) {
-      showToast('Please enter a trend or content to remix', 'warning');
-      return;
-    }
-
-    if (!user?.id) {
-      showToast('Please log in to use remix features', 'error');
-      return;
-    }
-
-    setLoadingStates(prev => ({ ...prev, remixEngine: true }));
-    try {
-      // Use n8n webhook to remix content with selected mode
-      const result = await generateWithN8n({
-        userId: user.id,
-        topic: remixInput,
-        platform: 'multi-platform',
-        contentType: 'remix',
-        brandVoice: getBrandVoice(brandData),
-        remixMode: remixMode,
-        additionalContext: {
-          mode: remixMode,
-          niche: getNiche(brandData),
-          targetAudience: getTargetAudience(brandData),
-          ...brandData
-        }
-      });
-
-      if (result.success && result.content) {
-        setRemixOutput(result.content);
-        const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
-        showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
-      } else {
-        // Handle error with user-friendly messages
-        let errorMessage = 'Failed to remix content';
-        if (result.errorType === 'TIMEOUT') {
-          errorMessage = 'AI generation took too long. Please try again with shorter content.';
-        } else if (result.errorType === 'NETWORK') {
-          errorMessage = 'Connection failed. Please check your internet.';
-        } else if (result.error) {
-          errorMessage = result.error;
-        }
-        showToast(errorMessage, 'error');
-      }
-    } catch (error) {
-      console.error('Error remixing content:', error);
-      showToast('Error remixing content. Please try again.', 'error');
-    } finally {
-      setLoadingStates(prev => ({ ...prev, remixEngine: false }));
-    }
-  };
-
   // Loading skeleton component
   const LoadingSkeleton = () => (
     <div className="animate-pulse space-y-4">
@@ -390,7 +321,7 @@ export default function TrendLab() {
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
     
-    const totalCards = 4; // Audience Insight, Content Remix Studio, Trend Forecaster, Trend Alerts
+    const totalCards = 3; // Audience Insight, Trend Forecaster, Trend Alerts
     
     if (isLeftSwipe && currentCardIndex < totalCards - 1) {
       setCurrentCardIndex(prev => prev + 1);
@@ -435,7 +366,7 @@ export default function TrendLab() {
         </div>
 
         {/* Trend Discovery Hub - Quick Scan & Deep Dive */}
-        <TrendDiscoveryHub onRemix={(content) => setRemixInput(content)} />
+        <TrendDiscoveryHub />
 
       {/* Modular Dashboard Cards */}
       <div 
@@ -446,7 +377,7 @@ export default function TrendLab() {
       >
         {/* Mobile swipe indicator */}
         <div className="md:hidden flex justify-center gap-2 mb-4">
-          {[0, 1, 2, 3].map((index) => (
+          {[0, 1, 2].map((index) => (
             <div
               key={index}
               className={`h-2 rounded-full transition-all ${
@@ -542,125 +473,6 @@ export default function TrendLab() {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content Remix Studio Card - All Tiers */}
-        <div className="trend-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
-          <div className="p-4 md:p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-huttle-cyan-light flex items-center justify-center flex-shrink-0">
-                  <Shuffle className="w-5 h-5 md:w-6 md:h-6 text-huttle-cyan" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base md:text-lg font-bold mb-2">Content Remix Studio</h3>
-                  <p className="text-xs md:text-sm text-gray-600 mb-4">
-                    Transform trending content for your brand. Adapt ideas across platforms seamlessly.
-                  </p>
-                  
-                  {/* Mode Toggle */}
-                  <div className="mb-4">
-                    <p className="text-xs text-gray-500 mb-2 font-medium">Remix Mode</p>
-                    <div className="relative inline-grid grid-cols-2 p-1 bg-gray-100 rounded-xl border border-black gap-0">
-                      {/* Sliding Background */}
-                      <div 
-                        className={`absolute top-1 bottom-1 bg-white rounded-lg shadow-sm transition-all duration-300 ease-out ${
-                          remixMode === 'sales' 
-                            ? 'left-[calc(50%+2px)] right-1' 
-                            : 'left-1 right-[calc(50%+2px)]'
-                        }`}
-                      />
-                      
-                      <button
-                        onClick={() => setRemixMode('viral')}
-                        className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300 bg-transparent ${
-                          remixMode === 'viral'
-                            ? 'text-gray-900'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        <Flame className={`w-4 h-4 transition-all duration-300 flex-shrink-0 ${remixMode === 'viral' ? 'text-orange-500' : ''}`} />
-                        <span className="whitespace-nowrap">Viral Reach</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => setRemixMode('sales')}
-                        className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300 bg-transparent ${
-                          remixMode === 'sales'
-                            ? 'text-gray-900'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        <DollarSign className={`w-4 h-4 transition-all duration-300 flex-shrink-0 ${remixMode === 'sales' ? 'text-green-600' : ''}`} />
-                        <span className="whitespace-nowrap">Sales Conversion</span>
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1.5">
-                      {remixMode === 'viral' 
-                        ? 'Optimized for engagement, shares, and maximum reach' 
-                        : 'Optimized for conversions using PAS framework with CTAs'}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      placeholder="Enter trend or content to remix..."
-                      value={remixInput}
-                      onChange={(e) => setRemixInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleRemixContent()}
-                      className="flex-1 px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent transition-all outline-none text-sm"
-                    />
-                    <button
-                      onClick={handleRemixContent}
-                      disabled={loadingStates.remixEngine}
-                      className="flex items-center justify-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                      {loadingStates.remixEngine ? (
-                        <>
-                          <LoadingSpinner size="sm" />
-                          <span>Remixing (10-15 sec)...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Start Remixing</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {remixOutput && (
-                <button
-                  onClick={() => toggleCard('remixEngine')}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-                >
-                  {collapsedCards.remixEngine ? (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  )}
-                </button>
-              )}
-            </div>
-
-            {/* Remix Output */}
-            {remixOutput && !collapsedCards.remixEngine && (
-              <div className="mt-6 pt-6 border-t border-gray-200 animate-fadeIn">
-                <RemixContentDisplay 
-                  content={remixOutput}
-                  onCopy={(idea, index) => handleCopyIdea(idea, `remix-${index}`)}
-                  copiedIdea={copiedIdea}
-                  onClearAndRemix={() => {
-                    setRemixInput('');
-                    setRemixOutput(null);
-                  }}
-                />
               </div>
             )}
           </div>
@@ -878,8 +690,9 @@ export default function TrendLab() {
           <div>
             <h3 className="font-display font-bold text-gray-900 mb-1">Pro Tip</h3>
             <p className="text-sm text-gray-600">
-              Use Trend Discovery Hub daily to stay ahead of the curve. Combine it with the Content Remix Studio to quickly 
-              adapt trending content to your brand voice and increase engagement by up to 30%.
+              Use Trend Discovery Hub daily to stay ahead of the curve. Click "Remix" on any trend to send it to the 
+              <a href="/dashboard/content-remix" className="text-huttle-primary font-medium hover:underline ml-1">Content Remix Studio</a> and 
+              adapt trending content to your brand voice for up to 30% more engagement.
             </p>
           </div>
         </div>

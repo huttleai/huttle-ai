@@ -1,4 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -15,10 +16,11 @@ import { saveContentLibraryItem, supabase } from '../config/supabase';
  * TrendDiscoveryHub - Reimagined with cutting-edge design
  * A premium trend discovery experience with glassmorphism and advanced animations
  */
-export default function TrendDiscoveryHub({ onRemix }) {
+export default function TrendDiscoveryHub() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
+  const navigate = useNavigate();
   const { TIERS, userTier } = useSubscription();
   
   const [activeMode, setActiveMode] = useState('quickScan');
@@ -253,10 +255,11 @@ export default function TrendDiscoveryHub({ onRemix }) {
   };
 
   const handleSendToRemix = (content) => {
-    if (onRemix) {
-      onRemix(content.substring(0, 200));
-      showToast('Added to Content Remix Studio! Scroll down to remix.', 'success');
-    }
+    // Navigate to Content Remix page
+    // Store content in sessionStorage for the remix page to pick up
+    sessionStorage.setItem('remixContent', content.substring(0, 500));
+    showToast('Opening Content Remix Studio...', 'success');
+    navigate('/dashboard/content-remix');
   };
 
   const handleAddToLibrary = async (content, type = 'trend', itemIndex = null) => {

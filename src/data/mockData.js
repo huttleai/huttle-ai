@@ -1,6 +1,7 @@
 /**
- * Mock Data for Huttle AI
+ * Mock Data for Huttle AI - Iron Peak Fitness
  * Provides realistic, "lived-in" data for development and testing.
+ * Theme: Fitness Gym / Health & Wellness
  */
 
 // No icon imports needed - icons are handled by components
@@ -64,97 +65,97 @@ export const STATUS_COLORS = {
 
 // --- MOCK DATA ---
 
-// 1. Scheduled Posts
+// 1. Scheduled Posts - Iron Peak Fitness
 const postDates = generateRealisticDates(25);
 
 export const mockScheduledPosts = [
   // Past Posts (Posted/Failed)
   {
     id: 'post-001',
-    title: 'Product Launch Announcement',
-    caption: '🚀 We are officially LIVE! After months of hard work, our new AI-powered analytics dashboard is finally here. Check the link in bio to start your free trial today! #ProductLaunch #SaaS #AI',
-    hashtags: '#ProductLaunch #SaaS #AI #StartupLife #TechNews',
-    keywords: 'product launch, analytics, dashboard',
-    platforms: ['Instagram', 'X'],
+    title: 'New Year Transformation Challenge Launch',
+    caption: '🔥 NEW YEAR, NEW YOU! Iron Peak Fitness is launching our 12-Week Transformation Challenge! Join 500+ members who have already signed up. First 50 sign-ups get a FREE nutrition consultation. Link in bio to register! #TransformationChallenge #IronPeakFitness #NewYearNewYou',
+    hashtags: '#TransformationChallenge #IronPeakFitness #NewYearNewYou #FitnessGoals #GymLife',
+    keywords: 'transformation challenge, new year fitness, gym membership',
+    platforms: ['Instagram', 'Facebook'],
     contentType: 'Image Post',
-    imagePrompt: 'Futuristic dashboard interface glowing on a laptop screen',
+    imagePrompt: 'Before and after transformation collage with gym equipment in background',
     media: [],
     scheduledDate: postDates[0],
-    scheduledTime: '09:00',
+    scheduledTime: '06:00',
     status: 'posted',
-    analytics: { likes: 12450, comments: 342, shares: 890, impressions: 45000 },
+    analytics: { likes: 2847, comments: 156, shares: 423, impressions: 18500 },
     createdAt: getDate(-10),
     updatedAt: getDate(-8),
     timezone: 'America/New_York'
   },
   {
     id: 'post-002',
-    title: '5 SEO Tips',
-    caption: 'Stop guessing with SEO. Here are 5 quick wins you can implement today:\n1. Update meta descriptions\n2. Compress images\n3. Fix broken links\n4. Use internal linking\n5. Optimize for mobile\n\nWhich one are you struggling with? 👇',
-    hashtags: '#SEO #MarketingTips #DigitalMarketing #SmallBusiness',
-    keywords: 'SEO, marketing tips',
-    platforms: ['Facebook', 'Instagram'],
+    title: '5 Common Deadlift Mistakes',
+    caption: 'Stop making these 5 deadlift mistakes that are killing your gains:\n1. Rounding your back\n2. Starting with hips too high\n3. Not engaging your lats\n4. Looking up instead of neutral\n5. Wearing the wrong shoes\n\nSave this post and share with your gym buddy! 💪',
+    hashtags: '#DeadliftTips #FormCheck #IronPeakFitness #StrengthTraining',
+    keywords: 'deadlift form, strength training tips',
+    platforms: ['Instagram', 'TikTok'],
     contentType: 'Carousel',
     imagePrompt: '',
     media: [],
     scheduledDate: postDates[1],
-    scheduledTime: '14:30',
+    scheduledTime: '12:00',
     status: 'posted',
-    analytics: { likes: 89, comments: 12, shares: 5, impressions: 1200 },
+    analytics: { likes: 1234, comments: 89, shares: 312, impressions: 9800 },
     createdAt: getDate(-9),
     updatedAt: getDate(-9),
     timezone: 'America/New_York'
   },
   {
     id: 'post-003',
-    title: 'Why I Quit My Job',
-    caption: 'It wasn’t an easy decision, but it was necessary. Sometimes you have to leap to fly. Here’s why I left my 9-5 to build my own agency... 🧵',
-    hashtags: '#Entrepreneurship #AgencyLife #CareerGrowth #RiskTaking',
-    keywords: 'entrepreneurship, career story',
-    platforms: ['X'],
-    contentType: 'Text Post',
-    imagePrompt: '',
+    title: 'Member Spotlight: Marcus Journey',
+    caption: 'MEMBER SPOTLIGHT 🌟 Meet Marcus! He lost 45 lbs in 6 months and gained confidence he never knew he had. "Iron Peak isn\'t just a gym, it\'s a family that pushes you to be your best." Your transformation story could be next! 💪',
+    hashtags: '#MemberSpotlight #TransformationStory #IronPeakFamily #FitnessJourney',
+    keywords: 'member transformation, success story, weight loss',
+    platforms: ['Instagram', 'Facebook'],
+    contentType: 'Image Post',
+    imagePrompt: 'Before and after photo of gym member with trainer',
     media: [],
     scheduledDate: postDates[2],
-    scheduledTime: '10:15',
+    scheduledTime: '18:00',
     status: 'posted',
-    analytics: { likes: 340, comments: 45, shares: 120, impressions: 8900 },
+    analytics: { likes: 892, comments: 67, shares: 145, impressions: 7200 },
     createdAt: getDate(-8),
     updatedAt: getDate(-8),
     timezone: 'America/New_York'
   },
   {
     id: 'post-004',
-    title: 'Weekly Roundup Video',
-    caption: 'This week in tech: Apple’s new VR headset, Google’s AI update, and what it means for creators. Watch the full breakdown! 🎥',
-    hashtags: '#TechNews #WeeklyRoundup #CreatorEconomy',
-    keywords: 'tech news, apple, google',
-    platforms: ['YouTube', 'TikTok'],
-    contentType: 'Video',
-    videoPrompt: 'Tech news presenter talking to camera with graphical overlays',
+    title: 'HIIT Class Promo Video',
+    caption: '🔥 Our HIIT classes are NO JOKE! 45 minutes of high-intensity intervals that will torch calories and build endurance. New class times added - 6AM, 12PM, and 7PM! Book your spot in the app.',
+    hashtags: '#HIITWorkout #IronPeakClasses #CardioKiller #FitnessClass',
+    keywords: 'HIIT class, group fitness, cardio workout',
+    platforms: ['TikTok', 'Instagram'],
+    contentType: 'Video Reel',
+    videoPrompt: 'Fast-paced montage of HIIT class with energetic music',
     media: [],
     scheduledDate: postDates[3],
-    scheduledTime: '18:00',
-    status: 'failed', // Simulate a failure
-    error: 'Upload timeout',
+    scheduledTime: '17:00',
+    status: 'failed',
+    error: 'Video encoding error',
     createdAt: getDate(-7),
     updatedAt: getDate(-7),
     timezone: 'America/New_York'
   },
-   {
+  {
     id: 'post-005',
     title: 'Monday Motivation',
-    caption: 'Your only limit is you. Start the week strong! 💪 #MondayMotivation #Grind',
-    hashtags: '#MondayMotivation #Inspiration #Hustle',
-    keywords: 'motivation, monday',
+    caption: 'The only bad workout is the one that didn\'t happen. Let\'s crush this week! 💪 Who\'s hitting the gym today? Drop a 🔥 in the comments! #MondayMotivation #IronPeakFitness',
+    hashtags: '#MondayMotivation #GymLife #FitnessMotivation #IronPeak',
+    keywords: 'motivation, monday, workout',
     platforms: ['Instagram', 'X'],
     contentType: 'Image Post',
-    imagePrompt: 'Mountain climber reaching summit at sunrise',
+    imagePrompt: 'Motivational quote over gym equipment photo',
     media: [],
     scheduledDate: postDates[4],
-    scheduledTime: '08:00',
+    scheduledTime: '05:30',
     status: 'posted',
-    analytics: { likes: 5, comments: 0, shares: 1, impressions: 45 },
+    analytics: { likes: 456, comments: 78, shares: 34, impressions: 3200 },
     createdAt: getDate(-6),
     updatedAt: getDate(-6),
     timezone: 'America/New_York'
@@ -163,32 +164,33 @@ export const mockScheduledPosts = [
   // Today's Posts
   {
     id: 'post-006',
-    title: 'New Feature Teaser',
-    caption: 'Something BIG is coming tomorrow... Can you guess what it is? 👀 drop your guesses below!',
-    hashtags: '#Teaser #NewFeature #ComingSoon',
-    keywords: 'teaser, new feature',
+    title: 'New Equipment Announcement',
+    caption: '🎉 BIG NEWS! We just added 10 new Rogue power racks and a complete set of Eleiko competition plates! Your PRs are about to get CRUSHED. Come check them out today!',
+    hashtags: '#NewEquipment #IronPeakFitness #GymUpgrade #PowerLifting',
+    keywords: 'new equipment, gym upgrade, power racks',
     platforms: ['Instagram', 'Facebook', 'X'],
     contentType: 'Image Post',
-    imagePrompt: 'Silhouette of a new product with question mark',
+    imagePrompt: 'Shiny new gym equipment with Iron Peak branding',
     media: [],
     scheduledDate: getDate(0),
-    scheduledTime: '12:00',
+    scheduledTime: '10:00',
     status: 'ready',
     createdAt: getDate(-2),
     updatedAt: getDate(-1),
     timezone: 'America/New_York'
   },
-   {
+  {
     id: 'post-007',
-    title: 'Poll: Content Preferences',
-    caption: 'Do you prefer video content or written guides? Vote now! 🗳️',
-    hashtags: '#Poll #UserFeedback #ContentStrategy',
-    keywords: 'poll, feedback',
-    platforms: ['X', 'Facebook'],
-    contentType: 'Text Post',
+    title: 'Protein Shake Recipe',
+    caption: 'Post-workout fuel that actually tastes good! 🥤\n\n✅ 1 scoop chocolate protein\n✅ 1 banana\n✅ 2 tbsp peanut butter\n✅ 1 cup almond milk\n✅ Ice\n\nBlend and enjoy! What\'s YOUR go-to shake recipe?',
+    hashtags: '#ProteinShake #PostWorkout #FitnessNutrition #IronPeakFitness',
+    keywords: 'protein shake, nutrition, post workout',
+    platforms: ['Instagram', 'TikTok'],
+    contentType: 'Video Reel',
+    videoPrompt: 'Quick recipe video showing shake being made',
     media: [],
     scheduledDate: getDate(0),
-    scheduledTime: '16:00',
+    scheduledTime: '14:00',
     status: 'scheduled',
     createdAt: getDate(-3),
     updatedAt: getDate(-1),
@@ -198,66 +200,15 @@ export const mockScheduledPosts = [
   // Future Posts
   {
     id: 'post-008',
-    title: 'Customer Spotlight: Sarah',
-    caption: 'Meet Sarah. She doubled her leads in 30 days using our strategy. "I never thought it would be this easy," she says. Read her full story on the blog.',
-    hashtags: '#CaseStudy #ClientSuccess #Testimonial',
-    keywords: 'case study, testimonial',
+    title: 'Personal Training Special',
+    caption: '🏋️ LIMITED TIME: Get 3 FREE personal training sessions when you sign up for a 6-month membership! Our certified trainers will create a custom plan just for you. DM us or visit the front desk to claim this offer!',
+    hashtags: '#PersonalTraining #GymDeal #IronPeakFitness #FitnessGoals',
+    keywords: 'personal training, membership deal, fitness special',
     platforms: ['Facebook', 'Instagram'],
     contentType: 'Image Post',
-    imagePrompt: 'Professional headshot of a happy client',
+    imagePrompt: 'Personal trainer working with client on squat form',
     media: [],
     scheduledDate: postDates[7],
-    scheduledTime: '10:00',
-    status: 'scheduled',
-    createdAt: getDate(-1),
-    updatedAt: getDate(-1),
-    timezone: 'America/New_York'
-  },
-  {
-    id: 'post-009',
-    title: '3 Common Mistakes',
-    caption: 'Are you making these 3 marketing mistakes? \n1. Ignoring video\n2. Posting inconsistently\n3. Not engaging with comments\n\nFixing these can change everything.',
-    hashtags: '#MarketingMistakes #TipsAndTricks #SocialMediaGrowth',
-    keywords: 'marketing mistakes, tips',
-    platforms: ['TikTok', 'Instagram'],
-    contentType: 'Video Reel',
-    videoPrompt: 'Person counting down 3 items on fingers',
-    media: [],
-    scheduledDate: postDates[8],
-    scheduledTime: '15:00',
-    status: 'draft',
-    createdAt: getDate(-5),
-    updatedAt: getDate(-1),
-    timezone: 'America/New_York'
-  },
-  {
-    id: 'post-010',
-    title: 'Behind The Scenes: Office Tour',
-    caption: 'Welcome to our chaos! 🤪 Here’s where the magic happens. #OfficeTour #BTS #AgencyLife',
-    hashtags: '#OfficeLife #BehindTheScenes #WorkCulture',
-    keywords: 'office tour, bts',
-    platforms: ['Instagram', 'TikTok'],
-    contentType: 'Video Reel',
-    videoPrompt: 'Fast-paced tour of a modern office space',
-    media: [],
-    scheduledDate: postDates[9],
-    scheduledTime: '11:00',
-    status: 'scheduled',
-    createdAt: getDate(-2),
-    updatedAt: getDate(-2),
-    timezone: 'America/New_York'
-  },
-  {
-    id: 'post-011',
-    title: 'Q&A Session Annoucement',
-    caption: 'Going live this Friday at 3PM EST to answer all your questions! Drop them here 👇',
-    hashtags: '#QandA #LiveStream #Community',
-    keywords: 'q&a, live',
-    platforms: ['Instagram', 'Facebook', 'YouTube'],
-    contentType: 'Image Post',
-    imagePrompt: 'Graphic with Q&A text and time details',
-    media: [],
-    scheduledDate: postDates[10],
     scheduledTime: '09:00',
     status: 'scheduled',
     createdAt: getDate(-1),
@@ -265,17 +216,68 @@ export const mockScheduledPosts = [
     timezone: 'America/New_York'
   },
   {
+    id: 'post-009',
+    title: 'Leg Day Workout',
+    caption: 'LEG DAY DESTROYER 🦵\n\n4x12 Barbell Squats\n4x10 Romanian Deadlifts\n3x15 Leg Press\n3x12 Walking Lunges\n4x15 Leg Curls\n3x20 Calf Raises\n\nSave this and try it on your next leg day! Tag your workout partner 👇',
+    hashtags: '#LegDay #WorkoutPlan #IronPeakFitness #StrengthTraining',
+    keywords: 'leg workout, strength training, workout plan',
+    platforms: ['Instagram', 'TikTok'],
+    contentType: 'Carousel',
+    imagePrompt: '',
+    media: [],
+    scheduledDate: postDates[8],
+    scheduledTime: '11:00',
+    status: 'draft',
+    createdAt: getDate(-5),
+    updatedAt: getDate(-1),
+    timezone: 'America/New_York'
+  },
+  {
+    id: 'post-010',
+    title: 'Yoga Class Introduction',
+    caption: 'NEW CLASS ALERT! 🧘 Introducing Yoga Flow at Iron Peak! Perfect for recovery days and improving flexibility. Every Sunday at 9AM. First class is FREE for all members!',
+    hashtags: '#YogaClass #Recovery #IronPeakFitness #Flexibility',
+    keywords: 'yoga class, recovery, flexibility',
+    platforms: ['Instagram', 'Facebook'],
+    contentType: 'Video',
+    videoPrompt: 'Peaceful yoga class in progress with natural lighting',
+    media: [],
+    scheduledDate: postDates[9],
+    scheduledTime: '08:00',
+    status: 'scheduled',
+    createdAt: getDate(-2),
+    updatedAt: getDate(-2),
+    timezone: 'America/New_York'
+  },
+  {
+    id: 'post-011',
+    title: 'Nutrition Workshop Announcement',
+    caption: '📚 FREE NUTRITION WORKSHOP! Join our certified nutritionist this Saturday at 2PM to learn:\n\n• Meal prep basics\n• Macro counting made simple\n• Best foods for muscle gain\n• How to read nutrition labels\n\nLimited spots - register at the front desk!',
+    hashtags: '#NutritionWorkshop #IronPeakFitness #MealPrep #FitnessEducation',
+    keywords: 'nutrition workshop, meal prep, fitness education',
+    platforms: ['Instagram', 'Facebook', 'X'],
+    contentType: 'Image Post',
+    imagePrompt: 'Workshop setting with healthy food display',
+    media: [],
+    scheduledDate: postDates[10],
+    scheduledTime: '10:00',
+    status: 'scheduled',
+    createdAt: getDate(-1),
+    updatedAt: getDate(-1),
+    timezone: 'America/New_York'
+  },
+  {
     id: 'post-012',
-    title: 'Weekend Vibes',
-    caption: 'Unplugging for the weekend. See you Monday! ✌️',
-    hashtags: '#WeekendVibes #DigitalDetox',
-    keywords: 'weekend, relax',
+    title: 'Weekend Hours Reminder',
+    caption: '⏰ WEEKEND HOURS REMINDER!\n\nSaturday: 6AM - 8PM\nSunday: 7AM - 6PM\n\nNo excuses - we\'re open! See you there 💪',
+    hashtags: '#WeekendWorkout #IronPeakFitness #GymHours',
+    keywords: 'gym hours, weekend workout',
     platforms: ['Instagram'],
     contentType: 'Story',
-    imagePrompt: 'Cozy coffee shop setting',
+    imagePrompt: 'Gym interior with clock showing hours',
     media: [],
     scheduledDate: postDates[11],
-    scheduledTime: '17:00',
+    scheduledTime: '16:00',
     status: 'scheduled',
     createdAt: getDate(-4),
     updatedAt: getDate(-4),
@@ -283,13 +285,13 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-013',
-    title: 'Tool Recommendation: Canva',
-    caption: 'If you aren’t using Canva, you’re working too hard. Here’s how I create posts in 5 minutes.',
-    hashtags: '#ToolsWeLove #DesignTips #CanvaHacks',
-    keywords: 'canva, design tools',
-    platforms: ['TikTok', 'Instagram'],
-    contentType: 'Video Reel',
-    videoPrompt: 'Screen recording of quick design process',
+    title: 'Supplement Guide',
+    caption: 'SUPPLEMENTS 101 💊\n\nWhat you actually need:\n✅ Protein powder\n✅ Creatine monohydrate\n✅ Vitamin D\n\nWhat you can skip:\n❌ Fat burners\n❌ BCAAs (if eating enough protein)\n❌ Pre-workout (coffee works!)\n\nSave this before you waste money!',
+    hashtags: '#SupplementGuide #FitnessTips #IronPeakFitness #GymAdvice',
+    keywords: 'supplements, fitness tips, nutrition',
+    platforms: ['Instagram', 'TikTok'],
+    contentType: 'Carousel',
+    imagePrompt: '',
     media: [],
     scheduledDate: postDates[12],
     scheduledTime: '13:00',
@@ -300,15 +302,16 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-014',
-    title: 'Industry News: Algorithm Changes',
-    caption: 'The algorithm changed AGAIN. Here’s what you need to know to stay visible.',
-    hashtags: '#SocialMediaNews #AlgorithmUpdate',
-    keywords: 'algorithm, news',
-    platforms: ['X', 'Facebook'],
-    contentType: 'Text Post',
+    title: 'Trainer Tip Tuesday',
+    caption: '💡 TRAINER TIP TUESDAY with Coach Sarah!\n\n"Stop ego lifting. Drop the weight by 20% and focus on the mind-muscle connection. You\'ll see better results in half the time."\n\nWhat tip changed YOUR training? 👇',
+    hashtags: '#TrainerTip #IronPeakFitness #FitnessAdvice #MindMuscle',
+    keywords: 'trainer tip, fitness advice, workout tips',
+    platforms: ['X', 'Instagram'],
+    contentType: 'Image Post',
+    imagePrompt: 'Trainer giving advice to client',
     media: [],
     scheduledDate: postDates[13],
-    scheduledTime: '08:30',
+    scheduledTime: '07:00',
     status: 'scheduled',
     createdAt: getDate(-3),
     updatedAt: getDate(-3),
@@ -316,16 +319,16 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-015',
-    title: 'Meme: Client Expectations',
-    caption: 'When the client says "make it pop" 😂 #DesignerProblems #AgencyLife',
-    hashtags: '#MarketingMemes #Relatable',
-    keywords: 'meme, humor',
-    platforms: ['Instagram', 'X', 'Facebook'],
+    title: 'Gym Meme',
+    caption: 'When someone asks if the squat rack is free but you have 6 more sets 😂💀 Tag your gym buddy who does this! #GymMemes #IronPeakFitness',
+    hashtags: '#GymMemes #FitnessHumor #IronPeakFitness #GymLife',
+    keywords: 'gym meme, fitness humor',
+    platforms: ['Instagram', 'X', 'TikTok'],
     contentType: 'Image Post',
-    imagePrompt: 'Funny meme about design feedback',
+    imagePrompt: 'Funny gym meme about squat rack',
     media: [],
     scheduledDate: postDates[14],
-    scheduledTime: '12:30',
+    scheduledTime: '19:00',
     status: 'ready',
     createdAt: getDate(-1),
     updatedAt: getDate(-1),
@@ -333,16 +336,16 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-016',
-    title: 'Flash Sale Alert',
-    caption: '24 HOURS ONLY! 50% off everything. Link in bio! 🚨',
-    hashtags: '#FlashSale #Discount #LimitedTime',
-    keywords: 'sale, promotion',
+    title: 'Spring Break Special',
+    caption: '🌴 SPRING BREAK SPECIAL! Get beach-body ready with our 6-week intensive program. Includes:\n\n• Custom workout plan\n• Nutrition guide\n• Weekly check-ins\n• Access to all classes\n\n50% OFF for the first 20 sign-ups! DM "SPRING" to claim.',
+    hashtags: '#SpringBreak #BeachBody #IronPeakFitness #FitnessChallenge',
+    keywords: 'spring break, fitness program, gym special',
     platforms: ['Instagram', 'Facebook', 'TikTok'],
-    contentType: 'Story',
-    imagePrompt: 'Bold red and white sale graphic',
+    contentType: 'Video Reel',
+    videoPrompt: 'Energetic workout montage with beach imagery',
     media: [],
     scheduledDate: postDates[15],
-    scheduledTime: '09:00',
+    scheduledTime: '12:00',
     status: 'scheduled',
     createdAt: getDate(-5),
     updatedAt: getDate(-5),
@@ -350,50 +353,50 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-017',
-    title: 'How-To: Content Calendar',
-    caption: 'Struggling to be consistent? You need a content calendar. Swipe to see my template.',
-    hashtags: '#ContentStrategy #Planning #Organization',
-    keywords: 'content calendar, how-to',
+    title: 'Upper Body Workout',
+    caption: 'PUSH DAY PERFECTION 💪\n\n5x5 Bench Press\n4x8 Overhead Press\n4x10 Incline Dumbbell Press\n3x12 Cable Flyes\n3x15 Tricep Pushdowns\n3x12 Lateral Raises\n\nRest 2-3 min between heavy sets. Let\'s get it!',
+    hashtags: '#PushDay #ChestWorkout #IronPeakFitness #StrengthTraining',
+    keywords: 'push day, chest workout, upper body',
     platforms: ['Instagram', 'Facebook'],
     contentType: 'Carousel',
     imagePrompt: '',
     media: [],
     scheduledDate: postDates[16],
-    scheduledTime: '14:00',
+    scheduledTime: '06:00',
     status: 'draft',
     createdAt: getDate(-2),
     updatedAt: getDate(-2),
     timezone: 'America/New_York'
   },
-   {
+  {
     id: 'post-018',
-    title: 'Quote of the Day',
-    caption: '"Content is king, but engagement is queen, and the lady rules the house." - Mari Smith',
-    hashtags: '#MarketingQuotes #Wisdom',
-    keywords: 'quote, inspiration',
-    platforms: ['X', 'Instagram'],
+    title: 'Fitness Quote',
+    caption: '"The pain you feel today will be the strength you feel tomorrow." 💪\n\nDouble tap if you\'re putting in the work! #IronPeakFitness #FitnessMotivation',
+    hashtags: '#FitnessQuote #Motivation #IronPeakFitness #GymLife',
+    keywords: 'fitness quote, motivation',
+    platforms: ['Instagram', 'X'],
     contentType: 'Image Post',
-    imagePrompt: 'Minimalist typography quote graphic',
+    imagePrompt: 'Minimalist typography quote over gym background',
     media: [],
     scheduledDate: postDates[17],
-    scheduledTime: '10:00',
+    scheduledTime: '08:00',
     status: 'scheduled',
     createdAt: getDate(-6),
     updatedAt: getDate(-6),
     timezone: 'America/New_York'
   },
-   {
+  {
     id: 'post-019',
-    title: 'Team Lunch',
-    caption: 'Tacos for the team today! 🌮 celebrating a big win.',
-    hashtags: '#TeamCulture #Foodie #Celebration',
-    keywords: 'team, food',
-    platforms: ['Instagram'],
-    contentType: 'Story',
-    imagePrompt: 'Group of people eating tacos',
+    title: 'Staff Appreciation',
+    caption: 'TEAM IRON PEAK! 🙌 Shoutout to our amazing staff who make this gym feel like home. From the front desk to our trainers - we appreciate you! Tag a staff member who\'s made a difference in your fitness journey.',
+    hashtags: '#TeamIronPeak #GymFamily #StaffAppreciation #FitnessCommunity',
+    keywords: 'staff appreciation, gym team',
+    platforms: ['Instagram', 'Facebook'],
+    contentType: 'Image Post',
+    imagePrompt: 'Group photo of gym staff smiling',
     media: [],
     scheduledDate: postDates[18],
-    scheduledTime: '12:00',
+    scheduledTime: '15:00',
     status: 'scheduled',
     createdAt: getDate(-1),
     updatedAt: getDate(-1),
@@ -401,16 +404,16 @@ export const mockScheduledPosts = [
   },
   {
     id: 'post-020',
-    title: 'Product Demo',
-    caption: 'See how X feature works in real-time. It’s a game changer for [Audience].',
-    hashtags: '#ProductDemo #Tutorial #Tech',
-    keywords: 'demo, tutorial',
-    platforms: ['YouTube', 'TikTok'],
+    title: 'Form Check Friday',
+    caption: '📹 FORM CHECK FRIDAY! Send us a video of your lift and our coaches will give you FREE feedback. DM us your squat, deadlift, or bench press videos! #FormCheckFriday #IronPeakFitness',
+    hashtags: '#FormCheck #FreeFeedback #IronPeakFitness #LiftingTips',
+    keywords: 'form check, lifting tips, coaching',
+    platforms: ['Instagram', 'TikTok'],
     contentType: 'Video',
-    videoPrompt: 'Screen recording software demo',
+    videoPrompt: 'Coach reviewing and correcting lift form',
     media: [],
     scheduledDate: postDates[19],
-    scheduledTime: '11:00',
+    scheduledTime: '16:00',
     status: 'draft',
     createdAt: getDate(-3),
     updatedAt: getDate(-3),
@@ -418,14 +421,14 @@ export const mockScheduledPosts = [
   }
 ];
 
-// 2. AI Plan Builder History
+// 2. AI Plan Builder History - Iron Peak Fitness
 export const mockAIPlans = [
   {
     id: 'plan-001',
-    name: 'Q1 Product Launch Strategy',
-    goal: 'Drive conversions',
+    name: 'New Year Transformation Campaign',
+    goal: 'Drive membership sign-ups',
     period: '30 days',
-    platforms: ['Instagram', 'Email'],
+    platforms: ['Instagram', 'Facebook'],
     createdDate: getDate(-45),
     lastUpdated: getDate(-10),
     progress: 100,
@@ -434,22 +437,22 @@ export const mockAIPlans = [
   },
   {
     id: 'plan-002',
-    name: '30-Day Personal Brand Growth',
-    goal: 'Grow followers',
+    name: 'Summer Body Challenge Promo',
+    goal: 'Increase class attendance',
     period: '30 days',
-    platforms: ['X', 'Instagram'],
+    platforms: ['Instagram', 'TikTok'],
     createdDate: getDate(-15),
     lastUpdated: getDate(-2),
-    progress: 45,
+    progress: 65,
     status: 'Active',
     statusColor: STATUS_COLORS.active
   },
   {
     id: 'plan-003',
-    name: 'Authority Building',
-    goal: 'Build authority',
+    name: 'Member Retention Campaign',
+    goal: 'Reduce churn',
     period: '14 days',
-    platforms: ['X'],
+    platforms: ['Instagram', 'Facebook', 'X'],
     createdDate: getDate(-60),
     lastUpdated: getDate(-46),
     progress: 100,
@@ -458,10 +461,10 @@ export const mockAIPlans = [
   },
   {
     id: 'plan-004',
-    name: 'Holiday Content Campaign',
-    goal: 'Increase engagement',
+    name: 'Personal Training Upsell',
+    goal: 'Increase PT bookings',
     period: '7 days',
-    platforms: ['Instagram', 'TikTok', 'Facebook'],
+    platforms: ['Instagram', 'Facebook'],
     createdDate: getDate(-5),
     lastUpdated: getDate(0),
     progress: 78,
@@ -470,10 +473,10 @@ export const mockAIPlans = [
   },
   {
     id: 'plan-005',
-    name: 'Weekly Engagement Boost',
-    goal: 'Boost engagement',
+    name: 'Weekend Warrior Engagement',
+    goal: 'Boost weekend attendance',
     period: '7 days',
-    platforms: ['Instagram'],
+    platforms: ['Instagram', 'TikTok'],
     createdDate: getDate(0),
     lastUpdated: getDate(0),
     progress: 12,
@@ -482,167 +485,167 @@ export const mockAIPlans = [
   }
 ];
 
-// 3. Trend Lab Data
+// 3. Trend Lab Data - Fitness Industry
 export const mockTrendingTopics = [
   {
     id: 'trend-001',
-    topic: 'No-Code Revolution',
-    volume: '12k posts',
-    growth: '+120%',
-    growthDirection: 'up', // for coloring
-    platforms: ['X', 'Instagram'],
-    engagement: 'High'
-  },
-  {
-    id: 'trend-002',
-    topic: 'AI Content Tools',
-    volume: '8.5k posts',
-    growth: '+89%',
+    topic: 'Zone 2 Cardio',
+    volume: '45k posts',
+    growth: '+156%',
     growthDirection: 'up',
-    platforms: ['YouTube', 'X', 'TikTok'],
+    platforms: ['Instagram', 'TikTok', 'YouTube'],
     engagement: 'Very High'
   },
   {
-    id: 'trend-003',
-    topic: 'Video-First Strategy',
-    volume: '15k posts',
-    growth: '+67%',
+    id: 'trend-002',
+    topic: 'Protein Coffee (Proffee)',
+    volume: '28k posts',
+    growth: '+89%',
     growthDirection: 'up',
-    platforms: ['Instagram', 'TikTok'],
+    platforms: ['TikTok', 'Instagram'],
     engagement: 'High'
+  },
+  {
+    id: 'trend-003',
+    topic: '12-3-30 Treadmill Workout',
+    volume: '67k posts',
+    growth: '+234%',
+    growthDirection: 'up',
+    platforms: ['TikTok', 'Instagram'],
+    engagement: 'Very High'
   },
   {
     id: 'trend-004',
-    topic: 'Micro-Influencers',
-    volume: '6.2k posts',
-    growth: '-5%',
-    growthDirection: 'down',
-    platforms: ['Instagram'],
-    engagement: 'Medium'
+    topic: 'Cold Plunge Benefits',
+    volume: '32k posts',
+    growth: '+78%',
+    growthDirection: 'up',
+    platforms: ['Instagram', 'YouTube', 'X'],
+    engagement: 'High'
   },
   {
     id: 'trend-005',
-    topic: 'Interactive Posts',
-    volume: '9.8k posts',
-    growth: '+45%',
+    topic: 'Creatine for Women',
+    volume: '19k posts',
+    growth: '+145%',
     growthDirection: 'up',
-    platforms: ['Facebook', 'Instagram'],
-    engagement: 'Medium'
+    platforms: ['TikTok', 'Instagram'],
+    engagement: 'High'
   },
   {
     id: 'trend-006',
-    topic: 'Community Building',
-    volume: '11k posts',
-    growth: '+78%',
-    growthDirection: 'up',
-    platforms: ['X', 'Discord'],
-    engagement: 'High'
+    topic: 'Walking Pad Workouts',
+    volume: '52k posts',
+    growth: '-12%',
+    growthDirection: 'down',
+    platforms: ['TikTok'],
+    engagement: 'Medium'
   }
 ];
 
-// 4. Huttle Agent Activity Log
+// 4. Huttle Agent Activity Log - Iron Peak Fitness
 export const mockAgentActivity = [
   {
     id: 'log-001',
-    message: 'Analyzing competitor top posts...',
+    message: 'Analyzing competitor gym posts for engagement patterns...',
     timestamp: '2 mins ago',
     type: 'info'
   },
   {
     id: 'log-002',
-    message: 'Found 3 viral hooks for your next reel',
+    message: 'Found 5 viral fitness hooks for your next reel',
     timestamp: '5 mins ago',
     type: 'success'
   },
   {
     id: 'log-003',
-    message: 'Scheduled 2 tweets for tomorrow',
+    message: 'Scheduled 3 workout posts for peak engagement times',
     timestamp: '12 mins ago',
     type: 'success'
   },
   {
     id: 'log-004',
-    message: 'Trend alert: "AI tools" spiking in your niche',
+    message: 'Trend alert: "Zone 2 Cardio" spiking in fitness niche',
     timestamp: '1 hour ago',
-    type: 'warning' // Used for alerts
+    type: 'warning'
   },
   {
     id: 'log-005',
-    message: 'Content gap detected: Add more video content',
+    message: 'Content gap detected: Add more nutrition tips content',
     timestamp: '2 hours ago',
     type: 'info'
   },
   {
     id: 'log-006',
-    message: 'Generated "Q1 Product Launch" strategy',
+    message: 'Generated "Summer Body Challenge" content strategy',
     timestamp: '5 hours ago',
     type: 'success'
   },
   {
     id: 'log-007',
-    message: 'Optimized 3 draft posts for SEO',
+    message: 'Optimized 4 workout posts for Instagram SEO',
     timestamp: 'Yesterday',
     type: 'info'
   },
   {
     id: 'log-008',
-    message: 'Repurposed YouTube video to Twitter thread',
+    message: 'Repurposed YouTube workout video to TikTok format',
     timestamp: 'Yesterday',
     type: 'success'
   },
   {
     id: 'log-009',
-    message: 'Analyzed audience engagement patterns',
+    message: 'Analyzed member engagement patterns by time of day',
     timestamp: '2 days ago',
     type: 'info'
   },
   {
     id: 'log-010',
-    message: 'Weekly performance report ready',
+    message: 'Weekly fitness content performance report ready',
     timestamp: '2 days ago',
     type: 'info'
   }
 ];
 
-// 5. Content Repurposer Examples
+// 5. Content Repurposer Examples - Iron Peak Fitness
 export const mockRepurposerExamples = [
   {
     id: 'repurpose-001',
-    originalContent: 'YouTube Video: "How to scale your agency to $50k/mo"',
+    originalContent: 'YouTube Video: "Complete Push Day Workout - 45 Minutes"',
     format: 'Video to Text',
     sourcePlatform: 'YouTube',
     targetPlatform: 'X (Twitter)',
     outputType: 'Thread (5 tweets)',
     repurposedContent: {
-      content: '1/ Scaling an agency isn\'t about working harder. It\'s about systems. Here are the 3 systems that took us to $50k/mo... 🧵👇',
-      hashtags: '#AgencyLife #Scale #BusinessGrowth',
-      hooks: ['Stop trading time for money.', 'The secret to scaling? Fire yourself.']
+      content: '1/ Want to build a bigger chest and shoulders? Here\'s the exact push day routine that helped our members see results in 8 weeks... 🧵👇',
+      hashtags: '#PushDay #ChestWorkout #FitnessThread #IronPeakFitness',
+      hooks: ['Stop wasting time with junk volume.', 'The secret to chest gains? Progressive overload.']
     }
   },
   {
     id: 'repurpose-002',
-    originalContent: 'Instagram Post: "5 tips for better SEO ranking"',
+    originalContent: 'Instagram Post: "5 High-Protein Meal Prep Ideas"',
     format: 'Text to Video',
     sourcePlatform: 'Instagram',
     targetPlatform: 'TikTok',
     outputType: 'Video Script',
     repurposedContent: {
-      content: '(Hook: Stop ignoring SEO!) Want to rank #1? Here are 5 tips in 30 seconds. 1. Keywords in titles. 2. Alt text on images. 3... [Point to screen]',
-      hashtags: '#SEO #MarketingTips #LearnOnTikTok',
-      hooks: ['Your website is invisible. Here\'s why.', 'SEO is dead? No, you\'re just doing it wrong.']
+      content: '(Hook: Stop eating boring chicken and rice!) Here are 5 high-protein meals that actually taste good AND help you hit your macros. Number 3 is a game-changer... [Show meal prep montage]',
+      hashtags: '#MealPrep #HighProtein #FitnessTikTok #IronPeakFitness',
+      hooks: ['Your meal prep is boring. Here\'s how to fix it.', 'Eating 150g protein doesn\'t have to suck.']
     }
   },
   {
     id: 'repurpose-003',
-    originalContent: 'Blog Post: "The Future of AI in Marketing"',
+    originalContent: 'Blog Post: "The Ultimate Guide to Building Muscle After 40"',
     format: 'Long-form to Carousel',
     sourcePlatform: 'Blog',
     targetPlatform: 'Instagram',
-    outputType: 'Carousel (7 slides)',
+    outputType: 'Carousel (8 slides)',
     repurposedContent: {
-      content: 'Slide 1: AI isn\'t replacing marketers.\nSlide 2: Marketers using AI will replace those who don\'t.\nSlide 3: Top 3 tools to learn now...',
-      hashtags: '#AI #MarketingFuture #Innovation',
-      hooks: ['Will AI take your job?', 'The marketing landscape is changing forever.']
+      content: 'Slide 1: Building muscle after 40 is different. Not harder - just different.\nSlide 2: Recovery becomes your superpower.\nSlide 3: Here\'s what to prioritize...',
+      hashtags: '#FitnessOver40 #MuscleBuilding #IronPeakFitness #HealthyAging',
+      hooks: ['Think you\'re too old to build muscle?', 'Age is just a number. Here\'s proof.']
     }
   }
 ];
@@ -653,8 +656,8 @@ export const mockRepurposerExamples = [
 export const generateMockPost = (overrides = {}) => {
   return {
     id: `generated-${Date.now()}`,
-    title: 'New Post',
-    caption: 'This is a generated post.',
+    title: 'New Workout Post',
+    caption: 'Ready to crush your fitness goals? 💪 #IronPeakFitness',
     platforms: ['Instagram'],
     scheduledDate: getDate(1),
     scheduledTime: '12:00',
@@ -665,14 +668,3 @@ export const generateMockPost = (overrides = {}) => {
     ...overrides
   };
 };
-
-
-
-
-
-
-
-
-
-
-

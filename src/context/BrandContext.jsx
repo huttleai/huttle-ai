@@ -13,6 +13,7 @@ export function useBrand() {
     brandProfile: context.brandData,
     updateBrandData: context.updateBrandData,
     resetBrandData: context.resetBrandData,
+    refreshBrandData: context.refreshBrandData,
     loading: context.loading,
     // Convenience helpers for profile type
     isCreator: context.brandData?.profileType === 'creator',
@@ -21,7 +22,7 @@ export function useBrand() {
 }
 
 export function BrandProvider({ children }) {
-  const { user, userProfile } = useContext(AuthContext);
+  const { user, userProfile, needsOnboarding } = useContext(AuthContext);
   const [brandData, setBrandData] = useState({
     profileType: 'brand', // 'brand' or 'creator'
     creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
@@ -39,6 +40,8 @@ export function BrandProvider({ children }) {
     emotionalTriggers: [], // How they want audience to feel
   });
   const [loading, setLoading] = useState(true);
+  // Track if we need to force reload (e.g., after onboarding completes)
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   // Load brand data from Supabase user_profile table
   useEffect(() => {
@@ -55,14 +58,27 @@ export function BrandProvider({ children }) {
 
       try {
         // Load from Supabase user_profile table
-        const { data, error } = await supabase
+        // Use maybeSingle() instead of single() for new users who might not have a profile yet
+        // Add timeout protection to prevent hanging queries
+        const QUERY_TIMEOUT_MS = 8000;
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Brand data query timed out')), QUERY_TIMEOUT_MS);
+        });
+
+        const queryPromise = supabase
           .from('user_profile')
           .select('*')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+        if (error) {
           console.error('Error loading user profile:', error);
+          // Check for table not existing
+          if (error.code === '42P01' || error.message?.includes('does not exist')) {
+            console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
+          }
           // Fallback to localStorage
           const savedBrand = localStorage.getItem('brandData');
           if (savedBrand) {
@@ -109,7 +125,7 @@ export function BrandProvider({ children }) {
     };
 
     loadBrandData();
-  }, [user, userProfile]); // Reload when user or userProfile changes
+  }, [user, userProfile, needsOnboarding, reloadTrigger]); // Reload when user, userProfile, or onboarding status changes
 
   const updateBrandData = async (newData) => {
     const updated = { ...brandData, ...newData };
@@ -212,8 +228,14 @@ export function BrandProvider({ children }) {
     }
   };
 
+  // Force reload brand data from Supabase (useful after onboarding)
+  const refreshBrandData = () => {
+    console.log('🔄 [Brand] Forcing brand data reload');
+    setReloadTrigger(prev => prev + 1);
+  };
+
   return (
-    <BrandContext.Provider value={{ brandData, updateBrandData, resetBrandData, loading }}>
+    <BrandContext.Provider value={{ brandData, updateBrandData, resetBrandData, refreshBrandData, loading }}>
       {children}
     </BrandContext.Provider>
   );

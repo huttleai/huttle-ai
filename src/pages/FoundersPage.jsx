@@ -229,7 +229,7 @@ export default function FoundersPage() {
     { 
       icon: Lock, 
       title: "Lifetime Price Lock", 
-      desc: "$199/year forever, even when prices increase to $420/year" 
+      desc: "$199/year forever, even when prices increase to $357/year" 
     },
     { 
       icon: Zap, 
@@ -400,9 +400,9 @@ export default function FoundersPage() {
                   <span className="text-xl text-slate-400 mb-2">/year</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-lg text-slate-500 line-through">$420/year</span>
+                  <span className="text-lg text-slate-500 line-through">$357/year</span>
                   <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
-                    Save $221
+                    Save $158
                   </span>
                 </div>
               </div>
