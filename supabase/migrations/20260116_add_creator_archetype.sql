@@ -12,3 +12,4 @@ COMMENT ON COLUMN public.user_profile.creator_archetype IS 'For solo creators: e
 -- Create index for better query performance (optional)
 CREATE INDEX IF NOT EXISTS idx_user_profile_creator_archetype ON public.user_profile(creator_archetype);
 
+

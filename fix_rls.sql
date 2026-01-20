@@ -35,3 +35,4 @@ WITH CHECK ((select auth.uid()) = id);
 -- The frontend should use UPSERT to handle both cases gracefully
 
 
+

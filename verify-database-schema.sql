@@ -167,3 +167,4 @@ BEGIN
   RAISE NOTICE 'For detailed help, see: FIX-ONBOARDING-SCHEMA.md';
 END $$;
 
+
