@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-// Target date: January 26, 2026 at 12:00 PM EST
-const TARGET_DATE = new Date('2026-01-26T12:00:00-05:00').getTime();
+// Target date: January 29, 2026 at 12:00 PM EST
+const TARGET_DATE = new Date('2026-01-29T12:00:00-05:00').getTime();
 
 const CircularProgress = ({ value, max, label, size = 80, index }) => {
   const strokeWidth = size > 70 ? 4 : 3;

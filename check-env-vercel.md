@@ -153,3 +153,4 @@ The issue is almost certainly missing Supabase environment variables in Vercel. 
 
 
 
+

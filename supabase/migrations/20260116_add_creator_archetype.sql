@@ -13,3 +13,4 @@ COMMENT ON COLUMN public.user_profile.creator_archetype IS 'For solo creators: e
 CREATE INDEX IF NOT EXISTS idx_user_profile_creator_archetype ON public.user_profile(creator_archetype);
 
 
+

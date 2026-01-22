@@ -175,7 +175,7 @@ export default function Signup() {
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
-              <p className="text-lg font-semibold text-white">Jan 26, 2026</p>
+              <p className="text-lg font-semibold text-white">Jan 29, 2026</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
