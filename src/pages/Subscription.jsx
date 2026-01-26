@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical } from 'lucide-react';
+import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical, ShieldCheck } from 'lucide-react';
 import Badge from '../components/Badge';
 import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -461,6 +461,14 @@ export default function Subscription() {
               >
                 {getButtonText(plan)}
               </button>
+
+              {/* 7-Day Happiness Guarantee */}
+              {plan.id !== 'freemium' && (
+                <div className="flex items-center justify-center gap-1.5 mt-3">
+                  <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs text-gray-400">7-day money-back guarantee</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -545,6 +553,10 @@ export default function Subscription() {
         <div className="card p-6 lg:p-8 max-w-3xl mx-auto">
           <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-6">
+            <div className="pb-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
+              <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund—no questions asked. After 7 days, all sales are final.</p>
+            </div>
             <div className="pb-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
               <p className="text-gray-600 text-sm">Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.</p>

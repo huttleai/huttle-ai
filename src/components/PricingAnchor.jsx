@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Crown, Clock, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { Crown, Clock, ArrowRight, Check, Sparkles, ShieldCheck } from 'lucide-react';
 
 /**
  * PricingAnchor - A price anchoring comparison component
@@ -46,7 +46,7 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
                 Public Launch
               </h3>
               <p className="text-xs md:text-sm text-slate-500 mb-4 md:mb-6">
-                Coming February 2026
+                Q1 2026
               </p>
 
               {/* Price */}
@@ -153,6 +153,12 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
                 Lock in $199/yr
                 <ArrowRight size={16} />
               </motion.button>
+
+              {/* 7-Day Happiness Guarantee */}
+              <div className="flex items-center justify-center gap-1.5 mt-3 md:mt-4">
+                <ShieldCheck size={14} className="text-slate-400" />
+                <span className="text-xs text-slate-400">7-day money-back guarantee. Cancel anytime.</span>
+              </div>
             </motion.div>
           </div>
         </div>

@@ -959,11 +959,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "What is your refund policy?",
-      answer: "All Founders Club memberships are non-refundable. This is a special early-access program with a lifetime price lock at $199/year (normally $357/year), and by joining you're committing to support the development and growth of Huttle AI. We're confident you'll love the platform, but please make sure you're ready to commit before purchasing."
-    },
-    {
-      question: "Is there a free trial available?",
-      answer: "We're currently in early access mode with limited Founders Club spots available. Join the waitlist to be notified when we launch, or secure your Founders pricing now to lock in $199/year forever."
+      answer: "We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund—no questions asked. After 7 days, all sales are final. We're confident you'll love the platform!"
     },
     {
       question: "How does the AI understand my brand voice?",
@@ -1480,7 +1476,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Jan 29</span>
+              <span className="text-sm font-bold">Early Access Feb 4</span>
             </span>
           </div>
           <button 
