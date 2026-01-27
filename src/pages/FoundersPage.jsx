@@ -448,6 +448,10 @@ export default function FoundersPage() {
                   <Lock className="w-4 h-4 text-[#01bad2]" />
                   <span>Price locked forever at $199/year</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#01bad2]" />
+                  <span>7-Day Price Guarantee</span>
+                </div>
               </div>
             </motion.div>
           </div>
