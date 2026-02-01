@@ -605,6 +605,7 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
                 { title: "Highest AI Limits", desc: "Pro & Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to the founding team" },
+                { title: "7 Day Happiness Guarantee", desc: "Not satisfied? Get a full refund within 7 days, no questions asked" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
@@ -1476,7 +1477,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Feb 4</span>
+              <span className="text-sm font-bold">Early Access Feb 5</span>
             </span>
           </div>
           <button 
