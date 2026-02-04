@@ -1001,7 +1001,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
       <div className="container mx-auto max-w-4xl">
         {/* Social proof text above pricing */}
         <p className="text-center text-sm text-slate-500 mb-6 mt-8">
-          🔥 247 creators on the waitlist
+          🔥 312 creators on the waitlist
         </p>
         <div 
             className="relative rounded-2xl md:rounded-[4rem] bg-slate-900 p-5 md:p-16 lg:p-20 text-center overflow-hidden"
@@ -1073,7 +1073,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
-                  <Users size={8} className="text-[#01bad2] md:w-3 md:h-3"/> <NumberTicker value={27} duration={1} /> Spots Left
+                  <Users size={8} className="text-[#01bad2] md:w-3 md:h-3"/> <NumberTicker value={23} duration={1} /> Spots Left
                 </motion.span>
               </div>
             </div>
@@ -1477,7 +1477,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Feb 5</span>
+              <span className="text-sm font-bold">Early Access Feb 9</span>
             </span>
           </div>
           <button 
