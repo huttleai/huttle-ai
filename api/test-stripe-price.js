@@ -1,11 +1,27 @@
 /**
  * Test endpoint to verify Stripe configuration
  * Access at: /api/test-stripe-price
+ * 
+ * SECURITY: Protected by CRON_SECRET to prevent unauthorized access.
+ * This endpoint exposes configuration details and should NOT be publicly accessible.
  */
 
 import Stripe from 'stripe';
 
 export default async function handler(req, res) {
+  // SECURITY: Require admin secret to access this endpoint
+  // This prevents information disclosure about Stripe configuration
+  const ADMIN_SECRET = process.env.CRON_SECRET;
+  const providedSecret = req.headers['x-cron-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+
+  if (!ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Endpoint not configured' });
+  }
+
+  if (providedSecret !== ADMIN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     // Check if Stripe key exists
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -47,12 +63,8 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Stripe Test Error:', error);
     return res.status(500).json({
-      error: error.message,
-      type: error.type,
-      code: error.code,
-      hint: error.code === 'resource_missing' 
-        ? 'Price ID not found. Make sure the price ID matches the Stripe mode (test vs live)'
-        : 'Check Vercel function logs for details',
+      error: 'Stripe configuration test failed',
+      hint: 'Check Vercel function logs for details',
     });
   }
 }

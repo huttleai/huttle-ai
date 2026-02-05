@@ -75,11 +75,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // For authenticated requests, we can proceed
-    // For unauthenticated, we still allow but with stricter rate limits
+    // SECURITY: Require authentication for AI API access
+    // This prevents unauthorized usage of expensive AI API credits
     if (!userId) {
-      // Use IP as fallback for rate limiting
-      userId = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'anonymous';
+      return res.status(401).json({ 
+        error: 'Authentication required to use AI features. Please log in.' 
+      });
     }
 
     // Check rate limit
@@ -95,10 +96,22 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.7, model = 'grok-4-1-fast-reasoning' } = req.body;
+    const { messages, temperature = 0.7, model } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    // SECURITY: Whitelist allowed models to prevent abuse of expensive models
+    const ALLOWED_MODELS = ['grok-4-1-fast-reasoning', 'grok-3-fast', 'grok-3-mini-fast'];
+    const safeModel = ALLOWED_MODELS.includes(model) ? model : 'grok-4-1-fast-reasoning';
+
+    // Validate temperature range
+    const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
+
+    // Validate messages array size to prevent abuse
+    if (messages.length > 20) {
+      return res.status(400).json({ error: 'Too many messages in request (max 20)' });
     }
 
     // Forward request to Grok API
@@ -109,9 +122,9 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${GROK_API_KEY}`
       },
       body: JSON.stringify({
-        model,
+        model: safeModel,
         messages,
-        temperature,
+        temperature: safeTemperature,
       })
     });
 

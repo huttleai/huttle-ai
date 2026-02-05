@@ -8,44 +8,53 @@
  * - VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
  */
 
+import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 // SECURITY: No hardcoded fallback - must be configured via environment variable
 const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK;
 
+// Initialize Supabase for auth verification
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
 /**
  * Main handler function
  */
 export default async function handler(req, res) {
-  console.log('[viral-blueprint-proxy] API route hit');
-  console.log('[viral-blueprint-proxy] Request method:', req.method);
-  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
   // Handle preflight request
-  if (handlePreflight(req, res)) {
-    console.log('[viral-blueprint-proxy] Preflight request handled');
-    return;
-  }
+  if (handlePreflight(req, res)) return;
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    console.log('[viral-blueprint-proxy] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // SECURITY: Require authentication
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !supabase) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid authentication' });
   }
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
     console.error('[viral-blueprint-proxy] N8N webhook URL not configured');
     return res.status(500).json({ 
-      error: 'Webhook URL not configured. Please set VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK in environment variables.'
+      error: 'Service not configured. Please try again later.'
     });
   }
 
   try {
-    console.log('[viral-blueprint-proxy] Forwarding request to n8n:', N8N_WEBHOOK_URL);
-    console.log('[viral-blueprint-proxy] Request payload:', JSON.stringify(req.body, null, 2));
 
     // Forward request to n8n webhook
     const response = await fetch(N8N_WEBHOOK_URL, {
@@ -98,9 +107,9 @@ export default async function handler(req, res) {
       });
     }
 
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
+      error: 'An unexpected error occurred. Please try again.' 
     });
   }
 }

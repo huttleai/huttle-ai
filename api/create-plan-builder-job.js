@@ -8,10 +8,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role for backend operations
-);
+// SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = (supabaseUrl && supabaseServiceKey) 
+  ? createClient(supabaseUrl, supabaseServiceKey) 
+  : null;
 
 const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK_URL;
 
@@ -24,6 +26,12 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Validate services are configured
+  if (!supabase) {
+    console.error('[create-plan-builder-job] Supabase not configured');
+    return res.status(500).json({ error: 'Service not configured' });
   }
 
   try {

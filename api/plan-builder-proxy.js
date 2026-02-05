@@ -17,11 +17,16 @@
  * }
  */
 
+import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 // SECURITY: No hardcoded fallback - must be configured via environment variable
-// Note: Using non-VITE_ prefix for server-side code
 const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK || process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
+
+// Initialize Supabase for auth verification
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 /**
  * Validate UUID format
@@ -35,30 +40,34 @@ function isValidUUID(str) {
  * Main handler function
  */
 export default async function handler(req, res) {
-  console.log('[plan-builder-proxy] ====== API ROUTE HIT ======');
-  console.log('[plan-builder-proxy] Request method:', req.method);
-  console.log('[plan-builder-proxy] Timestamp:', new Date().toISOString());
-  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
   // Handle preflight request
-  if (handlePreflight(req, res)) {
-    console.log('[plan-builder-proxy] Preflight request handled');
-    return;
-  }
+  if (handlePreflight(req, res)) return;
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    console.log('[plan-builder-proxy] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // SECURITY: Require authentication
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !supabase) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid authentication' });
   }
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
     console.error('[plan-builder-proxy] N8N webhook URL not configured');
     return res.status(500).json({ 
-      error: 'Webhook URL not configured. Please set VITE_N8N_PLAN_BUILDER_WEBHOOK in environment variables.'
+      error: 'Service not configured. Please try again later.'
     });
   }
 
@@ -83,14 +92,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('[plan-builder-proxy] ====== REQUEST DETAILS ======');
-    console.log('[plan-builder-proxy] Forwarding to n8n:', N8N_WEBHOOK_URL);
-    console.log('[plan-builder-proxy] Job ID:', job_id);
-    console.log('[plan-builder-proxy] Content Goal:', contentGoal);
-    console.log('[plan-builder-proxy] Time Period:', timePeriod);
-    console.log('[plan-builder-proxy] Platforms:', platformFocus);
-    console.log('[plan-builder-proxy] Brand Voice:', brandVoice);
-    console.log('[plan-builder-proxy] =============================');
+    console.log('[plan-builder-proxy] Forwarding job:', job_id);
 
     // Build the complete payload for n8n
     const n8nPayload = {
@@ -100,8 +102,6 @@ export default async function handler(req, res) {
       platformFocus: Array.isArray(platformFocus) ? platformFocus : [],
       brandVoice: brandVoice || ''
     };
-
-    console.log('[plan-builder-proxy] Sending payload to n8n:', JSON.stringify(n8nPayload, null, 2));
 
     // Forward request to n8n webhook
     const response = await fetch(N8N_WEBHOOK_URL, {
@@ -127,11 +127,8 @@ export default async function handler(req, res) {
     }
 
     // Parse and return the response
-    const data = await response.text();
-    console.log('[plan-builder-proxy] ====== SUCCESS ======');
-    console.log('[plan-builder-proxy] n8n webhook triggered successfully');
-    console.log('[plan-builder-proxy] Response:', data.substring(0, 500));
-    console.log('[plan-builder-proxy] ======================');
+    await response.text();
+    console.log('[plan-builder-proxy] Webhook triggered successfully for job:', job_id);
     
     // Return success (n8n will update job via Supabase)
     return res.status(200).json({ 
@@ -161,9 +158,9 @@ export default async function handler(req, res) {
       });
     }
 
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
+      error: 'An unexpected error occurred. Please try again.'
     });
   }
 }

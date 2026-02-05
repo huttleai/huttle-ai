@@ -16,9 +16,6 @@ const MAILCHIMP_AUDIENCE_ID = process.env.MAILCHIMP_WAITLIST_AUDIENCE_ID || '';
 const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_API_KEY.split('-')[1] || 'us22';
 
 export default async function handler(req, res) {
-  console.log('📧 Waitlist API called');
-  console.log('📧 Request method:', req.method);
-  console.log('📧 Request origin:', req.headers.origin);
   
   // Set secure CORS headers
   setCorsHeaders(req, res);
@@ -33,7 +30,6 @@ export default async function handler(req, res) {
 
   try {
     const { firstName, lastName, email } = req.body;
-    console.log('📧 Processing signup for:', email);
 
     // Validate required fields
     if (!firstName || !email) {
@@ -62,8 +58,7 @@ export default async function handler(req, res) {
       });
     }
     
-    console.log('✅ Mailchimp credentials found');
-    console.log('📧 Server prefix:', MAILCHIMP_SERVER_PREFIX);
+    console.log('[subscribe-waitlist] Processing signup');
 
     // Prepare Mailchimp API request
     const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_AUDIENCE_ID}/members`;
@@ -78,7 +73,7 @@ export default async function handler(req, res) {
       tags: ['Waitlist', 'Landing Page']
     };
 
-    console.log('📧 Calling Mailchimp API:', mailchimpUrl);
+    // SECURITY: Don't log Mailchimp API URL
     
     // Add subscriber to Mailchimp
     const mailchimpResponse = await fetch(mailchimpUrl, {
@@ -90,9 +85,7 @@ export default async function handler(req, res) {
       body: JSON.stringify(memberData),
     });
 
-    console.log('📧 Mailchimp response status:', mailchimpResponse.status);
     const mailchimpData = await mailchimpResponse.json();
-    console.log('📧 Mailchimp response:', JSON.stringify(mailchimpData, null, 2));
 
     // Handle Mailchimp errors
     if (!mailchimpResponse.ok) {
@@ -113,22 +106,17 @@ export default async function handler(req, res) {
     }
 
     // Success!
-    console.log(`✅ Waitlist signup: ${email} (${firstName} ${lastName || ''})`);
+    console.log('[subscribe-waitlist] Signup successful');
     return res.status(200).json({ 
       success: true,
       message: 'Successfully joined the waitlist!',
-      subscriber: {
-        email: email,
-        firstName: firstName,
-        lastName: lastName || ''
-      }
     });
 
   } catch (error) {
     console.error('Waitlist subscription error:', error);
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'Internal server error',
-      details: error.message 
+      error: 'An unexpected error occurred. Please try again.' 
     });
   }
 }

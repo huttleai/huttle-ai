@@ -8,10 +8,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = (supabaseUrl && supabaseServiceKey) 
+  ? createClient(supabaseUrl, supabaseServiceKey) 
+  : null;
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -22,6 +24,10 @@ export default async function handler(req, res) {
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!supabase) {
+    return res.status(500).json({ error: 'Service not configured' });
   }
 
   try {

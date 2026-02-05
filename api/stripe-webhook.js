@@ -178,9 +178,15 @@ export default async function handler(req, res) {
         const customerEmail = session.customer_email || session.customer_details?.email;
 
         if (customerEmail && customerId) {
-          // Find user by email and update their profile with Stripe customer ID
-          const { data: authUsers } = await supabase.auth.admin.listUsers();
-          const user = authUsers?.users?.find(u => u.email === customerEmail);
+          // Find user by email - use filtered query instead of listing all users
+          // SECURITY & PERFORMANCE: listUsers() loads ALL users into memory which is 
+          // both slow and a potential DoS vector as the user base grows
+          const { data: userList } = await supabase.auth.admin.listUsers({
+            filter: `email.eq.${customerEmail}`,
+            page: 1,
+            perPage: 1,
+          });
+          const user = userList?.users?.[0];
           
           if (user) {
             // Extract customer name from session

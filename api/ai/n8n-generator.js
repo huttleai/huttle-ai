@@ -16,18 +16,11 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
  * Main handler function
  */
 export default async function handler(req, res) {
-  console.log('🚀 [n8n-generator] API route hit');
-  console.log('🚀 [n8n-generator] Request method:', req.method);
-  console.log('🚀 [n8n-generator] Request URL:', req.url);
-  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
   // Handle preflight request
-  if (handlePreflight(req, res)) {
-    console.log('✅ [n8n-generator] Preflight request handled');
-    return;
-  }
+  if (handlePreflight(req, res)) return;
 
   // Only allow POST requests
   if (req.method !== 'POST') {
@@ -36,24 +29,15 @@ export default async function handler(req, res) {
   }
 
   // Validate environment variables
-  console.log('🔍 [n8n-generator] Checking N8N_WEBHOOK_URL_GENERATOR:', N8N_WEBHOOK_URL ? 'FOUND' : 'MISSING');
-  
   if (!N8N_WEBHOOK_URL) {
-    console.error('❌ [n8n-generator] N8N_WEBHOOK_URL_GENERATOR environment variable not set');
+    console.error('[n8n-generator] N8N_WEBHOOK_URL_GENERATOR not configured');
+    // SECURITY: Don't expose environment variable names to client
     return res.status(500).json({ 
-      error: 'CRITICAL: N8N_WEBHOOK_URL_GENERATOR is missing in .env file'
+      error: 'Content generation service not configured. Please try again later.'
     });
   }
 
   try {
-    console.log('📦 [n8n-generator] Request body received:', {
-      hasUserId: !!req.body?.userId,
-      hasTopic: !!req.body?.topic,
-      platform: req.body?.platform,
-      contentType: req.body?.contentType,
-      bodyKeys: Object.keys(req.body || {})
-    });
-
     // Extract and validate request body
     const {
       userId,
@@ -67,24 +51,18 @@ export default async function handler(req, res) {
     } = req.body;
 
     // Validate required fields
-    console.log('✅ [n8n-generator] Validating required fields...');
     if (!userId) {
-      console.log('❌ [n8n-generator] Missing userId');
       return res.status(400).json({ error: 'User ID is required' });
     }
     if (!topic || !topic.trim()) {
-      console.log('❌ [n8n-generator] Missing or empty topic');
       return res.status(400).json({ error: 'Topic is required' });
     }
     if (!contentType) {
-      console.log('❌ [n8n-generator] Missing contentType');
       return res.status(400).json({ error: 'Content type is required' });
     }
     if (!platform) {
-      console.log('❌ [n8n-generator] Missing platform');
       return res.status(400).json({ error: 'Platform is required' });
     }
-    console.log('✅ [n8n-generator] All required fields present');
 
     // Prepare payload for n8n
     const n8nPayload = {
@@ -99,26 +77,12 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     };
 
-    // Log request (without sensitive data)
-    console.log('📤 [n8n-generator] Prepared n8n payload:', {
-      userId,
-      contentType,
-      platform,
-      topicLength: topic.length,
-      brandVoice: brandVoice || 'engaging',
-      theme,
-      remixMode
-    });
-
     // Forward request to n8n with timeout
-    console.log('🌐 [n8n-generator] Sending request to n8n webhook...');
-    console.log('🌐 [n8n-generator] Webhook URL configured: YES (not logging actual URL for security)');
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
     try {
-      console.log('📡 [n8n-generator] Making fetch request to n8n...');
       const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
@@ -129,37 +93,20 @@ export default async function handler(req, res) {
       });
 
       clearTimeout(timeoutId);
-      console.log('📥 [n8n-generator] Received response from n8n. Status:', n8nResponse.status);
 
       if (!n8nResponse.ok) {
         const errorText = await n8nResponse.text();
-        console.error('❌ [n8n-generator] N8n error response:', {
-          status: n8nResponse.status,
-          error: errorText.substring(0, 200)
-        });
+        console.error('[n8n-generator] N8n error:', n8nResponse.status);
         
-        return res.status(n8nResponse.status).json({
-          error: 'N8n service error',
-          details: `N8n returned ${n8nResponse.status}`,
-          n8nError: errorText.substring(0, 200) // Limit error message length
+        // SECURITY: Don't expose n8n error details to client
+        return res.status(502).json({
+          error: 'Content generation service error. Please try again.',
         });
       }
 
       const n8nData = await n8nResponse.json();
-      console.log('✅ [n8n-generator] N8n response parsed successfully');
-
-      // Log successful response
-      console.log('📊 [n8n-generator] N8n response summary:', {
-        userId,
-        contentType,
-        hasContent: !!n8nData.content,
-        contentLength: n8nData.content?.length || 0,
-        hasHashtags: !!n8nData.hashtags,
-        hasMetadata: !!n8nData.metadata
-      });
 
       // Return structured response
-      console.log('✅ [n8n-generator] Returning success response to client');
       return res.status(200).json({
         success: true,
         content: n8nData.content || '',
@@ -175,24 +122,18 @@ export default async function handler(req, res) {
       clearTimeout(timeoutId);
       
       if (fetchError.name === 'AbortError') {
-        console.error('❌ [n8n-generator] N8n request timeout:', { userId, contentType });
+        console.error('[n8n-generator] Request timeout');
         return res.status(504).json({
-          error: 'Request timeout: N8n took too long to respond (>60s)'
+          error: 'Content generation timed out. Please try again.'
         });
       }
 
       // Network or connection errors
-      const errorMessage = fetchError.message || 'Unknown network error';
-      console.error('❌ [n8n-generator] Fetch error:', {
-        name: fetchError.name,
-        message: errorMessage,
-        stack: fetchError.stack?.substring(0, 200)
-      });
+      console.error('[n8n-generator] Network error:', fetchError.message);
       
-      // Return specific network error message
-      return res.status(500).json({
-        error: `Network error connecting to n8n: ${errorMessage}`,
-        details: `Failed to reach n8n webhook. Check if the URL is correct and n8n is running.`
+      // SECURITY: Don't expose infrastructure details to client
+      return res.status(502).json({
+        error: 'Content generation service is temporarily unavailable. Please try again.',
       });
     }
 

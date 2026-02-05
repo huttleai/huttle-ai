@@ -18,7 +18,8 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is not configured in environment variables');
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+// SECURITY: Never use a placeholder key - validate at request time instead
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 // Initialize Supabase client for user lookup
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -26,9 +27,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
-  console.log('🚀 [create-checkout-session] Handler started');
-  console.log('📋 Method:', req.method);
-  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+  // SECURITY: Removed verbose header/body logging that could expose auth tokens in Vercel logs
+  console.log('[create-checkout-session] Handler started, method:', req.method);
   
   // Set secure CORS headers
   setCorsHeaders(req, res);
@@ -42,28 +42,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('🚀 Checkout session request received');
-    console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
-    
-    // Validate Stripe key at runtime
-    if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
-      console.error('❌ STRIPE_SECRET_KEY not configured');
+    // Validate Stripe is configured
+    if (!stripe) {
+      console.error('[create-checkout-session] STRIPE_SECRET_KEY not configured');
       return res.status(500).json({ 
-        error: 'Stripe configuration error',
-        details: 'STRIPE_SECRET_KEY is not set in environment variables'
+        error: 'Payment service not configured',
       });
     }
 
     const { priceId, planId, billingCycle } = req.body;
 
     if (!priceId) {
-      console.error('❌ No price ID provided in request');
       return res.status(400).json({ error: 'Price ID is required' });
     }
-    
-    console.log('💰 Price ID:', priceId);
-    console.log('📋 Plan ID:', planId);
-    console.log('📅 Billing Cycle:', billingCycle);
 
     // Get the app URL for redirects - REQUIRED in production
     const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
@@ -158,44 +149,30 @@ export default async function handler(req, res) {
       sessionOptions.customer_email = customerEmail;
     }
 
-    console.log('🎫 Creating Stripe checkout session...');
-    console.log('📋 Session options:', JSON.stringify(sessionOptions, null, 2));
-    
     let session;
     try {
       session = await stripe.checkout.sessions.create(sessionOptions);
     } catch (stripeError) {
-      console.error('💥 Stripe API Error:', stripeError);
-      console.error('Stripe Error type:', stripeError.type);
-      console.error('Stripe Error code:', stripeError.code);
-      console.error('Stripe Error message:', stripeError.message);
+      console.error('[create-checkout-session] Stripe API Error:', stripeError.type, stripeError.code, stripeError.message);
       
+      // SECURITY: Don't expose internal Stripe error details to client
       return res.status(500).json({
-        error: stripeError.message || 'Stripe API error',
-        type: stripeError.type,
-        code: stripeError.code,
-        details: 'Error creating Stripe checkout session'
+        error: 'Payment service error. Please try again or contact support.',
       });
     }
 
-    console.log('✅ Stripe session created successfully:', session.id);
-    console.log('✅ Session URL:', session.url);
+    console.log('[create-checkout-session] Session created:', session.id);
     
     return res.status(200).json({
       sessionId: session.id,
       url: session.url,
     });
   } catch (error) {
-    console.error('💥 General Checkout Error:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('[create-checkout-session] Error:', error.message);
     
+    // SECURITY: Don't expose internal error details to client
     return res.status(500).json({
-      error: error.message || 'Failed to create checkout session',
-      type: error.type || error.name,
-      code: error.code || 'UNKNOWN',
-      details: 'Check server logs for more information'
+      error: 'An unexpected error occurred. Please try again.',
     });
   }
 }
