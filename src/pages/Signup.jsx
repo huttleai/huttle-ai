@@ -1,17 +1,82 @@
-import { useState, useContext, useMemo } from 'react';
+import { useState, useContext, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
+import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, AlertTriangle } from 'lucide-react';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingBreach, setCheckingBreach] = useState(false);
+  const [isBreached, setIsBreached] = useState(false);
+  const [breachCheckDebounce, setBreachCheckDebounce] = useState(null);
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  // Check password against Have I Been Pwned API (privacy-preserving k-anonymity)
+  const checkPasswordBreach = async (password) => {
+    if (!password || password.length < 8) {
+      setIsBreached(false);
+      return;
+    }
+
+    try {
+      setCheckingBreach(true);
+      
+      // Use SHA-1 hash of password
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      
+      // Send only first 5 characters (k-anonymity)
+      const prefix = hashHex.substring(0, 5);
+      const suffix = hashHex.substring(5);
+      
+      // Query HIBP API
+      const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+      const text = await response.text();
+      
+      // Check if our password hash suffix is in the results
+      const found = text.split('\n').some(line => {
+        const [hashSuffix] = line.split(':');
+        return hashSuffix === suffix;
+      });
+      
+      setIsBreached(found);
+    } catch (error) {
+      console.error('Error checking password breach:', error);
+      // Fail open - don't block user if API is down
+      setIsBreached(false);
+    } finally {
+      setCheckingBreach(false);
+    }
+  };
+
+  // Debounce breach checking to avoid too many API calls
+  useEffect(() => {
+    if (breachCheckDebounce) {
+      clearTimeout(breachCheckDebounce);
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (password && password.length >= 8) {
+        checkPasswordBreach(password);
+      } else {
+        setIsBreached(false);
+      }
+    }, 800); // Wait 800ms after user stops typing
+
+    setBreachCheckDebounce(timeoutId);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [password]);
 
   // Password strength calculation with security requirements
   const passwordStrength = useMemo(() => {
@@ -61,6 +126,14 @@ export default function Signup() {
       requirements.push({ met: true, text: 'Special character (bonus)' });
     }
     
+    // CRITICAL: If password is breached, cap score at 2 (Weak/Fair)
+    if (isBreached && password.length >= 8) {
+      score = Math.min(2, score);
+      requirements.push({ met: false, text: 'Not found in data breaches', isBreachCheck: true });
+    } else if (password.length >= 8 && !checkingBreach) {
+      requirements.push({ met: true, text: 'Not found in data breaches', isBreachCheck: true });
+    }
+    
     // Round score and cap at 5
     score = Math.min(5, Math.round(score));
     
@@ -68,7 +141,7 @@ export default function Signup() {
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
     return { score, label: labels[score], color: colors[score], requirements };
-  }, [password]);
+  }, [password, isBreached, checkingBreach]);
 
   // Check if password meets minimum requirements
   const passwordMeetsRequirements = useMemo(() => {
@@ -102,6 +175,18 @@ export default function Signup() {
       return;
     }
 
+    // Block submission if password is breached
+    if (isBreached) {
+      addToast('This password has been found in data breaches. Please choose a different password.', 'error', 6000);
+      return;
+    }
+
+    // Wait for breach check to complete if still running
+    if (checkingBreach) {
+      addToast('Checking password security...', 'info');
+      return;
+    }
+
     setLoading(true);
     const result = await signup(email, password);
     setLoading(false);
@@ -110,7 +195,18 @@ export default function Signup() {
       addToast('Account created! Welcome to Huttle.', 'success');
       navigate('/dashboard');
     } else {
-      addToast(result.error || 'Failed to create account', 'error');
+      // Check if it's a breached password error (backup server-side check)
+      const errorMessage = result.error || 'Failed to create account';
+      const isBreachedPassword = errorMessage.toLowerCase().includes('weak') || 
+                                  errorMessage.toLowerCase().includes('breach') ||
+                                  errorMessage.toLowerCase().includes('compromised') ||
+                                  errorMessage.toLowerCase().includes('guess');
+      
+      if (isBreachedPassword) {
+        addToast('This password has been found in data breaches. Please create a unique password with random words or characters.', 'error', 6000);
+      } else {
+        addToast(errorMessage, 'error');
+      }
     }
   };
 
@@ -265,23 +361,46 @@ export default function Signup() {
                   </p>
                   {/* Password requirements checklist */}
                   <div className="mt-2 space-y-1">
-                    {passwordStrength.requirements.slice(0, 4).map((req, idx) => (
+                    {passwordStrength.requirements.map((req, idx) => (
                       <div key={idx} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 rounded-full flex items-center justify-center ${
                           req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                        }`}>
-                          {req.met ? (
+                        } ${req.isBreachCheck && !req.met ? 'bg-red-100 text-red-600' : ''}`}>
+                          {checkingBreach && req.isBreachCheck ? (
+                            <Loader className="w-2 h-2 animate-spin" />
+                          ) : req.met ? (
                             <Check className="w-2 h-2" />
+                          ) : req.isBreachCheck ? (
+                            <AlertTriangle className="w-2 h-2" />
                           ) : (
                             <X className="w-2 h-2" />
                           )}
                         </div>
-                        <span className={`text-[10px] ${req.met ? 'text-green-600' : 'text-gray-500'}`}>
+                        <span className={`text-[10px] ${
+                          req.met ? 'text-green-600' : req.isBreachCheck && !req.met ? 'text-red-600 font-medium' : 'text-gray-500'
+                        }`}>
                           {req.text}
+                          {checkingBreach && req.isBreachCheck && ' (checking...)'}
                         </span>
                       </div>
                     ))}
                   </div>
+                  {/* Breach detection warning */}
+                  {isBreached && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-[10px] text-red-700 leading-relaxed font-medium">
+                        ⚠️ This password has been compromised in data breaches. Please choose a different password.
+                      </p>
+                    </div>
+                  )}
+                  {/* Breach detection info */}
+                  {!isBreached && password.length >= 8 && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                      <p className="text-[10px] text-blue-700 leading-relaxed">
+                        💡 Your password is checked against known data breaches. Use unique combinations like random words or phrases.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -319,7 +438,11 @@ export default function Signup() {
             </div>
 
             {/* Submit Button */}
-            <button type="submit" disabled={loading} className="w-full btn-primary py-3 mt-2">
+            <button 
+              type="submit" 
+              disabled={loading || checkingBreach || isBreached} 
+              className="w-full btn-primary py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
