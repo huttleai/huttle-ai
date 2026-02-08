@@ -711,6 +711,28 @@ export default function ViralBlueprint() {
         'Story': 'Story'
       };
 
+      // Check if n8n workflow is configured
+      const workflowConfigured = isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT);
+      
+      if (!workflowConfigured) {
+        console.log('[Viral Blueprint] n8n workflow not configured, using mock generator');
+        
+        // Use mock blueprint generator as fallback
+        const mockBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
+        
+        setGeneratedBlueprint(mockBlueprint);
+        
+        // Update usage
+        const newUsage = usageCount + 1;
+        setUsageCount(newUsage);
+        localStorage.setItem('viralBlueprintUsage', newUsage.toString());
+
+        showToast('Blueprint generated! (Using demo template - connect n8n for custom blueprints)', 'success');
+        setCurrentView('results');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       // Build payload for n8n webhook
       const payload = {
         topic: topic.trim(),
@@ -721,12 +743,6 @@ export default function ViralBlueprint() {
         brandVoice: 'Authentic and Authoritative',           // Hardcoded for now
         identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
       };
-
-      // Validate webhook URL is configured
-      if (!N8N_WEBHOOK_URL || N8N_WEBHOOK_URL.trim() === '') {
-        console.error('[N8N] Webhook URL is not configured');
-        throw new Error('WEBHOOK_NOT_CONFIGURED');
-      }
 
       console.log('[N8N] ====== WEBHOOK REQUEST DEBUG ======');
       console.log('[N8N] Using proxy endpoint:', N8N_WEBHOOK_URL);
@@ -876,9 +892,6 @@ export default function ViralBlueprint() {
       } else if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
         errorMessage = 'Unable to connect to n8n. Please check CORS settings and verify the webhook URL is correct.';
         console.error('[N8N] CORS/NETWORK ERROR: Cannot reach n8n webhook');
-      } else if (error.message === 'WEBHOOK_NOT_CONFIGURED') {
-        errorMessage = 'Webhook URL is not configured. Please set VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK in your .env file and restart the dev server.';
-        console.error('[N8N] CONFIGURATION ERROR: Webhook URL missing');
       }
 
       showToast(errorMessage, 'error');
