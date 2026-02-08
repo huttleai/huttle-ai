@@ -28,56 +28,31 @@ const ViralBlueprintPreview = () => (
       <span className="text-white font-semibold text-sm">Viral Blueprint</span>
     </div>
     
-    {/* Animated content generation */}
+    {/* Static content representation of actual Viral Blueprint output */}
     <div className="space-y-3">
-      <motion.div 
-        className="bg-slate-700/50 rounded-lg p-3"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <div className="text-xs text-slate-400 mb-1">Hook</div>
-        <motion.div 
-          className="h-2 bg-gradient-to-r from-cyan-400 to-blue-500 rounded"
-          initial={{ width: 0 }}
-          animate={{ width: '80%' }}
-          transition={{ delay: 0.4, duration: 0.8 }}
-        />
-      </motion.div>
-      
-      <motion.div 
-        className="bg-slate-700/50 rounded-lg p-3"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <div className="text-xs text-slate-400 mb-1">Script</div>
-        <div className="space-y-1">
-          <motion.div 
-            className="h-2 bg-white/20 rounded"
-            initial={{ width: 0 }}
-            animate={{ width: '100%' }}
-            transition={{ delay: 0.7, duration: 0.6 }}
-          />
-          <motion.div 
-            className="h-2 bg-white/20 rounded"
-            initial={{ width: 0 }}
-            animate={{ width: '70%' }}
-            transition={{ delay: 0.9, duration: 0.5 }}
-          />
+      <div>
+        <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Hook</p>
+        <p className="text-sm text-white leading-relaxed">"Stop scrolling if you want to know the truth about morning routines that actually work..."</p>
+      </div>
+      <div>
+        <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Script</p>
+        <p className="text-sm text-gray-300 leading-relaxed">"Step 1: Open with a pattern interrupt — close-up shot, slight zoom. Step 2: Present the problem everyone relates to..."</p>
+      </div>
+      <div className="flex gap-2 flex-wrap mt-2">
+        <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full">#morningroutine</span>
+        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">#productivity</span>
+        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full">#viralcontent</span>
+        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">#tiktoktips</span>
+      </div>
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-700">
+        <span className="text-xs text-gray-400">Viral Score</span>
+        <div className="flex items-center gap-2">
+          <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-[94%] h-full bg-gradient-to-r from-cyan-400 to-green-400 rounded-full"></div>
+          </div>
+          <span className="text-sm font-bold text-green-400">94</span>
         </div>
-      </motion.div>
-      
-      <motion.div 
-        className="flex gap-2"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.1 }}
-      >
-        <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs rounded-full">#trending</span>
-        <span className="px-2 py-1 bg-pink-500/20 text-pink-400 text-xs rounded-full">#viral</span>
-        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-full">#fyp</span>
-      </motion.div>
+      </div>
     </div>
     
     {/* Sparkle effects */}
@@ -95,7 +70,7 @@ const SmartCalendarPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-slate-50 to-white rounded-2xl p-4 overflow-hidden border border-slate-200">
     {/* Calendar header */}
     <div className="flex items-center justify-between mb-3">
-      <span className="font-semibold text-slate-800 text-sm">January 2026</span>
+      <span className="font-semibold text-slate-800 text-sm">February 2026</span>
       <div className="flex gap-1">
         <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center">
           <ChevronLeft size={14} className="text-slate-500" />

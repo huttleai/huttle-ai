@@ -718,12 +718,8 @@ const OrbitingPlatformsSection = () => {
           Create for every platform,<br className="hidden sm:block"/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">all in one place.</span>
         </h2>
-        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto whitespace-nowrap">
-            <WordRotate 
-              words={["TikTok,", "Instagram,", "YouTube,", "X,", "Facebook,"]} 
-              className="text-[#01bad2] font-semibold inline min-w-[90px] md:min-w-[120px] inline-block text-left"
-              duration={2000}
-            />{" "}and more. We optimize for every algorithm instantly.
+        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto">
+            TikTok. Instagram. YouTube. X. Facebook. One tool that creates content optimized for every algorithm.
           </p>
       </div>
 
@@ -778,32 +774,32 @@ const BentoGrid = () => {
     { 
       IconComponent: ViralBlueprintIcon, 
       title: "Viral Blueprint Generator", 
-      description: "AI analyzes trending content and generates complete scripts with hooks, visuals, keywords, and optimal timing." 
+      description: "Tell it your topic and platform. It researches what's trending, writes a step-by-step script with hooks, visuals, and keywords — in 30 seconds." 
     },
     { 
       IconComponent: AIPlanBuilderIcon, 
       title: "AI Plan Builder", 
-      description: "Generate complete 7-day and 14-day content calendars in seconds." 
+      description: "Get a full week of posts planned in 30 seconds. No more Sunday night scrambling." 
     },
     { 
       IconComponent: ContentRemixIcon, 
       title: "Content Remix Studio", 
-      description: "Turn one post into 5 platform-optimized variations instantly." 
+      description: "Drop in one post. Get back 5 platform-optimized versions — TikTok, Instagram, X, YouTube, Facebook." 
     },
     { 
       IconComponent: SmartCalendarIcon, 
       title: "Smart Calendar", 
-      description: "Auto-optimizes your posting times for maximum reach based on your audience." 
+      description: "AI picks the best times to post based on when your audience is actually online." 
     },
     { 
       IconComponent: CaptionGeneratorIcon, 
       title: "AI Power Tools", 
-      description: "Caption generation, hashtag generator, keyword generator, and more." 
+      description: "Caption generator, hashtag research, hook builder, CTA suggester, and keyword tools — all in one place." 
     },
     { 
       IconComponent: QualityScorerIcon, 
       title: "Quality Scorer", 
-      description: "Know your viral potential before you hit post." 
+      description: "Get a viral potential score before you hit post. See exactly what to fix to boost engagement." 
     },
   ];
 
@@ -822,7 +818,7 @@ const BentoGrid = () => {
           <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter mb-2 md:mb-4 text-slate-900">
             Your AI Creative Director.
           </h2>
-          <p className="text-xs md:text-lg lg:text-xl text-slate-500">Packed with superpowers no one else has.</p>
+          <p className="text-xs md:text-lg lg:text-xl text-slate-500">10+ AI tools that replace your content planner, trend researcher, and copywriter — for $16/month.</p>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-4">
@@ -852,9 +848,9 @@ const BentoGrid = () => {
 
 const PainPointsSection = () => {
   const painPoints = [
-    { emoji: "🤔", title: "What should I post?", text: "You stare at your phone for 30 mins, then give up and post something random." },
-    { emoji: "📉", title: "Why did that flop?", text: "You spent 3 hours creating content that got 47 views. It's demoralizing." },
-    { emoji: "😫", title: "I can't keep up", text: "TikTok wants one thing, Instagram wants another. The algorithms are exhausting." }
+    { emoji: "🤔", title: "What should I post?", text: "It's 9am. You've been staring at a blank caption for 20 minutes. You post something generic. It gets 12 likes. You wonder why you bother." },
+    { emoji: "📉", title: "Why did that flop?", text: "You spent 3 hours on a Reel. Picked the music. Edited the cuts. Wrote the caption. 47 views. Meanwhile, some guy filming his lunch gets 200K." },
+    { emoji: "😫", title: "I can't keep up", text: "TikTok wants raw. Instagram wants polished. X wants hot takes. YouTube wants long-form. You're one person trying to be four different creators." }
   ];
 
   return (
@@ -965,6 +961,10 @@ const FAQSectionComponent = () => {
     {
       question: "How does the AI understand my brand voice?",
       answer: "During onboarding, you'll complete a quick brand voice quiz that helps our AI understand your style, tone, and target audience. The more you use Huttle AI, the better it learns your unique voice and preferences."
+    },
+    {
+      question: "What happens after the 100 Founders spots fill?",
+      answer: "The price goes to $357/year. Founders pricing is locked in forever for members who join during this window. Once the spots are gone, this pricing is never coming back."
     },
   ];
 
@@ -1099,7 +1099,7 @@ const FinalCTASection = ({ onOpenWaitlist, onOpenFoundersModal }) => {
               </span>
             </h2>
             <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto mb-5 md:mb-10">
-              Join thousands of creators who've transformed their content strategy with AI-powered insights.
+              Join 312+ creators who got in early. Be one of the first 100 Founders.
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md sm:max-w-none mx-auto">
@@ -1477,7 +1477,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Feb 9</span>
+              <span className="text-sm font-bold">Early Access Feb 11</span>
             </span>
           </div>
           <button 

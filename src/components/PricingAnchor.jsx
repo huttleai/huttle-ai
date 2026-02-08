@@ -76,7 +76,7 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
                 disabled
                 className="w-full h-11 md:h-12 rounded-xl bg-slate-200 text-slate-500 font-medium text-sm cursor-not-allowed"
               >
-                Wait for February
+                View Full Price Details
               </button>
             </div>
           </div>
@@ -121,8 +121,8 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
               {/* Savings Callout */}
               <div className="mb-4 md:mb-6 p-3 md:p-4 rounded-xl bg-green-50 border border-green-100">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs md:text-sm font-medium text-green-700">You save instantly</span>
-                  <span className="text-lg md:text-xl font-black text-green-600">$221/year</span>
+                  <span className="text-xs md:text-sm font-medium text-green-700">You save</span>
+                  <span className="text-lg md:text-xl font-black text-green-600">$158/year</span>
                 </div>
               </div>
 
