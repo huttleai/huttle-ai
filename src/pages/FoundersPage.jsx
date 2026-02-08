@@ -5,6 +5,7 @@ import {
   Crown, Check, ArrowRight, Sparkles, Shield, 
   Zap, Users, Lock, X, AlertCircle
 } from 'lucide-react';
+import { supabase } from '../config/supabase';
 
 // ============================================
 // WAITLIST MODAL (Copied from LandingPage)
@@ -195,11 +196,20 @@ export default function FoundersPage() {
     }
 
     try {
+      // Build headers - include auth token if user is logged in
+      const headers = { 'Content-Type': 'application/json' };
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      } catch (e) {
+        // Continue without auth - guest checkout is supported
+      }
+
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           priceId: founderPriceId,
           planId: 'founder',

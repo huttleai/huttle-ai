@@ -74,6 +74,7 @@ export default function ContentLibrary() {
     [TIERS.FREE]: { limit: '250 MB', next: 'Pro', nextLimit: '25 GB' },
     [TIERS.ESSENTIALS]: { limit: '5 GB', next: 'Pro', nextLimit: '25 GB' },
     [TIERS.PRO]: { limit: '25 GB', next: null, nextLimit: null },
+    [TIERS.FOUNDER]: { limit: '25 GB', next: null, nextLimit: null },
   };
 
   // Load data on mount and when user changes

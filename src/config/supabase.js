@@ -88,6 +88,7 @@ export const TIERS = {
   FREE: 'free',
   ESSENTIALS: 'essentials',
   PRO: 'pro',
+  FOUNDER: 'founder',
 };
 
 // Tier limits based on Huttle AI Plans
@@ -146,22 +147,40 @@ export const TIER_LIMITS = {
     storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
+  // Founders Club: $199/year - same as Pro with lifetime benefits
+  [TIERS.FOUNDER]: {
+    aiGenerations: 800,
+    captionGenerator: true,
+    hashtagGenerator: true,
+    hookBuilder: true,
+    ctaSuggester: true,
+    qualityScorer: true,
+    visualBrainstormer: true,
+    contentRepurposer: true,
+    huttleAgent: true,
+    trendForecaster: true,
+    trendLab: true,
+    viralBlueprint: 60,
+    aiPlanBuilderDays: 14,
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
+    scheduledPostsLimit: -1, // Unlimited
+  },
 };
 
 // Feature access mapping
 export const FEATURES = {
-  'caption-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'hashtag-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'hook-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'cta-suggester': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'quality-scorer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'visual-brainstormer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO],
-  'content-repurposer': [TIERS.PRO],
-  'huttle-agent': [TIERS.PRO],
-  'trend-forecaster': [TIERS.PRO],
-  'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO],
-  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO], // Essentials: 15/month, Pro: 60/month
-  'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO], // All tiers, but different day limits
+  'caption-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'hashtag-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'hook-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'cta-suggester': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'quality-scorer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'visual-brainstormer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'content-repurposer': [TIERS.PRO, TIERS.FOUNDER],
+  'huttle-agent': [TIERS.PRO, TIERS.FOUNDER],
+  'trend-forecaster': [TIERS.PRO, TIERS.FOUNDER],
+  'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // Essentials: 15/month, Pro/Founder: 60/month
+  'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // All tiers, but different day limits
 };
 
 /**

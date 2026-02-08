@@ -2,12 +2,14 @@ import { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { supabase } from '../config/supabase';
 import { LogIn, Mail, Lock, Loader, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const { login } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -28,6 +30,26 @@ export default function Login() {
       navigate('/dashboard');
     } else {
       addToast(result.error || 'Failed to log in', 'error');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      addToast('Please enter your email address first', 'warning');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/dashboard/security`,
+      });
+      if (error) throw error;
+      addToast('Password reset email sent! Check your inbox.', 'success');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      addToast(error.message || 'Failed to send reset email', 'error');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -92,7 +114,7 @@ export default function Login() {
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
-              <p className="text-lg font-semibold text-white">Feb 5, 2026</p>
+              <p className="text-lg font-semibold text-white">Feb 11, 2026</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
@@ -146,8 +168,13 @@ export default function Login() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <button type="button" className="text-xs text-huttle-blue hover:underline font-medium">
-                  Forgot password?
+                <button 
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="text-xs text-huttle-blue hover:underline font-medium disabled:opacity-50"
+                >
+                  {resetLoading ? 'Sending...' : 'Forgot password?'}
                 </button>
               </div>
               <div className="relative">

@@ -184,6 +184,7 @@ export function SubscriptionProvider({ children }) {
       [TIERS.FREE]: 'Free',
       [TIERS.ESSENTIALS]: 'Essentials',
       [TIERS.PRO]: 'Pro',
+      [TIERS.FOUNDER]: 'Founders Club',
     };
     return names[tier] || 'Free';
   };
@@ -193,6 +194,7 @@ export function SubscriptionProvider({ children }) {
       [TIERS.FREE]: 'text-gray-600',
       [TIERS.ESSENTIALS]: 'text-huttle-primary',
       [TIERS.PRO]: 'text-purple-600',
+      [TIERS.FOUNDER]: 'text-amber-600',
     };
     return colors[tier] || 'text-gray-600';
   };

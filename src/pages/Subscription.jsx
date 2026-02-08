@@ -111,7 +111,7 @@ export default function Subscription() {
       if (result.demo) {
         // Update tier in demo mode
         if (setDemoTier) {
-          const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
+          const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO, 'founder': TIERS.FOUNDER };
           setDemoTier(tierMap[planId] || TIERS.PRO);
         }
         addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');

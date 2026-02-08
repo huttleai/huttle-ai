@@ -125,7 +125,7 @@ export default async function handler(req, res) {
     
     return res.status(200).json({
       subscription: subscription.id,
-      plan: subscription.metadata?.planId || 'essentials',
+      plan: subscription.metadata?.planId || 'freemium',
       status: subscription.status,
       currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
       cancelAtPeriodEnd: subscription.cancel_at_period_end,

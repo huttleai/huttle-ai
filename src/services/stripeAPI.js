@@ -124,6 +124,27 @@ export const SUBSCRIPTION_PLANS = {
         'Priority Email Support'
       ]
     }
+  },
+  FOUNDER: {
+    id: 'founder',
+    name: 'Founders Club',
+    monthlyPrice: null, // Annual only
+    annualPrice: 199,
+    priceId: null,
+    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || '',
+    features: {
+      aiGenerations: 800,
+      storageGB: 25,
+      features: [
+        'Everything in Pro',
+        '800 AI generations/month',
+        '25GB storage',
+        'Locked-in Founders pricing forever',
+        'All future features included',
+        'Priority support',
+        'Founders Club badge'
+      ]
+    }
   }
 };
 
