@@ -1477,7 +1477,7 @@ export default function LandingPage() {
                 animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               /> 
-              <span className="text-sm font-bold">Early Access Feb 11</span>
+              <span className="text-sm font-bold">Early Access Feb 12</span>
             </span>
           </div>
           <button 
