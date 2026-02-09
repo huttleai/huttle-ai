@@ -126,12 +126,11 @@ export default function Signup() {
       requirements.push({ met: true, text: 'Special character (bonus)' });
     }
     
-    // CRITICAL: If password is breached, cap score at 2 (Weak/Fair)
+    // Breach check is informational - doesn't affect password strength score
     if (isBreached && password.length >= 8) {
-      score = Math.min(2, score);
-      requirements.push({ met: false, text: 'Not found in data breaches', isBreachCheck: true });
+      requirements.push({ met: false, text: 'Found in known data breaches (warning)', isBreachCheck: true });
     } else if (password.length >= 8 && !checkingBreach) {
-      requirements.push({ met: true, text: 'Not found in data breaches', isBreachCheck: true });
+      requirements.push({ met: true, text: 'Not in known data breaches', isBreachCheck: true });
     }
     
     // Round score and cap at 5
@@ -143,7 +142,7 @@ export default function Signup() {
     return { score, label: labels[score], color: colors[score], requirements };
   }, [password, isBreached, checkingBreach]);
 
-  // Check if password meets minimum requirements
+  // Check if password meets minimum requirements (breach check is informational only)
   const passwordMeetsRequirements = useMemo(() => {
     return password.length >= 8 && 
            /[a-z]/.test(password) && 
@@ -164,21 +163,20 @@ export default function Signup() {
       return;
     }
 
-    // Enforce strong password policy
-    if (password.length < 8) {
-      addToast('Password must be at least 8 characters', 'error');
-      return;
-    }
-
+    // Enforce password requirements
     if (!passwordMeetsRequirements) {
-      addToast('Password must include uppercase, lowercase, and a number', 'error');
+      if (password.length < 8) {
+        addToast('Password must be at least 8 characters', 'error');
+      } else {
+        addToast('Password must include: uppercase letter, lowercase letter, and a number', 'error');
+      }
       return;
     }
 
-    // Block submission if password is breached
+    // Warning for breached passwords (doesn't block submission)
     if (isBreached) {
-      addToast('This password has been found in data breaches. Please choose a different password.', 'error', 6000);
-      return;
+      addToast('Warning: This password was found in data breaches. Consider using a more unique password.', 'warning', 5000);
+      // Continue with signup - don't block
     }
 
     // Wait for breach check to complete if still running
@@ -203,7 +201,7 @@ export default function Signup() {
                                   errorMessage.toLowerCase().includes('guess');
       
       if (isBreachedPassword) {
-        addToast('This password has been found in data breaches. Please create a unique password with random words or characters.', 'error', 6000);
+        addToast('Server rejected this password. Please try a more unique password with random words or characters.', 'error', 6000);
       } else {
         addToast(errorMessage, 'error');
       }
@@ -334,12 +332,38 @@ export default function Signup() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input pl-10"
-                  placeholder="At least 8 characters"
+                  placeholder="Create a strong password"
                   required
                   disabled={loading}
                   minLength={8}
                 />
               </div>
+              
+              {/* Password Requirements (Always visible) */}
+              {!password && (
+                <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Password must include:</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <span>At least 8 characters</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <span>One uppercase letter (A-Z)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <span>One lowercase letter (a-z)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+                      <span>One number (0-9)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Password strength indicator */}
               {password && (
                 <div className="mt-2">
@@ -365,7 +389,7 @@ export default function Signup() {
                       <div key={idx} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 rounded-full flex items-center justify-center ${
                           req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                        } ${req.isBreachCheck && !req.met ? 'bg-red-100 text-red-600' : ''}`}>
+                        } ${req.isBreachCheck && !req.met ? 'bg-yellow-100 text-yellow-600' : ''}`}>
                           {checkingBreach && req.isBreachCheck ? (
                             <Loader className="w-2 h-2 animate-spin" />
                           ) : req.met ? (
@@ -377,7 +401,7 @@ export default function Signup() {
                           )}
                         </div>
                         <span className={`text-[10px] ${
-                          req.met ? 'text-green-600' : req.isBreachCheck && !req.met ? 'text-red-600 font-medium' : 'text-gray-500'
+                          req.met ? 'text-green-600' : req.isBreachCheck && !req.met ? 'text-yellow-600 font-medium' : 'text-gray-500'
                         }`}>
                           {req.text}
                           {checkingBreach && req.isBreachCheck && ' (checking...)'}
@@ -387,17 +411,17 @@ export default function Signup() {
                   </div>
                   {/* Breach detection warning */}
                   {isBreached && (
-                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-[10px] text-red-700 leading-relaxed font-medium">
-                        ⚠️ This password has been compromised in data breaches. Please choose a different password.
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-[10px] text-yellow-800 leading-relaxed font-medium">
+                        ⚠️ Warning: This password has been found in data breaches. We recommend choosing a different one for better security.
                       </p>
                     </div>
                   )}
                   {/* Breach detection info */}
-                  {!isBreached && password.length >= 8 && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg">
-                      <p className="text-[10px] text-blue-700 leading-relaxed">
-                        💡 Your password is checked against known data breaches. Use unique combinations like random words or phrases.
+                  {!isBreached && password.length >= 8 && !checkingBreach && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-lg">
+                      <p className="text-[10px] text-green-700 leading-relaxed">
+                        ✓ Password looks good! Not found in known data breaches.
                       </p>
                     </div>
                   )}
@@ -440,13 +464,18 @@ export default function Signup() {
             {/* Submit Button */}
             <button 
               type="submit" 
-              disabled={loading || checkingBreach || isBreached} 
+              disabled={loading || checkingBreach} 
               className="w-full btn-primary py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
                   Creating account...
+                </>
+              ) : checkingBreach ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Checking password...
                 </>
               ) : (
                 <>
