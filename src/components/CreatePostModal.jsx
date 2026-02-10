@@ -575,13 +575,25 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               contentType={postData.contentType}
               currentTime={postData.scheduledTime}
               currentDate={postData.scheduledDate}
-              onSelectTime={(time) => setPostData(prev => ({ ...prev, scheduledTime: time }))}
-              onSelectDate={(date) => setPostData(prev => ({ ...prev, scheduledDate: date }))}
+              onSelectTime={(time) => {
+                if (time) {
+                  setPostData(prev => ({ ...prev, scheduledTime: time }));
+                }
+              }}
+              onSelectDate={(date) => {
+                if (date) {
+                  setPostData(prev => ({ ...prev, scheduledDate: date }));
+                  // Scroll to scheduling fields so user sees the change
+                  setTimeout(() => {
+                    document.querySelector('[data-section="scheduling"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                }
+              }}
             />
           )}
 
           {/* Scheduling */}
-          <div className="space-y-3">
+          <div className="space-y-3" data-section="scheduling">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
                 <Calendar className="w-4 h-4 text-huttle-primary" />

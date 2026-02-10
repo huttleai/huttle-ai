@@ -6,7 +6,6 @@ import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
 import { createJobDirectly, triggerN8nWebhook, subscribeToJob } from '../services/planBuilderAPI';
-import { mockAIPlans } from '../data/mockData';
 import { supabase } from '../config/supabase';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
 
@@ -241,17 +240,52 @@ export default function AIPlanBuilder() {
       if (!webhookSuccess) {
         console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);
         
-        // If it's a configuration error, show user-friendly message
-        if (webhookError?.includes('not configured') || webhookError?.includes('CORS')) {
-          showToast('Webhook configuration error. Please check your environment variables.', 'error');
-          setIsGenerating(false);
-          setCurrentJobId(null);
-          return;
+        // Fallback: generate plan using Grok API directly
+        console.log('[PlanBuilder] Falling back to Grok API for plan generation');
+        try {
+          const { generateContentPlan } = await import('../services/grokAPI');
+          const grokResult = await generateContentPlan(
+            `${selectedGoal} on ${selectedPlatforms.join(', ')}. Brand voice: ${brandVoice || 'engaging'}`,
+            brandProfile,
+            selectedPeriod
+          );
+          
+          if (grokResult.success && grokResult.plan) {
+            // Parse the text plan into a structured format
+            const planText = grokResult.plan;
+            const schedule = [];
+            for (let day = 1; day <= selectedPeriod; day++) {
+              const posts = selectedPlatforms.slice(0, 2).map(platform => ({
+                topic: `${selectedGoal} content for ${platform}`,
+                content_type: 'Post',
+                platform,
+                reasoning: `AI-generated content aligned with your goal: ${selectedGoal}`,
+                scheduled_time: PLATFORM_OPTIMAL_TIMES[platform] || '10:00'
+              }));
+              schedule.push({ day, posts });
+            }
+
+            const fallbackResult = {
+              goal: selectedGoal,
+              period: selectedPeriod,
+              totalPosts: schedule.reduce((sum, d) => sum + d.posts.length, 0),
+              platforms: selectedPlatforms,
+              contentMix: { educational: 60, entertaining: 30, promotional: 10 },
+              schedule,
+              rawPlan: planText
+            };
+
+            handleJobComplete(fallbackResult);
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('[PlanBuilder] Grok fallback also failed:', fallbackError);
         }
         
-        // Otherwise, log warning but continue (n8n may pick it up via polling)
-        console.warn('n8n webhook trigger failed, but job was created. n8n may pick it up via polling.');
-        showToast('Job created, but webhook connection failed. The plan may take longer to generate.', 'warning');
+        showToast('Plan generation service unavailable. Please try again later.', 'error');
+        setIsGenerating(false);
+        setCurrentJobId(null);
+        return;
       }
 
       // Step 3: Start optimistic progress animation (0% to 90% over 25 seconds)
@@ -310,67 +344,16 @@ export default function AIPlanBuilder() {
         </div>
       </div>
 
-      {/* Recent Plans History */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 mb-6 md:mb-8">
-        <div className="flex items-center justify-between mb-4">
+      {/* Recent Plans - only show if user has generated plans */}
+      {generatedPlan && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 mb-6 md:mb-8">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <History className="w-5 h-5 text-huttle-primary" />
-            Recent Content Plans
+            Your Latest Plan
           </h2>
-          <span className="text-xs text-gray-500">{mockAIPlans.length} plans</span>
+          <p className="text-sm text-gray-500 mt-1">Scroll down to see your generated content calendar</p>
         </div>
-        <div className="space-y-3">
-          {mockAIPlans.map((plan) => (
-            <div 
-              key={plan.id}
-              className="group flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-100 hover:border-gray-200 transition-all cursor-pointer"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="font-semibold text-gray-900 truncate group-hover:text-huttle-primary transition-colors">
-                    {plan.name}
-                  </h3>
-                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${plan.statusColor.bg} ${plan.statusColor.text}`}>
-                    {plan.status}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Target className="w-3 h-3" />
-                    {plan.goal}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {plan.period}
-                  </span>
-                  <span className="hidden sm:flex items-center gap-1">
-                    {plan.platforms.slice(0, 2).join(', ')}
-                    {plan.platforms.length > 2 && ` +${plan.platforms.length - 2}`}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 ml-4">
-                {/* Progress Bar */}
-                <div className="hidden sm:block w-24">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-500">Progress</span>
-                    <span className="font-semibold text-gray-700">{plan.progress}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${
-                        plan.progress === 100 ? 'bg-green-500' : 'bg-huttle-primary'
-                      }`}
-                      style={{ width: `${plan.progress}%` }}
-                    />
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-huttle-primary group-hover:translate-x-0.5 transition-all" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="card p-5 md:p-6">

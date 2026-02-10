@@ -181,14 +181,27 @@ export function AuthProvider({ children }) {
       try {
         if (!isMounted) return;
 
-        // Reset profile checked state when auth changes
-        setProfileChecked(false);
-        
-        if (session?.user) {
-          setUser(session.user);
-          // CRITICAL: Wait for profile check to complete
-          await checkUserProfile(session.user.id);
-        } else {
+        // TOKEN_REFRESHED events should NOT reset state or re-check profile
+        // This prevents users from being kicked to onboarding when switching tabs
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('🔄 [Auth] Token refreshed - keeping existing state');
+          if (session?.user) {
+            setUser(session.user);
+          }
+          return;
+        }
+
+        // Only reset profile state for actual auth changes (SIGNED_IN, SIGNED_OUT, etc.)
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            setUser(session.user);
+            // Only re-check profile if we haven't already checked for this user
+            if (!profileChecked || !userProfile) {
+              setProfileChecked(false);
+              await checkUserProfile(session.user.id);
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setUserProfile(null);
           setNeedsOnboarding(false);

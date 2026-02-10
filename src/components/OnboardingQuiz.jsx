@@ -51,7 +51,8 @@ const AUDIENCES = [
   { value: 'professionals', label: 'Professionals', description: 'Industry experts and leaders', icon: Briefcase },
   { value: 'entrepreneurs', label: 'Entrepreneurs', description: 'Business owners and startups', icon: Rocket },
   { value: 'students', label: 'Students', description: 'Learning-focused audience', icon: BookOpen },
-  { value: 'general', label: 'General Audience', description: 'Broad, mixed demographic', icon: Users }
+  { value: 'general', label: 'General Audience', description: 'Broad, mixed demographic', icon: Users },
+  { value: 'other', label: 'Other', description: 'Fill in details on Brand Profile page', icon: HelpCircle }
 ];
 
 // Content goals - clean teal icons
@@ -94,7 +95,8 @@ const BRAND_VOICES = [
   { value: 'professional', label: 'Professional & Polished', description: 'Formal, authoritative', icon: Briefcase },
   { value: 'humorous', label: 'Humorous & Playful', description: 'Fun, lighthearted', icon: Sparkles },
   { value: 'inspirational', label: 'Inspirational & Motivating', description: 'Uplifting, encouraging', icon: Heart },
-  { value: 'educational', label: 'Educational & Informative', description: 'Clear, instructive', icon: BookOpen }
+  { value: 'educational', label: 'Educational & Informative', description: 'Clear, instructive', icon: BookOpen },
+  { value: 'other', label: 'Other', description: 'Fill in details on Brand Profile page', icon: HelpCircle }
 ];
 
 // Industries for brands
@@ -161,11 +163,12 @@ export default function OnboardingQuiz({ onComplete }) {
   const [formData, setFormData] = useState({
     profile_type: '',
     creator_archetype: '',
+    first_name: '',
     brand_name: '',
     industry: '',
     industry_custom: '', // Custom text when "Other" is selected
     niche: '',
-    target_audience: '',
+    target_audience: [], // Multi-select, max 3
     content_goals: [],
     posting_frequency: '',
     preferred_platforms: [],
@@ -249,10 +252,16 @@ export default function OnboardingQuiz({ onComplete }) {
     const challengeStep = isCreator ? 8 : 8;
     const emotionalStep = isCreator ? 9 : 9;
     
-    // Name step validation (required)
-    if (step === nameStep && !formData.brand_name.trim()) {
-      addToast(isCreator ? 'Please enter your name or handle' : 'Please enter your brand name', 'warning');
-      return;
+    // Name step validation (first name is required, brand_name is required)
+    if (step === nameStep) {
+      if (!formData.first_name.trim()) {
+        addToast('Please enter your first name', 'warning');
+        return;
+      }
+      if (!formData.brand_name.trim()) {
+        addToast(isCreator ? 'Please enter your name or handle' : 'Please enter your brand name', 'warning');
+        return;
+      }
     }
     // Industry step - required for brands, and if "Other" is selected, require custom text
     if (step === industryStep && !isCreator) {
@@ -269,8 +278,8 @@ export default function OnboardingQuiz({ onComplete }) {
       addToast(isCreator ? 'Please select your content focus' : 'Please select your content niche', 'warning');
       return;
     }
-    if (step === audienceStep && !formData.target_audience) {
-      addToast(isCreator ? 'Please select your community' : 'Please select your target audience', 'warning');
+    if (step === audienceStep && formData.target_audience.length === 0) {
+      addToast(isCreator ? 'Please select at least one community' : 'Please select at least one target audience', 'warning');
       return;
     }
     if (step === goalsStep && formData.content_goals.length === 0) {
@@ -327,23 +336,28 @@ export default function OnboardingQuiz({ onComplete }) {
       const userId = userData.user.id;
       console.log('Saving profile for user:', userId);
 
-      // Prepare complete profile data with all fields
+      // Helper to capitalize first letter
+      const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+      const capitalizeArray = (arr) => Array.isArray(arr) ? arr.map(capitalize) : arr;
+      
+      // Prepare complete profile data with all fields (capitalize selections)
       const profileData = {
         user_id: userId,
+        first_name: formData.first_name.trim(),
         profile_type: formData.profile_type,
-        creator_archetype: formData.creator_archetype || null,
+        creator_archetype: formData.creator_archetype ? capitalize(formData.creator_archetype) : null,
         brand_name: formData.brand_name || null,
-        industry: formData.industry === 'other' && formData.industry_custom ? formData.industry_custom.trim() : (formData.industry || null),
-        niche: formData.niche,
-        target_audience: formData.target_audience,
-        content_goals: formData.content_goals,
-        posting_frequency: formData.posting_frequency,
-        preferred_platforms: formData.preferred_platforms,
-        brand_voice_preference: formData.brand_voice_preference,
+        industry: formData.industry === 'other' && formData.industry_custom ? capitalize(formData.industry_custom.trim()) : (formData.industry ? capitalize(formData.industry) : null),
+        niche: capitalize(formData.niche),
+        target_audience: capitalizeArray(formData.target_audience),
+        content_goals: capitalizeArray(formData.content_goals),
+        posting_frequency: capitalize(formData.posting_frequency),
+        preferred_platforms: capitalizeArray(formData.preferred_platforms),
+        brand_voice_preference: capitalize(formData.brand_voice_preference),
         // New viral content strategy fields
-        content_strengths: formData.content_strengths,
-        biggest_challenge: formData.biggest_challenge || null,
-        emotional_triggers: formData.emotional_triggers,
+        content_strengths: capitalizeArray(formData.content_strengths),
+        biggest_challenge: formData.biggest_challenge ? capitalize(formData.biggest_challenge) : null,
+        emotional_triggers: capitalizeArray(formData.emotional_triggers),
         quiz_completed_at: new Date().toISOString(),
         onboarding_step: totalSteps
       };
@@ -367,6 +381,7 @@ export default function OnboardingQuiz({ onComplete }) {
 
       // Update local brand context with all quiz data
       updateBrandData({
+        firstName: formData.first_name.trim(),
         profileType: formData.profile_type,
         creatorArchetype: formData.creator_archetype || '',
         brandName: formData.brand_name || '',
@@ -506,29 +521,54 @@ export default function OnboardingQuiz({ onComplete }) {
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            {isCreator ? "What's your name or handle?" : "What's your brand name?"}
+            Let's get to know you
           </h2>
           <p className="text-slate-500 mb-6">
             {isCreator ? 'This is how we\'ll personalize your experience' : 'This helps us personalize AI-generated content for your brand'}
           </p>
           
-          <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                {isCreator ? <AtSign className="w-5 h-5 text-slate-400" /> : <Building2 className="w-5 h-5 text-slate-400" />}
+          <div className="space-y-5">
+            {/* First Name (required) */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="w-5 h-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="e.g., Sarah"
+                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                  autoFocus
+                />
               </div>
-              <input
-                type="text"
-                value={formData.brand_name}
-                onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
-                className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
-                autoFocus
-              />
             </div>
-            <p className="text-sm text-slate-400 text-center">
-              {isCreator ? 'AI will write content in first person as you' : 'AI will write content on behalf of your brand'}
-            </p>
+
+            {/* Brand Name / Handle */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {isCreator ? 'Your Name or Handle' : 'Brand Name'} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  {isCreator ? <AtSign className="w-5 h-5 text-slate-400" /> : <Building2 className="w-5 h-5 text-slate-400" />}
+                </div>
+                <input
+                  type="text"
+                  value={formData.brand_name}
+                  onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                  placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
+                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                />
+              </div>
+              <p className="text-sm text-slate-400 mt-1">
+                {isCreator ? 'AI will write content in first person as you' : 'AI will write content on behalf of your brand'}
+              </p>
+            </div>
           </div>
         </div>
       );
@@ -647,30 +687,58 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Audience step
+    // Audience step - multi-select, max 3
     const audienceStep = isCreator ? 5 : 5;
     if (step === audienceStep) {
+      const maxAudience = 3;
+      const selectedCount = formData.target_audience.length;
+      
+      const handleAudienceToggle = (value) => {
+        setFormData(prev => {
+          const current = prev.target_audience;
+          if (current.includes(value)) {
+            return { ...prev, target_audience: current.filter(v => v !== value) };
+          }
+          if (current.length >= maxAudience) {
+            addToast(`Maximum ${maxAudience} selections allowed`, 'warning');
+            return prev;
+          }
+          return { ...prev, target_audience: [...current, value] };
+        });
+      };
+      
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
             {isCreator ? "Who's your community?" : "Who's your target audience?"}
           </h2>
-          <p className="text-slate-500 mb-6">
-            {isCreator ? 'Select who you want to connect with' : 'Select the primary demographic you want to reach'}
-          </p>
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-slate-500">
+              {isCreator ? 'Select up to 3 communities' : 'Select up to 3 demographics'}
+            </p>
+            <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+              selectedCount === maxAudience ? 'bg-huttle-primary/10 text-huttle-primary' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {selectedCount}/{maxAudience} selected
+            </span>
+          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {AUDIENCES.map(audience => {
               const Icon = audience.icon;
-              const isSelected = formData.target_audience === audience.value;
+              const isSelected = formData.target_audience.includes(audience.value);
+              const isDisabled = !isSelected && selectedCount >= maxAudience;
               return (
                 <button
                   key={audience.value}
-                  onClick={() => setFormData({ ...formData, target_audience: audience.value })}
+                  onClick={() => handleAudienceToggle(audience.value)}
+                  disabled={isDisabled}
                   className={`group flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                      : isDisabled
+                        ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${

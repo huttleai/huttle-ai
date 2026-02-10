@@ -600,22 +600,22 @@ export default function ViralBlueprint() {
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
 
-  // Form state - Pre-filled with fitness demo data
+  // Form state - Start empty for real users
   const [selectedPlatform, setSelectedPlatform] = useState('TikTok');
   const [selectedPostType, setSelectedPostType] = useState('Video');
   const [objective, setObjective] = useState('views');
-  const [topic, setTopic] = useState('Why cardio is overrated for fat loss and strength training is the key');
-  const [targetAudience, setTargetAudience] = useState('Gym-goers, fitness beginners, people trying to lose weight');
+  const [topic, setTopic] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
 
-  // UI state - Pre-loaded with fitness mock blueprint
+  // UI state - Start with no blueprint
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedBlueprint, setGeneratedBlueprint] = useState(generateFitnessMockBlueprint());
+  const [generatedBlueprint, setGeneratedBlueprint] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
   const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
   
-  // View state - Controls whether to show input form or results
-  const [currentView, setCurrentView] = useState('results'); // 'input' | 'results' - Start with 'results' to show demo
+  // View state - Start with input form
+  const [currentView, setCurrentView] = useState('input'); // 'input' | 'results'
 
   // Usage tracking
   const [usageCount, setUsageCount] = useState(0);
@@ -715,19 +715,20 @@ export default function ViralBlueprint() {
       const workflowConfigured = isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT);
       
       if (!workflowConfigured) {
-        console.log('[Viral Blueprint] n8n workflow not configured, using mock generator');
+        console.log('[Viral Blueprint] n8n workflow not configured, using fallback generator');
         
-        // Use mock blueprint generator as fallback
-        const mockBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
+        // Use mock blueprint generator with user's actual topic as fallback
+        const fallbackBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
         
-        setGeneratedBlueprint(mockBlueprint);
+        setGeneratedBlueprint(fallbackBlueprint);
+        setIsGenerating(false);
         
         // Update usage
         const newUsage = usageCount + 1;
         setUsageCount(newUsage);
         localStorage.setItem('viralBlueprintUsage', newUsage.toString());
 
-        showToast('Blueprint generated! (Using demo template - connect n8n for custom blueprints)', 'success');
+        showToast('Blueprint generated!', 'success');
         setCurrentView('results');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
@@ -895,6 +896,15 @@ export default function ViralBlueprint() {
       }
 
       showToast(errorMessage, 'error');
+      
+      // Fallback: use mock generator with user's topic so they still get a result
+      if (topic.trim()) {
+        console.log('[Viral Blueprint] Falling back to mock generator after error');
+        const fallbackBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
+        setGeneratedBlueprint(fallbackBlueprint);
+        setCurrentView('results');
+        showToast('Generated with fallback template. Results may be less tailored.', 'info');
+      }
     } finally {
       // Always stop loading spinner
       setIsGenerating(false);

@@ -4,6 +4,7 @@ import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { generateWithN8n } from '../services/n8nGeneratorAPI';
+import { remixContentWithMode } from '../services/grokAPI';
 import { getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RemixContentDisplay from '../components/RemixContentDisplay';
@@ -74,18 +75,38 @@ export default function ContentRemix() {
         const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
         showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
       } else {
-        let errorMessage = 'Failed to remix content';
-        if (result.errorType === 'TIMEOUT') {
-          errorMessage = 'AI generation took too long. Please try again with shorter content.';
-        } else if (result.errorType === 'NETWORK') {
-          errorMessage = 'Connection failed. Please check your internet.';
-        } else if (result.error) {
-          errorMessage = result.error;
+        // n8n failed - try Grok API fallback
+        console.warn('n8n remix failed, falling back to Grok API:', result.error);
+        const grokResult = await remixContentWithMode(remixInput, brandData, remixMode);
+        if (grokResult.success && grokResult.remixed) {
+          setRemixOutput(grokResult.remixed);
+          const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
+          showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
+        } else {
+          let errorMessage = 'Failed to remix content';
+          if (result.errorType === 'TIMEOUT') {
+            errorMessage = 'AI generation took too long. Please try again with shorter content.';
+          } else if (result.errorType === 'NETWORK') {
+            errorMessage = 'Connection failed. Please check your internet.';
+          } else if (result.error) {
+            errorMessage = result.error;
+          }
+          showToast(errorMessage, 'error');
         }
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Error remixing content:', error);
+      // Final fallback to Grok API
+      try {
+        const grokResult = await remixContentWithMode(remixInput, brandData, remixMode);
+        if (grokResult.success && grokResult.remixed) {
+          setRemixOutput(grokResult.remixed);
+          showToast(`Content remixed! ${getToastDisclaimer('remix')}`, 'success');
+          return;
+        }
+      } catch (grokError) {
+        console.error('Grok fallback also failed:', grokError);
+      }
       showToast('Error remixing content. Please try again.', 'error');
     } finally {
       setIsLoading(false);

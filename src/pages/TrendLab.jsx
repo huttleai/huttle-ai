@@ -99,8 +99,9 @@ export default function TrendLab() {
   // ==========================================================================
   const handleForecastTrends = async () => {
     // Check if user has access to trend forecasts
-    if (!checkFeatureAccess('trendForecasts')) {
-      showToast(getUpgradeMessage('trendForecasts'), 'warning');
+    if (!checkFeatureAccess('trendForecaster')) {
+      setUpgradeFeature('trend-forecaster');
+      setShowUpgradeModal(true);
       return;
     }
 
@@ -111,35 +112,57 @@ export default function TrendLab() {
 
     setIsLoadingForecaster(true);
     try {
-      // TODO: N8N_WORKFLOW - Check workflow availability first
-      // Current implementation: Perplexity + Grok API fallback
+      // Try Perplexity API first, then fall back to Grok API
+      let forecastText = '';
+      let citations = [];
+      let postIdeasText = '';
       
-      // Get trend forecast from Perplexity API with full brand context
-      const perplexityResult = await forecastTrends(
-        brandData, 
-        '7 days'
-      );
-
-      if (perplexityResult.success) {
-        // Enhance with Grok API for actionable post ideas
-        const grokResult = await generateTrendIdeas(
+      try {
+        const perplexityResult = await forecastTrends(brandData, '7 days');
+        if (perplexityResult.success) {
+          forecastText = perplexityResult.forecast;
+          citations = perplexityResult.citations || [];
+        }
+      } catch (perplexityError) {
+        console.warn('Perplexity API failed, falling back to Grok:', perplexityError);
+      }
+      
+      // If Perplexity failed, try Grok API as fallback
+      if (!forecastText) {
+        const grokFallback = await generateTrendIdeas(
           brandData,
-          `Create 3 tailored post ideas based on these emerging trends: ${perplexityResult.forecast.substring(0, 500)}... Match the ${brandData.brandVoice || 'engaging'} brand voice.`
+          `Provide a 7-day trend forecast for ${brandData?.niche || 'social media'} content. Include emerging trends, predicted growth, and actionable insights.`
         );
+        if (grokFallback.success) {
+          forecastText = grokFallback.ideas;
+        }
+      }
+      
+      if (forecastText) {
+        // Enhance with Grok API for actionable post ideas
+        try {
+          const grokResult = await generateTrendIdeas(
+            brandData,
+            `Create 3 tailored post ideas based on these emerging trends: ${forecastText.substring(0, 500)}... Match the ${brandData.brandVoice || 'engaging'} brand voice.`
+          );
+          postIdeasText = grokResult.success ? grokResult.ideas : '';
+        } catch (grokError) {
+          console.warn('Grok post ideas failed:', grokError);
+        }
 
         setTrendForecast({
-          rawForecast: perplexityResult.forecast,
-          postIdeas: grokResult.success ? grokResult.ideas : 'Unable to generate post ideas at this time.',
-          citations: perplexityResult.citations,
-          timeline: parseTrendTimeline(perplexityResult.forecast)
+          rawForecast: forecastText,
+          postIdeas: postIdeasText || 'Unable to generate post ideas at this time. Please try again.',
+          citations,
+          timeline: parseTrendTimeline(forecastText)
         });
         showToast(`Trend forecast generated! ${getToastDisclaimer('forecast')}`, 'success');
       } else {
-        showToast('Failed to fetch trend forecast', 'error');
+        showToast('Failed to fetch trend forecast. Please check your API configuration.', 'error');
       }
     } catch (error) {
       console.error('Forecast error:', error);
-      showToast('Error generating forecast', 'error');
+      showToast('Error generating forecast. Please try again.', 'error');
     } finally {
       setIsLoadingForecaster(false);
     }
@@ -275,15 +298,39 @@ export default function TrendLab() {
 
     setLoadingStates(prev => ({ ...prev, audienceInsight: true }));
     try {
-      // Call real Perplexity API for audience insights
-      const result = await getAudienceInsights(brandData);
+      let insightsText = '';
       
-      if (result.success) {
-        const parsedData = parseAudienceResponse(result.insights);
+      // Try Perplexity API first
+      try {
+        const result = await getAudienceInsights(brandData);
+        if (result.success) {
+          insightsText = result.insights;
+        }
+      } catch (perplexityError) {
+        console.warn('Perplexity audience insights failed, trying Grok:', perplexityError);
+      }
+      
+      // Fallback to Grok API
+      if (!insightsText) {
+        try {
+          const grokResult = await generateTrendIdeas(
+            brandData,
+            `Analyze the target audience for ${brandData?.niche || 'social media'} content. Include demographics, peak activity times, preferred platforms, top content topics, and engagement patterns.`
+          );
+          if (grokResult.success) {
+            insightsText = grokResult.ideas;
+          }
+        } catch (grokError) {
+          console.warn('Grok audience fallback also failed:', grokError);
+        }
+      }
+      
+      if (insightsText) {
+        const parsedData = parseAudienceResponse(insightsText);
         setAudienceData(parsedData);
         showToast(`Audience insights loaded! ${getToastDisclaimer('general')}`, 'success');
       } else {
-        showToast('Failed to load audience insights. Please try again.', 'error');
+        showToast('Failed to load audience insights. Please check your API configuration.', 'error');
       }
     } catch (error) {
       console.error('Error fetching audience insights:', error);

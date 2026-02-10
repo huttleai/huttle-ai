@@ -7,6 +7,7 @@ import {
   updateScheduledPost as updateScheduledPostDB,
   deleteScheduledPost as deleteScheduledPostDB,
   getUserPreferences,
+  saveContentLibraryItem,
 } from '../config/supabase';
 import { mockScheduledPosts } from '../data/mockData';
 
@@ -376,6 +377,37 @@ export function ContentProvider({ children }) {
     timezone: post.timezone,
   });
 
+  // Save content to Supabase Content Library
+  const saveToLibrary = async (itemData) => {
+    if (!user?.id) {
+      addToast('Please log in to save content', 'error');
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      const result = await saveContentLibraryItem(user.id, {
+        name: itemData.name || `Content - ${new Date().toLocaleDateString()}`,
+        type: itemData.type || 'text',
+        content: typeof itemData.content === 'string' ? itemData.content : JSON.stringify(itemData.content),
+        size_bytes: itemData.size_bytes || 0,
+        description: itemData.description || '',
+        project_id: itemData.project_id || null,
+      });
+
+      if (result.success) {
+        addToast('Saved to Content Library!', 'success');
+        return result;
+      } else {
+        addToast('Failed to save to library: ' + (result.error || 'Unknown error'), 'error');
+        return result;
+      }
+    } catch (error) {
+      console.error('Error saving to library:', error);
+      addToast('Error saving to library', 'error');
+      return { success: false, error: error.message };
+    }
+  };
+
   // Save generated content for later use (keep in localStorage for now)
   const saveGeneratedContent = (content) => {
     const newContent = {
@@ -447,6 +479,7 @@ export function ContentProvider({ children }) {
         syncing,
         userTimezone,
         saveGeneratedContent,
+        saveToLibrary,
         loadSavedContent,
         deleteSavedContent,
         getContentById,

@@ -19,15 +19,35 @@ import {
   Repeat,
   Flame
 } from 'lucide-react';
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { logout } = useContext(AuthContext);
+  const { userTier, TIERS, TIER_LIMITS, usage, refreshUsage, getFeatureLimit } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [aiUsed, setAiUsed] = useState(0);
+  const [aiLimit, setAiLimit] = useState(20);
+
+  // Fetch AI usage on mount and when tier changes
+  useEffect(() => {
+    const limit = getFeatureLimit ? getFeatureLimit('aiGenerations') : (TIER_LIMITS?.[userTier?.toUpperCase?.()]?.aiGenerations ?? 20);
+    setAiLimit(limit === Infinity ? 999 : limit);
+    
+    if (refreshUsage) {
+      refreshUsage('aiGenerations').then(remaining => {
+        if (typeof remaining === 'number') {
+          setAiUsed(Math.max(0, limit - remaining));
+        }
+      }).catch(() => {});
+    } else if (usage?.aiGenerations !== undefined) {
+      setAiUsed(Math.max(0, limit - usage.aiGenerations));
+    }
+  }, [userTier, usage, refreshUsage, getFeatureLimit, TIER_LIMITS]);
 
   const handleLogout = async () => {
     try {
@@ -217,8 +237,95 @@ export default function Sidebar() {
             ))}
           </nav>
 
+          {/* AI Meter */}
+          <div className="mt-auto pt-4">
+            {(() => {
+              // For Founders and Builders (future), cap at 800/month
+              const isPremiumTier = userTier === TIERS.FOUNDER || userTier === TIERS.PRO || userTier === 'builder';
+              const displayLimit = isPremiumTier ? 800 : aiLimit;
+              
+              const percentage = displayLimit > 0 ? Math.round((aiUsed / displayLimit) * 100) : 0;
+              const isAmber = percentage >= 80 && percentage < 100;
+              const isRed = percentage >= 100;
+              
+              const barColor = isRed 
+                ? 'bg-red-500' 
+                : isAmber 
+                  ? 'bg-amber-500' 
+                  : 'bg-huttle-primary';
+              
+              const bgColor = isRed
+                ? 'bg-red-50 border-red-200'
+                : isAmber
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-gray-50 border-gray-200';
+                  
+              const textColor = isRed
+                ? 'text-red-700'
+                : isAmber
+                  ? 'text-amber-700'
+                  : 'text-gray-700';
+
+              return (
+                <div className={`rounded-xl border p-3 mb-3 ${bgColor}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className={`w-3.5 h-3.5 ${isRed ? 'text-red-500' : isAmber ? 'text-amber-500' : 'text-huttle-primary'}`} />
+                      <span className="text-xs font-bold text-gray-700">AI Meter</span>
+                    </div>
+                    <span className={`text-xs font-bold ${textColor}`}>
+                      {aiUsed}/{displayLimit}
+                    </span>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                      style={{ width: `${Math.min(percentage, 100)}%` }}
+                    />
+                  </div>
+                  
+                  {/* Warning messages - only show upgrade for non-premium tiers */}
+                  {!isPremiumTier && isRed && (
+                    <p className="text-xs text-red-600 font-medium mt-2">
+                      Limit reached.{' '}
+                      <button 
+                        onClick={() => { navigate('/dashboard/subscription'); setIsMobileOpen(false); }}
+                        className="underline hover:text-red-800 font-bold"
+                      >
+                        Upgrade now
+                      </button>
+                    </p>
+                  )}
+                  {!isPremiumTier && isAmber && !isRed && (
+                    <p className="text-xs text-amber-600 font-medium mt-2">
+                      Running low.{' '}
+                      <button 
+                        onClick={() => { navigate('/dashboard/subscription'); setIsMobileOpen(false); }}
+                        className="underline hover:text-amber-800"
+                      >
+                        Upgrade
+                      </button>
+                    </p>
+                  )}
+                  {isPremiumTier && isRed && (
+                    <p className="text-xs text-red-600 font-medium mt-2">
+                      Monthly limit reached. Resets next billing cycle.
+                    </p>
+                  )}
+                  {isPremiumTier && isAmber && !isRed && (
+                    <p className="text-xs text-amber-600 font-medium mt-2">
+                      Running low on AI generations this month.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Logout Button */}
-          <div className="mt-auto pt-6">
+          <div className="pt-2">
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group"

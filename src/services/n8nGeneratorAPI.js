@@ -148,11 +148,7 @@ export async function generateWithN8n(payload) {
       const details = errorData.details || '';
       console.error('❌ [Frontend] Error data:', errorData);
       
-      // Show browser alert with error details
-      const fullErrorMessage = details 
-        ? `${errorMessage}\n\nDetails: ${details}`
-        : errorMessage;
-      alert(`🚨 API Error (Status ${response.status}):\n\n${fullErrorMessage}`);
+      console.error(`API Error (Status ${response.status}):`, errorMessage, details);
       
       // Track failure
       await trackAIAnalytics({
@@ -222,9 +218,7 @@ export async function generateWithN8n(payload) {
       console.error('❌ [Frontend] Error type: UNKNOWN');
     }
     
-    // Show browser alert with raw error message
-    const errorAlertMessage = `🚨 Frontend Error:\n\nType: ${errorType}\n\nError: ${error.message}\n\nName: ${error.name}`;
-    alert(errorAlertMessage);
+    console.error(`[n8n] Frontend Error - Type: ${errorType}, Error: ${error.message}`);
     
     // Track failure
     await trackAIAnalytics({

@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useMemo } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 import { Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile, PenTool, Heart, Search, Info, Eye, TrendingUp, Calendar, MessageSquare, Lightbulb, Clock, AlertCircle, HelpCircle, Rocket, Target, Zap, Users } from 'lucide-react';
-import AIVoicePreview from '../components/AIVoicePreview';
+// AIVoicePreview removed per requirements
 
 // Profile types
 const PROFILE_TYPES = [
@@ -93,9 +93,11 @@ export default function BrandVoice() {
   const { addToast } = useToast();
   
   const [formData, setFormData] = useState({
+    firstName: brandData?.firstName || '',
     profileType: brandData?.profileType || 'brand',
     creatorArchetype: brandData?.creatorArchetype || '',
     brandName: brandData?.brandName || '',
+    socialHandle: brandData?.socialHandle || '',
     niche: brandData?.niche || '',
     industry: brandData?.industry || '',
     targetAudience: brandData?.targetAudience || '',
@@ -114,9 +116,11 @@ export default function BrandVoice() {
   useEffect(() => {
     if (brandData) {
       setFormData({
+        firstName: brandData.firstName || '',
         profileType: brandData.profileType || 'brand',
         creatorArchetype: brandData.creatorArchetype || '',
         brandName: brandData.brandName || '',
+        socialHandle: brandData.socialHandle || '',
         niche: brandData.niche || '',
         industry: brandData.industry || '',
         targetAudience: brandData.targetAudience || '',
@@ -134,9 +138,11 @@ export default function BrandVoice() {
   // Track unsaved changes
   useEffect(() => {
     const hasChanges = JSON.stringify(formData) !== JSON.stringify({
+      firstName: brandData?.firstName || '',
       profileType: brandData?.profileType || 'brand',
       creatorArchetype: brandData?.creatorArchetype || '',
       brandName: brandData?.brandName || '',
+      socialHandle: brandData?.socialHandle || '',
       niche: brandData?.niche || '',
       industry: brandData?.industry || '',
       targetAudience: brandData?.targetAudience || '',
@@ -156,8 +162,9 @@ export default function BrandVoice() {
   // Calculate profile completeness
   const completeness = useMemo(() => {
     const fields = [
+      { key: 'firstName', weight: 10, filled: !!formData.firstName },
       { key: 'profileType', weight: 8, filled: !!formData.profileType },
-      { key: 'brandName', weight: 15, filled: !!formData.brandName },
+      { key: 'brandName', weight: 12, filled: !!formData.brandName },
       { key: 'niche', weight: 10, filled: !!formData.niche },
       { key: 'industry', weight: 8, filled: !!formData.industry },
       { key: 'targetAudience', weight: 10, filled: !!formData.targetAudience },
@@ -181,6 +188,10 @@ export default function BrandVoice() {
   }, [formData, isCreator]);
 
   const handleSave = () => {
+    if (!formData.firstName.trim()) {
+      addToast('First name is required', 'warning');
+      return;
+    }
     updateBrandData(formData);
     setHasUnsavedChanges(false);
     addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
@@ -188,9 +199,11 @@ export default function BrandVoice() {
 
   const handleReset = () => {
     const resetData = {
+      firstName: '',
       profileType: 'brand',
       creatorArchetype: '',
       brandName: '',
+      socialHandle: '',
       niche: '',
       industry: '',
       targetAudience: '',
@@ -417,7 +430,26 @@ export default function BrandVoice() {
         {/* Main Form */}
         <div className="card p-6 mb-6">
           <div className="space-y-6">
-            {/* Name */}
+            {/* First Name (required) */}
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                placeholder="e.g., Sarah"
+                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm ${
+                  !formData.firstName.trim() ? 'border-red-200' : 'border-gray-200'
+                }`}
+              />
+              {!formData.firstName.trim() && (
+                <p className="text-xs text-red-500 mt-1">First name is required</p>
+              )}
+            </div>
+
+            {/* Brand Name / Handle */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
                 {labels.nameLabel}
@@ -427,6 +459,20 @@ export default function BrandVoice() {
                 value={formData.brandName}
                 onChange={(e) => setFormData(prev => ({ ...prev, brandName: e.target.value }))}
                 placeholder={labels.namePlaceholder}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+              />
+            </div>
+
+            {/* Social Media Handle (optional) */}
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
+                Social Media Handle <span className="text-gray-400 font-normal normal-case">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={formData.socialHandle}
+                onChange={(e) => setFormData(prev => ({ ...prev, socialHandle: e.target.value }))}
+                placeholder="e.g., @sarahcreates"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
               />
             </div>
@@ -722,11 +768,6 @@ export default function BrandVoice() {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* AI Voice Preview */}
-        <div className="mb-6">
-          <AIVoicePreview brandData={formData} isCreator={isCreator} />
         </div>
 
         {/* How This Helps */}

@@ -2,6 +2,7 @@ import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { createCheckoutSession } from '../services/stripeAPI';
 import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, AlertTriangle } from 'lucide-react';
 
 export default function Signup() {
@@ -225,8 +226,19 @@ export default function Signup() {
     setLoading(false);
 
     if (result.success) {
-      addToast('Account created! Welcome to Huttle.', 'success');
-      navigate('/dashboard');
+      addToast('Account created! Redirecting to payment...', 'success');
+      // Redirect to Stripe Checkout for Founders Club payment
+      try {
+        const checkoutResult = await createCheckoutSession('founder', 'annual');
+        if (checkoutResult.success && checkoutResult.url) {
+          window.location.href = checkoutResult.url;
+          return;
+        }
+      } catch (stripeError) {
+        console.error('Stripe checkout error:', stripeError);
+      }
+      // Fallback: send to subscription page if Stripe redirect fails
+      navigate('/dashboard/subscription');
     } else {
       const errorMessage = result.error || 'Failed to create account';
 

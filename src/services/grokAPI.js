@@ -148,9 +148,9 @@ Number them 1-5 with brief descriptions.`
 }
 
 export async function generateCaption(contentData, brandData) {
-  // Check if demo mode is enabled - return mock data immediately
-  if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock captions');
+  // Check if demo mode is enabled AND no real topic provided - return mock data
+  if (isDemoMode() && !contentData.topic?.trim()) {
+    console.log('[Demo Mode] Generating mock captions (no topic provided)');
     await simulateDelay(1000, 2000);
     const length = contentData.length || 'medium';
     const mockCaptions = getCaptionMocks(length, 4);
@@ -210,16 +210,19 @@ Number them 1-4. Each caption should have a different hook approach.`
   } catch (error) {
     console.error('Grok API Error:', error);
     
-    // Fallback to demo data on error
-    console.log('[Fallback] Using mock captions due to API error');
-    await simulateDelay(500, 1000);
-    const length = contentData.length || 'medium';
-    const mockCaptions = getCaptionMocks(length, 4);
+    // Fallback: generate simple captions using the user's actual topic
+    const topic = contentData.topic || 'your content';
+    const fallbackCaptions = [
+      `1. Discover the amazing world of ${topic}! Ready to transform your approach? Let us show you how.`,
+      `2. Everything you need to know about ${topic} starts here. Follow for more insights!`,
+      `3. ${topic} has never been more exciting! Here's why you should pay attention right now.`,
+      `4. Want to master ${topic}? Save this post and share it with someone who needs to see it!`
+    ];
     return {
       success: true,
-      caption: mockCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n\n'),
+      caption: fallbackCaptions.join('\n\n'),
       usage: { fallback: true },
-      note: 'Using demo content due to API unavailability'
+      note: 'Using fallback content due to API unavailability'
     };
   }
 }
@@ -326,9 +329,9 @@ Make sure all content aligns with the brand voice and appeals to the target audi
 }
 
 export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram') {
-  // Check if demo mode is enabled - return mock data immediately
-  if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock hooks');
+  // Check if demo mode is enabled AND no real input - return mock data
+  if (isDemoMode() && !input?.trim()) {
+    console.log('[Demo Mode] Generating mock hooks (no input provided)');
     await simulateDelay(800, 1500);
     const mockHooks = getHookMocks(theme, 4);
     return {
@@ -389,23 +392,26 @@ Number them 1-4. Vary the approach for each hook.`
   } catch (error) {
     console.error('Grok API Error:', error);
     
-    // Fallback to demo data on error
-    console.log('[Fallback] Using mock hooks due to API error');
-    await simulateDelay(500, 800);
-    const mockHooks = getHookMocks(theme, 4);
+    // Fallback: generate hooks using the user's actual input
+    const fallbackHooks = [
+      `1. What if everything you knew about ${input} was wrong?`,
+      `2. Stop scrolling — this changes everything about ${input}.`,
+      `3. I tried ${input} for 30 days. Here's what happened...`,
+      `4. The truth about ${input} that nobody talks about.`
+    ];
     return {
       success: true,
-      hooks: mockHooks.map((h, i) => `${i + 1}. ${h.text}`).join('\n'),
+      hooks: fallbackHooks.join('\n'),
       usage: { fallback: true },
-      note: 'Using demo hooks due to API unavailability'
+      note: 'Using fallback hooks due to API unavailability'
     };
   }
 }
 
 export async function generateCTAs(goal, brandData, platform = 'instagram') {
-  // Check if demo mode is enabled - return mock data immediately
-  if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock CTAs');
+  // Check if demo mode is enabled AND no real goal - return mock data
+  if (isDemoMode() && !goal?.trim()) {
+    console.log('[Demo Mode] Generating mock CTAs (no goal provided)');
     await simulateDelay(800, 1500);
     const mockCTAs = getCTAMocks(goal, 5);
     return {
@@ -465,23 +471,27 @@ Number them 1-5. Include a brief explanation of why each CTA works for ${platfor
   } catch (error) {
     console.error('Grok API Error:', error);
     
-    // Fallback to demo data on error
-    console.log('[Fallback] Using mock CTAs due to API error');
-    await simulateDelay(500, 800);
-    const mockCTAs = getCTAMocks(goal, 5);
+    // Fallback: generate CTAs using the user's actual goal
+    const fallbackCTAs = [
+      `1. Ready to ${goal}? Comment "YES" below and let's make it happen!`,
+      `2. Want to ${goal}? Tap the link in bio to get started today.`,
+      `3. Don't wait to ${goal} — save this post and take action NOW.`,
+      `4. Share this with someone who wants to ${goal} too!`,
+      `5. Drop a comment if you're serious about ${goal} — we'll help you get there.`
+    ];
     return {
       success: true,
-      ctas: mockCTAs.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+      ctas: fallbackCTAs.join('\n'),
       usage: { fallback: true },
-      note: 'Using demo CTAs due to API unavailability'
+      note: 'Using fallback CTAs due to API unavailability'
     };
   }
 }
 
 export async function generateHashtags(input, brandData, platform = 'instagram') {
-  // Check if demo mode is enabled - return mock data immediately
-  if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock hashtags');
+  // Check if demo mode is enabled AND no real input - return mock data
+  if (isDemoMode() && !input?.trim()) {
+    console.log('[Demo Mode] Generating mock hashtags (no input provided)');
     await simulateDelay(800, 1500);
     const hashtagGuidelines = getHashtagGuidelines(platform);
     const hashtagCount = hashtagGuidelines?.max || 10;
@@ -551,18 +561,22 @@ Return exactly ${hashtagCount} hashtags ranked by engagement potential. For each
   } catch (error) {
     console.error('Grok API Error:', error);
     
-    // Fallback to demo data on error
-    console.log('[Fallback] Using mock hashtags due to API error');
-    await simulateDelay(500, 800);
-    const hashtagGuidelines = getHashtagGuidelines(platform);
-    const hashtagCount = hashtagGuidelines?.max || 10;
-    const mockHashtags = getHashtagMocks(hashtagCount);
+    // Fallback: generate hashtags from the user's actual input
+    const words = (input || 'content').split(/\s+/).filter(w => w.length > 2);
+    const baseTag = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('');
+    const fallbackHashtags = [
+      { tag: `#${baseTag}`, score: 90, posts: '1.2M' },
+      { tag: `#${words[0] || 'Content'}Tips`, score: 85, posts: '800K' },
+      { tag: `#${words[0] || 'Content'}Life`, score: 80, posts: '500K' },
+      { tag: `#${baseTag}Community`, score: 75, posts: '300K' },
+      { tag: `#${words[0] || 'Content'}Goals`, score: 70, posts: '200K' },
+    ];
     return {
       success: true,
-      hashtags: mockHashtags.map(h => `${h.tag} (Score: ${h.score}%, ${h.posts} posts)`).join('\n'),
-      hashtagData: mockHashtags,
+      hashtags: fallbackHashtags.map(h => `${h.tag} (Score: ${h.score}%, ${h.posts} posts)`).join('\n'),
+      hashtagData: fallbackHashtags,
       usage: { fallback: true },
-      note: 'Using demo hashtags due to API unavailability'
+      note: 'Using fallback hashtags due to API unavailability'
     };
   }
 }

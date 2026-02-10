@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical, ShieldCheck } from 'lucide-react';
+import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical, ShieldCheck, Award, Lock, Users, CalendarCheck } from 'lucide-react';
 import Badge from '../components/Badge';
 import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -350,6 +350,154 @@ export default function Subscription() {
           </div>
         )}
 
+        {/* Founders Club View */}
+        {(userTier === TIERS.FOUNDER) ? (
+          <div className="max-w-4xl mx-auto">
+            {/* Founders Club Header */}
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
+                <Award className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+                  Founders Club
+                </h1>
+                <p className="text-base text-amber-600 font-medium">
+                  Welcome, Founding Member
+                </p>
+              </div>
+            </div>
+
+            {/* Welcome Card */}
+            <div className="bg-gradient-to-br from-amber-50 via-white to-amber-50 rounded-2xl border border-amber-200 p-8 mb-8 shadow-sm">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-1">You're one of the first 100 members</h2>
+                  <p className="text-gray-600">
+                    As a Founders Club member, you have lifetime access to exclusive benefits and pricing that will never be available again.
+                    Thank you for believing in Huttle from the beginning.
+                  </p>
+                </div>
+              </div>
+
+              {/* Membership Benefits */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-white rounded-xl p-5 border border-amber-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <Crown className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">All Pro Features</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Full access to every Pro feature including 800 AI generations/month, 25GB storage, Content Repurposer, Trend Forecaster, and more.</p>
+                </div>
+
+                <div className="bg-white rounded-xl p-5 border border-amber-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center">
+                      <Lock className="w-5 h-5 text-green-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">$199/year Locked Rate</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Your founding rate of $199/year is locked in forever. This price will never increase, even as we add new features and raise public pricing.</p>
+                </div>
+
+                <div className="bg-white rounded-xl p-5 border border-amber-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">Priority Support</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Get priority email support with faster response times. Your feedback directly shapes the product roadmap.</p>
+                </div>
+
+                <div className="bg-white rounded-xl p-5 border border-amber-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">Early Access</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">Be the first to try new features including Huttle Agent, advanced analytics, and upcoming AI capabilities before they launch publicly.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Membership Status */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-8 mb-8 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-200/50">
+                  <CalendarCheck className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Membership Status</h2>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      Active
+                    </span>
+                    <span className="text-sm text-gray-500">Founders Club Annual</span>
+                  </div>
+                  {subscriptionInfo?.currentPeriodEnd && (
+                    <p className="text-sm text-gray-600 mb-4">
+                      Your membership renews on{' '}
+                      <span className="font-semibold text-gray-900">
+                        {new Date(subscriptionInfo.currentPeriodEnd).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    <button 
+                      onClick={handleManagePayment}
+                      disabled={loading === 'portal'}
+                      className="btn-primary"
+                    >
+                      {loading === 'portal' ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Opening...
+                        </>
+                      ) : (
+                        <>
+                          Manage Billing
+                          <ExternalLink className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* FAQ for Founders */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Founders Club FAQ</h2>
+              <div className="space-y-6">
+                <div className="pb-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900 mb-2">Will my price ever change?</h3>
+                  <p className="text-gray-600 text-sm">Never. Your $199/year rate is permanently locked as long as you maintain your membership. Even as we add premium features and increase public pricing, your rate stays the same.</p>
+                </div>
+                <div className="pb-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900 mb-2">What if I cancel and want to rejoin?</h3>
+                  <p className="text-gray-600 text-sm">Your founding rate is tied to your active membership. If you cancel, you may not be able to rejoin at the $199/year rate as the Founders Club is limited to the first 100 members.</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">How do I get priority support?</h3>
+                  <p className="text-gray-600 text-sm">Email support@huttleai.com with "Founders Club" in the subject line and you'll be prioritized in our support queue.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
@@ -571,6 +719,8 @@ export default function Subscription() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* Cancel Subscription Modal */}

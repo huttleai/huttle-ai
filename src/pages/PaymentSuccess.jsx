@@ -1,10 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, Sparkles, Crown, Mail, ArrowRight } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
 
 export default function PaymentSuccess() {
   const hasConfettiFired = useRef(false);
+  const authContext = useContext(AuthContext);
+
+  // Mark payment as confirmed so ProtectedRoute allows access
+  useEffect(() => {
+    if (authContext?.user?.id) {
+      localStorage.setItem(`payment_confirmed_${authContext.user.id}`, 'true');
+    }
+  }, [authContext?.user?.id]);
 
   useEffect(() => {
     // Only fire confetti once and respect reduced motion preferences
