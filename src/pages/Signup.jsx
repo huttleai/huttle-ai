@@ -1,113 +1,20 @@
-import { useState, useContext, useMemo, useEffect, useRef } from 'react';
+import { useState, useContext, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createCheckoutSession } from '../services/stripeAPI';
-import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, AlertTriangle } from 'lucide-react';
+import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, Eye, EyeOff } from 'lucide-react';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [breachCheckStatus, setBreachCheckStatus] = useState('idle');
-  const [lastCheckedPassword, setLastCheckedPassword] = useState('');
-  const breachCheckTimeoutRef = useRef(null);
-  const latestPasswordRef = useRef('');
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
-  const checkingBreach = breachCheckStatus === 'checking';
-  const isBreached = breachCheckStatus === 'breached';
-  const isBreachCheckComplete =
-    password.length >= 8 &&
-    lastCheckedPassword === password &&
-    ['safe', 'breached', 'error'].includes(breachCheckStatus);
-
-  // Check password against Have I Been Pwned API (privacy-preserving k-anonymity)
-  const checkPasswordBreach = async (passwordToCheck) => {
-    if (!passwordToCheck || passwordToCheck.length < 8) {
-      if (latestPasswordRef.current === passwordToCheck) {
-        setBreachCheckStatus('idle');
-        setLastCheckedPassword('');
-      }
-      return { status: 'idle' };
-    }
-
-    try {
-      if (latestPasswordRef.current === passwordToCheck) {
-        setBreachCheckStatus('checking');
-      }
-
-      // Use SHA-1 hash of password
-      const encoder = new TextEncoder();
-      const data = encoder.encode(passwordToCheck);
-      const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-      
-      // Send only first 5 characters (k-anonymity)
-      const prefix = hashHex.substring(0, 5);
-      const suffix = hashHex.substring(5);
-
-      // Query HIBP API (no Add-Padding — padding adds decoy entries that can
-      // cause the client check to disagree with Supabase's server-side check)
-      const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
-      if (!response.ok) throw new Error(`Breach API returned ${response.status}`);
-      const text = await response.text();
-
-      // Check if our password hash suffix is in the results
-      const found = text.split('\n').some(line => {
-        const [hashSuffix] = line.trim().split(':');
-        return hashSuffix?.toUpperCase() === suffix;
-      });
-
-      if (latestPasswordRef.current === passwordToCheck) {
-        setBreachCheckStatus(found ? 'breached' : 'safe');
-        setLastCheckedPassword(passwordToCheck);
-      }
-
-      return { status: found ? 'breached' : 'safe' };
-    } catch (error) {
-      console.error('Error checking password breach:', error);
-      if (latestPasswordRef.current === passwordToCheck) {
-        setBreachCheckStatus('error');
-        setLastCheckedPassword(passwordToCheck);
-      }
-      return { status: 'error' };
-    }
-  };
-
-  // Debounce breach checking to avoid too many API calls
-  useEffect(() => {
-    latestPasswordRef.current = password;
-
-    if (breachCheckTimeoutRef.current) {
-      clearTimeout(breachCheckTimeoutRef.current);
-    }
-
-    if (!password || password.length < 8) {
-      setBreachCheckStatus('idle');
-      setLastCheckedPassword('');
-      return;
-    }
-
-    // Password changed; mark previous result stale until this value is checked.
-    if (password !== lastCheckedPassword) {
-      setLastCheckedPassword('');
-      setBreachCheckStatus('idle');
-    }
-
-    breachCheckTimeoutRef.current = setTimeout(() => {
-      if (password && password.length >= 8) {
-        checkPasswordBreach(password);
-      }
-    }, 800); // Wait 800ms after user stops typing
-
-    return () => {
-      if (breachCheckTimeoutRef.current) clearTimeout(breachCheckTimeoutRef.current);
-    };
-  }, [password, lastCheckedPassword]);
 
   // Password strength calculation with security requirements
   const passwordStrength = useMemo(() => {
@@ -157,23 +64,6 @@ export default function Signup() {
       requirements.push({ met: true, text: 'Special character (bonus)' });
     }
     
-    // Breach check should only show as complete when current password was actually checked.
-    if (checkingBreach && password.length >= 8) {
-      requirements.push({ met: false, text: 'Checking known data breaches...', isBreachCheck: true, isLoading: true });
-    } else if (isBreachCheckComplete && isBreached) {
-      requirements.push({ met: false, text: 'Found in known data breaches (warning)', isBreachCheck: true });
-    } else if (isBreachCheckComplete && breachCheckStatus === 'safe') {
-      requirements.push({ met: true, text: 'Not in known data breaches', isBreachCheck: true });
-    } else if (isBreachCheckComplete && breachCheckStatus === 'error') {
-      requirements.push({
-        met: false,
-        text: 'Could not verify against breach database (server still checks)',
-        isBreachCheck: true,
-      });
-    } else if (password.length >= 8) {
-      requirements.push({ met: false, text: 'Waiting to verify known data breaches', isBreachCheck: true, isPending: true });
-    }
-    
     // Round score and cap at 5
     score = Math.min(5, Math.round(score));
     
@@ -181,7 +71,7 @@ export default function Signup() {
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
     return { score, label: labels[score], color: colors[score], requirements };
-  }, [password, isBreached, checkingBreach, isBreachCheckComplete, breachCheckStatus]);
+  }, [password]);
 
   // Check if password meets minimum requirements (breach check is informational only)
   const passwordMeetsRequirements = useMemo(() => {
@@ -212,13 +102,6 @@ export default function Signup() {
         addToast('Password must include: uppercase letter, lowercase letter, and a number', 'error');
       }
       return;
-    }
-
-    // Client-side breach check is INFORMATIONAL ONLY — never blocks submission.
-    // Supabase performs its own server-side HIBP check and is the final authority.
-    // We warn the user here but always let the request go through to Supabase.
-    if (isBreachCheckComplete && isBreached) {
-      addToast('Warning: This password was found in breach databases. Supabase may reject it — consider choosing a different one.', 'warning', 5000);
     }
 
     setLoading(true);
@@ -252,13 +135,10 @@ export default function Signup() {
         errorMessage.toLowerCase().includes('pwned');
 
       if (isWeakPassword) {
-        // Mark the breach status so the UI updates immediately
-        setBreachCheckStatus('breached');
-        setLastCheckedPassword(password);
         addToast(
-          'This password has been found in a public data breach and was rejected by the server. Please choose a completely different password — try a random passphrase like "PurpleTiger$Runs42".',
+          'This password is not allowed. Please choose a stronger, more unique password and try again.',
           'error',
-          8000
+          6000
         );
       } else if (errorMessage.toLowerCase().includes('already registered') ||
                  errorMessage.toLowerCase().includes('already been registered')) {
@@ -389,15 +269,24 @@ export default function Signup() {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input pl-10"
+                  className="input pl-10 pr-10"
                   placeholder="Create a strong password"
                   required
                   disabled={loading}
                   minLength={8}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={loading}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               
               {/* Password Requirements (Always visible) */}
@@ -450,49 +339,17 @@ export default function Signup() {
                       <div key={idx} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 rounded-full flex items-center justify-center ${
                           req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                        } ${req.isBreachCheck && !req.met ? 'bg-yellow-100 text-yellow-600' : ''}`}>
-                          {checkingBreach && req.isBreachCheck ? (
-                            <Loader className="w-2 h-2 animate-spin" />
-                          ) : req.met ? (
-                            <Check className="w-2 h-2" />
-                          ) : req.isBreachCheck ? (
-                            <AlertTriangle className="w-2 h-2" />
-                          ) : (
-                            <X className="w-2 h-2" />
-                          )}
+                        }`}>
+                          {req.met ? <Check className="w-2 h-2" /> : <X className="w-2 h-2" />}
                         </div>
                         <span className={`text-[10px] ${
-                          req.met ? 'text-green-600' : req.isBreachCheck && !req.met ? 'text-yellow-600 font-medium' : 'text-gray-500'
+                          req.met ? 'text-green-600' : 'text-gray-500'
                         }`}>
                           {req.text}
-                          {checkingBreach && req.isBreachCheck && ' (checking...)'}
                         </span>
                       </div>
                     ))}
                   </div>
-                  {/* Breach detection warning */}
-                  {isBreachCheckComplete && isBreached && (
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-[10px] text-yellow-800 leading-relaxed font-medium">
-                        ⚠️ Warning: This password has been found in data breaches. We recommend choosing a different one for better security.
-                      </p>
-                    </div>
-                  )}
-                  {/* Breach detection info */}
-                  {isBreachCheckComplete && breachCheckStatus === 'safe' && (
-                    <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-lg">
-                      <p className="text-[10px] text-green-700 leading-relaxed">
-                        ✓ Password looks good! Not found in known data breaches.
-                      </p>
-                    </div>
-                  )}
-                  {isBreachCheckComplete && breachCheckStatus === 'error' && (
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-[10px] text-yellow-800 leading-relaxed font-medium">
-                        Could not verify this password against the breach database. The server may still reject common passwords.
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -508,7 +365,7 @@ export default function Signup() {
                 </div>
                 <input
                   id="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="input pl-10 pr-10"
@@ -526,6 +383,17 @@ export default function Signup() {
                     )}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 ${
+                    confirmPassword ? 'right-10' : 'right-3.5'
+                  }`}
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  disabled={loading}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
