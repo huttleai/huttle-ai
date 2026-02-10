@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo } from 'react';
+import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -12,9 +12,77 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uniqueCheckStatus, setUniqueCheckStatus] = useState('idle'); // 'idle' | 'checking' | 'unique' | 'common'
+  const [lastCheckedPassword, setLastCheckedPassword] = useState('');
+  const latestPasswordRef = useRef('');
+  const uniqueCheckTimeoutRef = useRef(null);
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  // Check if password is unique enough (matches Supabase's server-side check)
+  const checkPasswordUniqueness = async (passwordToCheck) => {
+    if (!passwordToCheck || passwordToCheck.length < 8) {
+      if (latestPasswordRef.current === passwordToCheck) {
+        setUniqueCheckStatus('idle');
+        setLastCheckedPassword('');
+      }
+      return;
+    }
+    try {
+      if (latestPasswordRef.current === passwordToCheck) setUniqueCheckStatus('checking');
+      const encoder = new TextEncoder();
+      const data = encoder.encode(passwordToCheck);
+      const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      const prefix = hashHex.substring(0, 5);
+      const suffix = hashHex.substring(5);
+      const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const text = await response.text();
+      const found = text.split('\n').some((line) => {
+        const [hashSuffix] = line.trim().split(':');
+        return hashSuffix?.toUpperCase() === suffix;
+      });
+      if (latestPasswordRef.current === passwordToCheck) {
+        setUniqueCheckStatus(found ? 'common' : 'unique');
+        setLastCheckedPassword(passwordToCheck);
+      }
+    } catch (error) {
+      console.error('Error checking password uniqueness:', error);
+      if (latestPasswordRef.current === passwordToCheck) {
+        setUniqueCheckStatus('error');
+        setLastCheckedPassword(passwordToCheck);
+      }
+    }
+  };
+
+  useEffect(() => {
+    latestPasswordRef.current = password;
+    if (uniqueCheckTimeoutRef.current) clearTimeout(uniqueCheckTimeoutRef.current);
+    if (!password || password.length < 8) {
+      setUniqueCheckStatus('idle');
+      setLastCheckedPassword('');
+      return;
+    }
+    if (password !== lastCheckedPassword) {
+      setLastCheckedPassword('');
+      setUniqueCheckStatus('idle');
+    }
+    uniqueCheckTimeoutRef.current = setTimeout(() => {
+      if (password && password.length >= 8) checkPasswordUniqueness(password);
+    }, 800);
+    return () => {
+      if (uniqueCheckTimeoutRef.current) clearTimeout(uniqueCheckTimeoutRef.current);
+    };
+  }, [password, lastCheckedPassword]);
+
+  const isUniqueCheckComplete =
+    password.length >= 8 &&
+    lastCheckedPassword === password &&
+    ['unique', 'common', 'error'].includes(uniqueCheckStatus);
+  const isPasswordUnique = uniqueCheckStatus === 'unique' || uniqueCheckStatus === 'error';
 
   // Password strength calculation with security requirements
   const passwordStrength = useMemo(() => {
@@ -63,7 +131,20 @@ export default function Signup() {
       score += 1;
       requirements.push({ met: true, text: 'Special character (bonus)' });
     }
-    
+
+    // Uniqueness check (aligns with Supabase server policy)
+    if (uniqueCheckStatus === 'checking' && password.length >= 8) {
+      requirements.push({ met: false, text: 'Checking uniqueness...', isUniqueCheck: true });
+    } else if (uniqueCheckStatus === 'unique') {
+      requirements.push({ met: true, text: 'Unique enough', isUniqueCheck: true });
+    } else if (uniqueCheckStatus === 'common') {
+      requirements.push({ met: false, text: 'Too common — choose a different password', isUniqueCheck: true });
+    } else if (uniqueCheckStatus === 'error') {
+      requirements.push({ met: true, text: 'Format OK (uniqueness could not be verified)', isUniqueCheck: true });
+    } else if (password.length >= 8) {
+      requirements.push({ met: false, text: 'Verifying uniqueness...', isUniqueCheck: true });
+    }
+
     // Round score and cap at 5
     score = Math.min(5, Math.round(score));
     
@@ -71,15 +152,17 @@ export default function Signup() {
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
     return { score, label: labels[score], color: colors[score], requirements };
-  }, [password]);
+  }, [password, uniqueCheckStatus, isUniqueCheckComplete, isPasswordUnique]);
 
-  // Check if password meets minimum requirements (breach check is informational only)
+  // Check if password meets all requirements (including uniqueness)
   const passwordMeetsRequirements = useMemo(() => {
-    return password.length >= 8 && 
-           /[a-z]/.test(password) && 
-           /[A-Z]/.test(password) && 
-           /[0-9]/.test(password);
-  }, [password]);
+    const formatOk =
+      password.length >= 8 &&
+      /[a-z]/.test(password) &&
+      /[A-Z]/.test(password) &&
+      /[0-9]/.test(password);
+    return formatOk && (isUniqueCheckComplete ? isPasswordUnique : false);
+  }, [password, isUniqueCheckComplete, isPasswordUnique]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -98,7 +181,9 @@ export default function Signup() {
     if (!passwordMeetsRequirements) {
       if (password.length < 8) {
         addToast('Password must be at least 8 characters', 'error');
-      } else {
+      } else if (isUniqueCheckComplete && !isPasswordUnique) {
+        addToast('This password is too common. Please choose a more unique password.', 'error');
+      } else if (password.length >= 8) {
         addToast('Password must include: uppercase letter, lowercase letter, and a number', 'error');
       }
       return;
@@ -338,12 +423,18 @@ export default function Signup() {
                     {passwordStrength.requirements.map((req, idx) => (
                       <div key={idx} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 rounded-full flex items-center justify-center ${
-                          req.met ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                          req.met ? 'bg-green-100 text-green-600' : req.isUniqueCheck ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'
                         }`}>
-                          {req.met ? <Check className="w-2 h-2" /> : <X className="w-2 h-2" />}
+                          {req.isUniqueCheck && uniqueCheckStatus === 'checking' ? (
+                            <Loader className="w-2 h-2 animate-spin" />
+                          ) : req.met ? (
+                            <Check className="w-2 h-2" />
+                          ) : (
+                            <X className="w-2 h-2" />
+                          )}
                         </div>
                         <span className={`text-[10px] ${
-                          req.met ? 'text-green-600' : 'text-gray-500'
+                          req.met ? 'text-green-600' : req.isUniqueCheck && !req.met ? 'text-red-600' : 'text-gray-500'
                         }`}>
                           {req.text}
                         </span>
@@ -400,7 +491,7 @@ export default function Signup() {
             {/* Submit Button */}
             <button 
               type="submit" 
-              disabled={loading} 
+              disabled={loading || !passwordMeetsRequirements} 
               className="w-full btn-primary py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
