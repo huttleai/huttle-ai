@@ -213,22 +213,11 @@ export default function Signup() {
       return;
     }
 
-    // Ensure breach check is complete for the current password before signup.
-    // This keeps client feedback consistent with Supabase server-side password checks.
-    let effectiveBreachStatus = breachCheckStatus;
-    if (password.length >= 8 && !isBreachCheckComplete) {
-      addToast('Running final password security check...', 'info');
-      const breachResult = await checkPasswordBreach(password);
-      effectiveBreachStatus = breachResult.status;
-    }
-
-    if (effectiveBreachStatus === 'breached') {
-      addToast('This password appears in known breaches. Please choose a more unique password before continuing.', 'error', 6000);
-      return;
-    }
-
-    if (effectiveBreachStatus === 'error') {
-      addToast('Could not verify this password against the breach database. If the server rejects it, try a more unique passphrase.', 'warning', 6000);
+    // Client-side breach check is INFORMATIONAL ONLY — never blocks submission.
+    // Supabase performs its own server-side HIBP check and is the final authority.
+    // We warn the user here but always let the request go through to Supabase.
+    if (isBreachCheckComplete && isBreached) {
+      addToast('Warning: This password was found in breach databases. Supabase may reject it — consider choosing a different one.', 'warning', 5000);
     }
 
     setLoading(true);
@@ -247,14 +236,15 @@ export default function Signup() {
       const isWeakPassword =
         result.code === 'weak_password' ||
         errorMessage.toLowerCase().includes('weak') ||
-        errorMessage.toLowerCase().includes('easy to guess');
+        errorMessage.toLowerCase().includes('easy to guess') ||
+        errorMessage.toLowerCase().includes('pwned');
 
       if (isWeakPassword) {
         // Mark the breach status so the UI updates immediately
         setBreachCheckStatus('breached');
         setLastCheckedPassword(password);
         addToast(
-          'This password has been found in a public data breach. Please choose a completely different password — try a passphrase like "PurpleTiger$Runs42".',
+          'This password has been found in a public data breach and was rejected by the server. Please choose a completely different password — try a random passphrase like "PurpleTiger$Runs42".',
           'error',
           8000
         );
@@ -530,18 +520,13 @@ export default function Signup() {
             {/* Submit Button */}
             <button 
               type="submit" 
-              disabled={loading || checkingBreach} 
+              disabled={loading} 
               className="w-full btn-primary py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
                   Creating account...
-                </>
-              ) : checkingBreach ? (
-                <>
-                  <Loader className="w-4 h-4 animate-spin" />
-                  Checking password...
                 </>
               ) : (
                 <>
