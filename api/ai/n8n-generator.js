@@ -5,12 +5,12 @@
  * Handles timeout and error responses.
  * 
  * Environment Variables Required:
- * - N8N_WEBHOOK_URL_GENERATOR: n8n webhook endpoint for content generation
+ * - VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK: n8n webhook endpoint for Content Remix Studio
  */
 
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
+const N8N_WEBHOOK_URL = process.env.VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK || process.env.N8N_WEBHOOK_URL_GENERATOR;
 
 /**
  * Main handler function
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[n8n-generator] N8N_WEBHOOK_URL_GENERATOR not configured');
+    console.error('[n8n-generator] VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK not configured');
     // SECURITY: Don't expose environment variable names to client
     return res.status(500).json({ 
       error: 'Content generation service not configured. Please try again later.'
