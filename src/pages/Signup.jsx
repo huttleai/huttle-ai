@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo, useEffect } from 'react';
+import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -9,26 +9,38 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [checkingBreach, setCheckingBreach] = useState(false);
-  const [isBreached, setIsBreached] = useState(false);
-  const [breachCheckDebounce, setBreachCheckDebounce] = useState(null);
+  const [breachCheckStatus, setBreachCheckStatus] = useState('idle');
+  const [lastCheckedPassword, setLastCheckedPassword] = useState('');
+  const breachCheckTimeoutRef = useRef(null);
+  const latestPasswordRef = useRef('');
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const checkingBreach = breachCheckStatus === 'checking';
+  const isBreached = breachCheckStatus === 'breached';
+  const isBreachCheckComplete =
+    password.length >= 8 &&
+    lastCheckedPassword === password &&
+    ['safe', 'breached', 'error'].includes(breachCheckStatus);
 
   // Check password against Have I Been Pwned API (privacy-preserving k-anonymity)
-  const checkPasswordBreach = async (password) => {
-    if (!password || password.length < 8) {
-      setIsBreached(false);
-      return;
+  const checkPasswordBreach = async (passwordToCheck) => {
+    if (!passwordToCheck || passwordToCheck.length < 8) {
+      if (latestPasswordRef.current === passwordToCheck) {
+        setBreachCheckStatus('idle');
+        setLastCheckedPassword('');
+      }
+      return { status: 'idle' };
     }
 
     try {
-      setCheckingBreach(true);
-      
+      if (latestPasswordRef.current === passwordToCheck) {
+        setBreachCheckStatus('checking');
+      }
+
       // Use SHA-1 hash of password
       const encoder = new TextEncoder();
-      const data = encoder.encode(password);
+      const data = encoder.encode(passwordToCheck);
       const hashBuffer = await crypto.subtle.digest('SHA-1', data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -36,47 +48,65 @@ export default function Signup() {
       // Send only first 5 characters (k-anonymity)
       const prefix = hashHex.substring(0, 5);
       const suffix = hashHex.substring(5);
-      
-      // Query HIBP API
+
+      // Query HIBP API (no Add-Padding — padding adds decoy entries that can
+      // cause the client check to disagree with Supabase's server-side check)
       const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+      if (!response.ok) throw new Error(`Breach API returned ${response.status}`);
       const text = await response.text();
-      
+
       // Check if our password hash suffix is in the results
       const found = text.split('\n').some(line => {
-        const [hashSuffix] = line.split(':');
-        return hashSuffix === suffix;
+        const [hashSuffix] = line.trim().split(':');
+        return hashSuffix?.toUpperCase() === suffix;
       });
-      
-      setIsBreached(found);
+
+      if (latestPasswordRef.current === passwordToCheck) {
+        setBreachCheckStatus(found ? 'breached' : 'safe');
+        setLastCheckedPassword(passwordToCheck);
+      }
+
+      return { status: found ? 'breached' : 'safe' };
     } catch (error) {
       console.error('Error checking password breach:', error);
-      // Fail open - don't block user if API is down
-      setIsBreached(false);
-    } finally {
-      setCheckingBreach(false);
+      if (latestPasswordRef.current === passwordToCheck) {
+        setBreachCheckStatus('error');
+        setLastCheckedPassword(passwordToCheck);
+      }
+      return { status: 'error' };
     }
   };
 
   // Debounce breach checking to avoid too many API calls
   useEffect(() => {
-    if (breachCheckDebounce) {
-      clearTimeout(breachCheckDebounce);
+    latestPasswordRef.current = password;
+
+    if (breachCheckTimeoutRef.current) {
+      clearTimeout(breachCheckTimeoutRef.current);
     }
 
-    const timeoutId = setTimeout(() => {
+    if (!password || password.length < 8) {
+      setBreachCheckStatus('idle');
+      setLastCheckedPassword('');
+      return;
+    }
+
+    // Password changed; mark previous result stale until this value is checked.
+    if (password !== lastCheckedPassword) {
+      setLastCheckedPassword('');
+      setBreachCheckStatus('idle');
+    }
+
+    breachCheckTimeoutRef.current = setTimeout(() => {
       if (password && password.length >= 8) {
         checkPasswordBreach(password);
-      } else {
-        setIsBreached(false);
       }
     }, 800); // Wait 800ms after user stops typing
 
-    setBreachCheckDebounce(timeoutId);
-
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (breachCheckTimeoutRef.current) clearTimeout(breachCheckTimeoutRef.current);
     };
-  }, [password]);
+  }, [password, lastCheckedPassword]);
 
   // Password strength calculation with security requirements
   const passwordStrength = useMemo(() => {
@@ -126,11 +156,21 @@ export default function Signup() {
       requirements.push({ met: true, text: 'Special character (bonus)' });
     }
     
-    // Breach check is informational - doesn't affect password strength score
-    if (isBreached && password.length >= 8) {
+    // Breach check should only show as complete when current password was actually checked.
+    if (checkingBreach && password.length >= 8) {
+      requirements.push({ met: false, text: 'Checking known data breaches...', isBreachCheck: true, isLoading: true });
+    } else if (isBreachCheckComplete && isBreached) {
       requirements.push({ met: false, text: 'Found in known data breaches (warning)', isBreachCheck: true });
-    } else if (password.length >= 8 && !checkingBreach) {
+    } else if (isBreachCheckComplete && breachCheckStatus === 'safe') {
       requirements.push({ met: true, text: 'Not in known data breaches', isBreachCheck: true });
+    } else if (isBreachCheckComplete && breachCheckStatus === 'error') {
+      requirements.push({
+        met: false,
+        text: 'Could not verify against breach database (server still checks)',
+        isBreachCheck: true,
+      });
+    } else if (password.length >= 8) {
+      requirements.push({ met: false, text: 'Waiting to verify known data breaches', isBreachCheck: true, isPending: true });
     }
     
     // Round score and cap at 5
@@ -140,7 +180,7 @@ export default function Signup() {
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
     return { score, label: labels[score], color: colors[score], requirements };
-  }, [password, isBreached, checkingBreach]);
+  }, [password, isBreached, checkingBreach, isBreachCheckComplete, breachCheckStatus]);
 
   // Check if password meets minimum requirements (breach check is informational only)
   const passwordMeetsRequirements = useMemo(() => {
@@ -173,16 +213,22 @@ export default function Signup() {
       return;
     }
 
-    // Warning for breached passwords (doesn't block submission)
-    if (isBreached) {
-      addToast('Warning: This password was found in data breaches. Consider using a more unique password.', 'warning', 5000);
-      // Continue with signup - don't block
+    // Ensure breach check is complete for the current password before signup.
+    // This keeps client feedback consistent with Supabase server-side password checks.
+    let effectiveBreachStatus = breachCheckStatus;
+    if (password.length >= 8 && !isBreachCheckComplete) {
+      addToast('Running final password security check...', 'info');
+      const breachResult = await checkPasswordBreach(password);
+      effectiveBreachStatus = breachResult.status;
     }
 
-    // Wait for breach check to complete if still running
-    if (checkingBreach) {
-      addToast('Checking password security...', 'info');
+    if (effectiveBreachStatus === 'breached') {
+      addToast('This password appears in known breaches. Please choose a more unique password before continuing.', 'error', 6000);
       return;
+    }
+
+    if (effectiveBreachStatus === 'error') {
+      addToast('Could not verify this password against the breach database. If the server rejects it, try a more unique passphrase.', 'warning', 6000);
     }
 
     setLoading(true);
@@ -193,15 +239,28 @@ export default function Signup() {
       addToast('Account created! Welcome to Huttle.', 'success');
       navigate('/dashboard');
     } else {
-      // Check if it's a breached password error (backup server-side check)
       const errorMessage = result.error || 'Failed to create account';
-      const isBreachedPassword = errorMessage.toLowerCase().includes('weak') || 
-                                  errorMessage.toLowerCase().includes('breach') ||
-                                  errorMessage.toLowerCase().includes('compromised') ||
-                                  errorMessage.toLowerCase().includes('guess');
-      
-      if (isBreachedPassword) {
-        addToast('Server rejected this password. Please try a more unique password with random words or characters.', 'error', 6000);
+
+      // Supabase returns code "weak_password" with reason "pwned" when the
+      // password is found in the HaveIBeenPwned database on the server side.
+      // It can also return messages containing "weak" or "easy to guess".
+      const isWeakPassword =
+        result.code === 'weak_password' ||
+        errorMessage.toLowerCase().includes('weak') ||
+        errorMessage.toLowerCase().includes('easy to guess');
+
+      if (isWeakPassword) {
+        // Mark the breach status so the UI updates immediately
+        setBreachCheckStatus('breached');
+        setLastCheckedPassword(password);
+        addToast(
+          'This password has been found in a public data breach. Please choose a completely different password — try a passphrase like "PurpleTiger$Runs42".',
+          'error',
+          8000
+        );
+      } else if (errorMessage.toLowerCase().includes('already registered') ||
+                 errorMessage.toLowerCase().includes('already been registered')) {
+        addToast('An account with this email already exists. Try signing in instead.', 'error', 6000);
       } else {
         addToast(errorMessage, 'error');
       }
@@ -410,7 +469,7 @@ export default function Signup() {
                     ))}
                   </div>
                   {/* Breach detection warning */}
-                  {isBreached && (
+                  {isBreachCheckComplete && isBreached && (
                     <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <p className="text-[10px] text-yellow-800 leading-relaxed font-medium">
                         ⚠️ Warning: This password has been found in data breaches. We recommend choosing a different one for better security.
@@ -418,10 +477,17 @@ export default function Signup() {
                     </div>
                   )}
                   {/* Breach detection info */}
-                  {!isBreached && password.length >= 8 && !checkingBreach && (
+                  {isBreachCheckComplete && breachCheckStatus === 'safe' && (
                     <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded-lg">
                       <p className="text-[10px] text-green-700 leading-relaxed">
                         ✓ Password looks good! Not found in known data breaches.
+                      </p>
+                    </div>
+                  )}
+                  {isBreachCheckComplete && breachCheckStatus === 'error' && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-[10px] text-yellow-800 leading-relaxed font-medium">
+                        Could not verify this password against the breach database. The server may still reject common passwords.
                       </p>
                     </div>
                   )}

@@ -238,7 +238,13 @@ export function AuthProvider({ children }) {
       return { success: true, data };
     } catch (error) {
       console.error('Signup error:', error);
-      return { success: false, error: error.message };
+      // Preserve the full error so callers can inspect code/status/reasons
+      return {
+        success: false,
+        error: error.message,
+        code: error?.code,
+        status: error?.status,
+      };
     }
   };
 
