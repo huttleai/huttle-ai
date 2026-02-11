@@ -539,7 +539,20 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ API Error Response:', errorText);
-        throw new Error(`Failed to create checkout session: ${response.status} ${response.statusText}`);
+
+        let apiErrorMessage = '';
+        try {
+          const parsedError = JSON.parse(errorText);
+          apiErrorMessage = parsedError?.details || parsedError?.error || '';
+        } catch {
+          apiErrorMessage = errorText || '';
+        }
+
+        if (!apiErrorMessage && response.status >= 500) {
+          apiErrorMessage = 'Checkout API is unavailable. For local development, run `npm run dev` to start both frontend and API.';
+        }
+
+        throw new Error(apiErrorMessage || `Failed to create checkout session: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();

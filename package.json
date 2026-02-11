@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:local",
     "dev:local": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
     "dev:api": "node server/local-api-server.js",
     "dev:frontend": "vite",

@@ -434,7 +434,7 @@ export default function FoundersPage() {
                     </>
                   ) : (
                     <>
-                      Become a Founding Member
+                      Checkout
                       <ArrowRight size={20} />
                     </>
                   )}
