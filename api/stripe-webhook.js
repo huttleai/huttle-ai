@@ -37,6 +37,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const endpointSecret = STRIPE_WEBHOOK_SECRET;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const processedEventIds = new Set();
+const MAX_PROCESSED_EVENTS = 500;
 
 // Mailchimp configuration (optional)
 const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
@@ -135,6 +137,21 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
   }
 }
 
+function hasProcessedEvent(eventId) {
+  return !!eventId && processedEventIds.has(eventId);
+}
+
+function markEventProcessed(eventId) {
+  if (!eventId) return;
+  processedEventIds.add(eventId);
+  if (processedEventIds.size > MAX_PROCESSED_EVENTS) {
+    const oldestEventId = processedEventIds.values().next().value;
+    if (oldestEventId) {
+      processedEventIds.delete(oldestEventId);
+    }
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -167,6 +184,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Webhook Error: ${err.message}` });
     }
 
+    console.log('[stripe-webhook] Received event:', event.type, event.id);
+
+    if (hasProcessedEvent(event.id)) {
+      console.log('[stripe-webhook] Duplicate event ignored:', event.id);
+      return res.status(200).json({ received: true, duplicate: true });
+    }
+
     // Handle the event
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -181,11 +205,15 @@ export default async function handler(req, res) {
           // Find user by email - use filtered query instead of listing all users
           // SECURITY & PERFORMANCE: listUsers() loads ALL users into memory which is 
           // both slow and a potential DoS vector as the user base grows
-          const { data: userList } = await supabase.auth.admin.listUsers({
+          const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
             filter: `email.eq.${customerEmail}`,
             page: 1,
             perPage: 1,
           });
+          if (userLookupError) {
+            console.error('Error finding auth user by email:', userLookupError);
+            break;
+          }
           const user = userList?.users?.[0];
           
           if (user) {
@@ -233,21 +261,29 @@ export default async function handler(req, res) {
                 await addToFoundersClub(customerEmail, firstName, lastName);
               }
             }
+          } else {
+            console.warn('No auth user found for checkout email:', customerEmail);
           }
         }
         break;
       }
 
+      case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object;
         const customerId = subscription.customer;
 
         // Find user by Stripe customer ID
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('user_profile')
           .select('user_id')
           .eq('stripe_customer_id', customerId)
-          .single();
+          .maybeSingle();
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Error finding user profile by customer id:', profileError);
+          break;
+        }
 
         if (profile) {
           const priceId = subscription.items.data[0]?.price?.id;
@@ -325,6 +361,7 @@ export default async function handler(req, res) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
+    markEventProcessed(event.id);
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('Webhook Error:', error);

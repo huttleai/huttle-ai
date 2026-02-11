@@ -46,28 +46,32 @@ export default function ContentLibrary() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [signedUrlCache, setSignedUrlCache] = useState({});
   const [selectedItems, setSelectedItems] = useState([]);
+  const safeProjects = projects || [];
+  const safeContentItems = contentItems || [];
 
   // Calculate storage values
   const storageLimit = getStorageLimit();
-  const storageLimitMB = storageLimit / (1024 * 1024);
+  const safeStorageUsed = Number(storageUsed || 0);
+  const safeStorageLimit = Number(storageLimit || 0);
+  const storageLimitMB = safeStorageLimit / (1024 * 1024);
   const storageLimitDisplay = storageLimitMB >= 1024 
     ? `${(storageLimitMB / 1024).toFixed(storageLimitMB >= 10240 ? 0 : 1)} GB`
     : `${storageLimitMB.toFixed(0)} MB`;
-  const storageUsedDisplay = storageUsed >= 1024 
-    ? `${(storageUsed / 1024).toFixed(2)} GB`
-    : `${storageUsed.toFixed(1)} MB`;
-  const storagePercent = storageLimit > 0 ? (storageUsed / storageLimitMB) * 100 : 0;
+  const storageUsedDisplay = safeStorageUsed >= 1024 
+    ? `${(safeStorageUsed / 1024).toFixed(2)} GB`
+    : `${safeStorageUsed.toFixed(1)} MB`;
+  const storagePercent = safeStorageLimit > 0 ? ((safeStorageUsed * 1024 * 1024) / safeStorageLimit) * 100 : 0;
 
   // Content type counts for sidebar
   const contentCounts = useMemo(() => {
     const counts = { images: 0, videos: 0, text: 0 };
-    contentItems.forEach(item => {
+    safeContentItems.forEach(item => {
       if (item.type === 'image') counts.images++;
       else if (item.type === 'video') counts.videos++;
       else if (item.type === 'text') counts.text++;
     });
     return counts;
-  }, [contentItems]);
+  }, [safeContentItems]);
 
   // Tier storage info for upgrade CTA - Always suggest Pro for best value
   const tierStorageInfo = {
@@ -376,7 +380,7 @@ export default function ContentLibrary() {
 
   // Filter items based on search, tab, and project
   const filteredItems = useMemo(() => {
-    return contentItems.filter(item => {
+    return safeContentItems.filter(item => {
       const matchesTab = activeTab === 'all' || item.type === activeTab;
       const matchesProject = activeProject === 'all' || item.project === activeProject;
       const matchesSearch = !searchQuery || 
@@ -384,7 +388,7 @@ export default function ContentLibrary() {
         (item.content && item.content.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchesTab && matchesProject && matchesSearch;
     });
-  }, [contentItems, activeTab, activeProject, searchQuery]);
+  }, [safeContentItems, activeTab, activeProject, searchQuery]);
 
   const handleItemClick = async (item) => {
     setSelectedItem(item);
@@ -915,7 +919,7 @@ export default function ContentLibrary() {
                 New Project
               </button>
 
-              {projects.map((project) => (
+              {safeProjects.map((project) => (
                 <div key={project.id} className="relative group">
                   <button
                     onClick={() => setActiveProject(project.id)}
@@ -1176,7 +1180,7 @@ export default function ContentLibrary() {
                             {item.project && (
                               <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[10px] font-medium rounded-md border border-gray-100 flex items-center gap-1">
                                 <Folder className="w-3 h-3" />
-                                {projects.find(p => p.id === item.project)?.name}
+                                {safeProjects.find(p => p.id === item.project)?.name}
                               </span>
                             )}
                           </div>
@@ -1201,7 +1205,7 @@ export default function ContentLibrary() {
               {/* Empty State */}
               {filteredItems.length === 0 && !loading && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-                  {contentItems.length === 0 ? (
+                  {safeContentItems.length === 0 ? (
                     <>
                       <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-huttle-primary/10 to-indigo-100 flex items-center justify-center">
                         <CloudUpload className="w-10 h-10 text-huttle-primary" />
@@ -1653,7 +1657,7 @@ export default function ContentLibrary() {
                     className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
                   >
                     <option value="all">No Project</option>
-                    {projects.filter(p => p.id !== 'all').map((project) => (
+                    {safeProjects.filter(p => p.id !== 'all').map((project) => (
                       <option key={project.id} value={project.id}>{project.name}</option>
                     ))}
                   </select>
@@ -1719,7 +1723,7 @@ export default function ContentLibrary() {
                 Select a project for "{selectedItem.name}":
               </p>
               <div className="space-y-2">
-                {projects.filter(p => p.id !== 'all').map((project) => (
+                {safeProjects.filter(p => p.id !== 'all').map((project) => (
                   <button
                     key={project.id}
                     onClick={() => handleAddToProject(project.id)}
@@ -1741,7 +1745,7 @@ export default function ContentLibrary() {
                   </button>
                 ))}
               </div>
-              {projects.filter(p => p.id !== 'all').length === 0 && (
+              {safeProjects.filter(p => p.id !== 'all').length === 0 && (
                 <div className="text-center py-6">
                   <p className="text-gray-500 mb-3">No projects yet</p>
                   <button

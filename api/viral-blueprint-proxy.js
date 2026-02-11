@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 // SECURITY: No hardcoded fallback - must be configured via environment variable
-const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK;
+const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK || process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -23,6 +23,8 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
  * Main handler function
  */
 export default async function handler(req, res) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -48,9 +50,10 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[viral-blueprint-proxy] N8N webhook URL not configured');
+    console.error('[viral-blueprint-proxy] N8N webhook URL not configured', { requestId });
     return res.status(500).json({ 
-      error: 'Service not configured. Please try again later.'
+      error: 'Service not configured. Please try again later.',
+      requestId
     });
   }
 
@@ -68,23 +71,24 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(120000), // 120 seconds
     });
 
-    console.log('[viral-blueprint-proxy] n8n response status:', response.status, response.statusText);
+    console.log('[viral-blueprint-proxy] n8n response status:', response.status, response.statusText, { requestId });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
-      console.error('[viral-blueprint-proxy] n8n error response:', errorText);
+      console.error('[viral-blueprint-proxy] n8n error response:', errorText, { requestId });
       return res.status(response.status).json({ 
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
-        details: errorText.substring(0, 200)
+        details: errorText.substring(0, 200),
+        requestId
       });
     }
 
     // Parse and return the response
-    const data = await response.json();
-    console.log('[viral-blueprint-proxy] Successfully received response from n8n');
-    console.log('[viral-blueprint-proxy] Response keys:', Object.keys(data));
+    const data = await response.json().catch(() => ({}));
+    console.log('[viral-blueprint-proxy] Successfully received response from n8n', { requestId });
+    console.log('[viral-blueprint-proxy] Response keys:', Object.keys(data), { requestId });
     
-    return res.status(200).json(data);
+    return res.status(200).json({ ...data, requestId });
 
   } catch (error) {
     console.error('[viral-blueprint-proxy] Error:', {
@@ -96,20 +100,23 @@ export default async function handler(req, res) {
     // Handle timeout errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
       return res.status(504).json({ 
-        error: 'Request timeout: n8n workflow took longer than 120 seconds' 
+        error: 'Request timeout: n8n workflow took longer than 120 seconds',
+        requestId
       });
     }
 
     // Handle network errors
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
       return res.status(502).json({ 
-        error: 'Unable to reach n8n webhook. Please check the webhook URL.' 
+        error: 'Unable to reach n8n webhook. Please check the webhook URL.',
+        requestId
       });
     }
 
     // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'An unexpected error occurred. Please try again.' 
+      error: 'An unexpected error occurred. Please try again.',
+      requestId
     });
   }
 }

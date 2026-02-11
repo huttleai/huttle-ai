@@ -23,12 +23,16 @@ export function SubscriptionProvider({ children }) {
   
   // Get initial tier from localStorage if in demo mode
   const getInitialTier = () => {
-    if (skipAuth || demoMode) {
+    if (skipAuth) {
       const savedTier = localStorage.getItem(DEMO_TIER_KEY);
       if (savedTier && Object.values(TIERS).includes(savedTier)) {
         return savedTier;
       }
       return TIERS.PRO; // Default to Pro in dev/demo mode
+    }
+    if (demoMode) {
+      // Never trust local storage for launch credit limits
+      return TIERS.FREE;
     }
     return TIERS.FREE;
   };
@@ -43,8 +47,8 @@ export function SubscriptionProvider({ children }) {
 
   // Function to change tier in demo mode
   const setDemoTier = useCallback((newTier) => {
-    if (!skipAuth && !demoMode) {
-      console.warn('setDemoTier only works in demo/dev mode');
+    if (!skipAuth) {
+      console.warn('setDemoTier only works in dev skip-auth mode');
       return false;
     }
     if (!Object.values(TIERS).includes(newTier)) {
@@ -59,7 +63,7 @@ export function SubscriptionProvider({ children }) {
 
   // Listen for demo tier changes from other components (e.g., checkout simulation)
   useEffect(() => {
-    if (!skipAuth && !demoMode) return;
+    if (!skipAuth) return;
     
     const handleStorageChange = (e) => {
       if (e.key === DEMO_TIER_KEY && e.newValue) {
@@ -72,11 +76,11 @@ export function SubscriptionProvider({ children }) {
     
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [skipAuth, demoMode]);
+  }, [skipAuth]);
 
   useEffect(() => {
-    if (skipAuth || demoMode) {
-      // Dev/Demo mode: Use saved tier or default to Pro
+    if (skipAuth) {
+      // Dev mode only: Use saved tier or default to Pro
       const savedTier = localStorage.getItem(DEMO_TIER_KEY);
       if (savedTier && Object.values(TIERS).includes(savedTier)) {
         setUserTier(savedTier);
@@ -86,6 +90,16 @@ export function SubscriptionProvider({ children }) {
       }
       setLoading(false);
       console.log('🚀 Demo mode: Subscription tier set to', savedTier || TIERS.PRO);
+      return;
+    }
+
+    if (demoMode) {
+      // Keep limits server-defined instead of localStorage-derived
+      setUserTier(TIERS.FREE);
+      setUsage({});
+      setStorageUsage(0);
+      setLoading(false);
+      console.log('🚀 Demo mode: using Free tier limits');
       return;
     }
     
@@ -126,10 +140,24 @@ export function SubscriptionProvider({ children }) {
     return TIER_LIMITS[userTier]?.[feature] || 0;
   };
 
+  const getAuthoritativeRemainingUsage = useCallback(async (feature) => {
+    if (skipAuth) {
+      return Infinity;
+    }
+    if (!userId) {
+      return 0;
+    }
+    return getRemainingUsage(userId, feature, userTier);
+  }, [skipAuth, userId, userTier]);
+
   const checkAndTrackUsage = async (feature, metadata = {}) => {
     // Dev mode: Allow all features without limits
     if (skipAuth) {
       return { allowed: true, remaining: Infinity };
+    }
+
+    if (!userId) {
+      return { allowed: false, reason: 'auth', remaining: 0 };
     }
 
     // Check if feature is available for tier
@@ -139,7 +167,7 @@ export function SubscriptionProvider({ children }) {
     }
 
     // Get remaining usage and limit for percentage calculation
-    const remaining = await getRemainingUsage(userId, feature, userTier);
+    const remaining = await getAuthoritativeRemainingUsage(feature);
     const limit = TIER_LIMITS[userTier]?.[feature] || 0;
     
     if (remaining === Infinity) {
@@ -174,7 +202,7 @@ export function SubscriptionProvider({ children }) {
   };
 
   const refreshUsage = async (feature) => {
-    const remaining = await getRemainingUsage(userId, feature, userTier);
+    const remaining = await getAuthoritativeRemainingUsage(feature);
     setUsage((prev) => ({ ...prev, [feature]: remaining }));
     return remaining;
   };
@@ -261,6 +289,7 @@ export function SubscriptionProvider({ children }) {
         getFeatureLimit,
         checkAndTrackUsage,
         refreshUsage,
+        getAuthoritativeRemainingUsage,
         getTierDisplayName,
         getTierColor,
         canAccessFeature: canAccessFeatureByName,

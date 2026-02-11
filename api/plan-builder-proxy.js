@@ -40,6 +40,8 @@ function isValidUUID(str) {
  * Main handler function
  */
 export default async function handler(req, res) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -65,9 +67,10 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[plan-builder-proxy] N8N webhook URL not configured');
+    console.error('[plan-builder-proxy] N8N webhook URL not configured', { requestId });
     return res.status(500).json({ 
-      error: 'Service not configured. Please try again later.'
+      error: 'Service not configured. Please try again later.',
+      requestId
     });
   }
 
@@ -75,24 +78,26 @@ export default async function handler(req, res) {
   const { job_id, contentGoal, timePeriod, platformFocus, brandVoice } = req.body || {};
 
   if (!job_id) {
-    console.error('[plan-builder-proxy] Missing job_id in request body');
+    console.error('[plan-builder-proxy] Missing job_id in request body', { requestId });
     return res.status(400).json({ 
       error: 'Missing required field: job_id',
-      hint: 'The job_id must be a valid UUID format'
+      hint: 'The job_id must be a valid UUID format',
+      requestId
     });
   }
 
   if (!isValidUUID(job_id)) {
-    console.error('[plan-builder-proxy] Invalid job_id format:', job_id);
+    console.error('[plan-builder-proxy] Invalid job_id format:', job_id, { requestId });
     return res.status(400).json({ 
       error: 'Invalid job_id format. Must be a valid UUID.',
       received: job_id,
-      example: '550e8400-e29b-41d4-a716-446655440000'
+      example: '550e8400-e29b-41d4-a716-446655440000',
+      requestId
     });
   }
 
   try {
-    console.log('[plan-builder-proxy] Forwarding job:', job_id);
+    console.log('[plan-builder-proxy] Forwarding job:', job_id, { requestId });
 
     // Build the complete payload for n8n
     const n8nPayload = {
@@ -115,26 +120,28 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(30000), // 30 seconds
     });
 
-    console.log('[plan-builder-proxy] n8n response status:', response.status, response.statusText);
+    console.log('[plan-builder-proxy] n8n response status:', response.status, response.statusText, { requestId });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
-      console.error('[plan-builder-proxy] n8n error response:', errorText);
+      console.error('[plan-builder-proxy] n8n error response:', errorText, { requestId });
       return res.status(response.status).json({ 
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
-        details: errorText.substring(0, 200)
+        details: errorText.substring(0, 200),
+        requestId
       });
     }
 
     // Parse and return the response
     await response.text();
-    console.log('[plan-builder-proxy] Webhook triggered successfully for job:', job_id);
+    console.log('[plan-builder-proxy] Webhook triggered successfully for job:', job_id, { requestId });
     
     // Return success (n8n will update job via Supabase)
     return res.status(200).json({ 
       success: true, 
       message: 'Webhook triggered successfully',
-      job_id: job_id
+      job_id: job_id,
+      requestId
     });
 
   } catch (error) {
@@ -147,20 +154,23 @@ export default async function handler(req, res) {
     // Handle timeout errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
       return res.status(504).json({ 
-        error: 'Request timeout: n8n webhook took longer than 30 seconds' 
+        error: 'Request timeout: n8n webhook took longer than 30 seconds',
+        requestId
       });
     }
 
     // Handle network errors
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
       return res.status(502).json({ 
-        error: 'Unable to reach n8n webhook. Please check the webhook URL.' 
+        error: 'Unable to reach n8n webhook. Please check the webhook URL.',
+        requestId
       });
     }
 
     // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'An unexpected error occurred. Please try again.'
+      error: 'An unexpected error occurred. Please try again.',
+      requestId
     });
   }
 }

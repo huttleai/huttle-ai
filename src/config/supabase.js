@@ -581,10 +581,35 @@ export async function getStorageUsage(userId) {
       if (error.code === 'PGRST116') {
         return { success: true, usageBytes: 0 };
       }
+      // Defensive fallback for schemas using user_id instead of id
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from(TABLES.USERS)
+        .select('storage_used_bytes')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!fallbackError) {
+        return { success: true, usageBytes: fallbackData?.storage_used_bytes || 0 };
+      }
       throw error;
     }
     
-    return { success: true, usageBytes: data?.storage_used_bytes || 0 };
+    if (data) {
+      return { success: true, usageBytes: data.storage_used_bytes || 0 };
+    }
+
+    // Defensive fallback for schemas using user_id instead of id
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from(TABLES.USERS)
+      .select('storage_used_bytes')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!fallbackError) {
+      return { success: true, usageBytes: fallbackData?.storage_used_bytes || 0 };
+    }
+
+    return { success: true, usageBytes: 0 };
   } catch (error) {
     // Silently fail - storage tracking isn't critical
     // console.error('Error getting storage usage:', error);
@@ -957,6 +982,8 @@ export async function saveUserPreferences(userId, preferences) {
         user_id: userId,
         ...preferences,
         updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id',
       })
       .select()
       .single();

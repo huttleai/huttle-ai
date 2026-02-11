@@ -15,9 +15,11 @@ const supabase = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl, supabaseServiceKey) 
   : null;
 
-const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK_URL;
+const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK_URL || process.env.N8N_PLAN_BUILDER_WEBHOOK || process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
 
 export default async function handler(req, res) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -30,8 +32,8 @@ export default async function handler(req, res) {
 
   // Validate services are configured
   if (!supabase) {
-    console.error('[create-plan-builder-job] Supabase not configured');
-    return res.status(500).json({ error: 'Service not configured' });
+    console.error('[create-plan-builder-job] Supabase not configured', { requestId });
+    return res.status(500).json({ error: 'Service not configured', requestId });
   }
 
   try {
@@ -51,7 +53,7 @@ export default async function handler(req, res) {
     const userId = user.id;
 
     // 2. Get user's subscription tier
-    const { data: subscription, error: subError } = await supabase
+    const { data: subscription, error: _subError } = await supabase
       .from('subscriptions')
       .select('tier')
       .eq('user_id', userId)
@@ -65,7 +67,7 @@ export default async function handler(req, res) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { data: usageData, error: usageError } = await supabase
+    const { data: usageData, error: _usageError } = await supabase
       .from('user_activity')
       .select('id', { count: 'exact' })
       .eq('user_id', userId)
@@ -142,19 +144,19 @@ export default async function handler(req, res) {
         });
 
         if (!n8nResponse.ok) {
-          console.error('n8n webhook failed:', await n8nResponse.text());
+          console.error('n8n webhook failed:', await n8nResponse.text(), { requestId });
           // Don't fail the request - n8n might pick it up via polling
         }
       } catch (n8nError) {
-        console.error('Error calling n8n webhook:', n8nError);
+        console.error('Error calling n8n webhook:', n8nError, { requestId });
         // Don't fail the request - n8n might pick it up via polling
       }
     } else {
-      console.warn('N8N_PLAN_BUILDER_WEBHOOK_URL not configured - job created but n8n webhook not called');
+      console.warn('N8N plan builder webhook not configured - job created but n8n webhook not called', { requestId });
     }
 
     // 7. Track the usage immediately (reserved slot)
-    await supabase
+    const { error: usageTrackError } = await supabase
       .from('user_activity')
       .insert({
         user_id: userId,
@@ -166,20 +168,26 @@ export default async function handler(req, res) {
           platforms
         }
       });
+    if (usageTrackError) {
+      console.error('Failed to track AI Plan Builder usage:', usageTrackError, { requestId, jobId: job.id });
+    }
 
     // 8. Return job ID to frontend
     return res.status(200).json({
       success: true,
       jobId: job.id,
       status: 'queued',
-      message: 'Plan generation started'
+      message: 'Plan generation started',
+      usageTracked: !usageTrackError,
+      requestId
     });
 
   } catch (error) {
     console.error('Error in create-plan-builder-job:', error);
     // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
-      error: 'An unexpected error occurred. Please try again.'
+      error: 'An unexpected error occurred. Please try again.',
+      requestId
     });
   }
 }

@@ -248,7 +248,7 @@ export default function Dashboard() {
   }, [addSocialUpdate]);
 
   // Sort posts by date
-  const sortedPosts = [...scheduledPosts].sort((a, b) => {
+  const sortedPosts = [...(scheduledPosts || [])].sort((a, b) => {
     const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
     const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
     return dateA - dateB;
@@ -256,14 +256,14 @@ export default function Dashboard() {
 
   // Calculate posting streak (consecutive days with scheduled posts starting from today)
   const postingStreak = useMemo(() => {
-    if (scheduledPosts.length === 0) return 0;
+    if ((scheduledPosts?.length || 0) === 0) return 0;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     // Get unique dates with posts
     const datesWithPosts = new Set(
-      scheduledPosts.map(post => post.scheduledDate)
+      (scheduledPosts || []).map(post => post.scheduledDate)
     );
     
     let streak = 0;
@@ -315,7 +315,7 @@ export default function Dashboard() {
   // Calculate unique platforms with scheduled posts
   const activePlatforms = useMemo(() => {
     const platforms = new Set();
-    scheduledPosts.forEach(post => {
+    (scheduledPosts || []).forEach(post => {
       post.platforms?.forEach(p => platforms.add(p));
     });
     return platforms.size;
@@ -455,10 +455,11 @@ export default function Dashboard() {
   useEffect(() => {
     const checkPanelUpdates = () => {
       const prev = prevPanelDataRef.current;
+      const scheduledPostsCount = scheduledPosts?.length || 0;
       
-      if (prev.scheduledPostsCount !== scheduledPosts.length) {
-        if (scheduledPosts.length > prev.scheduledPostsCount) {
-          const sorted = [...scheduledPosts].sort((a, b) => {
+      if (prev.scheduledPostsCount !== scheduledPostsCount) {
+        if (scheduledPostsCount > prev.scheduledPostsCount) {
+          const sorted = [...(scheduledPosts || [])].sort((a, b) => {
             const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
             const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
             return dateA - dateB;
@@ -466,10 +467,10 @@ export default function Dashboard() {
           const nextPost = sorted[0];
           if (nextPost) {
             const nextPostTime = `${nextPost.scheduledDate} at ${nextPost.scheduledTime}`;
-            addScheduledPostReminder(scheduledPosts.length, nextPostTime);
+            addScheduledPostReminder(scheduledPostsCount, nextPostTime);
           }
         }
-        prev.scheduledPostsCount = scheduledPosts.length;
+        prev.scheduledPostsCount = scheduledPostsCount;
       }
     };
 
@@ -744,7 +745,7 @@ export default function Dashboard() {
                               {post.scheduledDate} at {formatTo12Hour(post.scheduledTime)}
                             </span>
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
-                              {post.platforms[0]}{post.platforms.length > 1 ? ` +${post.platforms.length - 1}` : ''}
+                              {(post.platforms?.[0] ?? 'No platform')}{(post.platforms?.length ?? 0) > 1 ? ` +${(post.platforms?.length ?? 0) - 1}` : ''}
                             </span>
                           </div>
                         </div>
