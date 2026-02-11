@@ -114,7 +114,7 @@ export default function Login() {
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
-              <p className="text-lg font-semibold text-white">Feb 11, 2026</p>
+              <p className="text-lg font-semibold text-white">Feb 13, 2026</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
