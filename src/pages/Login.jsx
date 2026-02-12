@@ -105,22 +105,6 @@ export default function Login() {
               </div>
             ))}
           </div>
-
-          {/* Launch Status */}
-          <div className="mt-16 pt-8 border-t border-white/10 grid grid-cols-3 gap-8">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
-              <p className="text-lg font-semibold text-huttle-cyan">Early Access</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Launch Date</p>
-              <p className="text-lg font-semibold text-white">Feb 13, 2026</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Version</p>
-              <p className="text-lg font-semibold text-white">Pro Beta</p>
-            </div>
-          </div>
         </div>
       </div>
 
