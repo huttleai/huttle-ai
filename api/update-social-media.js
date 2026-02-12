@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

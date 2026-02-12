@@ -5,7 +5,6 @@ import {
   Crown, Check, ArrowRight, Sparkles, Shield, 
   Zap, Users, Lock, X, AlertCircle
 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 
 // ============================================
 // WAITLIST MODAL (Copied from LandingPage)
@@ -183,56 +182,11 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 export default function FoundersPage() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
+  const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     setIsCheckingOut(true);
-
-    const founderPriceId = import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL;
-    
-    if (!founderPriceId) {
-      alert('Payment system is being configured. Please try again shortly or contact support@huttleai.com');
-      setIsCheckingOut(false);
-      return;
-    }
-
-    try {
-      // Build headers - include auth token if user is logged in
-      const headers = { 'Content-Type': 'application/json' };
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-      } catch (e) {
-        // Continue without auth - guest checkout is supported
-      }
-
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          priceId: founderPriceId,
-          planId: 'founder',
-          billingCycle: 'annual',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create checkout session: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (error) {
-      console.error('Checkout error:', error);
-      alert(`Failed to start checkout: ${error.message}\n\nPlease contact support@huttleai.com if this persists.`);
-      setIsCheckingOut(false);
-    }
+    window.location.href = stripeTestCheckoutUrl;
   };
 
   const benefits = [
