@@ -8,7 +8,6 @@ import {
   Bot,
   User,
   Waves,
-  CreditCard,
   Settings,
   HelpCircle,
   Menu,
@@ -99,7 +98,6 @@ export default function Sidebar() {
       items: [
         { name: 'Profile', icon: User, path: '/dashboard/profile', color: 'from-slate-500 to-gray-600' },
         { name: 'Brand Voice', icon: Waves, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500' },
-        { name: 'Subscription', icon: CreditCard, path: '/dashboard/subscription', color: 'from-emerald-500 to-green-500' },
         { name: 'Social Updates', icon: Newspaper, path: '/dashboard/social-updates', color: 'from-orange-500 to-red-500' },
         { name: 'Settings', icon: Settings, path: '/dashboard/settings', color: 'from-gray-500 to-slate-600' },
         { name: 'Help', icon: HelpCircle, path: '/dashboard/help', color: 'from-blue-400 to-cyan-500' }

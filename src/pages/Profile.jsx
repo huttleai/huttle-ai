@@ -1,12 +1,14 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { User, Mail, Phone, MapPin, Save } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { formatDisplayName } from '../utils/brandContextBuilder';
 
 export default function Profile() {
   const { user, updateUser, updateEmail } = useContext(AuthContext);
+  const { userTier } = useSubscription();
   const { brandProfile, updateBrandData } = useBrand();
   const { showToast } = useToast();
   
@@ -65,6 +67,7 @@ export default function Profile() {
   };
 
   const displayName = formatDisplayName(defaultName);
+  const isFoundingMember = userTier === 'founders' || userTier === 'founder';
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
@@ -91,7 +94,14 @@ export default function Profile() {
               {displayName?.[0]?.toUpperCase() || <User className="w-8 h-8" />}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{displayName || 'Your Name'}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-bold text-gray-900">{displayName || 'Your Name'}</h2>
+                {isFoundingMember && (
+                  <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    🏆 FOUNDING MEMBER
+                  </span>
+                )}
+              </div>
               <p className="text-gray-600">{defaultEmail || 'No email set'}</p>
             </div>
           </div>
