@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Shuffle, Sparkles, ArrowRight, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap } from 'lucide-react';
+import { Shuffle, Sparkles, ArrowRight, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -29,6 +29,7 @@ export default function ContentRemix() {
   const [remixMode, setRemixMode] = useState('viral'); // 'viral' or 'sales'
   const [isLoading, setIsLoading] = useState(false);
   const [copiedIdea, setCopiedIdea] = useState(null);
+  const [remixError, setRemixError] = useState(null);
 
   // Check for content passed from Trend Lab via sessionStorage
   useEffect(() => {
@@ -72,6 +73,7 @@ export default function ContentRemix() {
 
       if (result.success && result.content) {
         setRemixOutput(result.content);
+        setRemixError(null);
         const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
         showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
       } else {
@@ -80,6 +82,7 @@ export default function ContentRemix() {
         const grokResult = await remixContentWithMode(remixInput, brandData, remixMode);
         if (grokResult.success && grokResult.remixed) {
           setRemixOutput(grokResult.remixed);
+          setRemixError(null);
           const modeLabel = remixMode === 'sales' ? 'Sales conversion' : 'Viral reach';
           showToast(`Content remixed for ${modeLabel}! ${getToastDisclaimer('remix')}`, 'success');
         } else {
@@ -91,6 +94,7 @@ export default function ContentRemix() {
           } else if (result.error) {
             errorMessage = result.error;
           }
+          setRemixError(errorMessage);
           showToast(errorMessage, 'error');
         }
       }
@@ -101,12 +105,14 @@ export default function ContentRemix() {
         const grokResult = await remixContentWithMode(remixInput, brandData, remixMode);
         if (grokResult.success && grokResult.remixed) {
           setRemixOutput(grokResult.remixed);
+          setRemixError(null);
           showToast(`Content remixed! ${getToastDisclaimer('remix')}`, 'success');
           return;
         }
       } catch (grokError) {
         console.error('Grok fallback also failed:', grokError);
       }
+      setRemixError('Error remixing content. Please try again.');
       showToast('Error remixing content. Please try again.', 'error');
     } finally {
       setIsLoading(false);
@@ -278,7 +284,7 @@ export default function ContentRemix() {
                 Remixed Output
               </h2>
               
-              {!remixOutput && !isLoading && (
+              {!remixOutput && !isLoading && !remixError && (
                 <div className="flex flex-col items-center justify-center h-[400px] text-center">
                   <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
                     <Shuffle className="w-10 h-10 text-gray-400" />
@@ -307,6 +313,23 @@ export default function ContentRemix() {
                 </div>
               )}
               
+              {remixError && !isLoading && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+                    <AlertTriangle className="w-7 h-7 text-red-400" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 mb-2">Something went wrong</h3>
+                  <p className="text-sm text-gray-500 mb-4 max-w-sm">{remixError}</p>
+                  <button
+                    onClick={() => { setRemixError(null); handleRemixContent(); }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-all"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Try Again
+                  </button>
+                </div>
+              )}
+
               {remixOutput && !isLoading && (
                 <div className="remix-output-container">
                   <RemixContentDisplay 

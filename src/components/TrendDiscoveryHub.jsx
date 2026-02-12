@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus } from 'lucide-react';
+import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
 import MarkdownRenderer from './MarkdownRenderer';
 import { scanTrendingTopics } from '../services/perplexityAPI';
@@ -34,6 +34,8 @@ export default function TrendDiscoveryHub() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [hoveredTrend, setHoveredTrend] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const [deepDiveError, setDeepDiveError] = useState(null);
   
   const canAccessDeepDive = userTier !== TIERS.FREE;
 
@@ -127,12 +129,15 @@ export default function TrendDiscoveryHub() {
           niche: brandData.niche,
           citations: result.citations || []
         });
+        setScanError(null);
         showToast(`Scan complete! Found ${parsedTrends.length} trending topics. ${getToastDisclaimer('forecast')}`, 'success');
       } else {
+        setScanError('Failed to scan trends. Please try again.');
         showToast('Failed to scan trends. Please try again.', 'error');
       }
     } catch (error) {
       console.error('Quick Scan error:', error);
+      setScanError('Failed to scan trends. Please try again.');
       showToast('Error scanning trends', 'error');
     } finally {
       setIsScanning(false);
@@ -203,6 +208,7 @@ export default function TrendDiscoveryHub() {
           timestamp: new Date().toLocaleString(),
           source: 'n8n'
         });
+        setDeepDiveError(null);
         showToast(`Deep Dive complete! Found ${ideas.length} content ideas. ${getToastDisclaimer('forecast')}`, 'ai');
       } else {
         // If workflow is not configured or failed
@@ -220,6 +226,7 @@ export default function TrendDiscoveryHub() {
           ? 'Workflow server error. Please check your n8n workflow logs for details.'
           : `Deep Dive failed: ${errorMessage}. Check console for details.`;
         
+        setDeepDiveError(userMessage);
         showToast(userMessage, 'error');
       }
     } catch (error) {
@@ -228,8 +235,10 @@ export default function TrendDiscoveryHub() {
       // Check if this is a timeout error
       if (error.name === 'AbortError' || error.name === 'TimeoutError' || 
           (error.message && error.message.toLowerCase().includes('timeout'))) {
+        setDeepDiveError('The analysis is taking longer than expected. Please try again.');
         showToast('The analysis is taking longer than expected. Please try again.', 'warning');
       } else {
+        setDeepDiveError('Error analyzing trends. Please try again.');
         showToast('Error analyzing trends', 'error');
       }
     } finally {
@@ -445,6 +454,22 @@ export default function TrendDiscoveryHub() {
                       </p>
                     </div>
                   </div>
+                </div>
+              ) : scanError ? (
+                /* Error State with Retry */
+                <div className="relative py-12 text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 mb-4">
+                    <AlertTriangle className="w-8 h-8 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Scan Failed</h3>
+                  <p className="text-gray-500 mb-6 max-w-sm mx-auto">{scanError}</p>
+                  <button
+                    onClick={() => { setScanError(null); handleQuickScan(); }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold transition-all shadow-lg"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Try Again
+                  </button>
                 </div>
               ) : scanResults ? (
                 /* Results Display */
@@ -725,6 +750,24 @@ export default function TrendDiscoveryHub() {
                     </div>
                   </div>
 
+                  {/* Deep Dive Error State */}
+                  {deepDiveError && !isLoadingDeepDive && (
+                    <div className="relative py-12 text-center">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 mb-4">
+                        <AlertTriangle className="w-8 h-8 text-red-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Deep Dive Failed</h3>
+                      <p className="text-gray-500 mb-6 max-w-sm mx-auto">{deepDiveError}</p>
+                      <button
+                        onClick={() => { setDeepDiveError(null); handleDeepDive(); }}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold transition-all shadow-lg"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+
                   {/* Results */}
                   {deepDiveResults && (
                     <div className="space-y-4 animate-fadeIn">
@@ -903,7 +946,7 @@ export default function TrendDiscoveryHub() {
                   )}
 
                   {/* Empty State */}
-                  {!deepDiveResults && !isLoadingDeepDive && (
+                  {!deepDiveResults && !isLoadingDeepDive && !deepDiveError && (
                     <div className="text-center py-8 text-gray-500">
                       <Target className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                       <p className="text-sm">

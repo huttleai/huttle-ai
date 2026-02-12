@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video, AlertCircle, Eye, Clock, Lightbulb, HelpCircle, Building2, AtSign } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
@@ -183,29 +183,56 @@ const EMOTIONAL_TRIGGERS = [
   { value: 'understood', label: 'Understood', description: 'Seen and validated', icon: Heart }
 ];
 
+const defaultFormData = {
+  profile_type: '',
+  creator_archetype: '',
+  first_name: '',
+  brand_name: '',
+  industry: '',
+  industry_custom: '',
+  niche: '',
+  target_audience: [],
+  content_goals: [],
+  posting_frequency: '',
+  preferred_platforms: [],
+  brand_voice_preference: '',
+  content_strengths: [],
+  biggest_challenge: '',
+  emotional_triggers: []
+};
+
 export default function OnboardingQuiz({ onComplete }) {
   const { addToast } = useToast();
   const { updateBrandData, refreshBrandData } = useContext(BrandContext);
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    profile_type: '',
-    creator_archetype: '',
-    first_name: '',
-    brand_name: '',
-    industry: '',
-    industry_custom: '', // Custom text when "Other" is selected
-    niche: '',
-    target_audience: [], // Multi-select, max 3
-    content_goals: [],
-    posting_frequency: '',
-    preferred_platforms: [],
-    brand_voice_preference: '',
-    // New viral content strategy fields
-    content_strengths: [],
-    biggest_challenge: '',
-    emotional_triggers: []
+  const [step, setStep] = useState(() => {
+    try {
+      const saved = localStorage.getItem('onboarding_step');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (parsed >= 1 && parsed <= 10) return parsed;
+      }
+    } catch (e) {}
+    return 1;
+  });
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('onboarding_progress');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaultFormData, ...parsed };
+      }
+    } catch (e) {}
+    return defaultFormData;
   });
   const [saving, setSaving] = useState(false);
+
+  // Persist onboarding progress to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('onboarding_progress', JSON.stringify(formData));
+      localStorage.setItem('onboarding_step', String(step));
+    } catch (e) {}
+  }, [formData, step]);
 
   const isCreator = formData.profile_type === 'creator';
   
@@ -431,6 +458,10 @@ export default function OnboardingQuiz({ onComplete }) {
       if (refreshBrandData) {
         refreshBrandData();
       }
+
+      // Clear persisted onboarding progress
+      localStorage.removeItem('onboarding_progress');
+      localStorage.removeItem('onboarding_step');
 
       addToast('Profile setup complete! 🎉', 'success');
       
@@ -1140,43 +1171,90 @@ export default function OnboardingQuiz({ onComplete }) {
             </div>
 
             {/* Footer with Navigation */}
-            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-              {step > 1 && (
-                <button
-                  onClick={handleBack}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Back
-                </button>
-              )}
-              
-              {step < totalSteps ? (
-                <button
-                  onClick={handleNext}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-huttle-primary hover:bg-huttle-primary-dark"
-                >
-                  {isCreator && step === 2 && !formData.creator_archetype ? 'Skip' : 'Continue'}
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={handleSubmit}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold bg-emerald-500 hover:bg-emerald-600 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                >
-                  {saving ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Complete Setup
-                    </>
-                  )}
-                </button>
+            <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 bg-slate-50 border-t border-slate-100">
+              <div className="flex gap-3">
+                {step > 1 && (
+                  <button
+                    onClick={handleBack}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                )}
+                
+                {step < totalSteps ? (
+                  <button
+                    onClick={handleNext}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-huttle-primary hover:bg-huttle-primary-dark"
+                  >
+                    {isCreator && step === 2 && !formData.creator_archetype ? 'Skip' : 'Continue'}
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold bg-emerald-500 hover:bg-emerald-600 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Complete Setup
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {step > 1 && step < totalSteps && (
+                <div className="flex justify-center mt-3">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data: userData } = await supabase.auth.getUser();
+                        if (userData?.user) {
+                          const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+                          await supabase
+                            .from('user_profile')
+                            .upsert({
+                              user_id: userData.user.id,
+                              first_name: formData.first_name?.trim() || null,
+                              profile_type: formData.profile_type || null,
+                              brand_name: formData.brand_name?.trim() || null,
+                              niche: formData.niche ? capitalize(formData.niche) : null,
+                              quiz_completed_at: new Date().toISOString(),
+                              onboarding_step: step
+                            }, { onConflict: 'user_id', ignoreDuplicates: false });
+                          
+                          updateBrandData({
+                            firstName: formData.first_name?.trim() || '',
+                            profileType: formData.profile_type || 'brand',
+                            brandName: formData.brand_name || '',
+                            niche: formData.niche || '',
+                          });
+                          
+                          if (refreshBrandData) refreshBrandData();
+                          localStorage.removeItem('onboarding_progress');
+                          localStorage.removeItem('onboarding_step');
+                          addToast('You can complete your profile later in Settings', 'info');
+                          if (onComplete) await onComplete(formData);
+                        }
+                      } catch (e) {
+                        console.error('Skip onboarding error:', e);
+                        addToast('Could not skip. Please complete the setup.', 'error');
+                      }
+                    }}
+                    className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Skip for now
+                  </button>
+                </div>
               )}
             </div>
           </div>

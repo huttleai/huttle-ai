@@ -615,40 +615,24 @@ export default function AITools() {
 
         {/* Tool Selector */}
         <div className="mb-3 md:mb-4 lg:mb-6">
-          {/* Mobile Dropdown - Gradient Button Style */}
-          <div className="md:hidden relative group">
-            {/* Active Tool Icon */}
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-              {(() => {
-                const ActiveToolIcon = tools.find(t => t.id === activeTool)?.icon;
-                return ActiveToolIcon ? <ActiveToolIcon className="w-4 h-4 text-white drop-shadow-sm" /> : null;
-              })()}
-            </div>
-            
-            {/* Solid Blue Background Layer */}
-            <div className="absolute inset-0 bg-huttle-primary rounded-xl shadow-lg shadow-huttle-primary/25" />
-            
-            {/* Select Element */}
-            <select
-              value={activeTool}
-              onChange={(e) => setActiveTool(e.target.value)}
-              className="relative w-full pl-11 pr-10 py-3.5 bg-transparent border-0 rounded-xl font-bold text-sm text-white outline-none appearance-none z-10"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6L8 10L12 6' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                backgroundPosition: 'right 12px center',
-                backgroundSize: '16px',
-                backgroundRepeat: 'no-repeat'
-              }}
-            >
+          {/* Mobile Horizontal Scroll Tabs */}
+          <div className="md:hidden -mx-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 px-4 snap-x snap-mandatory scrollbar-hide">
               {tools.map((tool) => (
-                <option key={tool.id} value={tool.id} className="bg-gray-900 text-white">
-                  {tool.name} - {tool.description}
-                </option>
+                <button
+                  key={tool.id}
+                  onClick={() => setActiveTool(tool.id)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-semibold transition-all duration-200 whitespace-nowrap snap-start flex-shrink-0 text-xs ${
+                    activeTool === tool.id
+                      ? 'bg-huttle-primary text-white shadow-lg shadow-huttle-primary/25'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:border-huttle-primary/50'
+                  }`}
+                >
+                  <tool.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{tool.name}</span>
+                </button>
               ))}
-            </select>
-            
-            {/* Shine Effect on Hover */}
-            <div className="absolute inset-0 rounded-xl bg-white opacity-0 group-active:opacity-10 transition-opacity pointer-events-none" />
+            </div>
           </div>
 
           {/* Desktop/Tablet Horizontal Scroll */}
