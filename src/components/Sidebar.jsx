@@ -35,7 +35,9 @@ export default function Sidebar() {
 
   // Fetch AI usage on mount and when tier changes
   useEffect(() => {
-    const limit = getFeatureLimit ? getFeatureLimit('aiGenerations') : (TIER_LIMITS?.[userTier?.toUpperCase?.()]?.aiGenerations ?? 20);
+    const limit = getFeatureLimit
+      ? getFeatureLimit('aiGenerations')
+      : (TIER_LIMITS?.[userTier?.toUpperCase?.()]?.aiGenerations ?? 20);
     setAiLimit(limit === Infinity ? 999 : limit);
     
     if (refreshUsage) {
@@ -44,10 +46,10 @@ export default function Sidebar() {
           setAiUsed(Math.max(0, limit - remaining));
         }
       }).catch(() => {});
-    } else if (usage?.aiGenerations !== undefined) {
+    } else if (typeof usage?.aiGenerations === 'number') {
       setAiUsed(Math.max(0, limit - usage.aiGenerations));
     }
-  }, [userTier, usage, refreshUsage, getFeatureLimit, TIER_LIMITS]);
+  }, [userTier, usage?.aiGenerations, refreshUsage, getFeatureLimit, TIER_LIMITS]);
 
   const handleLogout = async () => {
     try {

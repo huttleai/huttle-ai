@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   creator_archetype TEXT, -- For solo creators: 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
   
   -- Extended brand/creator info
+  first_name TEXT, -- User first name from onboarding
   brand_name TEXT, -- Brand name or creator handle
   industry TEXT, -- Industry or category
   
@@ -93,6 +94,7 @@ COMMENT ON TABLE public.user_profile IS 'Stores user onboarding quiz data and pr
 -- Migration for existing tables (run if table already exists):
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS profile_type TEXT DEFAULT 'brand';
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS creator_archetype TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS first_name TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS brand_name TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS industry TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS content_strengths TEXT[];

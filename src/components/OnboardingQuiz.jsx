@@ -29,29 +29,56 @@ const CREATOR_ARCHETYPES = [
   { value: 'curator', label: 'The Curator', description: 'You discover and share gems', icon: Search }
 ];
 
-const NICHES = [
+// Brand niches — business content strategies (shown after Industry)
+const BRAND_NICHES = [
+  { value: 'product_reviews', label: 'Product Reviews & Demos', icon: Eye },
+  { value: 'behind_scenes', label: 'Behind the Scenes', icon: Video },
+  { value: 'thought_leadership', label: 'Industry Thought Leadership', icon: Lightbulb },
+  { value: 'customer_stories', label: 'Customer Success Stories', icon: Heart },
+  { value: 'how_to', label: 'How-To Guides & Tutorials', icon: BookOpen },
+  { value: 'culture', label: 'Company Culture & Team', icon: Users },
+  { value: 'promotions', label: 'Promotions & Launches', icon: Rocket },
+  { value: 'other', label: 'Other', icon: Target }
+];
+
+// Creator focuses — personal content topics (replaces Industry + Niche for creators)
+const CREATOR_FOCUSES = [
   { value: 'fitness', label: 'Fitness & Wellness', icon: Heart },
   { value: 'food', label: 'Food & Cooking', icon: Sparkles },
   { value: 'travel', label: 'Travel & Adventure', icon: Rocket },
   { value: 'fashion', label: 'Fashion & Beauty', icon: Palette },
-  { value: 'tech', label: 'Technology & Gadgets', icon: Zap },
-  { value: 'business', label: 'Business & Entrepreneurship', icon: Briefcase },
-  { value: 'lifestyle', label: 'Lifestyle & Personal', icon: User },
-  { value: 'education', label: 'Education & Learning', icon: BookOpen },
-  { value: 'entertainment', label: 'Entertainment & Gaming', icon: Smile },
+  { value: 'tech', label: 'Tech & Gadgets', icon: Zap },
+  { value: 'personal_growth', label: 'Personal Growth', icon: TrendingUp },
+  { value: 'lifestyle', label: 'Lifestyle & Daily Life', icon: User },
+  { value: 'education', label: 'Education & Tips', icon: BookOpen },
+  { value: 'entertainment', label: 'Entertainment & Comedy', icon: Smile },
   { value: 'art', label: 'Art & Creativity', icon: PenTool },
   { value: 'other', label: 'Other', icon: Target }
 ];
 
-const AUDIENCES = [
-  { value: 'gen-z', label: 'Gen Z (18-24)', description: 'Young, digital-native audience', icon: Zap },
+// Brand audiences — customer-centric segments
+const BRAND_AUDIENCES = [
+  { value: 'small_business', label: 'Small Business Owners', description: 'Entrepreneurs running their own business', icon: Briefcase },
+  { value: 'enterprise', label: 'Enterprise Decision Makers', description: 'Corporate buyers and managers', icon: Building2 },
+  { value: 'gen_z_consumers', label: 'Gen Z Consumers (18-24)', description: 'Young, digital-native shoppers', icon: Zap },
+  { value: 'millennial_consumers', label: 'Millennial Consumers (25-40)', description: 'Career-focused, value-driven buyers', icon: TrendingUp },
+  { value: 'parents', label: 'Parents & Families', description: 'Family-oriented decision makers', icon: Users },
+  { value: 'health_conscious', label: 'Health-Conscious Buyers', description: 'Wellness and lifestyle shoppers', icon: Heart },
+  { value: 'tech_enthusiasts', label: 'Tech Enthusiasts', description: 'Early adopters and gadget lovers', icon: Lightbulb },
+  { value: 'general', label: 'General Consumers', description: 'Broad consumer demographic', icon: Users },
+  { value: 'other', label: 'Other', description: 'Fill in details on Brand Profile page', icon: HelpCircle }
+];
+
+// Creator communities — follower/community segments
+const CREATOR_COMMUNITIES = [
+  { value: 'gen_z', label: 'Gen Z (18-24)', description: 'Young, digital-native followers', icon: Zap },
   { value: 'millennials', label: 'Millennials (25-40)', description: 'Career-focused, diverse interests', icon: TrendingUp },
-  { value: 'gen-x', label: 'Gen X (41-56)', description: 'Established, family-oriented', icon: Users },
-  { value: 'boomers', label: 'Baby Boomers (57+)', description: 'Experienced, value-driven', icon: Target },
-  { value: 'professionals', label: 'Professionals', description: 'Industry experts and leaders', icon: Briefcase },
-  { value: 'entrepreneurs', label: 'Entrepreneurs', description: 'Business owners and startups', icon: Rocket },
-  { value: 'students', label: 'Students', description: 'Learning-focused audience', icon: BookOpen },
-  { value: 'general', label: 'General Audience', description: 'Broad, mixed demographic', icon: Users },
+  { value: 'gen_x', label: 'Gen X (41-56)', description: 'Established, family-oriented audience', icon: Users },
+  { value: 'fellow_creators', label: 'Fellow Creators', description: 'Other creators in your space', icon: Sparkles },
+  { value: 'entrepreneurs', label: 'Aspiring Entrepreneurs', description: 'People building their own thing', icon: Rocket },
+  { value: 'students', label: 'Students & Learners', description: 'Knowledge-hungry audience', icon: BookOpen },
+  { value: 'wellness', label: 'Wellness Community', description: 'Health and self-improvement focused', icon: Heart },
+  { value: 'general', label: 'General Followers', description: 'Broad, mixed community', icon: Users },
   { value: 'other', label: 'Other', description: 'Fill in details on Brand Profile page', icon: HelpCircle }
 ];
 
@@ -338,23 +365,26 @@ export default function OnboardingQuiz({ onComplete }) {
 
       // Helper to capitalize first letter
       const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
-      const capitalizeArray = (arr) => Array.isArray(arr) ? arr.map(capitalize) : arr;
+      const capitalizeArray = (arr) => Array.isArray(arr) ? [...new Set(arr)].map(capitalize) : arr;
       
       // Prepare complete profile data with all fields (capitalize selections)
+      // Null out fields that don't apply to the chosen profile type
       const profileData = {
         user_id: userId,
         first_name: formData.first_name.trim(),
         profile_type: formData.profile_type,
-        creator_archetype: formData.creator_archetype ? capitalize(formData.creator_archetype) : null,
-        brand_name: formData.brand_name || null,
-        industry: formData.industry === 'other' && formData.industry_custom ? capitalize(formData.industry_custom.trim()) : (formData.industry ? capitalize(formData.industry) : null),
+        creator_archetype: isCreator && formData.creator_archetype ? capitalize(formData.creator_archetype) : null,
+        brand_name: formData.brand_name?.trim() || null,
+        industry: !isCreator
+          ? (formData.industry === 'other' && formData.industry_custom ? capitalize(formData.industry_custom.trim()) : (formData.industry ? capitalize(formData.industry) : null))
+          : null,
         niche: capitalize(formData.niche),
         target_audience: capitalizeArray(formData.target_audience),
         content_goals: capitalizeArray(formData.content_goals),
         posting_frequency: capitalize(formData.posting_frequency),
         preferred_platforms: capitalizeArray(formData.preferred_platforms),
         brand_voice_preference: capitalize(formData.brand_voice_preference),
-        // New viral content strategy fields
+        // Viral content strategy fields
         content_strengths: capitalizeArray(formData.content_strengths),
         biggest_challenge: formData.biggest_challenge ? capitalize(formData.biggest_challenge) : null,
         emotional_triggers: capitalizeArray(formData.emotional_triggers),
@@ -580,10 +610,10 @@ export default function OnboardingQuiz({ onComplete }) {
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            What industry are you in?
+            What industry is your business in?
           </h2>
           <p className="text-slate-500 mb-6">
-            This helps AI understand your competitive landscape
+            This tells AI about your market and competitive landscape
           </p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -642,17 +672,18 @@ export default function OnboardingQuiz({ onComplete }) {
     // Niche step
     const nicheStep = isCreator ? 4 : 4;
     if (step === nicheStep) {
+      const niches = isCreator ? CREATOR_FOCUSES : BRAND_NICHES;
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            {isCreator ? "What's your content focus?" : "What's your content niche?"}
+            {isCreator ? "What's your content focus?" : "What type of content does your brand create?"}
           </h2>
           <p className="text-slate-500 mb-6">
-            {isCreator ? 'Choose what you mostly create content about' : 'Choose the category that best describes your content'}
+            {isCreator ? 'Choose what you mostly create content about' : 'This is your content angle \u2014 what makes your brand\'s content unique'}
           </p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {NICHES.map(niche => {
+            {niches.map(niche => {
               const Icon = niche.icon;
               const isSelected = formData.niche === niche.value;
               
@@ -690,6 +721,7 @@ export default function OnboardingQuiz({ onComplete }) {
     // Audience step - multi-select, max 3
     const audienceStep = isCreator ? 5 : 5;
     if (step === audienceStep) {
+      const audiences = isCreator ? CREATOR_COMMUNITIES : BRAND_AUDIENCES;
       const maxAudience = 3;
       const selectedCount = formData.target_audience.length;
       
@@ -710,11 +742,11 @@ export default function OnboardingQuiz({ onComplete }) {
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            {isCreator ? "Who's your community?" : "Who's your target audience?"}
+            {isCreator ? "Who's your community?" : "Who's your target customer?"}
           </h2>
           <div className="flex items-center justify-between mb-6">
             <p className="text-slate-500">
-              {isCreator ? 'Select up to 3 communities' : 'Select up to 3 demographics'}
+              {isCreator ? 'Select up to 3 communities you want to reach' : 'Select up to 3 customer segments you serve'}
             </p>
             <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
               selectedCount === maxAudience ? 'bg-huttle-primary/10 text-huttle-primary' : 'bg-slate-100 text-slate-500'
@@ -724,7 +756,7 @@ export default function OnboardingQuiz({ onComplete }) {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {AUDIENCES.map(audience => {
+            {audiences.map(audience => {
               const Icon = audience.icon;
               const isSelected = formData.target_audience.includes(audience.value);
               const isDisabled = !isSelected && selectedCount >= maxAudience;

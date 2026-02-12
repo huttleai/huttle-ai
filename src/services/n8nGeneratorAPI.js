@@ -52,9 +52,16 @@ async function getAuthHeaders() {
     'Content-Type': 'application/json',
   };
   
-  // Auth is optional in safe mode - just return headers without auth
-  // Will be re-enabled when Supabase is fixed
-  console.log('🔐 [Frontend] Getting auth headers (safe mode - auth disabled)');
+  // Include auth headers for API requests
+  try {
+    const { supabase } = await import('../config/supabase');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (e) {
+    console.warn('⚠️ [n8nGenerator] Could not get auth session:', e.message);
+  }
   
   return headers;
 }

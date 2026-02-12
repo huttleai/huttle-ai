@@ -312,12 +312,12 @@ export default async function handler(req, res) {
         const subscription = event.data.object;
         const customerId = subscription.customer;
 
-        // Find user by Stripe customer ID
+        // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
         const { data: profile } = await supabase
           .from('user_profile')
           .select('user_id')
           .eq('stripe_customer_id', customerId)
-          .single();
+          .maybeSingle();
 
         if (profile) {
           // Update subscription to canceled/free tier
@@ -337,12 +337,12 @@ export default async function handler(req, res) {
         const invoice = event.data.object;
         const customerId = invoice.customer;
 
-        // Find user by Stripe customer ID
+        // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
         const { data: profile } = await supabase
           .from('user_profile')
           .select('user_id')
           .eq('stripe_customer_id', customerId)
-          .single();
+          .maybeSingle();
 
         if (profile) {
           // Update subscription status to past_due
@@ -365,7 +365,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('Webhook Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'An unexpected error occurred processing this webhook.' });
   }
 }
 

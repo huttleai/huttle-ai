@@ -8,9 +8,15 @@
  * - VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK: n8n webhook endpoint for Content Remix Studio
  */
 
+import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 
 const N8N_WEBHOOK_URL = process.env.VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK || process.env.N8N_WEBHOOK_URL_GENERATOR;
+
+// Initialize Supabase for auth verification
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 /**
  * Main handler function
@@ -26,6 +32,26 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     console.log('❌ [n8n-generator] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Verify authentication
+  const authHeader = req.headers.authorization;
+  let verifiedUserId = null;
+  
+  if (authHeader && supabase) {
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (error || !user) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+      verifiedUserId = user.id;
+    } catch (error) {
+      return res.status(401).json({ error: 'Authentication failed' });
+    }
+  } else if (supabase) {
+    // Auth is required when Supabase is configured
+    return res.status(401).json({ error: 'Authentication required' });
   }
 
   // Validate environment variables
@@ -50,8 +76,9 @@ export default async function handler(req, res) {
       additionalContext
     } = req.body;
 
-    // Validate required fields
-    if (!userId) {
+    // Use verified user ID from auth, fall back to body userId only if auth is not available
+    const authenticatedUserId = verifiedUserId || userId;
+    if (!authenticatedUserId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
     if (!topic || !topic.trim()) {
@@ -64,9 +91,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Platform is required' });
     }
 
-    // Prepare payload for n8n
+    // Prepare payload for n8n (use authenticated user ID)
     const n8nPayload = {
-      userId,
+      userId: authenticatedUserId,
       topic,
       platform,
       contentType,

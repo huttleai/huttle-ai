@@ -124,14 +124,25 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     try {
       console.log(`[PlanBuilder] Attempt ${attempt + 1} of ${retries + 1} - Triggering webhook...`);
       
+      // Include auth headers for the proxy endpoint
+      const requestHeaders = { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          requestHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      } catch (e) {
+        console.warn('[PlanBuilder] Could not get auth session:', e.message);
+      }
+
       const response = await fetch(N8N_PLAN_BUILDER_WEBHOOK_URL, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: requestHeaders,
         body: JSON.stringify(payload),
-        mode: 'cors' // Explicitly set CORS mode
+        mode: 'cors'
       });
 
       console.log(`[PlanBuilder] Response status: ${response.status} ${response.statusText}`);

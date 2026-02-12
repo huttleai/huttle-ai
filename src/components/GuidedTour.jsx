@@ -17,34 +17,50 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
     const checkTourStatus = async () => {
       if (!user) return;
       
-      // Check if user has already seen the tour (stored in user_profile)
+      // Check localStorage first (fast, works for all users)
+      const localCompleted = localStorage.getItem(storageKey);
+      if (localCompleted) return;
+      
+      // Try checking database, but gracefully handle missing column
       try {
         const { data, error } = await supabase
           .from('user_profile')
           .select('has_seen_tour')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error checking tour status:', error);
+        if (error) {
+          // Column doesn't exist (42703) or table issues - fall back to localStorage only
+          if (error.code === '42703' || error.code === '42P01' || error.code === 'PGRST204') {
+            // Column/table doesn't exist — silently fall back to localStorage
+          } else if (error.code !== 'PGRST116') {
+            console.error('Error checking tour status:', error);
+          }
+          
+          // Show tour if localStorage doesn't have it marked
+          if (isMounted) {
+            timer = setTimeout(() => {
+              if (isMounted) setIsActive(true);
+            }, 500);
+          }
           return;
         }
         
         // Only show tour if user has NOT seen it yet
-        // Also check localStorage as fallback for existing users
-        const localCompleted = localStorage.getItem(storageKey);
         const dbCompleted = data?.has_seen_tour;
         
-        if (!dbCompleted && !localCompleted && isMounted) {
-          // Delay showing tour slightly for better UX
+        if (!dbCompleted && isMounted) {
           timer = setTimeout(() => {
-            if (isMounted) {
-              setIsActive(true);
-            }
+            if (isMounted) setIsActive(true);
           }, 500);
         }
       } catch (error) {
-        console.error('Error in tour status check:', error);
+        // Silently fall back to localStorage-only behavior
+        if (!localCompleted && isMounted) {
+          timer = setTimeout(() => {
+            if (isMounted) setIsActive(true);
+          }, 500);
+        }
       }
     };
     

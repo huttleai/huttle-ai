@@ -133,7 +133,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Subscription Status Error:', error);
     return res.status(500).json({
-      error: error.message || 'Failed to get subscription status',
+      error: 'Failed to get subscription status. Please try again.',
     });
   }
 }

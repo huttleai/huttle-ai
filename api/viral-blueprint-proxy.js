@@ -58,15 +58,28 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Validate and sanitize input before forwarding to n8n
+    const { platform, postType, topic, objective, targetAudience, voiceContext } = req.body || {};
+    if (!platform || !topic) {
+      return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
+    }
+    const sanitizedPayload = {
+      platform,
+      postType: postType || 'video',
+      topic: String(topic).substring(0, 500),
+      objective: objective || 'viral',
+      targetAudience: targetAudience ? String(targetAudience).substring(0, 200) : '',
+      voiceContext: voiceContext || {},
+    };
 
-    // Forward request to n8n webhook
+    // Forward sanitized request to n8n webhook
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(sanitizedPayload),
       // Add timeout for long-running workflows
       signal: AbortSignal.timeout(120000), // 120 seconds
     });

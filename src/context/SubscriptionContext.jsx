@@ -59,7 +59,7 @@ export function SubscriptionProvider({ children }) {
     setUserTier(newTier);
     console.log('🎭 Demo Mode: Tier changed to', newTier);
     return true;
-  }, [skipAuth, demoMode]);
+  }, [skipAuth]);
 
   // Listen for demo tier changes from other components (e.g., checkout simulation)
   useEffect(() => {
@@ -128,17 +128,17 @@ export function SubscriptionProvider({ children }) {
     }
   };
 
-  const checkFeatureAccess = (feature) => {
+  const checkFeatureAccess = useCallback((feature) => {
     return hasFeatureAccess(userTier, feature);
-  };
+  }, [userTier]);
 
-  const getFeatureLimit = (feature) => {
+  const getFeatureLimit = useCallback((feature) => {
     // Dev mode: Return unlimited for all features
     if (skipAuth) {
       return Infinity;
     }
     return TIER_LIMITS[userTier]?.[feature] || 0;
-  };
+  }, [skipAuth, userTier]);
 
   const getAuthoritativeRemainingUsage = useCallback(async (feature) => {
     if (skipAuth) {
@@ -201,11 +201,13 @@ export function SubscriptionProvider({ children }) {
     return { allowed: true, remaining: remainingAfterUse };
   };
 
-  const refreshUsage = async (feature) => {
+  const refreshUsage = useCallback(async (feature) => {
     const remaining = await getAuthoritativeRemainingUsage(feature);
-    setUsage((prev) => ({ ...prev, [feature]: remaining }));
+    setUsage((prev) => (
+      prev?.[feature] === remaining ? prev : { ...prev, [feature]: remaining }
+    ));
     return remaining;
-  };
+  }, [getAuthoritativeRemainingUsage]);
 
   const getTierDisplayName = (tier) => {
     const names = {

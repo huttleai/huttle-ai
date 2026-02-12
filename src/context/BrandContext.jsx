@@ -24,6 +24,7 @@ export function useBrand() {
 export function BrandProvider({ children }) {
   const { user, userProfile, needsOnboarding } = useContext(AuthContext);
   const [brandData, setBrandData] = useState({
+    firstName: '', // User first name from onboarding
     profileType: 'brand', // 'brand' or 'creator'
     creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
     brandName: '',
@@ -87,6 +88,7 @@ export function BrandProvider({ children }) {
         } else if (data) {
           // Map user_profile fields to brandData structure
           const mappedData = {
+            firstName: data.first_name || '',
             profileType: data.profile_type || 'brand',
             creatorArchetype: data.creator_archetype || '',
             brandName: data.brand_name || '',
@@ -140,6 +142,7 @@ export function BrandProvider({ children }) {
         // Complete data with all fields
         const profileData = {
           user_id: user.id,
+          first_name: updated.firstName || null,
           profile_type: updated.profileType || 'brand',
           creator_archetype: updated.creatorArchetype || null,
           brand_name: updated.brandName || null,
@@ -176,6 +179,7 @@ export function BrandProvider({ children }) {
 
   const resetBrandData = async () => {
     const resetData = {
+      firstName: '',
       profileType: 'brand',
       creatorArchetype: '',
       brandName: '',
@@ -198,6 +202,7 @@ export function BrandProvider({ children }) {
     if (user?.id) {
       try {
         const resetProfileData = {
+          first_name: null,
           profile_type: 'brand',
           creator_archetype: null,
           brand_name: null,
