@@ -18,6 +18,9 @@ function App() {
         {/* Payment Success Page */}
         <Route path="/payment-success" element={<PaymentSuccess />} />
         
+        {/* Secure Account - Protected, handled inside DashboardManager with auth context */}
+        <Route path="/secure-account" element={<DashboardManager secureAccountMode />} />
+        
         {/* Main Dashboard App */}
         <Route path="/dashboard/*" element={<DashboardManager />} />
         

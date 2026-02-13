@@ -27,13 +27,14 @@ import SocialUpdates from '../pages/SocialUpdates';
 import AITools from '../pages/AITools';
 // import ContentRepurposer from './pages/ContentRepurposer'; // Temporarily disabled - uncomment to re-enable
 import Login from '../pages/Login';
-import Signup from '../pages/Signup';
+// Signup disabled for Founders Only launch - accounts created via Stripe invite only
 import Security from '../pages/Security';
+import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
 import IPhoneMockupDemo from '../components/IPhoneMockupDemo';
 import MockupShowcase from '../pages/MockupShowcase';
 
-function AppContent() {
+function AppContent({ secureAccountMode = false }) {
   const authContext = useContext(AuthContext);
   
   // Safety check - if context is undefined, show error
@@ -78,6 +79,18 @@ function AppContent() {
     );
   }
 
+  // SECURE ACCOUNT MODE: Protected password-setup page
+  // User clicks invite email -> Supabase logs them in -> renders SecureAccount
+  // This runs BEFORE onboarding gatekeeper since they need to set password first
+  if (secureAccountMode) {
+    if (!user) {
+      // Not logged in (invalid/expired invite link) -> redirect to login
+      return <Navigate to="/dashboard/login" replace />;
+    }
+    // User is authenticated via invite link -> show password setup form
+    return <SecureAccount />;
+  }
+
   // If user is logged in, show the main app layout
   if (user) {
     // GATEKEEPER: Force redirect to onboarding if user hasn't completed it
@@ -120,16 +133,17 @@ function AppContent() {
   }
 
   // If user is not logged in, show auth pages
+  // Signup disabled for Founders Only launch - redirect to login
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      <Route path="/signup" element={<Navigate to="/dashboard/login" replace />} />
       <Route path="*" element={<Navigate to="/dashboard/login" replace />} />
     </Routes>
   );
 }
 
-export default function DashboardManager() {
+export default function DashboardManager({ secureAccountMode = false }) {
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -138,7 +152,7 @@ export default function DashboardManager() {
             <NotificationProvider>
               <SubscriptionProvider>
                 <ContentProvider>
-                    <AppContent />
+                    <AppContent secureAccountMode={secureAccountMode} />
                 </ContentProvider>
               </SubscriptionProvider>
             </NotificationProvider>

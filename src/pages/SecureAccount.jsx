@@ -1,55 +1,36 @@
-import { useState, useContext } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../config/supabase';
-import { LogIn, Mail, Lock, Loader, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
+import { Lock, Loader, ShieldCheck, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
 
-export default function Login() {
-  const [email, setEmail] = useState('');
+export default function SecureAccount() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const { login } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      addToast('Please enter both email and password', 'error');
+
+    if (!password || password.length < 6) {
+      addToast('Password must be at least 6 characters', 'error');
       return;
     }
 
     setLoading(true);
-    const result = await login(email, password);
-    setLoading(false);
-
-    if (result.success) {
-      addToast('Welcome back!', 'success');
-      navigate('/dashboard');
-    } else {
-      addToast(result.error || 'Failed to log in', 'error');
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      addToast('Please enter your email address first', 'warning');
-      return;
-    }
-    setResetLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/dashboard/security`,
-      });
+      const { error } = await supabase.auth.updateUser({ password });
+
       if (error) throw error;
-      addToast('Password reset email sent! Check your inbox.', 'success');
+
+      addToast('Account secured! Welcome to Huttle AI.', 'success');
+      navigate('/dashboard');
     } catch (error) {
-      console.error('Password reset error:', error);
-      addToast(error.message || 'Failed to send reset email', 'error');
+      console.error('Error setting password:', error);
+      addToast(error.message || 'Failed to set password. Please try again.', 'error');
     } finally {
-      setResetLoading(false);
+      setLoading(false);
     }
   };
 
@@ -108,7 +89,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel - Secure Account Form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-white">
         <div className="w-full max-w-sm">
           {/* Mobile Logo */}
@@ -116,51 +97,26 @@ export default function Login() {
             <img src="/huttle-logo.png" alt="Huttle AI" className="h-8 w-auto mx-auto" />
           </div>
 
-          {/* Welcome Text */}
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome back</h2>
-            <p className="text-gray-500 text-sm">Sign in to continue to your dashboard</p>
+          {/* Shield Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-huttle-blue/10 flex items-center justify-center">
+              <ShieldCheck className="w-7 h-7 text-huttle-blue" />
+            </div>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input pl-10"
-                  placeholder="you@example.com"
-                  required
-                  disabled={loading}
-                />
-              </div>
-            </div>
+          {/* Welcome Text */}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome to Huttle AI!</h2>
+            <p className="text-gray-500 text-sm">Secure your account to get started.</p>
+          </div>
 
+          {/* Password Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <button 
-                  type="button" 
-                  onClick={handleForgotPassword}
-                  disabled={resetLoading}
-                  className="text-xs text-huttle-blue hover:underline font-medium disabled:opacity-50"
-                >
-                  {resetLoading ? 'Sending...' : 'Forgot password?'}
-                </button>
-              </div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                New Password
+              </label>
               <div className="relative">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
                   <Lock className="w-4 h-4" />
@@ -171,11 +127,14 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input pl-10"
-                  placeholder="Enter your password"
+                  placeholder="Create a secure password"
                   required
+                  minLength={6}
                   disabled={loading}
+                  autoFocus
                 />
               </div>
+              <p className="text-xs text-gray-400 mt-1.5">Must be at least 6 characters</p>
             </div>
 
             {/* Submit Button */}
@@ -183,12 +142,12 @@ export default function Login() {
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  Signing in...
+                  Saving...
                 </>
               ) : (
                 <>
-                  <LogIn className="w-4 h-4" />
-                  Sign In
+                  <ShieldCheck className="w-4 h-4" />
+                  Save & Continue
                 </>
               )}
             </button>
@@ -196,7 +155,7 @@ export default function Login() {
 
           {/* Footer */}
           <p className="text-center text-gray-400 text-xs mt-6">
-            By signing in, you agree to our{' '}
+            By continuing, you agree to our{' '}
             <a href="#" className="text-huttle-blue hover:underline">Terms</a>
             {' '}and{' '}
             <a href="#" className="text-huttle-blue hover:underline">Privacy Policy</a>
