@@ -373,6 +373,8 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
     const requestBody = {
       userId,
       trend,
+      topic: trend, // Duplicate as 'topic' for workflow compatibility
+      trendTopic: trend, // Another alias in case workflow uses this key
       niche,
       platforms,
       brandData,
@@ -413,9 +415,36 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
       dataKeys: Object.keys(data)
     });
     
+    // Validate that the response actually contains analysis and isn't an error/clarification
+    const analysisText = data.analysis || data.output || data.report || '';
+    const failurePhrases = [
+      'cannot provide',
+      'lacks a specified',
+      'need you to clarify',
+      'please specify',
+      'empty string',
+      'what is the specific trend',
+      'which trend do you want'
+    ];
+    
+    const isFailedResponse = failurePhrases.some(phrase => 
+      analysisText.toLowerCase().includes(phrase)
+    );
+    
+    if (isFailedResponse) {
+      console.warn('[N8N_WORKFLOW] Deep Dive response indicates the workflow did not receive the trend topic correctly');
+      console.warn('[N8N_WORKFLOW] Trend sent:', trend, '| Full payload:', JSON.stringify(requestBody));
+      return {
+        success: false,
+        reason: `The workflow did not process the topic "${trend}" correctly. The n8n workflow template may need to reference the "trend" or "topic" field from the request body. Please check the workflow configuration.`,
+        analysis: analysisText,
+        source: 'n8n'
+      };
+    }
+    
     return {
       success: true,
-      analysis: data.analysis || data.output || data.report || '',
+      analysis: analysisText,
       contentIdeas: data.contentIdeas || data.ideas || [],
       competitorInsights: data.competitorInsights || data.insights || [],
       citations: data.citations || data.sources || [],

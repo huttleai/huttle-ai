@@ -77,7 +77,7 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend analysis expert. Provide real-time, data-backed trend insights with metrics. Prioritize trends that would resonate with the specified brand and audience.'
+        content: 'You are a trend analysis expert. Return trends as a numbered list. Each trend must follow this exact format on a single line:\n\nNUMBER. TREND_NAME | Platforms: PLATFORM1, PLATFORM2 | DESCRIPTION\n\nDo NOT use markdown tables, headers (###), or any other formatting. Only use the numbered list format above. Keep each trend to a single line.'
       },
       {
         role: 'user',
@@ -88,12 +88,9 @@ Target Audience: ${audience}
 Brand Context:
 ${brandContext}
 
-Include:
-- Engagement metrics and velocity indicators
-- Relevance score for the target audience
-- Suggested content angles that match the brand voice
+For each trend provide: the trend name, which platforms it's trending on, and a brief description of the trend and content angle.
 
-Prioritize trends that align with the brand profile.`
+Prioritize trends that align with the brand profile. Return ONLY the numbered list, no extra commentary.`
       }
     ], 0.2);
 

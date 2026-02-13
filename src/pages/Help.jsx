@@ -41,8 +41,8 @@ export default function Help() {
       answer: 'AI generations reset on the first day of each month at midnight UTC. Any unused generations do not roll over to the next month. You can track your usage in the sidebar or on the Subscription page.'
     },
     {
-      question: 'Can I connect multiple social accounts?',
-      answer: 'Yes! You can connect Instagram, TikTok, YouTube, Facebook, and X (Twitter) from Settings > Connected Accounts. Each platform can have one connected account per Huttle AI account.'
+      question: 'How do I publish to social media?',
+      answer: 'Huttle AI supports publishing via deep links. When you create a post, you can use the Publish button to open the post content directly on your chosen platform (Instagram, TikTok, YouTube, Facebook, or X). This lets you review and publish natively on each platform.'
     },
     {
       question: 'How does the Trend Lab work?',
@@ -58,7 +58,7 @@ export default function Help() {
     },
     {
       question: 'What are the differences between subscription tiers?',
-      answer: 'Free tier includes 20 AI generations/month and basic features. Essentials ($15/mo) offers 300 generations and full calendar access. Pro ($35/mo) includes 500 generations, Content Repurposer, priority support, and advanced analytics.'
+      answer: 'Free tier includes 20 AI generations/month and basic features. Essentials ($9/mo) offers 200 generations, full calendar access, and Trend Lab. Pro ($19/mo) includes 800 generations, Content Remix Studio, Viral Blueprint, priority support, and 50GB storage.'
     },
     {
       question: 'How do I save content to my Content Library?',
@@ -150,15 +150,27 @@ export default function Help() {
       ]
     },
     { 
-      id: 'repurposer', 
-      name: 'Content Repurposer', 
+      id: 'content-remix', 
+      name: 'Content Remix Studio', 
       icon: Repeat,
-      description: 'Transform content for different platforms',
+      description: 'Remix and transform content for maximum reach',
       tips: [
-        'Convert long-form to short-form content',
-        'Adapt content for different platforms',
-        'Create multiple variations from one piece',
-        'Maintain brand voice across formats'
+        'Remix content for viral reach or sales conversion',
+        'Transform content across different platforms and formats',
+        'AI-powered content adaptation using your brand voice',
+        'Generate multiple variations from a single piece of content'
+      ]
+    },
+    { 
+      id: 'viral-blueprint', 
+      name: 'Viral Blueprint', 
+      icon: Zap,
+      description: 'Generate step-by-step viral content scripts',
+      tips: [
+        'Get a complete director\'s cut with script and visuals',
+        'AI generates platform-specific viral strategies',
+        'SEO-optimized hooks, captions, and hashtags included',
+        'Audio and visual mood recommendations for your content'
       ]
     },
     { 
@@ -179,7 +191,7 @@ export default function Help() {
       icon: Settings,
       description: 'Configure your account',
       tips: [
-        'Connect social media accounts',
+        'Set your preferred platforms for content creation',
         'Manage notification preferences',
         'Update account information',
         'Configure timezone and language'

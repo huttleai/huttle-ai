@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useContext } from 'react';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
+import { BrandContext } from '../context/BrandContext';
 
 /**
  * Master list of all supported platforms with their metadata
@@ -100,6 +101,9 @@ const DEFAULT_PLATFORMS = ['Instagram', 'TikTok'];
  * - savePlatforms: Function to save platforms to localStorage
  */
 export function usePreferredPlatforms() {
+  const brandContext = useContext(BrandContext);
+  const brandData = brandContext?.brandData;
+
   const [preferredPlatforms, setPreferredPlatforms] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -131,9 +135,16 @@ export function usePreferredPlatforms() {
     .map(name => normalizePlatformName(name))
     .filter(Boolean);
 
-  // Filter ALL_PLATFORMS to only include preferred ones
+  // Merge in Brand Voice platforms so they always appear
+  const brandPlatformIds = (brandData?.platforms || [])
+    .map(name => normalizePlatformName(name))
+    .filter(Boolean);
+
+  const mergedPlatformIds = [...new Set([...preferredPlatformIds, ...brandPlatformIds])];
+
+  // Filter ALL_PLATFORMS to include preferred + Brand Voice platforms
   const platforms = ALL_PLATFORMS.filter(platform => 
-    preferredPlatformIds.includes(platform.id)
+    mergedPlatformIds.includes(platform.id)
   );
 
   // Toggle a platform preference

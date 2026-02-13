@@ -59,38 +59,90 @@ export default function TrendDiscoveryHub() {
     if (!trendText) return [];
     
     const trends = [];
-    const lines = trendText.split('\n').filter(line => line.trim());
+    
+    // Pre-clean: strip markdown table syntax and artifacts
+    const cleanedText = trendText
+      .replace(/\|[-–—]+\|/g, '') // Remove table divider rows like |---|---|
+      .replace(/^\|.*\|$/gm, '')  // Remove full table rows
+      .replace(/^#{1,4}\s+/gm, '') // Remove markdown headers ### 
+      .replace(/\*\*/g, '')        // Remove bold markers
+      .replace(/\*([^*]+)\*/g, '$1') // Remove italic markers
+      .trim();
+    
+    const lines = cleanedText.split('\n').filter(line => line.trim());
     
     let currentTrend = null;
     
     for (const line of lines) {
-      const trendMatch = line.match(/^(?:\d+[\.\)]\s*|[-•]\s*)?(?:\*\*)?([^:*]+)(?:\*\*)?(?::|$)/);
+      const trimmed = line.trim();
       
-      if (trendMatch) {
-        const name = trendMatch[1].trim();
-        if (name.length > 3 && !name.toLowerCase().includes('engagement') && !name.toLowerCase().includes('score')) {
-          if (currentTrend) {
-            trends.push(currentTrend);
-          }
+      // Skip lines that are just markdown artifacts or too short
+      if (trimmed.length < 5) continue;
+      if (/^[-|=_*#>]+$/.test(trimmed)) continue;
+      if (/^\|/.test(trimmed)) continue; // Skip any remaining table rows
+      
+      // Try to match numbered list format: "1. Trend Name | Platforms: X | Description"
+      const pipeMatch = trimmed.match(/^(?:\d+[\.\)]\s*)(.*?)\s*\|\s*(?:Platforms?:?\s*)(.*?)\s*\|\s*(.*)/i);
+      if (pipeMatch) {
+        if (currentTrend) trends.push(currentTrend);
+        
+        const name = pipeMatch[1].trim();
+        const platformStr = pipeMatch[2].trim();
+        const description = pipeMatch[3].trim();
+        
+        const platformMatches = platformStr.match(/(?:Instagram|TikTok|YouTube|X|Twitter|Facebook)/gi) || [];
+        const platforms = platformMatches.length > 0
+          ? [...new Set(platformMatches.map(p => p === 'Twitter' ? 'X' : p))]
+          : ['Multi-platform'];
+        
+        const baseScore = 95 - (trends.length * 5);
+        currentTrend = {
+          name: name.substring(0, 60),
+          score: Math.max(baseScore, 60),
+          velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
+          platforms,
+          description
+        };
+        continue;
+      }
+      
+      // Try numbered/bulleted list: "1. Trend Name" or "- Trend Name" or "• Trend Name"
+      const listMatch = trimmed.match(/^(?:\d+[\.\)]\s*|[-•]\s+)(.+)/);
+      if (listMatch) {
+        const rawName = listMatch[1].trim();
+        
+        // Validate: reject names that are mostly special characters or too short
+        const alphaCount = (rawName.match(/[a-zA-Z]/g) || []).length;
+        if (alphaCount < 3) continue;
+        
+        // Split on colon or dash to separate name from description
+        const colonIdx = rawName.indexOf(':');
+        const dashIdx = rawName.indexOf(' - ');
+        const splitIdx = colonIdx > 0 ? colonIdx : dashIdx > 0 ? dashIdx : -1;
+        
+        const name = splitIdx > 0 ? rawName.substring(0, splitIdx).trim() : rawName;
+        const desc = splitIdx > 0 ? rawName.substring(splitIdx + (colonIdx > 0 ? 1 : 3)).trim() : '';
+        
+        if (name.length > 3) {
+          if (currentTrend) trends.push(currentTrend);
           
-          const baseScore = 95 - (trends.length * 5);
-          const velocity = `+${Math.floor(40 + Math.random() * 60)}%`;
-          
-          const platformMatches = line.match(/(?:Instagram|TikTok|YouTube|X|Twitter|Facebook)/gi) || [];
-          const platforms = platformMatches.length > 0 
+          const platformMatches = trimmed.match(/(?:Instagram|TikTok|YouTube|X|Twitter|Facebook)/gi) || [];
+          const platforms = platformMatches.length > 0
             ? [...new Set(platformMatches.map(p => p === 'Twitter' ? 'X' : p))]
             : ['Multi-platform'];
           
+          const baseScore = 95 - (trends.length * 5);
           currentTrend = {
-            name: name.substring(0, 50),
+            name: name.substring(0, 60),
             score: Math.max(baseScore, 60),
-            velocity,
+            velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
             platforms,
-            description: ''
+            description: desc
           };
         }
-      } else if (currentTrend && line.trim()) {
-        currentTrend.description += (currentTrend.description ? ' ' : '') + line.trim();
+      } else if (currentTrend && trimmed) {
+        // Continuation line - append to current trend description
+        currentTrend.description += (currentTrend.description ? ' ' : '') + trimmed;
       }
     }
     
@@ -98,7 +150,29 @@ export default function TrendDiscoveryHub() {
       trends.push(currentTrend);
     }
     
-    if (trends.length === 0) {
+    // Final validation: remove any trends with garbage names
+    const validTrends = trends.filter(t => {
+      const alphaRatio = (t.name.match(/[a-zA-Z]/g) || []).length / t.name.length;
+      return alphaRatio > 0.5 && t.name.length > 3;
+    });
+    
+    if (validTrends.length === 0) {
+      // Last resort: try to extract any meaningful sentences from the text
+      const sentences = trendText.split(/[.\n]/).filter(s => {
+        const cleaned = s.replace(/[^a-zA-Z\s]/g, '').trim();
+        return cleaned.length > 15;
+      });
+      
+      if (sentences.length > 0) {
+        return sentences.slice(0, 5).map((sentence, i) => ({
+          name: sentence.trim().substring(0, 60),
+          score: Math.max(90 - (i * 6), 60),
+          velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
+          platforms: ['Multi-platform'],
+          description: ''
+        }));
+      }
+      
       return [{
         name: 'Trending in ' + (brandData?.niche || 'your niche'),
         score: 85,
@@ -108,7 +182,7 @@ export default function TrendDiscoveryHub() {
       }];
     }
     
-    return trends.slice(0, 5);
+    return validTrends.slice(0, 10);
   };
 
   const handleQuickScan = async () => {

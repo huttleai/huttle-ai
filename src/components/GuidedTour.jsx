@@ -41,7 +41,7 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
           if (isMounted) {
             timer = setTimeout(() => {
               if (isMounted) setIsActive(true);
-            }, 500);
+            }, 2000);
           }
           return;
         }
@@ -52,14 +52,14 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
         if (!dbCompleted && isMounted) {
           timer = setTimeout(() => {
             if (isMounted) setIsActive(true);
-          }, 500);
+          }, 2000);
         }
       } catch (error) {
         // Silently fall back to localStorage-only behavior
         if (!localCompleted && isMounted) {
           timer = setTimeout(() => {
             if (isMounted) setIsActive(true);
-          }, 500);
+          }, 2000);
         }
       }
     };

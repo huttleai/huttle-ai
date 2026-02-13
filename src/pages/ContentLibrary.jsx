@@ -495,7 +495,8 @@ export default function ContentLibrary() {
       if (uploadType === 'text') {
         await handleTextUpload(contentName, textContent);
       } else {
-        if (!fileInput || fileInput.size === 0) {
+        // Defensive check: ensure fileInput is a valid File object with content
+        if (!fileInput || !(fileInput instanceof File) || fileInput.size === 0) {
           addToast('Please select a file to upload', 'error');
           setUploading(false);
           return;

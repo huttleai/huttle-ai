@@ -89,7 +89,7 @@ const EMOTIONAL_TRIGGERS = [
 ];
 
 export default function BrandVoice() {
-  const { brandData, updateBrandData } = useContext(BrandContext);
+  const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
   const { addToast } = useToast();
   
   const [formData, setFormData] = useState({
@@ -193,6 +193,8 @@ export default function BrandVoice() {
       return;
     }
     updateBrandData(formData);
+    // Force refresh brand data across the entire app
+    refreshBrandData();
     setHasUnsavedChanges(false);
     addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
   };

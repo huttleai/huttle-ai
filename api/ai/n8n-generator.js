@@ -56,10 +56,11 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[n8n-generator] VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK not configured');
-    // SECURITY: Don't expose environment variable names to client
-    return res.status(500).json({ 
-      error: 'Content generation service not configured. Please try again later.'
+    console.error('[n8n-generator] N8N webhook URL not configured. Set VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK or N8N_WEBHOOK_URL_GENERATOR in environment.');
+    // Return a clear error so the frontend can fall back to Grok API
+    return res.status(503).json({ 
+      error: 'Content Remix Studio workflow not configured. Using fallback AI.',
+      errorType: 'NOT_CONFIGURED'
     });
   }
 

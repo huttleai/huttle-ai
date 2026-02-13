@@ -101,7 +101,7 @@ export const TIERS = {
 // Tier limits based on Huttle AI Plans
 // Freemium: $0 - 20 AI gens, 250MB storage
 // Essentials: $9/mo ($90/yr) - 200 AI gens, 5GB storage
-// Pro: $19/mo ($190/yr) - 800 AI gens, 25GB storage
+// Pro: $19/mo ($190/yr) - 800 AI gens, 50GB storage
 export const TIER_LIMITS = {
   [TIERS.FREE]: {
     aiGenerations: 20,
@@ -151,7 +151,7 @@ export const TIER_LIMITS = {
     trendLab: true, // Full access
     viralBlueprint: 60, // 60 blueprints/month
     aiPlanBuilderDays: 14, // 7 or 14 days
-    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
+    storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
   // Founders Club: $199/year - same as Pro with lifetime benefits
@@ -169,7 +169,7 @@ export const TIER_LIMITS = {
     trendLab: true,
     viralBlueprint: 60,
     aiPlanBuilderDays: 14,
-    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
+    storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
 };
@@ -481,7 +481,18 @@ export async function uploadFileToStorage(userId, file, type) {
     };
   } catch (error) {
     console.error('Error uploading file to storage:', error);
-    return { success: false, error: error.message };
+    
+    // Provide specific error messages for common issues
+    let errorMessage = error.message;
+    if (error.message?.includes('Bucket not found') || error.statusCode === 400) {
+      errorMessage = 'Storage bucket not configured. Please ensure the "content-library" bucket exists in Supabase Storage.';
+    } else if (error.message?.includes('new row violates') || error.message?.includes('policy')) {
+      errorMessage = 'Storage permission denied. Please check Supabase Storage RLS policies for the content-library bucket.';
+    } else if (error.message?.includes('Payload too large') || error.statusCode === 413) {
+      errorMessage = 'File is too large. Please try a smaller file.';
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -527,7 +538,17 @@ export async function saveContentLibraryItem(userId, itemData) {
     return { success: true, data };
   } catch (error) {
     console.error('Error saving content library item:', error);
-    return { success: false, error: error.message };
+    
+    let errorMessage = error.message;
+    if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
+      errorMessage = 'Database setup error: user record may be missing. Please contact support.';
+    } else if (error.code === '42P01') {
+      errorMessage = 'Content library table not found. Please run the database migration.';
+    } else if (error.message?.includes('policy') || error.code === '42501') {
+      errorMessage = 'Permission denied. Please check database RLS policies.';
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 

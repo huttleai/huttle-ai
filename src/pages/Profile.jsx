@@ -9,7 +9,7 @@ import { formatDisplayName } from '../utils/brandContextBuilder';
 export default function Profile() {
   const { user, updateUser, updateEmail } = useContext(AuthContext);
   const { userTier } = useSubscription();
-  const { brandProfile, updateBrandData } = useBrand();
+  const { brandProfile, updateBrandData, refreshBrandData } = useBrand();
   const { showToast } = useToast();
   
   const defaultName = useMemo(() => (
@@ -59,6 +59,8 @@ export default function Profile() {
         }
       }
 
+      // Force refresh brand data across the app
+      refreshBrandData();
       showToast('Profile updated successfully!', 'success');
     } catch (error) {
       console.error('Failed to update profile:', error);

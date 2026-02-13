@@ -468,38 +468,17 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         </div>
 
         <div className="p-6 space-y-6">
-          {/* AI Assist Toggle */}
-          <div className="bg-gradient-to-r from-huttle-primary/10 to-huttle-primary-light/10 rounded-xl border border-huttle-primary/20 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-huttle-primary" />
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    <span className="mr-1">AI</span>
-                    <span>Assist</span>
-                  </h3>
-                  <p className="text-sm text-gray-600">Auto-fill with your brand voice</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setUseAI(!useAI)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  useAI ? 'bg-huttle-primary text-white' : 'bg-white border border-gray-300 text-gray-700'
-                }`}
-              >
-                {useAI ? 'AI Enabled' : 'Enable AI'}
-              </button>
-            </div>
-            {useAI && (
-              <button
-                onClick={handleAIGenerate}
-                disabled={isGenerating}
-                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Sparkles className="w-4 h-4" />
-                {isGenerating ? 'Generating with Brand Voice...' : 'Generate with AI'}
-              </button>
-            )}
+          {/* AI Assist - Single Action Button */}
+          <div className="bg-gradient-to-r from-huttle-primary/5 to-huttle-primary-light/5 rounded-xl border border-huttle-primary/15 p-3">
+            <button
+              onClick={handleAIGenerate}
+              disabled={isGenerating || !postData.title}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              <Sparkles className="w-4 h-4" />
+              {isGenerating ? 'Generating with Brand Voice...' : 'Auto-Fill All with AI'}
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-2">Enter a title first, then let AI fill caption, hashtags, and media concepts using your brand voice</p>
           </div>
 
           {/* SECTION 1: Basic Info */}

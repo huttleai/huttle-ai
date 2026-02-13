@@ -32,7 +32,6 @@ import MiniCalendar from '../components/MiniCalendar';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
-import { AIDisclaimerFooter, HowWePredictModal } from '../components/AIDisclaimer';
 import { socialUpdates } from '../data/socialUpdates';
 import { mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
@@ -64,7 +63,6 @@ export default function Dashboard() {
   const [aiGensUsed, setAiGensUsed] = useState(0);
   const [aiGensLimit, setAiGensLimit] = useState(Infinity);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
   const [timeGreeting, setTimeGreeting] = useState('');
   const [hoveredStat, setHoveredStat] = useState(null);
   const [hoveredTrend, setHoveredTrend] = useState(null);
@@ -182,9 +180,33 @@ export default function Dashboard() {
   const tourSteps = [
     {
       title: 'Welcome to Huttle AI!',
-      content: 'Let\'s take a quick tour to help you get started.',
+      content: 'Let\'s take a quick tour to help you get the most out of your experience. We\'ll walk you through the key features.',
       icon: Sparkles,
-      tooltipPosition: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+    },
+    {
+      title: 'Set Up Your Brand Voice',
+      content: 'Head to Brand Voice in the sidebar to define your brand personality, tone, and target audience. This ensures all AI-generated content matches your unique style.',
+      icon: Target,
+    },
+    {
+      title: 'Smart Calendar',
+      content: 'Plan and schedule your social media posts with the Smart Calendar. Click any date to create a post, and get AI-powered optimal posting time suggestions.',
+      icon: Calendar,
+    },
+    {
+      title: 'AI Power Tools',
+      content: 'Generate captions, hashtags, hooks, and more with our AI Power Tools. Each generation uses your brand voice for consistent, on-brand content.',
+      icon: Zap,
+    },
+    {
+      title: 'Trend Lab',
+      content: 'Discover trending topics in your niche with Quick Scan, or do a Deep Dive into specific trends for actionable content ideas.',
+      icon: TrendingUp,
+    },
+    {
+      title: 'You\'re All Set!',
+      content: 'Explore the dashboard to see your upcoming posts, AI insights, and trending topics. Track your AI generation usage in the sidebar. Happy creating!',
+      icon: Sparkles,
     },
   ];
 
@@ -935,7 +957,6 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-              <AIDisclaimerFooter phraseIndex={2} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
             </div>
           </div>
         </div>
@@ -992,7 +1013,6 @@ export default function Dashboard() {
                     );
                   })}
                 </div>
-                <AIDisclaimerFooter phraseIndex={1} className="mt-4" onModalOpen={() => setShowHowWePredictModal(true)} />
               </>
             )}
           </div>
@@ -1036,7 +1056,6 @@ export default function Dashboard() {
       {/* Modals */}
       <CreatePostModal isOpen={isCreatePostOpen} onClose={() => setIsCreatePostOpen(false)} />
       <FloatingActionButton onCreatePost={() => setIsCreatePostOpen(true)} />
-      <HowWePredictModal isOpen={showHowWePredictModal} onClose={() => setShowHowWePredictModal(false)} />
     </div>
   );
 }

@@ -36,6 +36,7 @@ import {
 } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
+import { supabase } from '../config/supabase';
 import ViralScoreGauge from '../components/ViralScoreGauge';
 import PremiumScriptRenderer from '../components/PremiumScriptRenderer';
 import SkeletonLoader from '../components/SkeletonLoader';
@@ -734,21 +735,27 @@ export default function ViralBlueprint() {
         return;
       }
 
-      // Build payload for n8n webhook
+      // Build payload matching what the proxy expects
       const payload = {
         topic: topic.trim(),
-        platform: selectedPlatform,                          // e.g., 'Instagram', 'YouTube'
-        format: formatMapping[selectedPostType] || 'Post',   // Maps to 5 master formats
-        goal: objective,                                     // 'views', 'conversion', or 'trust'
-        audience: targetAudience.trim(),                     // e.g., 'SaaS Founders'
-        brandVoice: 'Authentic and Authoritative',           // Hardcoded for now
-        identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
+        platform: selectedPlatform,                                    // e.g., 'Instagram', 'YouTube'
+        postType: formatMapping[selectedPostType] || 'Post',           // Maps to 5 master formats
+        objective: objective,                                          // 'views', 'conversion', or 'trust'
+        targetAudience: targetAudience.trim(),                         // e.g., 'SaaS Founders'
+        voiceContext: {
+          brandVoice: brandProfile?.brandVoice || 'Authentic and Authoritative',
+          identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
+        }
       };
 
       console.log('[N8N] ====== WEBHOOK REQUEST DEBUG ======');
       console.log('[N8N] Using proxy endpoint:', N8N_WEBHOOK_URL);
       console.log('[N8N] Blueprint Payload:', JSON.stringify(payload, null, 2));
       console.log('[N8N] ====================================');
+
+      // Get auth token for the proxy
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
 
       // Make POST request with robust 120s timeout (compatible with all browsers)
       const controller = new AbortController();
@@ -765,6 +772,7 @@ export default function ViralBlueprint() {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify(payload),
           signal: controller.signal,

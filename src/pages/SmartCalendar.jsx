@@ -33,7 +33,6 @@ import { AuthContext } from '../context/AuthContext';
 import PostValidationAlert from '../components/PostValidationAlert';
 import CreatePostModal from '../components/CreatePostModal';
 import PublishModal from '../components/PublishModal';
-import CalendarTemplates, { CalendarTemplateButton } from '../components/CalendarTemplates';
 import UpgradeModal from '../components/UpgradeModal';
 import OptimizeTimesModal from '../components/OptimizeTimesModal';
 import { downloadPostAsText, downloadPostAsJSON, copyPostToClipboard, downloadForPlatform } from '../utils/downloadHelpers';
@@ -67,7 +66,6 @@ export default function SmartCalendar() {
   const [quickAddDate, setQuickAddDate] = useState(null);
   const [hoveredPost, setHoveredPost] = useState(null);
   const [showPostActions, setShowPostActions] = useState(null);
-  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -742,16 +740,6 @@ export default function SmartCalendar() {
             <Plus className="w-4 h-4" />
             New Post
           </button>
-          <CalendarTemplateButton 
-            onClick={() => {
-              if (userTier === TIERS.FREE) {
-                setShowUpgradeModal(true);
-                addToast('Content Calendar Templates are available for Essentials and Pro plans', 'warning');
-              } else {
-                setIsTemplatesOpen(true);
-              }
-            }} 
-          />
           <div className="relative group hidden sm:block">
             <button 
               onClick={() => setIsOptimizeModalOpen(true)}
@@ -1198,15 +1186,6 @@ export default function SmartCalendar() {
           userId={user?.id}
         />
       )}
-
-      {/* Calendar Templates Modal */}
-      <CalendarTemplates
-        isOpen={isTemplatesOpen}
-        onClose={() => setIsTemplatesOpen(false)}
-        onApplyTemplate={(plan) => {
-          addToast(`Applied ${plan.template.name} template!`, 'success');
-        }}
-      />
 
       {/* Upgrade Modal */}
       <UpgradeModal

@@ -36,7 +36,7 @@ export default function Sidebar() {
   useEffect(() => {
     const limit = getFeatureLimit
       ? getFeatureLimit('aiGenerations')
-      : (TIER_LIMITS?.[userTier?.toUpperCase?.()]?.aiGenerations ?? 20);
+      : (TIER_LIMITS?.[userTier]?.aiGenerations ?? 20);
     setAiLimit(limit === Infinity ? 999 : limit);
     
     if (refreshUsage) {

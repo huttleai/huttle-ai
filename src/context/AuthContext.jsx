@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../config/supabase';
 
 export const AuthContext = createContext();
@@ -9,6 +9,10 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+
+  // Refs to track current state without stale closures in auth listener
+  const currentUserIdRef = useRef(null);
+  const profileCheckedRef = useRef(false);
 
   // Memoized checkUserProfile to prevent recreation on every render
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
@@ -52,6 +56,7 @@ export function AuthProvider({ children }) {
         setUserProfile(null);
         setNeedsOnboarding(true);
         setProfileChecked(true);
+        profileCheckedRef.current = true;
         return;
       }
 
@@ -71,6 +76,8 @@ export function AuthProvider({ children }) {
         setNeedsOnboarding(true);
       }
       setProfileChecked(true);
+      profileCheckedRef.current = true;
+      currentUserIdRef.current = userId;
     } catch (error) {
       console.error('❌ [Auth] Error in checkUserProfile:', error);
       console.error('❌ [Auth] This may indicate:');
@@ -83,6 +90,7 @@ export function AuthProvider({ children }) {
       setUserProfile(null);
       setNeedsOnboarding(true);
       setProfileChecked(true);
+      profileCheckedRef.current = true;
     }
   }, []);
 
@@ -195,10 +203,18 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           if (session?.user) {
             setUser(session.user);
-            // Only re-check profile if we haven't already checked for this user
-            if (!profileChecked || !userProfile) {
+            // Use refs for current values to avoid stale closure issues on tab switch
+            const isSameUser = session.user.id === currentUserIdRef.current;
+            const alreadyChecked = profileCheckedRef.current;
+            
+            // Only re-check profile if this is a NEW user or we haven't checked yet
+            if (!alreadyChecked || !isSameUser) {
+              console.log('🔄 [Auth] Re-checking profile. Same user:', isSameUser, 'Already checked:', alreadyChecked);
               setProfileChecked(false);
+              profileCheckedRef.current = false;
               await checkUserProfile(session.user.id);
+            } else {
+              console.log('🔄 [Auth] Skipping profile re-check - same user and already verified');
             }
           }
         } else if (event === 'SIGNED_OUT') {
@@ -206,6 +222,8 @@ export function AuthProvider({ children }) {
           setUserProfile(null);
           setNeedsOnboarding(false);
           setProfileChecked(true);
+          profileCheckedRef.current = false;
+          currentUserIdRef.current = null;
         }
       } catch (error) {
         console.error('❌ [Auth] Error handling auth state change:', error);
