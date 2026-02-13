@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
 import { 
   ArrowRight, Check, Sparkles, Calendar, TrendingUp, 
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
-  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle
+  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle, LogIn
 } from "lucide-react";
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
@@ -1433,7 +1434,7 @@ export default function LandingPage() {
           </div>
           <button 
             onClick={() => setIsWaitlistModalOpen(true)}
-            className="text-sm md:text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            className="hidden md:inline-flex text-sm md:text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
           >
             Join Waitlist
           </button>
@@ -1445,6 +1446,13 @@ export default function LandingPage() {
           >
             Get Early Access
           </BorderBeamButton>
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            <span className="hidden md:inline">Login</span>
+          </Link>
         </motion.div>
       </nav>
 
