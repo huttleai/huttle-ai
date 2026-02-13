@@ -17,11 +17,15 @@ export default function ProtectedRoute({ children }) {
 
   const { user, loading } = authContext;
 
+  // RACE CONDITION FIX: Wait for loading to complete before making auth decisions
+  // This prevents redirecting users who are in the middle of Magic Link authentication
   if (loading || subLoading) {
     return <LoadingSpinner />;
   }
 
+  // Only redirect to login AFTER loading is complete and we confirm there's no user
   if (!user) {
+    console.log('🚫 [ProtectedRoute] No user found after loading, redirecting to login');
     return <Navigate to="/dashboard/login" replace />;
   }
 

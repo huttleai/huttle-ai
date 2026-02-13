@@ -63,6 +63,7 @@ function AppContent({ secureAccountMode = false }) {
 
   // Show loading state while checking auth OR while profile is being checked
   // CRITICAL: Wait for BOTH auth loading AND profile check to complete
+  // RACE CONDITION FIX: Always wait for loading to finish before making decisions
   if (loading || (user && !profileChecked)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -82,12 +83,16 @@ function AppContent({ secureAccountMode = false }) {
   // SECURE ACCOUNT MODE: Protected password-setup page
   // User clicks invite email -> Supabase logs them in -> renders SecureAccount
   // This runs BEFORE onboarding gatekeeper since they need to set password first
+  // RACE CONDITION FIX: This check now happens AFTER loading is complete,
+  // so Magic Link sessions have time to establish before we check user state
   if (secureAccountMode) {
     if (!user) {
       // Not logged in (invalid/expired invite link) -> redirect to login
+      console.log('🔒 [Secure Account] No user found after loading complete, redirecting to login');
       return <Navigate to="/dashboard/login" replace />;
     }
     // User is authenticated via invite link -> show password setup form
+    console.log('🔒 [Secure Account] User authenticated, showing password setup');
     return <SecureAccount />;
   }
 
