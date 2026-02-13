@@ -286,35 +286,13 @@ export default function Sidebar() {
                     />
                   </div>
                   
-                  {/* Warning messages - only show upgrade for non-premium tiers */}
-                  {!isPremiumTier && isRed && (
-                    <p className="text-xs text-red-600 font-medium mt-2">
-                      Limit reached.{' '}
-                      <button 
-                        onClick={() => { navigate('/dashboard/subscription'); setIsMobileOpen(false); }}
-                        className="underline hover:text-red-800 font-bold"
-                      >
-                        Upgrade now
-                      </button>
-                    </p>
-                  )}
-                  {!isPremiumTier && isAmber && !isRed && (
-                    <p className="text-xs text-amber-600 font-medium mt-2">
-                      Running low.{' '}
-                      <button 
-                        onClick={() => { navigate('/dashboard/subscription'); setIsMobileOpen(false); }}
-                        className="underline hover:text-amber-800"
-                      >
-                        Upgrade
-                      </button>
-                    </p>
-                  )}
-                  {isPremiumTier && isRed && (
+                  {/* Founders Only: No upgrade CTAs — just usage info */}
+                  {isRed && (
                     <p className="text-xs text-red-600 font-medium mt-2">
                       Monthly limit reached. Resets next billing cycle.
                     </p>
                   )}
-                  {isPremiumTier && isAmber && !isRed && (
+                  {isAmber && !isRed && (
                     <p className="text-xs text-amber-600 font-medium mt-2">
                       Running low on AI generations this month.
                     </p>

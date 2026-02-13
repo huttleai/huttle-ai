@@ -21,20 +21,10 @@ export function SubscriptionProvider({ children }) {
   // Check if in demo mode (Stripe not configured)
   const demoMode = isDemoMode();
   
-  // Get initial tier from localStorage if in demo mode
+  // Founders Only: ALL authenticated users are effectively Pro.
+  // No free/essentials tier enforcement — paid-entry app.
   const getInitialTier = () => {
-    if (skipAuth) {
-      const savedTier = localStorage.getItem(DEMO_TIER_KEY);
-      if (savedTier && Object.values(TIERS).includes(savedTier)) {
-        return savedTier;
-      }
-      return TIERS.PRO; // Default to Pro in dev/demo mode
-    }
-    if (demoMode) {
-      // Never trust local storage for launch credit limits
-      return TIERS.FREE;
-    }
-    return TIERS.FREE;
+    return TIERS.PRO;
   };
   
   const [userTier, setUserTier] = useState(getInitialTier);
@@ -78,42 +68,18 @@ export function SubscriptionProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [skipAuth]);
 
+  // Founders Only: Force Pro tier for ALL authenticated users.
+  // This bypasses Stripe tier lookups entirely — every user is a founding member.
   useEffect(() => {
-    if (skipAuth) {
-      // Dev mode only: Use saved tier or default to Pro
-      const savedTier = localStorage.getItem(DEMO_TIER_KEY);
-      if (savedTier && Object.values(TIERS).includes(savedTier)) {
-        setUserTier(savedTier);
-      } else {
-        setUserTier(TIERS.PRO);
-        localStorage.setItem(DEMO_TIER_KEY, TIERS.PRO);
-      }
-      setLoading(false);
-      console.log('🚀 Demo mode: Subscription tier set to', savedTier || TIERS.PRO);
-      return;
-    }
-
-    if (demoMode) {
-      // Keep limits server-defined instead of localStorage-derived
-      setUserTier(TIERS.FREE);
-      setUsage({});
-      setStorageUsage(0);
-      setLoading(false);
-      console.log('🚀 Demo mode: using Free tier limits');
-      return;
-    }
+    setUserTier(TIERS.PRO);
+    setLoading(false);
     
     if (userId) {
-      loadUserTier();
       refreshStorageUsage();
-    } else {
-      // No user logged in, reset to defaults
-      setUserTier(TIERS.FREE);
-      setUsage({});
-      setStorageUsage(0);
-      setLoading(false);
     }
-  }, [userId, skipAuth, demoMode]);
+    
+    console.log('🚀 Founders Only: All users set to Pro tier');
+  }, [userId]);
 
   const loadUserTier = async () => {
     try {
@@ -129,76 +95,34 @@ export function SubscriptionProvider({ children }) {
   };
 
   const checkFeatureAccess = useCallback((feature) => {
-    return hasFeatureAccess(userTier, feature);
-  }, [userTier]);
+    // Founders Only: All features unlocked
+    return true;
+  }, []);
 
   const getFeatureLimit = useCallback((feature) => {
-    // Dev mode: Return unlimited for all features
-    if (skipAuth) {
-      return Infinity;
-    }
-    return TIER_LIMITS[userTier]?.[feature] || 0;
-  }, [skipAuth, userTier]);
+    // Founders Only: Unlimited for all features
+    return TIER_LIMITS[TIERS.PRO]?.[feature] || Infinity;
+  }, []);
 
   const getAuthoritativeRemainingUsage = useCallback(async (feature) => {
-    if (skipAuth) {
-      return Infinity;
-    }
-    if (!userId) {
-      return 0;
-    }
-    return getRemainingUsage(userId, feature, userTier);
-  }, [skipAuth, userId, userTier]);
+    // Founders Only: Unlimited usage for all features
+    return Infinity;
+  }, []);
 
   const checkAndTrackUsage = async (feature, metadata = {}) => {
-    // Dev mode: Allow all features without limits
-    if (skipAuth) {
-      return { allowed: true, remaining: Infinity };
-    }
-
+    // Founders Only: All features allowed for all authenticated users
     if (!userId) {
       return { allowed: false, reason: 'auth', remaining: 0 };
     }
 
-    // Check if feature is available for tier
-    if (!checkFeatureAccess(feature)) {
-      showToast(`This feature requires ${userTier === TIERS.FREE ? 'Essentials' : 'Pro'} plan. Upgrade to unlock!`, 'warning');
-      return { allowed: false, reason: 'tier' };
-    }
-
-    // Get remaining usage and limit for percentage calculation
-    const remaining = await getAuthoritativeRemainingUsage(feature);
-    const limit = TIER_LIMITS[userTier]?.[feature] || 0;
-    
-    if (remaining === Infinity) {
-      // Unlimited - track and allow
+    // Track usage for analytics but never block
+    try {
       await trackUsage(userId, feature, metadata);
-      return { allowed: true, remaining: Infinity };
+    } catch (e) {
+      console.warn('Usage tracking failed (non-blocking):', e);
     }
 
-    if (remaining <= 0) {
-      showToast(`AI limit reached. Upgrade to Pro for unlimited generations.`, 'error');
-      return { allowed: false, reason: 'limit', remaining: 0 };
-    }
-
-    // Has usage left - track and allow
-    await trackUsage(userId, feature, metadata);
-    
-    // Calculate usage percentage for threshold-based warnings
-    const used = limit - remaining + 1; // +1 because we just used one
-    const usagePercent = limit > 0 ? (used / limit) * 100 : 0;
-    const remainingAfterUse = remaining - 1;
-    
-    // Show contextual warnings based on usage thresholds (80%, 90%, 95%)
-    if (usagePercent >= 95 && remainingAfterUse > 0) {
-      showToast(`Almost out! Only ${remainingAfterUse} AI credit${remainingAfterUse !== 1 ? 's' : ''} left. Upgrade to avoid interruption.`, 'warning');
-    } else if (usagePercent >= 90 && remainingAfterUse > 0) {
-      showToast(`Running low! Only ${remainingAfterUse} AI credit${remainingAfterUse !== 1 ? 's' : ''} remaining this month.`, 'warning');
-    } else if (usagePercent >= 80 && remainingAfterUse > 0) {
-      showToast(`You've used ${Math.round(usagePercent)}% of your AI credits. Upgrade for unlimited access.`, 'info');
-    }
-
-    return { allowed: true, remaining: remainingAfterUse };
+    return { allowed: true, remaining: Infinity };
   };
 
   const refreshUsage = useCallback(async (feature) => {
@@ -267,17 +191,13 @@ export function SubscriptionProvider({ children }) {
   };
 
   const getUpgradeMessage = () => {
-    if (userTier === TIERS.FREE) {
-      return 'Upgrade to Essentials or Pro to unlock this feature!';
-    }
-    if (userTier === TIERS.ESSENTIALS) {
-      return 'Upgrade to Pro for unlimited access!';
-    }
+    // Founders Only: No upgrade messages — all users are Pro
     return '';
   };
 
   const canAccessFeatureByName = (featureName) => {
-    return canTierAccessFeature(featureName, userTier);
+    // Founders Only: All features unlocked
+    return true;
   };
 
   return (

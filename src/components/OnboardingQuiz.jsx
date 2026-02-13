@@ -190,7 +190,7 @@ const defaultFormData = {
   brand_name: '',
   industry: '',
   industry_custom: '',
-  niche: '',
+  niche: [],
   target_audience: [],
   content_goals: [],
   posting_frequency: '',
@@ -268,12 +268,15 @@ export default function OnboardingQuiz({ onComplete }) {
   const STEP_ICONS = getStepIcons();
 
   const handleMultiSelect = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter(v => v !== value)
-        : [...prev[field], value]
-    }));
+    setFormData(prev => {
+      const current = Array.isArray(prev[field]) ? prev[field] : (prev[field] ? [prev[field]] : []);
+      return {
+        ...prev,
+        [field]: current.includes(value)
+          ? current.filter(v => v !== value)
+          : [...current, value]
+      };
+    });
   };
 
   // Helper to get the logical step number (accounts for skipped steps)
@@ -288,26 +291,12 @@ export default function OnboardingQuiz({ onComplete }) {
   };
 
   const handleNext = () => {
-    // Validation based on current step
-    if (step === 1 && !formData.profile_type) {
-      addToast('Please select how you create content', 'warning');
-      return;
-    }
-    
-    // Calculate step numbers based on profile type
-    // For creators: 1=Profile, 2=Archetype, 3=Name, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Emotions, 10=Voice
-    // For brands: 1=Profile, 2=Name, 3=Industry, 4=Niche, 5=Audience, 6=Goals, 7=Strengths, 8=Challenge, 9=Emotions, 10=Voice
-    const nameStep = isCreator ? 3 : 2;
-    const industryStep = 3; // Only for brands
-    const nicheStep = isCreator ? 4 : 4;
-    const audienceStep = isCreator ? 5 : 5;
-    const goalsStep = isCreator ? 6 : 6;
-    const strengthsStep = isCreator ? 7 : 7;
-    const challengeStep = isCreator ? 8 : 8;
-    const emotionalStep = isCreator ? 9 : 9;
-    
-    // Name step validation (first name is required, brand_name is required)
-    if (step === nameStep) {
+    // Step 1 validation: profile type + first name + brand name ALL required
+    if (step === 1) {
+      if (!formData.profile_type) {
+        addToast('Please select how you create content', 'warning');
+        return;
+      }
       if (!formData.first_name.trim()) {
         addToast('Please enter your first name', 'warning');
         return;
@@ -317,6 +306,17 @@ export default function OnboardingQuiz({ onComplete }) {
         return;
       }
     }
+    
+    // Steps 2+ have relaxed validation — users can skip via "Skip for now"
+    // But if they click "Continue", validate the current step content
+    const industryStep = 3; // Only for brands
+    const nicheStep = isCreator ? 4 : 4;
+    const audienceStep = isCreator ? 5 : 5;
+    const goalsStep = isCreator ? 6 : 6;
+    const strengthsStep = isCreator ? 7 : 7;
+    const challengeStep = isCreator ? 8 : 8;
+    const emotionalStep = isCreator ? 9 : 9;
+
     // Industry step - required for brands, and if "Other" is selected, require custom text
     if (step === industryStep && !isCreator) {
       if (!formData.industry) {
@@ -327,33 +327,6 @@ export default function OnboardingQuiz({ onComplete }) {
         addToast('Please specify your industry', 'warning');
         return;
       }
-    }
-    if (step === nicheStep && !formData.niche) {
-      addToast(isCreator ? 'Please select your content focus' : 'Please select your content niche', 'warning');
-      return;
-    }
-    if (step === audienceStep && formData.target_audience.length === 0) {
-      addToast(isCreator ? 'Please select at least one community' : 'Please select at least one target audience', 'warning');
-      return;
-    }
-    if (step === goalsStep && formData.content_goals.length === 0) {
-      addToast('Please select at least one content goal', 'warning');
-      return;
-    }
-    // Strengths step - require at least one
-    if (step === strengthsStep && formData.content_strengths.length === 0) {
-      addToast('Please select at least one strength', 'warning');
-      return;
-    }
-    // Challenge step - required
-    if (step === challengeStep && !formData.biggest_challenge) {
-      addToast('Please select your biggest challenge', 'warning');
-      return;
-    }
-    // Emotional triggers - require at least one
-    if (step === emotionalStep && formData.emotional_triggers.length === 0) {
-      addToast('Please select at least one emotional trigger', 'warning');
-      return;
     }
 
     if (step < totalSteps) {
@@ -405,7 +378,7 @@ export default function OnboardingQuiz({ onComplete }) {
         industry: !isCreator
           ? (formData.industry === 'other' && formData.industry_custom ? capitalize(formData.industry_custom.trim()) : (formData.industry ? capitalize(formData.industry) : null))
           : null,
-        niche: capitalize(formData.niche),
+        niche: Array.isArray(formData.niche) ? capitalizeArray(formData.niche).join(', ') : capitalize(formData.niche),
         target_audience: capitalizeArray(formData.target_audience),
         content_goals: capitalizeArray(formData.content_goals),
         posting_frequency: capitalize(formData.posting_frequency),
@@ -443,7 +416,7 @@ export default function OnboardingQuiz({ onComplete }) {
         creatorArchetype: formData.creator_archetype || '',
         brandName: formData.brand_name || '',
         industry: formData.industry || '',
-        niche: formData.niche,
+        niche: Array.isArray(formData.niche) ? formData.niche.join(', ') : formData.niche,
         targetAudience: formData.target_audience,
         brandVoice: formData.brand_voice_preference,
         platforms: formData.preferred_platforms,
@@ -479,16 +452,19 @@ export default function OnboardingQuiz({ onComplete }) {
     }
   };
 
+  // Check if Step 1 (profile) is complete — all 3 fields required
+  const isStep1Complete = formData.profile_type && formData.first_name.trim() && formData.brand_name.trim();
+
   // Render step content
   const renderStepContent = () => {
-    // Step 1: Profile Type
+    // Step 1: Profile Type + First Name + Brand Name (ALL REQUIRED)
     if (step === 1) {
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">How do you create content?</h2>
-          <p className="text-slate-500 mb-8">This helps us personalize your entire experience</p>
+          <p className="text-slate-500 mb-6">This helps us personalize your entire experience</p>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {PROFILE_TYPES.map(type => {
               const Icon = type.icon;
               const isSelected = formData.profile_type === type.value;
@@ -523,6 +499,48 @@ export default function OnboardingQuiz({ onComplete }) {
                 </button>
               );
             })}
+          </div>
+
+          {/* Name fields — shown inline on Step 1 */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                First Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="w-5 h-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="e.g., Sarah"
+                  className="w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {formData.profile_type === 'creator' ? 'Your Name or Handle' : 'Brand Name'} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  {formData.profile_type === 'creator' ? <AtSign className="w-5 h-5 text-slate-400" /> : <Building2 className="w-5 h-5 text-slate-400" />}
+                </div>
+                <input
+                  type="text"
+                  value={formData.brand_name}
+                  onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                  placeholder={formData.profile_type === 'creator' ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
+                  className="w-full pl-12 pr-4 py-3.5 text-base border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
+                />
+              </div>
+              <p className="text-sm text-slate-400 mt-1">
+                {formData.profile_type === 'creator' ? 'AI will write content in first person as you' : 'AI will write content on behalf of your brand'}
+              </p>
+            </div>
           </div>
         </div>
       );
@@ -572,65 +590,6 @@ export default function OnboardingQuiz({ onComplete }) {
           <p className="text-center text-sm text-slate-400 mt-4">
             This helps AI understand your unique style
           </p>
-        </div>
-      );
-    }
-    
-    // Name step
-    const nameStep = isCreator ? 3 : 2;
-    if (step === nameStep) {
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
-            Let's get to know you
-          </h2>
-          <p className="text-slate-500 mb-6">
-            {isCreator ? 'This is how we\'ll personalize your experience' : 'This helps us personalize AI-generated content for your brand'}
-          </p>
-          
-          <div className="space-y-5">
-            {/* First Name (required) */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                First Name <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User className="w-5 h-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  value={formData.first_name}
-                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                  placeholder="e.g., Sarah"
-                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Brand Name / Handle */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                {isCreator ? 'Your Name or Handle' : 'Brand Name'} <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  {isCreator ? <AtSign className="w-5 h-5 text-slate-400" /> : <Building2 className="w-5 h-5 text-slate-400" />}
-                </div>
-                <input
-                  type="text"
-                  value={formData.brand_name}
-                  onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                  placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
-                  className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all"
-                />
-              </div>
-              <p className="text-sm text-slate-400 mt-1">
-                {isCreator ? 'AI will write content in first person as you' : 'AI will write content on behalf of your brand'}
-              </p>
-            </div>
-          </div>
         </div>
       );
     }
@@ -700,28 +659,29 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
     
-    // Niche step
+    // Niche step — multi-select (checkboxes)
     const nicheStep = isCreator ? 4 : 4;
     if (step === nicheStep) {
       const niches = isCreator ? CREATOR_FOCUSES : BRAND_NICHES;
+      const nicheSelections = Array.isArray(formData.niche) ? formData.niche : (formData.niche ? [formData.niche] : []);
       return (
         <div className="animate-fadeIn">
           <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-900 mb-2">
             {isCreator ? "What's your content focus?" : "What type of content does your brand create?"}
           </h2>
           <p className="text-slate-500 mb-6">
-            {isCreator ? 'Choose what you mostly create content about' : 'This is your content angle \u2014 what makes your brand\'s content unique'}
+            {isCreator ? 'Select all that apply — choose your content topics' : 'Select all that apply — your content angles'}
           </p>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {niches.map(niche => {
               const Icon = niche.icon;
-              const isSelected = formData.niche === niche.value;
+              const isSelected = nicheSelections.includes(niche.value);
               
               return (
                 <button
                   key={niche.value}
-                  onClick={() => setFormData({ ...formData, niche: niche.value })}
+                  onClick={() => handleMultiSelect('niche', niche.value)}
                   className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
@@ -1186,7 +1146,12 @@ export default function OnboardingQuiz({ onComplete }) {
                 {step < totalSteps ? (
                   <button
                     onClick={handleNext}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-huttle-primary hover:bg-huttle-primary-dark"
+                    disabled={step === 1 && !isStep1Complete}
+                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold transition-all duration-200 ${
+                      step === 1 && !isStep1Complete
+                        ? 'bg-slate-300 cursor-not-allowed'
+                        : 'bg-huttle-primary hover:bg-huttle-primary-dark hover:shadow-lg hover:-translate-y-0.5'
+                    }`}
                   >
                     {isCreator && step === 2 && !formData.creator_archetype ? 'Skip' : 'Continue'}
                     <ChevronRight className="w-4 h-4" />
@@ -1212,7 +1177,8 @@ export default function OnboardingQuiz({ onComplete }) {
                 )}
               </div>
 
-              {step > 1 && step < totalSteps && (
+              {/* Skip for now — visible on all steps after Step 1 */}
+              {step > 1 && (
                 <div className="flex justify-center mt-3">
                   <button
                     onClick={async () => {
@@ -1220,6 +1186,9 @@ export default function OnboardingQuiz({ onComplete }) {
                         const { data: userData } = await supabase.auth.getUser();
                         if (userData?.user) {
                           const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+                          const nicheValue = Array.isArray(formData.niche) 
+                            ? formData.niche.map(capitalize).join(', ') 
+                            : (formData.niche ? capitalize(formData.niche) : null);
                           await supabase
                             .from('user_profile')
                             .upsert({
@@ -1227,7 +1196,7 @@ export default function OnboardingQuiz({ onComplete }) {
                               first_name: formData.first_name?.trim() || null,
                               profile_type: formData.profile_type || null,
                               brand_name: formData.brand_name?.trim() || null,
-                              niche: formData.niche ? capitalize(formData.niche) : null,
+                              niche: nicheValue,
                               quiz_completed_at: new Date().toISOString(),
                               onboarding_step: step
                             }, { onConflict: 'user_id', ignoreDuplicates: false });
@@ -1236,7 +1205,7 @@ export default function OnboardingQuiz({ onComplete }) {
                             firstName: formData.first_name?.trim() || '',
                             profileType: formData.profile_type || 'brand',
                             brandName: formData.brand_name || '',
-                            niche: formData.niche || '',
+                            niche: nicheValue || '',
                           });
                           
                           if (refreshBrandData) refreshBrandData();
