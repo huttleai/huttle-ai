@@ -485,63 +485,89 @@ export const mockAIPlans = [
   }
 ];
 
-// 3. Trend Lab Data - Fitness Industry
-export const mockTrendingTopics = [
-  {
-    id: 'trend-001',
-    topic: 'Zone 2 Cardio',
-    volume: '45k posts',
-    growth: '+156%',
-    growthDirection: 'up',
-    platforms: ['Instagram', 'TikTok', 'YouTube'],
-    engagement: 'Very High'
-  },
-  {
-    id: 'trend-002',
-    topic: 'Protein Coffee (Proffee)',
-    volume: '28k posts',
-    growth: '+89%',
-    growthDirection: 'up',
-    platforms: ['TikTok', 'Instagram'],
-    engagement: 'High'
-  },
-  {
-    id: 'trend-003',
-    topic: '12-3-30 Treadmill Workout',
-    volume: '67k posts',
-    growth: '+234%',
-    growthDirection: 'up',
-    platforms: ['TikTok', 'Instagram'],
-    engagement: 'Very High'
-  },
-  {
-    id: 'trend-004',
-    topic: 'Cold Plunge Benefits',
-    volume: '32k posts',
-    growth: '+78%',
-    growthDirection: 'up',
-    platforms: ['Instagram', 'YouTube', 'X'],
-    engagement: 'High'
-  },
-  {
-    id: 'trend-005',
-    topic: 'Creatine for Women',
-    volume: '19k posts',
-    growth: '+145%',
-    growthDirection: 'up',
-    platforms: ['TikTok', 'Instagram'],
-    engagement: 'High'
-  },
-  {
-    id: 'trend-006',
-    topic: 'Walking Pad Workouts',
-    volume: '52k posts',
-    growth: '-12%',
-    growthDirection: 'down',
-    platforms: ['TikTok'],
-    engagement: 'Medium'
-  }
+// 3. Trend Lab Data - Organized by niche/industry
+const trendingTopicsByNiche = {
+  fitness: [
+    { id: 'trend-fit-1', topic: 'Zone 2 Cardio', volume: '45k posts', growth: '+156%', growthDirection: 'up', platforms: ['Instagram', 'TikTok', 'YouTube'], engagement: 'Very High' },
+    { id: 'trend-fit-2', topic: 'Protein Coffee (Proffee)', volume: '28k posts', growth: '+89%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-fit-3', topic: '12-3-30 Treadmill Workout', volume: '67k posts', growth: '+234%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-fit-4', topic: 'Cold Plunge Benefits', volume: '32k posts', growth: '+78%', growthDirection: 'up', platforms: ['Instagram', 'YouTube', 'X'], engagement: 'High' },
+    { id: 'trend-fit-5', topic: 'Creatine for Women', volume: '19k posts', growth: '+145%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-fit-6', topic: 'Walking Pad Workouts', volume: '52k posts', growth: '-12%', growthDirection: 'down', platforms: ['TikTok'], engagement: 'Medium' },
+  ],
+  beauty: [
+    { id: 'trend-bty-1', topic: 'Glass Skin Routine', volume: '62k posts', growth: '+198%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-bty-2', topic: 'Slugging Method', volume: '34k posts', growth: '+112%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-bty-3', topic: 'Clean Beauty Swaps', volume: '27k posts', growth: '+76%', growthDirection: 'up', platforms: ['Instagram', 'YouTube'], engagement: 'High' },
+    { id: 'trend-bty-4', topic: 'Latte Makeup Look', volume: '41k posts', growth: '+145%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-bty-5', topic: 'Skin Cycling', volume: '29k posts', growth: '+67%', growthDirection: 'up', platforms: ['Instagram', 'TikTok'], engagement: 'High' },
+  ],
+  'medical spa': [
+    { id: 'trend-med-1', topic: 'Prejuvenation (Preventive Botox)', volume: '38k posts', growth: '+167%', growthDirection: 'up', platforms: ['Instagram', 'TikTok'], engagement: 'Very High' },
+    { id: 'trend-med-2', topic: 'Red Light Therapy at Home', volume: '45k posts', growth: '+134%', growthDirection: 'up', platforms: ['TikTok', 'Instagram', 'YouTube'], engagement: 'Very High' },
+    { id: 'trend-med-3', topic: 'Lip Flip vs. Filler', volume: '31k posts', growth: '+89%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-med-4', topic: 'Microneedling Results', volume: '22k posts', growth: '+56%', growthDirection: 'up', platforms: ['Instagram', 'YouTube'], engagement: 'High' },
+    { id: 'trend-med-5', topic: 'Hydrafacial Before/After', volume: '18k posts', growth: '+78%', growthDirection: 'up', platforms: ['Instagram', 'TikTok'], engagement: 'High' },
+  ],
+  tech: [
+    { id: 'trend-tech-1', topic: 'AI Coding Assistants', volume: '78k posts', growth: '+245%', growthDirection: 'up', platforms: ['X', 'YouTube', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-tech-2', topic: 'Local LLMs', volume: '34k posts', growth: '+189%', growthDirection: 'up', platforms: ['X', 'YouTube'], engagement: 'High' },
+    { id: 'trend-tech-3', topic: 'Vibe Coding', volume: '52k posts', growth: '+312%', growthDirection: 'up', platforms: ['TikTok', 'X', 'YouTube'], engagement: 'Very High' },
+    { id: 'trend-tech-4', topic: 'AI Agents for Business', volume: '41k posts', growth: '+167%', growthDirection: 'up', platforms: ['X', 'Instagram'], engagement: 'High' },
+    { id: 'trend-tech-5', topic: 'No-Code App Building', volume: '29k posts', growth: '+98%', growthDirection: 'up', platforms: ['TikTok', 'YouTube'], engagement: 'High' },
+  ],
+  food: [
+    { id: 'trend-food-1', topic: 'Cottage Cheese Recipes', volume: '56k posts', growth: '+178%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-food-2', topic: 'Dubai Chocolate Bar', volume: '89k posts', growth: '+345%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'Very High' },
+    { id: 'trend-food-3', topic: 'Protein Ice Cream', volume: '33k posts', growth: '+112%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-food-4', topic: 'Girl Dinner', volume: '42k posts', growth: '-8%', growthDirection: 'down', platforms: ['TikTok'], engagement: 'Medium' },
+    { id: 'trend-food-5', topic: 'Kitchen Gadget Reviews', volume: '27k posts', growth: '+89%', growthDirection: 'up', platforms: ['TikTok', 'YouTube'], engagement: 'High' },
+  ],
+  business: [
+    { id: 'trend-biz-1', topic: 'Side Hustle Stack', volume: '48k posts', growth: '+134%', growthDirection: 'up', platforms: ['TikTok', 'Instagram', 'X'], engagement: 'Very High' },
+    { id: 'trend-biz-2', topic: 'UGC Creator Economy', volume: '35k posts', growth: '+167%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+    { id: 'trend-biz-3', topic: 'AI for Small Business', volume: '41k posts', growth: '+198%', growthDirection: 'up', platforms: ['X', 'Instagram', 'YouTube'], engagement: 'Very High' },
+    { id: 'trend-biz-4', topic: 'Personal Branding Tips', volume: '29k posts', growth: '+78%', growthDirection: 'up', platforms: ['Instagram', 'X'], engagement: 'High' },
+    { id: 'trend-biz-5', topic: 'Email Marketing Revival', volume: '22k posts', growth: '+56%', growthDirection: 'up', platforms: ['X', 'YouTube'], engagement: 'High' },
+  ],
+};
+
+// General trending topics shown when no niche is configured
+const generalTrendingTopics = [
+  { id: 'trend-gen-1', topic: 'AI-Generated Content', volume: '120k posts', growth: '+267%', growthDirection: 'up', platforms: ['TikTok', 'Instagram', 'X', 'YouTube'], engagement: 'Very High' },
+  { id: 'trend-gen-2', topic: 'Short-Form Video Storytelling', volume: '95k posts', growth: '+178%', growthDirection: 'up', platforms: ['TikTok', 'Instagram', 'YouTube'], engagement: 'Very High' },
+  { id: 'trend-gen-3', topic: 'Authentic Over Polished', volume: '67k posts', growth: '+134%', growthDirection: 'up', platforms: ['TikTok', 'Instagram'], engagement: 'High' },
+  { id: 'trend-gen-4', topic: 'Community-Led Growth', volume: '43k posts', growth: '+89%', growthDirection: 'up', platforms: ['Instagram', 'X'], engagement: 'High' },
+  { id: 'trend-gen-5', topic: 'Micro-Influencer Partnerships', volume: '38k posts', growth: '+98%', growthDirection: 'up', platforms: ['Instagram', 'TikTok'], engagement: 'High' },
 ];
+
+/**
+ * Get trending topics based on user's niche/industry.
+ * Returns general topics if no niche is configured.
+ * @param {string} niche - User's niche from BrandContext
+ * @param {string} industry - User's industry from BrandContext
+ * @returns {Array} Matching trending topics
+ */
+export const getMockTrendingTopics = (niche = '', industry = '') => {
+  const key = (niche || industry || '').toLowerCase().trim();
+  
+  // Try exact match first, then partial match
+  if (trendingTopicsByNiche[key]) {
+    return trendingTopicsByNiche[key];
+  }
+  
+  // Partial keyword matching
+  for (const [nicheKey, topics] of Object.entries(trendingTopicsByNiche)) {
+    if (key.includes(nicheKey) || nicheKey.includes(key)) {
+      return topics;
+    }
+  }
+  
+  return [];
+};
+
+/** @deprecated Use getMockTrendingTopics(niche, industry) instead */
+export const mockTrendingTopics = generalTrendingTopics;
 
 // 4. Huttle Agent Activity Log - Iron Peak Fitness
 export const mockAgentActivity = [

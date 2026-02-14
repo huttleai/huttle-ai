@@ -21,34 +21,16 @@ import {
 import { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import useAIUsage from '../hooks/useAIUsage';
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { logout } = useContext(AuthContext);
-  const { userTier, TIERS, TIER_LIMITS, usage, refreshUsage, getFeatureLimit } = useSubscription();
+  const { userTier, TIERS } = useSubscription();
+  const { overallUsed: aiUsed, overallLimit: aiLimit } = useAIUsage();
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
-  const [aiUsed, setAiUsed] = useState(0);
-  const [aiLimit, setAiLimit] = useState(20);
-
-  // Fetch AI usage on mount and when tier changes
-  useEffect(() => {
-    const limit = getFeatureLimit
-      ? getFeatureLimit('aiGenerations')
-      : (TIER_LIMITS?.[userTier]?.aiGenerations ?? 20);
-    setAiLimit(limit === Infinity ? 999 : limit);
-    
-    if (refreshUsage) {
-      refreshUsage('aiGenerations').then(remaining => {
-        if (typeof remaining === 'number') {
-          setAiUsed(Math.max(0, limit - remaining));
-        }
-      }).catch(() => {});
-    } else if (typeof usage?.aiGenerations === 'number') {
-      setAiUsed(Math.max(0, limit - usage.aiGenerations));
-    }
-  }, [userTier, usage?.aiGenerations, refreshUsage, getFeatureLimit, TIER_LIMITS]);
 
   const handleLogout = async () => {
     try {
@@ -240,9 +222,7 @@ export default function Sidebar() {
           {/* AI Meter */}
           <div className="mt-auto pt-4">
             {(() => {
-              // For Founders and Builders (future), cap at 800/month
-              const isPremiumTier = userTier === TIERS.FOUNDER || userTier === TIERS.PRO || userTier === 'builder';
-              const displayLimit = isPremiumTier ? 800 : aiLimit;
+              const displayLimit = aiLimit;
               
               const percentage = displayLimit > 0 ? Math.round((aiUsed / displayLimit) * 100) : 0;
               const isAmber = percentage >= 80 && percentage < 100;

@@ -168,13 +168,18 @@ export function BrandProvider({ children }) {
 
         if (error) {
           console.error('Error saving brand data to Supabase:', error);
-          // Data is still saved to localStorage, so user can continue
+          return { success: false, error: error.message };
         }
+        
+        return { success: true };
       } catch (error) {
         console.error('Error updating brand data:', error);
-        // Data is still saved to localStorage
+        return { success: false, error: error.message };
       }
     }
+    
+    // Not authenticated — saved to localStorage only
+    return { success: true };
   };
 
   const resetBrandData = async () => {

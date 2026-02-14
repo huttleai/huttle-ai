@@ -139,6 +139,12 @@ export const TIER_LIMITS = {
   },
   [TIERS.PRO]: {
     aiGenerations: 800,
+    // Per-feature monthly limits
+    trendQuickScan: 200,
+    trendDeepDive: 50,
+    contentRemix: 75,
+    viralBlueprint: 60, // 60 blueprints/month
+    planBuilder: 20,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -149,7 +155,6 @@ export const TIER_LIMITS = {
     huttleAgent: true, // Pro feature
     trendForecaster: true, // Pro feature
     trendLab: true, // Full access
-    viralBlueprint: 60, // 60 blueprints/month
     aiPlanBuilderDays: 14, // 7 or 14 days
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
@@ -157,6 +162,12 @@ export const TIER_LIMITS = {
   // Founders Club: $199/year - same as Pro with lifetime benefits
   [TIERS.FOUNDER]: {
     aiGenerations: 800,
+    // Per-feature monthly limits
+    trendQuickScan: 200,
+    trendDeepDive: 50,
+    contentRemix: 75,
+    viralBlueprint: 60,
+    planBuilder: 20,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -167,7 +178,6 @@ export const TIER_LIMITS = {
     huttleAgent: true,
     trendForecaster: true,
     trendLab: true,
-    viralBlueprint: 60,
     aiPlanBuilderDays: 14,
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
@@ -245,6 +255,58 @@ export async function getRemainingUsage(userId, feature, userTier) {
     return Math.max(0, limit - used);
   } catch (error) {
     console.error('Error getting usage:', error);
+    return 0;
+  }
+}
+
+/**
+ * Get the count of a feature used this billing cycle.
+ * @param {string} userId
+ * @param {string} feature - e.g. 'aiGenerations', 'trendDeepDive'
+ * @returns {Promise<number>}
+ */
+export async function getFeatureUsageCount(userId, feature) {
+  try {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count, error } = await supabase
+      .from(TABLES.ACTIVITY)
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('feature', feature)
+      .gte('created_at', startOfMonth.toISOString());
+
+    if (error) throw error;
+    return count || 0;
+  } catch (error) {
+    console.error('Error getting feature usage count:', error);
+    return 0;
+  }
+}
+
+/**
+ * Get overall AI generations used this billing cycle (all features combined).
+ * @param {string} userId
+ * @returns {Promise<number>}
+ */
+export async function getOverallAIUsageCount(userId) {
+  try {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count, error } = await supabase
+      .from(TABLES.ACTIVITY)
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', startOfMonth.toISOString());
+
+    if (error) throw error;
+    return count || 0;
+  } catch (error) {
+    console.error('Error getting overall AI usage count:', error);
     return 0;
   }
 }
@@ -425,19 +487,32 @@ export async function getUserTier(userId) {
  * Get social media platform updates from Supabase
  * This fetches cached updates that were populated by the biweekly serverless function
  */
-export async function getSocialUpdates(months = 12) {
+/**
+ * Get social media platform updates from Supabase.
+ * Optionally filter by specific platforms (e.g. user's Brand Voice platforms).
+ * @param {number} months - How many months back to fetch
+ * @param {string[]} [platforms] - Optional platform names to filter by
+ */
+export async function getSocialUpdates(months = 12, platforms = null) {
   try {
     // Calculate date 12 months ago
     const today = new Date();
     const cutoffDate = new Date(today);
     cutoffDate.setMonth(today.getMonth() - months);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from(TABLES.SOCIAL_UPDATES)
       .select('*')
-      .gte('date_month', cutoffDate.toISOString().slice(0, 7)) // Filter by year-month
+      .gte('date_month', cutoffDate.toISOString().slice(0, 7))
       .order('date_month', { ascending: false })
       .order('created_at', { ascending: false });
+
+    // If platforms specified, filter by them
+    if (platforms && platforms.length > 0) {
+      query = query.in('platform', platforms);
+    }
+    
+    const { data, error } = await query;
     
     if (error) throw error;
     

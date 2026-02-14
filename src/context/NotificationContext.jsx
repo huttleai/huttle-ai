@@ -37,21 +37,24 @@ export function NotificationProvider({ children }) {
    * @param {Object} notification - { type, title, message, action, actionLabel, persistent }
    */
   const addNotification = (notification) => {
+    // Deduplicate: skip if a notification with the same title already exists and is unread
+    const isDuplicate = notifications.some(
+      n => n.title === notification.title && !n.read
+    );
+    if (isDuplicate) return null;
+
     const newNotification = {
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       timestamp: new Date().toISOString(),
       read: false,
       ...notification,
     };
 
-    setNotifications(prev => [newNotification, ...prev]);
-
-    // Auto-remove non-persistent notifications after 10 seconds
-    if (!notification.persistent) {
-      setTimeout(() => {
-        removeNotification(newNotification.id);
-      }, 10000);
-    }
+    setNotifications(prev => {
+      // Keep a max of 50 notifications to prevent unbounded growth
+      const updated = [newNotification, ...prev];
+      return updated.slice(0, 50);
+    });
 
     return newNotification.id;
   };
@@ -318,6 +321,15 @@ function NotificationPanel() {
     removeNotification,
     clearAll,
   } = useNotifications();
+
+  // Auto-mark all as read when the panel is opened
+  useEffect(() => {
+    if (showNotificationPanel && unreadCount > 0) {
+      // Small delay so the user sees the unread styling briefly
+      const timer = setTimeout(() => markAllAsRead(), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotificationPanel]);
 
   if (!showNotificationPanel) return null;
 

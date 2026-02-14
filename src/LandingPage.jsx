@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useTransform, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
+import { motion, useScroll, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
 import { 
   ArrowRight, Check, Sparkles, Calendar, TrendingUp, 
   Zap, Play, Search, Instagram,
@@ -23,7 +23,6 @@ import { BlurFade } from "./components/magicui/BlurFade";
 import { FAQAccordion } from "./components/magicui/FAQAccordion";
 import { ParticleNetwork } from "./components/magicui/ParticleNetwork";
 import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
-import { CountdownTimer } from "./components/CountdownTimer";
 import IPhoneMockup from "./components/IPhoneMockup";
 import PricingAnchor from "./components/PricingAnchor";
 
@@ -1387,14 +1386,6 @@ export default function LandingPage() {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
-  // Scroll-based fade effect for countdown timer
-  const heroRef = useRef(null);
-  const { scrollYProgress: heroScrollProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"]
-  });
-  const countdownOpacity = useTransform(heroScrollProgress, [0, 0.4], [1, 0]);
-
   const scrollToPricing = () => {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -1422,16 +1413,6 @@ export default function LandingPage() {
           <div className="flex items-center gap-2 font-bold tracking-tight">
             <img src="/huttle-logo.png" alt="Huttle AI" className="h-6 md:h-8 w-auto" />
           </div>
-          <div className="hidden md:flex gap-6 text-sm font-medium text-slate-500">
-            <span className="flex items-center gap-1.5 text-slate-700">
-              <motion.span 
-                className="h-2 w-2 rounded-full bg-green-500"
-                animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              /> 
-              <span className="text-sm font-bold">Early Access Feb 13</span>
-            </span>
-          </div>
           <button 
             onClick={() => setIsWaitlistModalOpen(true)}
             className="hidden md:inline-flex text-sm md:text-base font-medium text-slate-600 hover:text-slate-900 transition-colors"
@@ -1457,7 +1438,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION - Premium Two-Column Layout */}
-      <section ref={heroRef} className="relative pt-40 sm:pt-44 md:pt-48 lg:pt-44 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip">
+      <section className="relative pt-40 sm:pt-44 md:pt-48 lg:pt-44 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip">
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">
@@ -1505,16 +1486,6 @@ export default function LandingPage() {
                     $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $357/yr)</span>
                   </span>
                 </div>
-              </BlurFade>
-
-              {/* COUNTDOWN TIMER */}
-              <BlurFade delay={1.0}>
-                <motion.div 
-                  className="mt-8 md:mt-10 lg:mt-12 flex justify-center lg:justify-start"
-                  style={{ opacity: countdownOpacity }}
-                >
-                  <CountdownTimer />
-                </motion.div>
               </BlurFade>
             </div>
             

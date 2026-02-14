@@ -1,14 +1,17 @@
 import { useState, useContext, useEffect } from 'react';
-import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Mic, MicOff, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../context/NotificationContext';
 import { BrandContext } from '../context/BrandContext';
 import { generate12HourTimeOptions } from '../utils/timeFormatter';
 import { generateCaption, generateHashtags, generateVisualIdeas, generateCaptionVariations } from '../services/grokAPI';
-import EngagementPredictor from './EngagementPredictor';
-import VoiceInput from './VoiceInput';
+// Feature-flagged: Voice to Post and Engagement Predictor removed from UI (Issues 8 & 9)
+// import EngagementPredictor from './EngagementPredictor';
+// import VoiceInput from './VoiceInput';
 import SmartTimeSuggestion from './SmartTimeSuggestion';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
+import { useNavigate } from 'react-router-dom';
 
 // Helper to check if a date/time is in the past
 const isPastDateTime = (dateStr, timeStr) => {
@@ -21,8 +24,10 @@ const isPastDateTime = (dateStr, timeStr) => {
 export default function CreatePostModal({ isOpen, onClose, preselectedDate = null, postToEdit = null }) {
   const { schedulePost, updateScheduledPost } = useContent();
   const { showToast } = useToast();
+  const { addNotification } = useNotifications();
   const { brandData } = useContext(BrandContext);
-  const { platforms } = usePreferredPlatforms();
+  const { platforms, hasPlatformsConfigured } = usePreferredPlatforms();
+  const navigate = useNavigate();
   const [useAI, setUseAI] = useState(false);
   const [postData, setPostData] = useState({
     title: '',
@@ -241,13 +246,22 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     setIsGeneratingImagePrompt(true);
     
     try {
+      const topicContext = [
+        postData.title,
+        postData.caption ? postData.caption.substring(0, 200) : '',
+        brandData?.niche ? `Niche: ${brandData.niche}` : '',
+      ].filter(Boolean).join('. ');
+
+      const platform = postData.platforms?.[0]?.toLowerCase() || 'instagram';
+
       const result = await generateVisualIdeas(
-        `Image concept for: ${postData.title}. ${postData.caption ? `Context: ${postData.caption.substring(0, 200)}` : ''}`,
-        brandData
+        topicContext,
+        brandData,
+        platform,
+        'image'
       );
 
       if (result.success && result.ideas) {
-        // Extract the first idea
         const ideas = result.ideas.split(/\d+\./);
         const firstIdea = ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
         
@@ -257,10 +271,9 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         }));
         showToast('Image concept generated with your brand style!', 'success');
       } else {
-        // Fallback
         setPostData(prev => ({
           ...prev,
-          imagePrompt: `Create a vibrant, eye-catching image featuring ${prev.title || 'your content'}. Modern design, professional quality, engaging composition that aligns with your brand identity.`
+          imagePrompt: `Create a vibrant, eye-catching image for "${prev.title || 'your content'}". Modern design, professional quality, engaging composition that aligns with your brand identity.`
         }));
         showToast('Image concept generated!', 'success');
       }
@@ -281,26 +294,35 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     setIsGeneratingVideoPrompt(true);
     
     try {
+      const topicContext = [
+        postData.title,
+        postData.caption ? postData.caption.substring(0, 200) : '',
+        brandData?.niche ? `Niche: ${brandData.niche}` : '',
+        postData.platforms?.length > 0 ? `Platforms: ${postData.platforms.join(', ')}` : '',
+      ].filter(Boolean).join('. ');
+
+      const platform = postData.platforms?.[0]?.toLowerCase() || 'instagram';
+
       const result = await generateVisualIdeas(
-        `Video concept for: ${postData.title}. Target platforms: ${postData.platforms.length > 0 ? postData.platforms.join(', ') : 'social media'}. ${postData.caption ? `Context: ${postData.caption.substring(0, 200)}` : ''}`,
-        brandData
+        topicContext,
+        brandData,
+        platform,
+        'video'
       );
 
       if (result.success && result.ideas) {
-        // Extract the second idea (or first if only one)
         const ideas = result.ideas.split(/\d+\./);
-        const videoIdea = ideas[2]?.trim().substring(0, 500) || ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
+        const firstIdea = ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
         
         setPostData(prev => ({
           ...prev,
-          videoPrompt: videoIdea
+          videoPrompt: firstIdea
         }));
         showToast('Video concept generated with your brand style!', 'success');
       } else {
-        // Fallback
         setPostData(prev => ({
           ...prev,
-          videoPrompt: `Short-form video showcasing ${prev.title || 'your content'}. 15-30 seconds duration, dynamic transitions, upbeat music. Perfect for ${prev.platforms && prev.platforms.length > 0 ? prev.platforms.join(', ') : 'social media'} platforms.`
+          videoPrompt: `Short-form video about "${prev.title || 'your content'}". 15-30 seconds, dynamic transitions, upbeat music. Perfect for ${prev.platforms?.length > 0 ? prev.platforms.join(', ') : 'social media'}.`
         }));
         showToast('Video concept generated!', 'success');
       }
@@ -312,14 +334,8 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     }
   };
 
-  // Handle voice input content
-  const handleVoiceContent = (content) => {
-    setPostData(prev => ({
-      ...prev,
-      caption: content.caption || prev.caption,
-      hashtags: content.hashtags || prev.hashtags
-    }));
-  };
+  // Voice to Post handler removed (Issue 8) — kept for future re-enable
+  // const handleVoiceContent = (content) => { ... };
 
   // Generate A/B caption variations
   const handleGenerateVariations = async () => {
@@ -429,6 +445,18 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       const postId = await schedulePost(postData);
       if (postId) {
         showToast('Post scheduled successfully!', 'success');
+        // Fire a notification for the scheduled post confirmation
+        const platformList = postData.platforms?.join(', ') || 'your platforms';
+        const dateStr = postData.scheduledDate || 'today';
+        const timeStr = postData.scheduledTime || '';
+        addNotification({
+          type: 'success',
+          title: 'Post scheduled',
+          message: `"${postData.title || 'Untitled'}" scheduled for ${platformList} on ${dateStr}${timeStr ? ' at ' + timeStr : ''}.`,
+          action: () => { window.location.href = '/dashboard/calendar'; },
+          actionLabel: 'View Calendar',
+          persistent: true,
+        });
       } else {
         // Error toast is already shown by schedulePost
         showToast('Failed to schedule post', 'error');
@@ -505,24 +533,40 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             {/* Platforms */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Select Platform <span className="text-red-500">*</span></label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {platforms.map((platform) => (
+              {!hasPlatformsConfigured || platforms.length === 0 ? (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose which platforms you create content for.</p>
+                  </div>
                   <button
-                    key={platform.name}
-                    onClick={() => handlePlatformToggle(platform.name)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
-                      postData.platforms[0] === platform.name
-                        ? 'border-huttle-primary bg-huttle-primary/10'
-                        : 'border-gray-200 hover:border-gray-300 bg-white'
-                    }`}
+                    onClick={() => { onClose(); navigate('/dashboard/brand-voice'); }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
                   >
-                    <div className={`w-8 h-8 rounded flex items-center justify-center bg-white border border-gray-100`}>
-                      <platform.icon className="w-5 h-5" />
-                    </div>
-                    <span className="font-medium text-sm">{platform.name}</span>
+                    Set up Brand Voice <ArrowRight className="w-3 h-3" />
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {platforms.map((platform) => (
+                    <button
+                      key={platform.name}
+                      onClick={() => handlePlatformToggle(platform.name)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all ${
+                        postData.platforms[0] === platform.name
+                          ? 'border-huttle-primary bg-huttle-primary/10'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded flex items-center justify-center bg-white border border-gray-100">
+                        <platform.icon className="w-5 h-5" />
+                      </div>
+                      <span className="font-medium text-sm">{platform.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Content Type */}
@@ -708,12 +752,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               <h3 className="font-semibold text-gray-900">Content & Keywords</h3>
             </div>
             
-            {/* Voice Input */}
-            <VoiceInput
-              onPolishedContent={handleVoiceContent}
-              platform={postData.platforms.length > 0 ? postData.platforms[0] : 'social media'}
-              autoPolish={true}
-            />
+            {/* Voice Input removed (Issue 8) — feature-flagged for future re-enable */}
             
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -731,7 +770,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               <textarea
                 value={postData.caption}
                 onChange={(e) => setPostData({ ...postData, caption: e.target.value })}
-                placeholder="Write your caption or use voice input above..."
+                placeholder="Write your caption here..."
                 rows="4"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
               />
@@ -805,16 +844,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
             </div>
           </div> {/* End Content & Keywords section */}
 
-          {/* Engagement Predictor */}
-          {(postData.caption || postData.title) && (
-            <EngagementPredictor
-              caption={postData.caption}
-              hashtags={postData.hashtags}
-              title={postData.title}
-              platforms={postData.platforms}
-              autoAnalyze={false}
-            />
-          )}
+          {/* Engagement Predictor removed (Issue 9) — feature-flagged for future re-enable */}
 
           {/* SECTION 3: Media Concepts */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">

@@ -86,16 +86,21 @@ export const getPlatformById = (idOrName) => {
 };
 
 const STORAGE_KEY = 'preferredPlatforms';
-const DEFAULT_PLATFORMS = ['Instagram', 'TikTok'];
 
 /**
  * Custom hook to manage preferred platforms
  * 
+ * Brand Voice platforms are the source of truth. If the user has set platforms
+ * in their Brand Voice, only those platforms are shown. If no Brand Voice
+ * platforms are set, `platforms` will be empty and `hasPlatformsConfigured`
+ * will be false — callers should show a setup prompt.
+ * 
  * @returns {Object} Platform management utilities
  * - preferredPlatforms: Array of platform names the user has selected
  * - preferredPlatformIds: Array of normalized platform IDs
- * - platforms: Full platform objects filtered by user preferences
+ * - platforms: Full platform objects filtered by Brand Voice (empty if none configured)
  * - allPlatforms: All available platforms (for Settings page)
+ * - hasPlatformsConfigured: Whether the user has selected platforms in Brand Voice
  * - togglePlatform: Function to toggle a platform on/off
  * - isPlatformPreferred: Function to check if a platform is preferred
  * - savePlatforms: Function to save platforms to localStorage
@@ -107,9 +112,9 @@ export function usePreferredPlatforms() {
   const [preferredPlatforms, setPreferredPlatforms] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_PLATFORMS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return DEFAULT_PLATFORMS;
+      return [];
     }
   });
 
@@ -118,7 +123,7 @@ export function usePreferredPlatforms() {
     const handleStorageChange = (e) => {
       if (e.key === STORAGE_KEY) {
         try {
-          const newValue = e.newValue ? JSON.parse(e.newValue) : DEFAULT_PLATFORMS;
+          const newValue = e.newValue ? JSON.parse(e.newValue) : [];
           setPreferredPlatforms(newValue);
         } catch {
           // Ignore parse errors
@@ -130,21 +135,28 @@ export function usePreferredPlatforms() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Get normalized IDs for the preferred platforms
-  const preferredPlatformIds = preferredPlatforms
-    .map(name => normalizePlatformName(name))
-    .filter(Boolean);
-
-  // Merge in Brand Voice platforms so they always appear
+  // Brand Voice platforms are the primary source of truth
   const brandPlatformIds = (brandData?.platforms || [])
     .map(name => normalizePlatformName(name))
     .filter(Boolean);
 
-  const mergedPlatformIds = [...new Set([...preferredPlatformIds, ...brandPlatformIds])];
+  // Whether the user has configured platforms in Brand Voice
+  const hasPlatformsConfigured = brandPlatformIds.length > 0;
 
-  // Filter ALL_PLATFORMS to include preferred + Brand Voice platforms
+  // Get normalized IDs for the preferred platforms (localStorage)
+  const preferredPlatformIds = preferredPlatforms
+    .map(name => normalizePlatformName(name))
+    .filter(Boolean);
+
+  // If Brand Voice has platforms, use those as source of truth
+  // Otherwise, fall back to localStorage preferences (which may also be empty)
+  const activePlatformIds = hasPlatformsConfigured
+    ? brandPlatformIds
+    : preferredPlatformIds;
+
+  // Filter ALL_PLATFORMS to only include active platforms
   const platforms = ALL_PLATFORMS.filter(platform => 
-    mergedPlatformIds.includes(platform.id)
+    activePlatformIds.includes(platform.id)
   );
 
   // Toggle a platform preference
@@ -164,8 +176,8 @@ export function usePreferredPlatforms() {
   // Check if a platform is preferred
   const isPlatformPreferred = useCallback((platformName) => {
     const normalizedId = normalizePlatformName(platformName);
-    return preferredPlatformIds.includes(normalizedId);
-  }, [preferredPlatformIds]);
+    return activePlatformIds.includes(normalizedId);
+  }, [activePlatformIds]);
 
   // Save platforms directly (for bulk updates)
   const savePlatforms = useCallback((platforms) => {
@@ -177,11 +189,13 @@ export function usePreferredPlatforms() {
     // User's preferred platform names (as stored)
     preferredPlatforms,
     // Normalized IDs
-    preferredPlatformIds,
-    // Full platform objects filtered by preferences
+    preferredPlatformIds: activePlatformIds,
+    // Full platform objects filtered by Brand Voice (empty if none configured)
     platforms,
     // All available platforms (for Settings page)
     allPlatforms: ALL_PLATFORMS,
+    // Whether Brand Voice platforms are configured
+    hasPlatformsConfigured,
     // Utility functions
     togglePlatform,
     isPlatformPreferred,

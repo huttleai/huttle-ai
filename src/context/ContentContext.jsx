@@ -8,6 +8,8 @@ import {
   deleteScheduledPost as deleteScheduledPostDB,
   getUserPreferences,
   saveContentLibraryItem,
+  uploadFileToStorage,
+  getSignedUrl,
 } from '../config/supabase';
 import { mockScheduledPosts } from '../data/mockData';
 
@@ -220,6 +222,92 @@ export function ContentProvider({ children }) {
     }
   };
 
+  /**
+   * Auto-save an uploaded media file to the Content Library (background, non-blocking).
+   * Deduplicates by checking if the same storage_path already exists.
+   * @param {string} storagePath - Supabase Storage path
+   * @param {string} fileType - 'image' or 'video'
+   * @param {string} fileName - Original file name
+   * @param {number} sizeBytes - File size in bytes
+   * @param {Object} metadata - Additional metadata (e.g., post_id, platform)
+   */
+  const autoSaveToLibrary = (storagePath, fileType, fileName, sizeBytes, metadata = {}) => {
+    if (!user?.id || !storagePath) return;
+    
+    // Fire-and-forget — don't block post creation
+    saveContentLibraryItem(user.id, {
+      title: fileName || 'Uploaded Media',
+      content_type: fileType === 'video' ? 'video' : 'image',
+      file_url: storagePath,
+      source: 'post_upload',
+      metadata: {
+        ...metadata,
+        originalName: fileName,
+        sizeBytes,
+        autoSaved: true,
+      },
+    }).then(result => {
+      if (result.success) {
+        console.log('[ContentContext] Auto-saved media to library:', fileName);
+      } else if (result.error?.includes('duplicate') || result.error?.includes('unique')) {
+        // Already exists — that's fine, skip silently
+        console.log('[ContentContext] Media already in library, skipping:', fileName);
+      } else {
+        console.warn('[ContentContext] Failed to auto-save media to library:', result.error);
+      }
+    }).catch(err => {
+      console.warn('[ContentContext] Auto-save to library error:', err.message);
+    });
+  };
+
+  /**
+   * Upload media files to Supabase Storage and return storage paths.
+   * Also auto-saves each uploaded file to the Content Library.
+   * @param {Array} mediaItems - Array of { file, name, type, url } objects
+   * @returns {Array} Array of { storagePath, type, name } objects
+   */
+  const uploadMediaFiles = async (mediaItems) => {
+    if (!mediaItems || mediaItems.length === 0) return [];
+    if (!user?.id) return [];
+
+    const uploaded = [];
+    for (const item of mediaItems) {
+      // Skip items that are already storage paths (not blob URLs)
+      if (typeof item === 'string' || !item.file) {
+        uploaded.push(item);
+        continue;
+      }
+
+      try {
+        const result = await uploadFileToStorage(user.id, item.file, item.type || 'image');
+        if (result.success) {
+          const mediaInfo = {
+            storagePath: result.storagePath,
+            type: item.type || 'image',
+            name: item.name || item.file.name,
+            sizeBytes: result.sizeBytes || item.file.size,
+          };
+          uploaded.push(mediaInfo);
+
+          // Auto-save to Content Library in the background (non-blocking)
+          autoSaveToLibrary(
+            result.storagePath,
+            mediaInfo.type,
+            mediaInfo.name,
+            mediaInfo.sizeBytes,
+            { source: 'post_creation' }
+          );
+        } else {
+          console.error('Failed to upload media:', result.error);
+          addToast(`Failed to upload ${item.name}: ${result.error}`, 'error');
+        }
+      } catch (error) {
+        console.error('Error uploading media file:', error);
+      }
+    }
+    return uploaded;
+  };
+
   // Schedule a post with optimistic update
   const schedulePost = async (postData) => {
     if (skipAuth) {
@@ -257,8 +345,16 @@ export function ContentProvider({ children }) {
 
     try {
       setSyncing(true);
+      
+      // Upload media files to Supabase Storage before creating the post
+      let uploadedMedia = [];
+      if (postData.media && postData.media.length > 0) {
+        uploadedMedia = await uploadMediaFiles(postData.media);
+      }
+      
       const result = await createScheduledPost(user.id, {
         ...postData,
+        media: uploadedMedia, // Storage paths instead of blob URLs
         timezone: userTimezone,
       });
 
@@ -377,6 +473,42 @@ export function ContentProvider({ children }) {
     timezone: post.timezone,
   });
 
+  /**
+   * Get a signed URL for a media item stored in Supabase Storage.
+   * Caches signed URLs to avoid repeated calls within the same session.
+   * @param {string} storagePath - The storage path of the file
+   * @returns {string|null} The signed URL or null on error
+   */
+  const signedUrlCache = {};
+  const getMediaUrl = async (storagePath) => {
+    if (!storagePath) return null;
+    
+    // If it's already a full URL (legacy data or external URL), return as-is
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('blob:')) {
+      return storagePath;
+    }
+    
+    // Check cache first
+    const cached = signedUrlCache[storagePath];
+    if (cached && cached.expiresAt > new Date()) {
+      return cached.url;
+    }
+    
+    try {
+      const result = await getSignedUrl(storagePath, 3600); // 1 hour
+      if (result.success) {
+        signedUrlCache[storagePath] = {
+          url: result.signedUrl,
+          expiresAt: result.expiresAt,
+        };
+        return result.signedUrl;
+      }
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+    }
+    return null;
+  };
+
   // Save content to Supabase Content Library
   const saveToLibrary = async (itemData) => {
     if (!user?.id) {
@@ -492,6 +624,7 @@ export function ContentProvider({ children }) {
         updateScheduledPost,
         deleteScheduledPost,
         loadScheduledPosts,
+        getMediaUrl,
       }}
     >
       {children}

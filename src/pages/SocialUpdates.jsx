@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Newspaper, ExternalLink, X, AlertCircle, TrendingUp, Users, Clock } from 'lucide-react';
+import { useState, useMemo, useEffect, useContext } from 'react';
+import { Newspaper, ExternalLink, X, AlertCircle, TrendingUp, Users, Clock, Filter } from 'lucide-react';
 import { socialUpdates as staticSocialUpdates } from '../data/socialUpdates';
 import { getSocialUpdates } from '../config/supabase';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { BrandContext } from '../context/BrandContext';
 
 // TODO: N8N_WORKFLOW - Import workflow service when ready
 import { getSocialUpdates as getWorkflowSocialUpdates } from '../services/n8nWorkflowAPI';
@@ -41,10 +42,25 @@ import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants
  */
 
 export default function SocialUpdates() {
+  const { brandData } = useContext(BrandContext);
   const [selectedUpdate, setSelectedUpdate] = useState(null);
   const [apiUpdates, setApiUpdates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [useStaticData, setUseStaticData] = useState(false);
+  const [filterByBrandVoice, setFilterByBrandVoice] = useState(true);
+
+  // Get user's Brand Voice platforms for filtering
+  const brandVoicePlatforms = useMemo(() => {
+    const platforms = brandData?.platforms || [];
+    return platforms.map(p => {
+      // Normalize platform names to match the update data format
+      const lower = p.toLowerCase();
+      if (lower === 'twitter' || lower === 'x') return 'X';
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    });
+  }, [brandData?.platforms]);
+
+  const hasBrandVoicePlatforms = brandVoicePlatforms.length > 0;
   
   // Map platform names to icons and colors
   const platformConfig = {
@@ -195,11 +211,23 @@ export default function SocialUpdates() {
   };
   
   // Use API updates if available, otherwise fall back to static data
-  // Filter to only include allowed platforms
+  // Filter to only include allowed platforms, then optionally filter by Brand Voice
   const allUpdates = useMemo(() => {
     const updates = useStaticData ? staticSocialUpdates : apiUpdates;
-    return filterAllowedPlatforms(updates);
-  }, [useStaticData, apiUpdates]);
+    let filtered = filterAllowedPlatforms(updates);
+
+    // When filtering is enabled and user has Brand Voice platforms, show only those
+    if (filterByBrandVoice && hasBrandVoicePlatforms) {
+      filtered = filtered.filter(update => {
+        const normalizedPlatform = (update.platform || '').trim();
+        return brandVoicePlatforms.some(
+          bp => bp.toLowerCase() === normalizedPlatform.toLowerCase()
+        );
+      });
+    }
+
+    return filtered;
+  }, [useStaticData, apiUpdates, filterByBrandVoice, hasBrandVoicePlatforms, brandVoicePlatforms]);
   
   // Filter updates to show only the past 12 months from today's date
   // Shows entries from today back to 12 months ago, with most recent first
@@ -278,6 +306,35 @@ export default function SocialUpdates() {
         <p className="text-gray-600">
           Stay informed about the latest changes and updates from major social media platforms
         </p>
+
+        {/* Platform filter toggle */}
+        {hasBrandVoicePlatforms && (
+          <div className="flex items-center gap-2 mt-3">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg">
+              <button
+                onClick={() => setFilterByBrandVoice(true)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  filterByBrandVoice
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                My Platforms ({brandVoicePlatforms.length})
+              </button>
+              <button
+                onClick={() => setFilterByBrandVoice(false)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  !filterByBrandVoice
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                All Platforms
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Loading State */}
@@ -304,8 +361,12 @@ export default function SocialUpdates() {
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-1">Platforms Tracked</h3>
-              <p className="text-2xl font-bold text-gray-900">6</p>
-              <p className="text-xs text-gray-500">Social networks</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {filterByBrandVoice && hasBrandVoicePlatforms ? brandVoicePlatforms.length : 6}
+              </p>
+              <p className="text-xs text-gray-500">
+                {filterByBrandVoice && hasBrandVoicePlatforms ? 'Your platforms' : 'Social networks'}
+              </p>
             </div>
           </div>
 

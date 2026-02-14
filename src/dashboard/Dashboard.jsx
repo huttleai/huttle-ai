@@ -20,8 +20,7 @@ import ContentRemix from '../pages/ContentRemix';
 // import HuttleAgent from './pages/HuttleAgent'; // Temporarily disabled - kept in backend for future implementation
 import Profile from '../pages/Profile';
 import BrandVoice from '../pages/BrandVoice';
-// Subscription page disabled for Founders Only launch — will re-enable with monthly plans
-// import Subscription from '../pages/Subscription';
+import Subscription from '../pages/Subscription';
 import Settings from '../pages/Settings';
 import Help from '../pages/Help';
 import SocialUpdates from '../pages/SocialUpdates';
@@ -34,6 +33,7 @@ import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
 import IPhoneMockupDemo from '../components/IPhoneMockupDemo';
 import MockupShowcase from '../pages/MockupShowcase';
+import useNotificationGenerator from '../hooks/useNotificationGenerator';
 
 function AppContent({ secureAccountMode = false }) {
   const authContext = useContext(AuthContext);
@@ -52,6 +52,9 @@ function AppContent({ secureAccountMode = false }) {
   }
 
   const { user, loading, needsOnboarding, profileChecked, completeOnboarding } = authContext;
+
+  // Generate contextual notifications (onboarding nudges, post reminders, etc.)
+  useNotificationGenerator();
 
   // Debug logging for onboarding gatekeeper
   console.log('🚦 [Dashboard] Gatekeeper check:', { 
@@ -123,8 +126,7 @@ function AppContent({ secureAccountMode = false }) {
           {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />
-          {/* Subscription page disabled for Founders Only launch */}
-          <Route path="/subscription" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
           <Route path="/social-updates" element={<ProtectedRoute><SocialUpdates /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />

@@ -3,6 +3,8 @@ import { useBrand } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
+import { useNavigate } from 'react-router-dom';
 import { 
   Zap, 
   Sparkles, 
@@ -25,7 +27,9 @@ import {
   Type,
   Image,
   FileText,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 import { 
   TikTokIcon, 
@@ -40,6 +44,8 @@ import { supabase } from '../config/supabase';
 import ViralScoreGauge from '../components/ViralScoreGauge';
 import PremiumScriptRenderer from '../components/PremiumScriptRenderer';
 import SkeletonLoader from '../components/SkeletonLoader';
+import useAIUsage from '../hooks/useAIUsage';
+import AIUsageMeter from '../components/AIUsageMeter';
 
 // TODO: N8N_WORKFLOW - Import workflow service when ready
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
@@ -600,10 +606,21 @@ export default function ViralBlueprint() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
+  const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
+  const blueprintUsage = useAIUsage('viralBlueprint');
+  const navigate = useNavigate();
+
+  // Filter the hardcoded PLATFORMS to only show user's Brand Voice platforms
+  const availablePlatforms = hasPlatformsConfigured
+    ? PLATFORMS.filter(p => {
+        const normalizedId = normalizePlatformName(p.id);
+        return brandVoicePlatforms.some(bvp => bvp.id === normalizedId);
+      })
+    : [];
 
   // Form state - Start empty for real users
-  const [selectedPlatform, setSelectedPlatform] = useState('TikTok');
-  const [selectedPostType, setSelectedPostType] = useState('Video');
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [selectedPostType, setSelectedPostType] = useState('');
   const [objective, setObjective] = useState('views');
   const [topic, setTopic] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
@@ -686,8 +703,8 @@ export default function ViralBlueprint() {
       return;
     }
 
-    if (isAtLimit) {
-      showToast('You\'ve reached your monthly blueprint limit. Upgrade for more!', 'warning');
+    if (isAtLimit || !blueprintUsage.canGenerate) {
+      showToast('You\'ve reached your monthly blueprint limit. Resets on the 1st.', 'warning');
       return;
     }
 
@@ -697,6 +714,8 @@ export default function ViralBlueprint() {
     }
 
     setIsGenerating(true);
+    // Track feature usage
+    await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
 
     try {
       // Map UI post types to backend master formats (5 formats)
@@ -979,24 +998,14 @@ export default function ViralBlueprint() {
             </div>
 
             {/* Usage Stats */}
-            {hasAccess && usageLimit !== Infinity && (
-              <div className="w-full md:w-auto bg-white/50 backdrop-blur-md rounded-xl p-4 border border-white/60 shadow-sm">
-                <div className="flex items-center justify-between gap-8 mb-2">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monthly Credits</span>
-                  <span className="text-sm font-mono font-bold text-gray-900">
-                    {usageCount} <span className="text-gray-400">/</span> {usageLimit}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full md:w-48 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                      usageCount / usageLimit > 0.9 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
-                      usageCount / usageLimit > 0.7 ? 'bg-gradient-to-r from-orange-400 to-orange-500' : 
-                      'bg-gradient-to-r from-blue-400 to-cyan-400'
-                    }`}
-                    style={{ width: `${Math.min((usageCount / usageLimit) * 100, 100)}%` }}
-                  />
-                </div>
+            {hasAccess && (
+              <div className="w-full md:w-auto">
+                <AIUsageMeter
+                  used={blueprintUsage.featureUsed}
+                  limit={blueprintUsage.featureLimit}
+                  label="Blueprints this month"
+                  compact
+                />
               </div>
             )}
           </div>
@@ -1047,8 +1056,23 @@ export default function ViralBlueprint() {
                 {/* Platform Selection */}
                 <div className="space-y-4">
                   <h2 className="text-lg font-bold text-gray-900">Select Platform</h2>
+                  {!hasPlatformsConfigured || availablePlatforms.length === 0 ? (
+                    <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
+                        <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose which platforms you create content for.</p>
+                      </div>
+                      <button
+                        onClick={() => navigate('/dashboard/brand-voice')}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        Set up Brand Voice <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                    {PLATFORMS.map((platform) => {
+                    {availablePlatforms.map((platform) => {
                       const isSelected = selectedPlatform === platform.id;
                       const Icon = platform.icon;
                       
@@ -1088,6 +1112,7 @@ export default function ViralBlueprint() {
                       );
                     })}
                   </div>
+                  )}
                 </div>
 
                 {/* Post Type Selection */}

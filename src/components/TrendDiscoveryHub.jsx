@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, Lightbulb, Users, BookOpen } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
 import MarkdownRenderer from './MarkdownRenderer';
 import { scanTrendingTopics } from '../services/perplexityAPI';
@@ -11,6 +11,130 @@ import { getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { useToast } from '../context/ToastContext';
 import { getToastDisclaimer } from './AIDisclaimer';
 import { saveContentLibraryItem, supabase } from '../config/supabase';
+import useAIUsage from '../hooks/useAIUsage';
+import AIUsageMeter from './AIUsageMeter';
+
+/**
+ * Parse raw analysis text into structured sections for clean display.
+ * Handles markdown headings, double-newline-separated blocks, and common header patterns.
+ */
+function parseAnalysisSections(analysis) {
+  if (!analysis) return [];
+
+  const sections = [];
+  const sectionMap = {
+    overview: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
+    summary: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
+    'key insights': { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
+    insights: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
+    takeaways: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
+    'content opportunities': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
+    'content ideas': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
+    opportunities: { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
+    'audience angle': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
+    audience: { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
+    'who cares': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
+    'target audience': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
+  };
+
+  // Try splitting by markdown headers (## or ###)
+  const headerRegex = /(?:^|\n)#{2,3}\s+(.+)/g;
+  const matches = [...analysis.matchAll(headerRegex)];
+
+  if (matches.length >= 2) {
+    matches.forEach((match, idx) => {
+      const headerText = match[1].replace(/\*+/g, '').trim().toLowerCase();
+      const startIdx = match.index + match[0].length;
+      const endIdx = idx < matches.length - 1 ? matches[idx + 1].index : analysis.length;
+      const content = analysis.substring(startIdx, endIdx).trim();
+
+      // Find matching section type
+      let sectionMeta = null;
+      for (const [key, meta] of Object.entries(sectionMap)) {
+        if (headerText.includes(key)) {
+          sectionMeta = meta;
+          break;
+        }
+      }
+
+      sections.push({
+        title: sectionMeta?.title || match[1].replace(/\*+/g, '').trim(),
+        icon: sectionMeta?.icon || 'book',
+        color: sectionMeta?.color || 'gray-600',
+        content,
+      });
+    });
+  }
+
+  // Fallback: if no structured sections found, split into one overview block
+  if (sections.length === 0) {
+    sections.push({
+      title: 'Trend Analysis',
+      icon: 'sparkles',
+      color: 'huttle-primary',
+      content: analysis.trim(),
+    });
+  }
+
+  return sections;
+}
+
+/**
+ * Render a section icon by name
+ */
+function SectionIcon({ name, className }) {
+  switch (name) {
+    case 'lightbulb': return <Lightbulb className={className} />;
+    case 'target': return <Target className={className} />;
+    case 'users': return <Users className={className} />;
+    case 'book': return <BookOpen className={className} />;
+    case 'sparkles':
+    default: return <Sparkles className={className} />;
+  }
+}
+
+/**
+ * Loading skeleton for Deep Dive results
+ */
+function DeepDiveSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-6 w-64 bg-gray-200 rounded-lg mb-2" />
+          <div className="h-4 w-40 bg-gray-100 rounded" />
+        </div>
+      </div>
+      {/* Section skeletons */}
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="h-5 w-40 bg-gray-200 rounded" />
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="h-4 w-full bg-gray-100 rounded" />
+            <div className="h-4 w-5/6 bg-gray-100 rounded" />
+            <div className="h-4 w-4/6 bg-gray-100 rounded" />
+          </div>
+        </div>
+      ))}
+      {/* Ideas skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
+            <div className="h-5 w-24 bg-gray-200 rounded-lg mb-3" />
+            <div className="space-y-2">
+              <div className="h-4 w-full bg-gray-100 rounded" />
+              <div className="h-4 w-5/6 bg-gray-100 rounded" />
+              <div className="h-4 w-3/6 bg-gray-100 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * TrendDiscoveryHub - Reimagined with cutting-edge design
@@ -22,6 +146,8 @@ export default function TrendDiscoveryHub() {
   const { addToast: showToast } = useToast();
   const navigate = useNavigate();
   const { TIERS, userTier } = useSubscription();
+  const quickScanUsage = useAIUsage('trendQuickScan');
+  const deepDiveUsage = useAIUsage('trendDeepDive');
   
   const [activeMode, setActiveMode] = useState('quickScan');
   const [isScanning, setIsScanning] = useState(false);
@@ -191,8 +317,17 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
+    // Check feature limit before proceeding
+    if (!quickScanUsage.canGenerate) {
+      showToast('You\'ve reached your monthly Quick Scan limit. Resets on the 1st.', 'warning');
+      return;
+    }
+
     setIsScanning(true);
     try {
+      // Track this usage
+      await quickScanUsage.trackFeatureUsage({ niche: brandData.niche });
+
       const result = await scanTrendingTopics(brandData, 'all');
       
       if (result.success) {
@@ -230,8 +365,16 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
+    // Check feature limit before proceeding
+    if (!deepDiveUsage.canGenerate) {
+      showToast('You\'ve reached your monthly Deep Dive limit. Resets on the 1st.', 'warning');
+      return;
+    }
+
     setIsLoadingDeepDive(true);
     try {
+      // Track this usage
+      await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
       // Fetch user profile for personalized context
       let userProfile = null;
       if (user?.id) {
@@ -478,6 +621,26 @@ export default function TrendDiscoveryHub() {
 
         {/* Content Area */}
         <div className="relative px-6 pb-8 md:px-8">
+          
+          {/* Per-feature usage meter */}
+          <div className="mb-4">
+            {activeMode === 'quickScan' && (
+              <AIUsageMeter
+                used={quickScanUsage.featureUsed}
+                limit={quickScanUsage.featureLimit}
+                label="Quick Scans this month"
+                compact
+              />
+            )}
+            {activeMode === 'deepDive' && (
+              <AIUsageMeter
+                used={deepDiveUsage.featureUsed}
+                limit={deepDiveUsage.featureLimit}
+                label="Deep Dives this month"
+                compact
+              />
+            )}
+          </div>
           
           {/* Quick Scan Mode */}
           {activeMode === 'quickScan' && (
@@ -842,9 +1005,13 @@ export default function TrendDiscoveryHub() {
                     </div>
                   )}
 
+                  {/* Loading Skeleton */}
+                  {isLoadingDeepDive && <DeepDiveSkeleton />}
+
                   {/* Results */}
-                  {deepDiveResults && (
+                  {deepDiveResults && !isLoadingDeepDive && (
                     <div className="space-y-4 animate-fadeIn">
+                      {/* Results Header */}
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg">
@@ -870,84 +1037,94 @@ export default function TrendDiscoveryHub() {
                         </button>
                       </div>
 
-                      {/* Analysis Section (n8n workflow only) */}
-                      {deepDiveResults.analysis && (
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                          <div className="px-5 py-4 bg-gradient-to-r from-huttle-primary/5 to-purple-50 border-b border-gray-100">
-                            <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                              <Sparkles className="w-5 h-5 text-huttle-primary" />
-                              Trend Analysis
-                            </h4>
+                      {/* Structured Analysis Sections */}
+                      {deepDiveResults.analysis && (() => {
+                        const analysisSections = parseAnalysisSections(deepDiveResults.analysis);
+                        return (
+                          <div className="space-y-3">
+                            {analysisSections.map((section, idx) => (
+                              <div key={idx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                <div className="px-5 py-3.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
+                                  <SectionIcon name={section.icon} className={`w-4.5 h-4.5 text-${section.color}`} />
+                                  <h4 className="font-semibold text-gray-900 text-sm">{section.title}</h4>
+                                </div>
+                                <div className="p-5">
+                                  <MarkdownRenderer content={section.content} />
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="p-5">
-                            <MarkdownRenderer content={deepDiveResults.analysis} />
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Content Ideas */}
                       {deepDiveResults.ideas.length > 0 && (
                         <>
-                          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-900 flex items-center gap-2 pt-2">
                             <Target className="w-4 h-4 text-huttle-primary" />
                             Content Ideas
+                            <span className="text-xs bg-huttle-100 text-huttle-primary px-2 py-0.5 rounded-full font-medium">
+                              {deepDiveResults.ideas.length}
+                            </span>
                           </h4>
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {deepDiveResults.ideas.slice(0, 4).map((idea) => (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {deepDiveResults.ideas.slice(0, 6).map((idea) => (
                           <div
                             key={idea.id}
-                            className="group relative overflow-hidden bg-gradient-to-br from-huttle-50 to-cyan-50 rounded-2xl p-5 border border-huttle-100 hover:border-huttle-300 hover:shadow-xl hover:shadow-huttle-500/10 transition-all"
+                            className="group relative overflow-hidden bg-gradient-to-br from-huttle-50 to-cyan-50 rounded-xl p-4 border border-huttle-100 hover:border-huttle-300 hover:shadow-lg hover:shadow-huttle-500/10 transition-all"
                           >
-                            <div className="flex items-start justify-between mb-3">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white text-xs font-bold rounded-lg">
+                            <div className="flex items-start justify-between mb-2.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white text-xs font-bold rounded-md">
                                 <Sparkles className="w-3 h-3" />
-                                Idea #{idea.id}
+                                #{idea.id}
                               </span>
-                              <span className="px-2.5 py-1 bg-white text-gray-600 text-xs font-medium rounded-lg shadow-sm">
-                                {idea.platform}
-                              </span>
+                              {idea.platform && (
+                                <span className="px-2 py-0.5 bg-white text-gray-600 text-xs font-medium rounded-md shadow-sm">
+                                  {idea.platform}
+                                </span>
+                              )}
                             </div>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-4 leading-relaxed">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                               {idea.content}
                             </p>
-                            <div className="flex gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex gap-2 mt-3 pt-3 border-t border-huttle-100/50">
                               <button
                                 onClick={() => handleCopyIdea(idea.content, `deep-${idea.id}`)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
                               >
                                 {copiedIdea === `deep-${idea.id}` ? (
                                   <>
-                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <Check className="w-3 h-3 text-emerald-500" />
                                     <span>Copied!</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Copy className="w-3.5 h-3.5" />
+                                    <Copy className="w-3 h-3" />
                                     <span>Copy</span>
                                   </>
                                 )}
                               </button>
                               <button
                                 onClick={() => handleAddToLibrary(idea.content, 'idea', `idea-${idea.id}`)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-white text-huttle-primary border border-huttle-primary/30 rounded-xl text-xs font-medium hover:bg-huttle-primary/5 transition-colors"
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-huttle-primary border border-huttle-primary/30 rounded-lg text-xs font-medium hover:bg-huttle-primary/5 transition-colors"
                               >
                                 {savedTrendIndex === `idea-${idea.id}` ? (
                                   <>
-                                    <Check className="w-3.5 h-3.5 text-green-600" />
+                                    <Check className="w-3 h-3 text-green-600" />
                                     <span className="text-green-600">Saved!</span>
                                   </>
                                 ) : (
                                   <>
-                                    <FolderPlus className="w-3.5 h-3.5" />
+                                    <FolderPlus className="w-3 h-3" />
                                     <span>Save</span>
                                   </>
                                 )}
                               </button>
                               <button
                                 onClick={() => handleSendToRemix(idea.content)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-xl text-xs font-medium hover:shadow-md hover:shadow-huttle-500/20 transition-all"
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-lg text-xs font-medium hover:shadow-md transition-all"
                               >
-                                <Shuffle className="w-3.5 h-3.5" />
+                                <Shuffle className="w-3 h-3" />
                                 <span>Remix</span>
                               </button>
                             </div>
@@ -958,61 +1135,65 @@ export default function TrendDiscoveryHub() {
                       {/* Copy All */}
                       <button
                         onClick={() => handleCopyIdea(deepDiveResults.rawContent, 'all-deep')}
-                        className="w-full flex items-center justify-center gap-2 py-4 bg-white border-2 border-dashed border-gray-200 rounded-2xl text-gray-600 font-medium hover:border-huttle-primary hover:bg-huttle-50/50 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 py-3.5 bg-white border-2 border-dashed border-gray-200 rounded-xl text-gray-600 font-medium hover:border-huttle-primary hover:bg-huttle-50/50 transition-colors text-sm"
                       >
                         {copiedIdea === 'all-deep' ? (
                           <>
                             <Check className="w-4 h-4 text-emerald-500" />
-                            <span className="text-emerald-600">All Ideas Copied!</span>
+                            <span className="text-emerald-600">All Content Copied!</span>
                           </>
                         ) : (
                           <>
                             <Copy className="w-4 h-4" />
-                            <span>Copy All Ideas</span>
+                            <span>Copy All Content</span>
                           </>
                         )}
                       </button>
                         </>
                       )}
 
-                      {/* Competitor Insights (n8n workflow only) */}
+                      {/* Competitor Insights */}
                       {deepDiveResults.competitorInsights && deepDiveResults.competitorInsights.length > 0 && (
-                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border border-blue-200 p-5">
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-5 py-3.5 bg-blue-50/50 border-b border-blue-100 flex items-center gap-2">
                             <Activity className="w-4 h-4 text-blue-600" />
-                            Competitor Insights
-                          </h4>
-                          <ul className="space-y-2">
-                            {deepDiveResults.competitorInsights.map((insight, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                                <span className="text-blue-500 mt-1">•</span>
-                                <span>{insight}</span>
-                              </li>
-                            ))}
-                          </ul>
+                            <h4 className="font-semibold text-gray-900 text-sm">Competitor Insights</h4>
+                          </div>
+                          <div className="p-5">
+                            <ul className="space-y-2.5">
+                              {deepDiveResults.competitorInsights.map((insight, idx) => (
+                                <li key={idx} className="flex items-start gap-2.5 text-sm text-gray-700">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
+                                  <span>{insight}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                       )}
 
-                      {/* Citations (n8n workflow only) */}
+                      {/* Citations / Sources */}
                       {deepDiveResults.citations && deepDiveResults.citations.length > 0 && (
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                            <ExternalLink className="w-3 h-3" />
-                            Sources
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {deepDiveResults.citations.map((citation, idx) => (
-                              <a
-                                key={idx}
-                                href={citation}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-huttle-primary hover:text-huttle-primary-dark hover:underline"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Source {idx + 1}
-                              </a>
-                            ))}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-5 py-3.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
+                            <ExternalLink className="w-4 h-4 text-gray-500" />
+                            <h4 className="font-semibold text-gray-900 text-sm">Sources</h4>
+                          </div>
+                          <div className="p-5">
+                            <div className="flex flex-wrap gap-2">
+                              {deepDiveResults.citations.map((citation, idx) => (
+                                <a
+                                  key={idx}
+                                  href={citation}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-huttle-primary hover:bg-huttle-50 hover:border-huttle-200 transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  Source {idx + 1}
+                                </a>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}

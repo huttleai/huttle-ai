@@ -125,7 +125,8 @@ export default function SmartTimeSuggestion({
           }
         }
 
-        const dateStr = bestDate.toISOString().split('T')[0];
+        // Format date using local components (NOT toISOString which converts to UTC and can shift the day)
+        const dateStr = `${bestDate.getFullYear()}-${String(bestDate.getMonth() + 1).padStart(2, '0')}-${String(bestDate.getDate()).padStart(2, '0')}`;
         const dayName = dayNames[bestDate.getDay()];
 
         suggestions.push({
@@ -180,7 +181,9 @@ export default function SmartTimeSuggestion({
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Parse YYYY-MM-DD as local date (not UTC) to avoid off-by-one day display
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 

@@ -401,32 +401,57 @@ export function buildBriefBrandContext(brandData) {
 }
 
 /**
- * Gets personalized greeting based on profile type
+ * Gets personalized greeting based on profile type (account_type)
+ * - solo_creator / creator → "Hey {FirstName}!" using firstName field
+ * - brand_business / brand → "Hey {BrandName}!" using brandName field
+ * - Fallback if no name → "Hey there!" with profile completion nudge
+ * 
  * @param {Object} brandData - Brand data from BrandContext
  * @param {string} fallbackName - Fallback name if none in profile
- * @returns {Object} Greeting object with message and name
+ * @returns {Object} Greeting object with message, name, and needsProfile flag
  */
 export function getPersonalizedGreeting(brandData, fallbackName = 'there') {
   const isCreator = isCreatorProfile(brandData);
-  const name = formatDisplayName(brandData?.brandName || fallbackName);
-  
-  // Extract first name if full name provided
-  const firstName = name.split(' ')[0].replace('@', '');
   
   if (isCreator) {
+    // Solo Creator → use firstName field
+    const rawName = brandData?.firstName || fallbackName;
+    const firstName = formatDisplayName(rawName).split(' ')[0].replace('@', '');
+    const hasName = !!brandData?.firstName;
+    
     return {
-      message: `Hey ${firstName}! Ready to create?`,
-      shortMessage: `Hey ${firstName}!`,
-      name: firstName,
-      isCreator: true
+      message: hasName ? `Hey ${firstName}! Ready to create?` : 'Hey there! Ready to create?',
+      shortMessage: hasName ? `Hey ${firstName}!` : 'Hey there!',
+      name: hasName ? firstName : 'there',
+      isCreator: true,
+      needsProfile: !hasName,
+    };
+  }
+  
+  // Brand / Business → use brandName field
+  const brandName = formatDisplayName(brandData?.brandName || '');
+  const hasBrandName = !!brandData?.brandName;
+  
+  // If no brand name, try firstName as fallback
+  if (!hasBrandName) {
+    const firstName = formatDisplayName(brandData?.firstName || fallbackName).split(' ')[0];
+    const hasFirstName = !!brandData?.firstName;
+    
+    return {
+      message: hasFirstName ? `Hey ${firstName}!` : 'Hey there!',
+      shortMessage: hasFirstName ? `Hey ${firstName}!` : 'Hey there!',
+      name: hasFirstName ? firstName : 'there',
+      isCreator: false,
+      needsProfile: !hasFirstName,
     };
   }
   
   return {
-    message: `Welcome back, ${name}`,
-    shortMessage: `Welcome, ${name}`,
-    name: name,
-    isCreator: false
+    message: `Hey ${brandName}!`,
+    shortMessage: `Hey ${brandName}!`,
+    name: brandName,
+    isCreator: false,
+    needsProfile: false,
   };
 }
 

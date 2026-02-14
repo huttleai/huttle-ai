@@ -43,9 +43,12 @@ export default function ContentLibrary() {
   const [storageUsed, setStorageUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [signedUrlCache, setSignedUrlCache] = useState({});
   const [selectedItems, setSelectedItems] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState(null);
   const safeProjects = projects || [];
   const safeContentItems = contentItems || [];
 
@@ -474,6 +477,22 @@ export default function ContentLibrary() {
     }
   };
 
+  // Handle file selection from the input
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setSelectedFile(file);
+    
+    // Generate a preview for images
+    if (file.type.startsWith('image/')) {
+      const previewUrl = URL.createObjectURL(file);
+      setSelectedFilePreview(previewUrl);
+    } else {
+      setSelectedFilePreview(null);
+    }
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     
@@ -483,43 +502,56 @@ export default function ContentLibrary() {
     }
 
     setUploading(true);
+    setUploadProgress('Preparing...');
 
     try {
       const formData = new FormData(e.target);
       const name = formData.get('name');
       const textContent = formData.get('content');
-      const fileInput = formData.get('file');
 
       const contentName = name || `New ${uploadType}`;
     
       if (uploadType === 'text') {
+        setUploadProgress('Saving text...');
         await handleTextUpload(contentName, textContent);
       } else {
-        // Defensive check: ensure fileInput is a valid File object with content
+        // Use the selectedFile state instead of form data (more reliable)
+        const fileInput = selectedFile || formData.get('file');
+        
         if (!fileInput || !(fileInput instanceof File) || fileInput.size === 0) {
           addToast('Please select a file to upload', 'error');
           setUploading(false);
+          setUploadProgress('');
           return;
         }
+        
+        setUploadProgress('Uploading file...');
         await handleFileUpload(fileInput, contentName);
       }
 
+      setUploadProgress('Refreshing library...');
       await loadContent();
       await loadStorageUsage();
     
       addToast('Content uploaded successfully!', 'success');
       setShowUploadModal(false);
+      setSelectedFile(null);
+      setSelectedFilePreview(null);
     } catch (error) {
       console.error('Upload failed:', error);
-      // Provide more specific error messages
       if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
         addToast('Database setup error. Please contact support.', 'error');
         console.error('Foreign key constraint error - likely missing user record in public.users table');
+      } else if (error.message?.includes('Bucket not found')) {
+        addToast('Storage not configured. The content-library bucket needs to be created in Supabase Storage.', 'error');
+      } else if (error.message?.includes('policy') || error.message?.includes('permission')) {
+        addToast('Upload permission denied. Please check storage RLS policies.', 'error');
       } else {
         handleSupabaseError(error, 'upload file');
       }
     } finally {
       setUploading(false);
+      setUploadProgress('');
     }
   };
 
@@ -1563,7 +1595,7 @@ export default function ContentLibrary() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto">
             <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Upload Content</h2>
-              <button onClick={() => setShowUploadModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setSelectedFilePreview(null); }} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1581,7 +1613,7 @@ export default function ContentLibrary() {
                     <button
                       key={type.key}
                       type="button"
-                      onClick={() => setUploadType(type.key)}
+                      onClick={() => { setUploadType(type.key); setSelectedFile(null); setSelectedFilePreview(null); }}
                       className={`flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
                         uploadType === type.key
                           ? 'border-huttle-primary bg-huttle-primary/5'
@@ -1611,27 +1643,53 @@ export default function ContentLibrary() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Upload {uploadType === 'image' ? 'Image' : 'Video'} File
                   </label>
-                  <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-huttle-primary hover:bg-huttle-primary/5 transition-all bg-gray-50/50 group cursor-pointer">
-                    <input
-                      type="file"
-                      name="file"
-                      accept={uploadType === 'image' ? 'image/*' : 'video/*'}
-                      className="hidden"
-                      id="file-upload"
-                      disabled={uploading}
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer w-full h-full block">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300">
-                        <Upload className="w-8 h-8 text-huttle-primary" />
+                  {selectedFile ? (
+                    <div className="border-2 border-huttle-primary rounded-2xl p-4 bg-huttle-primary/5">
+                      <div className="flex items-center gap-4">
+                        {selectedFilePreview ? (
+                          <img src={selectedFilePreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200">
+                            <Video className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{selectedFile.name}</p>
+                          <p className="text-xs text-gray-500">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                        </button>
                       </div>
-                      <p className="text-gray-900 font-semibold mb-1 text-lg group-hover:text-huttle-primary transition-colors">
-                        {uploading ? 'Uploading...' : 'Click or Drag to Upload'}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
-                      </p>
-                    </label>
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-huttle-primary hover:bg-huttle-primary/5 transition-all bg-gray-50/50 group cursor-pointer">
+                      <input
+                        type="file"
+                        name="file"
+                        accept={uploadType === 'image' ? 'image/*' : 'video/*'}
+                        className="hidden"
+                        id="file-upload"
+                        disabled={uploading}
+                        onChange={handleFileSelect}
+                      />
+                      <label htmlFor="file-upload" className="cursor-pointer w-full h-full block">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300">
+                          <Upload className="w-8 h-8 text-huttle-primary" />
+                        </div>
+                        <p className="text-gray-900 font-semibold mb-1 text-lg group-hover:text-huttle-primary transition-colors">
+                          Click or Drag to Upload
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
+                        </p>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1693,7 +1751,7 @@ export default function ContentLibrary() {
                   {uploading ? (
                     <>
                       <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      Uploading...
+                      {uploadProgress || 'Uploading...'}
                     </>
                   ) : (
                     <>

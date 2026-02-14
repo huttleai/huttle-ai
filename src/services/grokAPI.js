@@ -810,40 +810,89 @@ etc.`
  * Remix content with mode-specific system prompts
  * @param {string} content - Content to remix
  * @param {Object} brandData - Brand data from BrandContext
- * @param {string} mode - 'viral' for viral reach or 'sales' for sales conversion
- * @returns {Promise<Object>} Remixed content
+ * @param {string} mode - 'viral', 'sales', 'educational', or 'community'
+ * @param {Array<string>} platforms - Target platforms for the remix output
+ * @returns {Promise<Object>} Remixed content with { success, remixed, mode, usage }
  */
-export async function remixContentWithMode(content, brandData, mode = 'viral') {
+export async function remixContentWithMode(content, brandData, mode = 'viral', platforms = []) {
   try {
-    // Define mode-specific system prompts
     const systemPrompts = {
-      viral: "You are a Social Media Virality Expert. Your goal is maximum reach. Take the user's input and rewrite it to be punchy, relatable, and shareable. Use short sentences, trending formats, and emojis. Optimize for engagement and comments.",
-      sales: "You are a Conversion Critic and Direct Response Copywriter. Your goal is revenue, not just views. Rewrite the user's input using the PAS (Problem-Agitation-Solution) framework. 1) Hook: Call out a specific customer pain point. 2) Body: Agitate the pain and present the offer as the solution. 3) CTA: Write an imperative Call to Action that requires a comment (e.g., 'Comment GUIDE'). 4) Objection: Add a P.S. handling a price or time objection."
+      viral: "You are a Social Media Virality Expert. Your goal is maximum reach. Take the user's input and rewrite it to be punchy, relatable, and shareable. Use short sentences, trending formats, and emojis. Optimize for engagement, shares, and saves.",
+      sales: "You are a Conversion Critic and Direct Response Copywriter. Your goal is revenue, not just views. Rewrite the user's input using the PAS (Problem-Agitation-Solution) framework. 1) Hook: Call out a specific customer pain point. 2) Body: Agitate the pain and present the offer as the solution. 3) CTA: Write an imperative Call to Action that requires a comment (e.g., 'Comment GUIDE'). 4) Objection: Add a P.S. handling a price or time objection.",
+      educational: "You are an Educational Content Strategist. Your goal is to teach and provide value. Rewrite the user's input to be informative, clear, and actionable. Use numbered tips, bite-sized insights, and practical takeaways. Make the audience feel like they learned something valuable.",
+      community: "You are a Community Building Expert. Your goal is to spark conversations and foster connection. Rewrite the user's input to invite discussion, share relatable experiences, and encourage audience participation. Use open-ended questions, polls, and 'this or that' formats."
     };
+
+    const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
     const baseSystemPrompt = systemPrompts[mode] || systemPrompts.viral;
     const systemPrompt = buildSystemPrompt(baseSystemPrompt, brandData);
 
-    const userPrompt = mode === 'sales' 
-      ? `Remix this content for maximum sales conversion: "${content}"
+    const modeLabels = {
+      viral: 'maximum viral reach and engagement',
+      sales: 'maximum sales conversion',
+      educational: 'educational value and practical takeaways',
+      community: 'community building and conversation'
+    };
+    const modeGoal = modeLabels[mode] || modeLabels.viral;
 
-Create 3 variations using the PAS framework. For each variation:
+    const userPrompts = {
+      sales: `Remix this content for ${modeGoal}: "${content}"
+
+Create 2-3 variations for these platforms: ${platformList}.
+
+For each variation:
+- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
 - Start with a pain-point hook that stops the scroll
 - Agitate the problem to create urgency
 - Present the solution naturally
 - End with a comment-based CTA (e.g., "Comment READY to get started")
 - Add a P.S. that handles a common objection
+- Optimize for the specific platform's format and audience
 
-Format each variation clearly with labels.`
-      : `Remix this trending content for my brand: "${content}". 
+Format: Use "### Platform Name" as headers for each platform section.`,
+      educational: `Remix this content for ${modeGoal}: "${content}"
 
-Adapt it to match my ${brandData?.brandVoice || 'engaging'} voice and create 3 variations for different platforms (Instagram, X (Twitter), TikTok).
+Create 2-3 variations for these platforms: ${platformList}.
 
-Make each variation:
-- Punchy and scroll-stopping
+For each variation:
+- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
+- Start with a curiosity-driven hook
+- Break down the information into clear, numbered tips or steps
+- Use simple language and practical examples
+- End with a takeaway or actionable next step
+- Optimize for the specific platform's format and audience
+
+Format: Use "### Platform Name" as headers for each platform section.`,
+      community: `Remix this content for ${modeGoal}: "${content}"
+
+Create 2-3 variations for these platforms: ${platformList}.
+
+For each variation:
+- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
+- Start with a relatable statement or shared experience
+- Include open-ended questions to spark discussion
+- Use "this or that" or poll-style formats where appropriate
+- End with an invitation to share their own experience
+- Optimize for the specific platform's format and audience
+
+Format: Use "### Platform Name" as headers for each platform section.`,
+      viral: `Remix this trending content for ${modeGoal}: "${content}"
+
+Create 2-3 variations for these platforms: ${platformList}.
+
+For each variation:
+- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
+- Make it punchy and scroll-stopping
 - Highly shareable and relatable
 - Optimized for engagement and comments
-- Include relevant emojis and trending formats`;
+- Include relevant emojis and trending formats
+- Optimize for the specific platform's format and audience
+
+Format: Use "### Platform Name" as headers for each platform section.`
+    };
+
+    const userPrompt = userPrompts[mode] || userPrompts.viral;
 
     const data = await callGrokAPI([
       {
@@ -858,7 +907,8 @@ Make each variation:
 
     return {
       success: true,
-      ideas: data.content || '',
+      remixed: data.content || '',
+      ideas: data.content || '', // backward compat
       mode,
       usage: data.usage
     };
@@ -951,14 +1001,15 @@ Hashtags: [platform-appropriate hashtags]
  * @param {string} prompt - Visual concept description
  * @param {Object} brandData - Brand data from BrandContext
  * @param {string} platform - Target platform for visual content
+ * @param {'image'|'video'|'all'} mediaType - Type of media concepts to generate ('image' for static, 'video' for motion, 'all' for mixed)
  * @returns {Promise<Object>} Generated visual ideas
  */
-export async function generateVisualIdeas(prompt, brandData, platform = 'instagram') {
+export async function generateVisualIdeas(prompt, brandData, platform = 'instagram', mediaType = 'all') {
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock visual ideas');
+    console.log(`[Demo Mode] Generating mock ${mediaType} ideas`);
     await simulateDelay(1000, 2000);
-    const mockIdeas = getVisualIdeaMocks(platform, 4);
+    const mockIdeas = getVisualIdeaMocks(platform, 4, mediaType);
     return {
       success: true,
       ideas: mockIdeas.map((idea, i) => 
@@ -969,14 +1020,40 @@ export async function generateVisualIdeas(prompt, brandData, platform = 'instagr
     };
   }
 
+  const isVideo = mediaType === 'video';
+  const isImage = mediaType === 'image';
+  const isMixed = mediaType === 'all';
+
   try {
     const platformData = getPlatform(platform);
     const platformContext = buildPlatformContext(platform, 'visual');
     
-    const systemPrompt = buildSystemPrompt(
-      'You are a visual content strategist. Create compelling image and video concepts that align with brand identity.',
-      brandData
-    );
+    const systemRole = isVideo
+      ? 'You are a video content strategist. Create compelling short-form and long-form video concepts (reels, tutorials, vlogs, clips) that align with brand identity. Focus exclusively on motion/video content — do NOT suggest static images or graphics.'
+      : isImage
+        ? 'You are a visual content strategist. Create compelling static image and graphic concepts (photos, carousels, infographics, quote cards) that align with brand identity. Focus exclusively on still imagery — do NOT suggest videos or reels.'
+        : 'You are a visual content strategist. Create compelling image and video concepts that align with brand identity.';
+
+    const systemPrompt = buildSystemPrompt(systemRole, brandData);
+
+    const formatGuidance = isVideo
+      ? `MEDIA TYPE: VIDEO/MOTION CONTENT ONLY
+- Suggest only video formats: reels, short clips, tutorials, vlogs, stories, TikToks
+- Include duration suggestions (e.g., 15s, 30s, 60s)
+- Suggest music/audio style, transitions, and pacing
+- Do NOT suggest static images, photos, or graphics`
+      : isImage
+        ? `MEDIA TYPE: STATIC IMAGE/GRAPHIC CONTENT ONLY
+- Suggest only image formats: photos, graphics, carousels, infographics, quote cards
+- Include composition, color palette, and layout suggestions
+- Suggest text overlay and typography if applicable
+- Do NOT suggest videos, reels, or motion content`
+        : `MEDIA TYPE: MIXED (IMAGES AND VIDEOS)
+- Include a mix of static image and video/motion concepts
+- For images: include composition, color palette, and layout suggestions
+- For videos: include duration, pacing, and audio/music suggestions`;
+
+    const contentLabel = isVideo ? 'video/motion' : isImage ? 'image/graphic' : 'visual';
 
     const data = await callGrokAPI([
       {
@@ -985,24 +1062,25 @@ export async function generateVisualIdeas(prompt, brandData, platform = 'instagr
       },
       {
         role: 'user',
-        content: `Generate 4 visual content ideas for: "${prompt}"
+        content: `Generate 4 ${contentLabel} content ideas for: "${prompt}"
 
 ${platformContext}
 
+${formatGuidance}
+
 PLATFORM-SPECIFIC REQUIREMENTS:
-- Optimize visuals for ${platformData?.name || 'social media'}
+- Optimize for ${platformData?.name || 'social media'}
 - Consider ${platformData?.contentFormats?.join(', ') || 'various formats'}
 - Match ${platformData?.audienceStyle || 'engaging visual style'}
 
 For each idea, include:
-- Visual concept description optimized for ${platformData?.name || 'social media'}
-- Recommended format (${platformData?.contentFormats?.slice(0, 3).join(', ') || 'image, video, carousel'})
-- Color palette suggestions
-- Composition tips for ${platformData?.name || 'social media'}
-- Text overlay suggestions (if applicable)
+- ${isMixed ? 'Visual/video' : isVideo ? 'Video' : 'Visual'} concept description optimized for ${platformData?.name || 'social media'}
+- Recommended format
+${isVideo ? '- Suggested duration and pacing\n- Audio/music style' : isImage ? '- Color palette suggestions\n- Composition and layout tips' : '- Color palette or audio/pacing suggestions as appropriate'}
 - Why this works for ${platformData?.name || 'this platform'}
 
-Make sure all visuals align with the brand identity and appeal to the target audience.
+Make sure all concepts align with the brand identity and appeal to the target audience.
+The content should be specifically relevant to the topic: "${prompt}"
 
 Number them 1-4.`
       }
@@ -1017,9 +1095,9 @@ Number them 1-4.`
     console.error('Grok API Error:', error);
     
     // Fallback to demo data on error
-    console.log('[Fallback] Using mock visual ideas due to API error');
+    console.log(`[Fallback] Using mock ${mediaType} ideas due to API error`);
     await simulateDelay(500, 1000);
-    const mockIdeas = getVisualIdeaMocks(platform, 4);
+    const mockIdeas = getVisualIdeaMocks(platform, 4, mediaType);
     return {
       success: true,
       ideas: mockIdeas.map((idea, i) => 
@@ -1027,7 +1105,7 @@ Number them 1-4.`
       ).join('\n\n'),
       visualData: mockIdeas,
       usage: { fallback: true },
-      note: 'Using demo visual ideas due to API unavailability'
+      note: `Using demo ${mediaType} ideas due to API unavailability`
     };
   }
 }

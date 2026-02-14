@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2 } from 'lucide-react';
+import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useContent } from '../context/ContentContext';
 import { useBrand } from '../context/BrandContext';
@@ -8,9 +8,13 @@ import HoverPreview from '../components/HoverPreview';
 import { createJobDirectly, triggerN8nWebhook, subscribeToJob } from '../services/planBuilderAPI';
 import { supabase } from '../config/supabase';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
+import { usePreferredPlatforms, ALL_PLATFORMS } from '../hooks/usePreferredPlatforms';
+import useAIUsage from '../hooks/useAIUsage';
+import AIUsageMeter from '../components/AIUsageMeter';
+import { useNavigate } from 'react-router-dom';
 
-// Hardcoded list of allowed platforms for AI Plan Builder
-const ALLOWED_PLATFORMS = [
+// Full list of all platforms (used as fallback for Settings display)
+const FALLBACK_PLATFORMS = [
   { id: 'facebook', name: 'Facebook', icon: FacebookIcon },
   { id: 'instagram', name: 'Instagram', icon: InstagramIcon },
   { id: 'x', name: 'X', displayName: 'X (Twitter)', icon: TwitterXIcon },
@@ -47,6 +51,9 @@ export default function AIPlanBuilder() {
   const { showToast } = useToast();
   const { schedulePost } = useContent();
   const { brandProfile } = useBrand();
+  const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
+  const planUsage = useAIUsage('planBuilder');
+  const navigate = useNavigate();
   
   // Form state
   const [selectedGoal, setSelectedGoal] = useState('Grow followers');
@@ -199,6 +206,15 @@ export default function AIPlanBuilder() {
       return;
     }
 
+    // Check feature limit
+    if (!planUsage.canGenerate) {
+      showToast('You\'ve reached your monthly Plan Builder limit. Resets on the 1st.', 'warning');
+      return;
+    }
+
+    // Track feature usage
+    await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
+
     // Reset state
     setIsGenerating(true);
     setProgress(0);
@@ -342,6 +358,13 @@ export default function AIPlanBuilder() {
             </p>
           </div>
         </div>
+        {/* Per-feature usage meter */}
+        <AIUsageMeter
+          used={planUsage.featureUsed}
+          limit={planUsage.featureLimit}
+          label="Plans this month"
+          compact
+        />
       </div>
 
       {/* Recent Plans - only show if user has generated plans */}
@@ -402,28 +425,44 @@ export default function AIPlanBuilder() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Platform Focus</label>
-              <div className="flex flex-wrap gap-2">
-                {ALLOWED_PLATFORMS.map(platform => {
-                  const Icon = platform.icon;
-                  const isSelected = selectedPlatforms.includes(platform.name);
-                  return (
-                    <button
-                      key={platform.id}
-                      onClick={() => handlePlatformToggle(platform.name)}
-                      className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-all ${
-                        isSelected
-                          ? 'border-huttle-primary bg-huttle-primary text-white'
-                          : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
-                      }`}
-                    >
-                      <span className={isSelected ? 'brightness-0 invert' : ''}>
-                        <Icon className="w-4 h-4" />
-                      </span>
-                      {platform.displayName || platform.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {!hasPlatformsConfigured || brandVoicePlatforms.length === 0 ? (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-800">No platforms selected yet.</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose platforms.</p>
+                  </div>
+                  <button
+                    onClick={() => navigate('/dashboard/brand-voice')}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    Set up Brand Voice <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {brandVoicePlatforms.map(platform => {
+                    const Icon = platform.icon;
+                    const isSelected = selectedPlatforms.includes(platform.name);
+                    return (
+                      <button
+                        key={platform.id}
+                        onClick={() => handlePlatformToggle(platform.name)}
+                        className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-all ${
+                          isSelected
+                            ? 'border-huttle-primary bg-huttle-primary text-white'
+                            : 'border-gray-300 hover:border-huttle-primary hover:text-huttle-primary'
+                        }`}
+                      >
+                        <span className={isSelected ? 'brightness-0 invert' : ''}>
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        {platform.displayName || platform.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">

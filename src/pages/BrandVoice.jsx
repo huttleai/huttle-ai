@@ -111,6 +111,7 @@ export default function BrandVoice() {
   });
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync form data when brandData changes (e.g., after loading)
   useEffect(() => {
@@ -187,16 +188,31 @@ export default function BrandVoice() {
     return Math.round((filledWeight / totalWeight) * 100);
   }, [formData, isCreator]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.firstName.trim()) {
       addToast('First name is required', 'warning');
       return;
     }
-    updateBrandData(formData);
-    // Force refresh brand data across the entire app
-    refreshBrandData();
-    setHasUnsavedChanges(false);
-    addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
+    
+    setIsSaving(true);
+    try {
+      const result = await updateBrandData(formData);
+      
+      if (result?.success === false) {
+        addToast(result.error || 'Failed to save. Please try again.', 'error');
+        return;
+      }
+      
+      // Only refresh and mark saved after confirmed success
+      refreshBrandData();
+      setHasUnsavedChanges(false);
+      addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
+    } catch (error) {
+      console.error('Error saving brand data:', error);
+      addToast('Something went wrong. Your changes are saved locally and will sync when the connection is restored.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -708,17 +724,26 @@ export default function BrandVoice() {
           <div className="mt-8 flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-100">
             <button 
               onClick={handleSave}
-              disabled={!hasUnsavedChanges}
+              disabled={!hasUnsavedChanges || isSaving}
               className={`flex-1 px-6 py-3 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 ${
-                !hasUnsavedChanges 
+                !hasUnsavedChanges || isSaving
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
                   : isCreator
                     ? 'bg-gradient-to-r from-huttle-500 to-huttle-600 text-white hover:shadow-lg hover:shadow-huttle-500/20'
                     : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark hover:shadow-lg hover:shadow-huttle-primary/20'
               }`}
             >
-              <Save className="w-5 h-5" />
-              {isCreator ? 'Save Creator Voice' : 'Save Brand Voice'}
+              {isSaving ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />
+                  {isCreator ? 'Save Creator Voice' : 'Save Brand Voice'}
+                </>
+              )}
             </button>
             <button 
               onClick={handleReset}

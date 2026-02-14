@@ -33,7 +33,7 @@ import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import { socialUpdates } from '../data/socialUpdates';
-import { mockTrendingTopics } from '../data/mockData';
+import { getMockTrendingTopics, mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import confetti from 'canvas-confetti';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
@@ -357,17 +357,25 @@ export default function Dashboard() {
   // Expected workflow response format:
   // { success: true, topics: [{ topic, engagement, growth, platforms }] }
   // ==========================================================================
+  const hasNicheConfigured = !!(brandProfile?.niche || brandProfile?.industry);
+
   const trendingTopics = useMemo(() => {
     // TODO: N8N_WORKFLOW - Replace with workflow data when available
-    // Current implementation: Mock data fallback
-    // Transform mock data to match expected format
-    return mockTrendingTopics.map(trend => ({
+    // Current implementation: Mock data fallback based on user's niche
+    const niche = brandProfile?.niche || '';
+    const industry = brandProfile?.industry || '';
+    const nicheTopics = getMockTrendingTopics(niche, industry);
+    
+    // Use niche-specific topics if available, otherwise general trends
+    const topics = nicheTopics.length > 0 ? nicheTopics : mockTrendingTopics;
+    
+    return topics.map(trend => ({
       topic: trend.topic,
       engagement: trend.volume,
       growth: trend.growth,
       platforms: trend.platforms
     }));
-  }, []);
+  }, [brandProfile?.niche, brandProfile?.industry]);
 
   // ==========================================================================
   // TODO: N8N_WORKFLOW - Hashtags of the Day
@@ -527,17 +535,16 @@ export default function Dashboard() {
     }
   };
 
-  // Build display name - for creators, use first name; for brands, use brand name
-  const displayName = isCreator 
+  // Build display name using the greeting logic (already handles creator vs brand)
+  const displayName = personalizedGreeting.name !== 'there' 
     ? personalizedGreeting.name
     : formatDisplayName(
-      brandProfile?.brandName 
-        || user?.user_metadata?.name 
+        user?.user_metadata?.name 
         || user?.user_metadata?.full_name 
         || user?.name 
         || user?.email?.split('@')[0] 
-        || 'Creator'
-    );
+        || ''
+      ) || 'there';
 
   // Stats configuration - clean monochrome style
   const stats = [
@@ -597,16 +604,26 @@ export default function Dashboard() {
                 <p className="text-gray-500 mt-1 text-sm">
                   Ready to create something amazing today?
                 </p>
+                {personalizedGreeting.needsProfile && (
+                  <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
+                    Complete your profile for a personalized experience <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
               </>
             ) : (
               <>
                 <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                  {displayName} <span className="animate-wave inline-block">👋</span>
+                  {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
                 </h1>
                 <p className="text-gray-500 mt-1 text-sm">
                   Here's what's happening with your content today.
                 </p>
+                {personalizedGreeting.needsProfile && (
+                  <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
+                    Complete your Brand Voice for a personalized experience <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -802,7 +819,11 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h2 className="font-bold text-gray-900">Trending Now</h2>
-                  <p className="text-xs text-gray-500">Hot topics and keywords across platforms</p>
+                  <p className="text-xs text-gray-500">
+                    {hasNicheConfigured
+                      ? `Hot topics in ${brandProfile?.niche || brandProfile?.industry}`
+                      : 'General trends across platforms'}
+                  </p>
                 </div>
               </div>
               

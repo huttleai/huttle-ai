@@ -253,47 +253,95 @@ export const getContentScoreMock = (content) => {
 // VISUAL BRAINSTORMER MOCKS
 // ============================================================================
 
-const visualIdeaMocks = [
+const imageIdeaMocks = [
   {
-    title: "Before/After Transformation Split",
-    description: "Side-by-side comparison showing dramatic fitness transformation with consistent lighting and pose",
+    title: "Eye-Catching Quote Graphic",
+    description: "Bold statement or tip on a gradient or textured background with brand colors",
+    style: "Minimalist design with clean sans-serif typography",
+    type: "image",
+  },
+  {
+    title: "Before/After Comparison",
+    description: "Side-by-side split image showing transformation or contrast relevant to your topic",
     style: "Clean, high-contrast photography with minimal text overlay",
     type: "carousel",
   },
   {
-    title: "Workout Demo Reel",
-    description: "Quick-cut video showing proper form for 5 exercises with text overlays naming each move",
+    title: "Step-by-Step Carousel",
+    description: "Multi-slide guide breaking down your topic into digestible visual steps",
+    style: "Consistent branding with numbered slides and clear layouts",
+    type: "carousel",
+  },
+  {
+    title: "Behind-the-Scenes Photo",
+    description: "Authentic snapshot showing your process, workspace, or daily routine",
+    style: "Natural lighting, candid composition, warm tones",
+    type: "image",
+  },
+  {
+    title: "Infographic Summary",
+    description: "Data-driven visual summarizing key points, stats, or tips from your content",
+    style: "Clean iconography with brand colors and structured layout",
+    type: "image",
+  },
+  {
+    title: "Product/Service Spotlight",
+    description: "Styled flat-lay or hero shot highlighting your offering with lifestyle context",
+    style: "Professional product photography with soft shadows and brand accents",
+    type: "image",
+  },
+];
+
+const videoIdeaMocks = [
+  {
+    title: "Quick Tips Reel",
+    description: "Fast-paced 15-30s video sharing 3-5 actionable tips with text overlays",
     style: "Dynamic transitions, upbeat music, bold typography",
     type: "reel",
   },
   {
-    title: "Motivational Quote Graphic",
-    description: "Powerful fitness quote on gradient background with gym equipment silhouette",
-    style: "Minimalist design with bold sans-serif typography",
-    type: "image",
-  },
-  {
-    title: "Day in the Life Vlog",
-    description: "Follow-along content showing morning routine, meals, and workout in authentic style",
-    style: "Raw, authentic footage with natural lighting",
+    title: "Day in the Life",
+    description: "Authentic follow-along content showing your routine and process",
+    style: "Raw, authentic footage with natural lighting and voiceover",
     type: "video",
   },
   {
-    title: "Meal Prep Carousel",
-    description: "Step-by-step guide showing weekly meal prep with macros and recipes",
-    style: "Bright, appetizing food photography with clean layouts",
-    type: "carousel",
+    title: "Tutorial Walkthrough",
+    description: "Screen recording or hands-on demo breaking down a process step by step",
+    style: "Clear visuals, slow-motion key moments, instructional captions",
+    type: "video",
   },
   {
-    title: "Progress Timeline",
-    description: "Monthly progress photos arranged in timeline format showing gradual transformation",
-    style: "Consistent framing with date stamps and milestone markers",
-    type: "carousel",
+    title: "Trending Audio Remix",
+    description: "Content set to a trending sound with creative lip-sync or visual storytelling",
+    style: "Trendy editing, jump cuts, on-screen text for context",
+    type: "reel",
+  },
+  {
+    title: "Myth vs. Fact",
+    description: "Engaging short video debunking common misconceptions in your niche",
+    style: "Split-screen or swipe transitions with bold text callouts",
+    type: "reel",
+  },
+  {
+    title: "Client/Customer Story",
+    description: "Short testimonial or case study video with results and authentic reactions",
+    style: "Interview-style framing with B-roll overlays and subtle music",
+    type: "video",
   },
 ];
 
-export const getVisualIdeaMocks = (platform = 'instagram', count = 4) => {
-  const ideas = pickRandom(visualIdeaMocks, Math.min(count, visualIdeaMocks.length));
+/**
+ * Get visual idea mocks filtered by media type
+ * @param {string} platform - Target platform
+ * @param {number} count - Number of ideas to return
+ * @param {'image'|'video'} mediaType - Type of media concepts to return
+ */
+export const getVisualIdeaMocks = (platform = 'instagram', count = 4, mediaType = 'all') => {
+  const pool = mediaType === 'video' ? videoIdeaMocks 
+    : mediaType === 'image' ? imageIdeaMocks 
+    : [...imageIdeaMocks, ...videoIdeaMocks];
+  const ideas = pickRandom(pool, Math.min(count, pool.length));
   return ideas.map(idea => ({
     ...idea,
     platform: platform.charAt(0).toUpperCase() + platform.slice(1),

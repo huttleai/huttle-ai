@@ -50,11 +50,66 @@ const getPlatformIconComponent = (platform) => {
   return null;
 };
 
+/**
+ * Thumbnail component for post media — loads signed URL on mount
+ * @param {Object} props
+ * @param {Array} props.media - Array of media items with storagePath, type, name
+ * @param {Function} props.getMediaUrl - Function to get signed URL for a storage path
+ * @param {'sm'|'md'|'lg'} props.size - Thumbnail size (sm=32px, md=48px, lg=full)
+ */
+function PostMediaThumbnail({ media, getMediaUrl: getUrl, size = 'sm' }) {
+  const [thumbUrl, setThumbUrl] = useState(null);
+  const firstMedia = media?.[0];
+
+  useEffect(() => {
+    if (!firstMedia?.storagePath && !firstMedia?.url) return;
+    let cancelled = false;
+    const path = firstMedia.storagePath || firstMedia.url || '';
+    
+    if (path.startsWith('blob:') || path.startsWith('http')) {
+      setThumbUrl(path);
+      return;
+    }
+    
+    if (getUrl) {
+      getUrl(path).then(url => {
+        if (!cancelled && url) setThumbUrl(url);
+      });
+    }
+    return () => { cancelled = true; };
+  }, [firstMedia, getUrl]);
+
+  if (!firstMedia || !thumbUrl) return null;
+
+  const isVideo = firstMedia.type === 'video';
+  const sizeClasses = size === 'lg' ? 'w-full max-h-64 rounded-xl' : size === 'md' ? 'w-12 h-12 rounded-lg' : 'w-8 h-8 rounded-md';
+
+  if (isVideo) {
+    return (
+      <div className={`${sizeClasses} relative bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0`}>
+        <Video className={`${size === 'lg' ? 'w-8 h-8' : 'w-3.5 h-3.5'} text-white/70`} />
+        {media.length > 1 && (
+          <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${sizeClasses} relative overflow-hidden flex-shrink-0`}>
+      <img src={thumbUrl} alt="" className={`${sizeClasses} object-cover`} loading="lazy" />
+      {media.length > 1 && (
+        <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
+      )}
+    </div>
+  );
+}
+
 export default function SmartCalendar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState('month');
+  const [view, setView] = useState('week');
   const [selectedDay, setSelectedDay] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -94,7 +149,7 @@ export default function SmartCalendar() {
   }, [statusFilter]);
 
   const { user } = useContext(AuthContext);
-  const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing } = useContent();
+  const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing, getMediaUrl } = useContent();
   const { addToast } = useToast();
   const { addInfo } = useNotifications();
   const { userTier, TIERS } = useSubscription();
@@ -528,10 +583,22 @@ export default function SmartCalendar() {
               </div>
             </div>
             
-            {/* Title */}
-            <h4 className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-800 truncate mb-1.5`}>
-              {post.title}
-            </h4>
+            {/* Title with optional media thumbnail and status dot */}
+            <div className="flex items-center gap-1.5 mb-1.5">
+              {/* Status dot */}
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                post.status === 'posted' ? 'bg-blue-500'
+                : post.status === 'draft' ? 'bg-amber-400'
+                : post.status === 'failed' ? 'bg-red-500'
+                : 'bg-green-500'
+              }`} />
+              {!compact && post.media && post.media.length > 0 && (
+                <PostMediaThumbnail media={post.media} getMediaUrl={getMediaUrl} size="sm" />
+              )}
+              <h4 className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-800 truncate`}>
+                {post.title}
+              </h4>
+            </div>
             
             {/* Platforms */}
             {post.platforms && post.platforms.length > 0 && (
@@ -772,8 +839,9 @@ export default function SmartCalendar() {
             <div className="flex items-center gap-3">
               {view === 'day' && (
                 <button
-                  onClick={() => setView('month')}
+                  onClick={() => setView('week')}
                   className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-600"
+                  title="Back to week view"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -784,7 +852,7 @@ export default function SmartCalendar() {
             <div className="flex items-center gap-2">
               {/* View Switcher */}
               <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-lg border border-gray-100">
-                {['month', 'week', 'day'].map((v) => (
+                {['day', 'week', 'month'].map((v) => (
                   <button
                     key={v}
                     onClick={() => setView(v)}
@@ -810,7 +878,7 @@ export default function SmartCalendar() {
                 <button
                   onClick={() => {
                     setCurrentDate(new Date());
-                    if (view === 'day') setView('month');
+                    if (view === 'day') setView('week');
                   }}
                   className="px-3 py-1.5 text-sm font-medium text-huttle-primary hover:bg-huttle-50 rounded-lg transition-colors"
                 >
@@ -895,6 +963,7 @@ export default function SmartCalendar() {
                     const posts = getPostsForDate(date);
                     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                     const isDragOver = dragOverDate === dateStr;
+                    const isWeekToday = date.toDateString() === new Date().toDateString();
                     
                     return (
                       <div
@@ -927,7 +996,8 @@ export default function SmartCalendar() {
                         onDrop={(e) => handleDrop(e, dateStr)}
                         className={`
                           p-2 border-r border-gray-100 last:border-r-0 cursor-pointer
-                          hover:bg-gray-50 overflow-y-auto
+                          overflow-y-auto
+                          ${isWeekToday ? 'bg-huttle-50/30 hover:bg-huttle-50/50' : 'hover:bg-gray-50'}
                           ${isDragOver ? 'bg-huttle-100 ring-2 ring-huttle-primary ring-inset' : ''}
                         `}
                       >
@@ -965,10 +1035,16 @@ export default function SmartCalendar() {
                           <div className="bg-gray-50/50 p-4 md:p-5 border-b border-gray-100">
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3 md:gap-4">
-                                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm`}>
-                                  {post.type === 'image' && <Image className="w-6 h-6 text-gray-400" />}
-                                  {post.type === 'video' && <Video className="w-6 h-6 text-gray-400" />}
-                                  {post.type === 'text' && <CalendarIcon className="w-6 h-6 text-gray-400" />}
+                                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center bg-white border border-gray-100 shadow-sm overflow-hidden`}>
+                                  {post.media && post.media.length > 0 ? (
+                                    <PostMediaThumbnail media={post.media} getMediaUrl={getMediaUrl} size="md" />
+                                  ) : (
+                                    <>
+                                      {post.type === 'image' && <Image className="w-6 h-6 text-gray-400" />}
+                                      {post.type === 'video' && <Video className="w-6 h-6 text-gray-400" />}
+                                      {post.type === 'text' && <CalendarIcon className="w-6 h-6 text-gray-400" />}
+                                    </>
+                                  )}
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
@@ -999,6 +1075,17 @@ export default function SmartCalendar() {
                           {/* Post Content */}
                           <div className="p-4 md:p-5">
                             <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-3">{post.title}</h3>
+                            
+                            {/* Media Preview */}
+                            {post.media && post.media.length > 0 && (
+                              <div className="mb-4">
+                                <PostMediaThumbnail media={post.media} getMediaUrl={getMediaUrl} size="lg" />
+                                {post.media.length > 1 && (
+                                  <p className="text-xs text-gray-400 mt-1">{post.media.length} files attached</p>
+                                )}
+                              </div>
+                            )}
+                            
                             {post.caption && (
                               <p className="text-gray-600 mb-3 leading-relaxed text-sm md:text-base">{post.caption}</p>
                             )}
