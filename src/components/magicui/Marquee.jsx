@@ -1,9 +1,8 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 /**
  * Marquee - Infinite horizontal scrolling content
- * Perfect for logos, testimonials, or any repeating content
+ * Uses pure CSS animation for maximum performance (no framer-motion overhead)
  */
 export function Marquee({ 
   children, 
@@ -15,37 +14,55 @@ export function Marquee({
   duration = 40,
   gap = 16
 }) {
+  const direction = vertical
+    ? (reverse ? 'marquee-vertical-reverse' : 'marquee-vertical')
+    : (reverse ? 'marquee-reverse' : 'marquee');
+
   return (
-    <div
-      className={`group flex overflow-hidden ${vertical ? 'flex-col' : ''} ${className}`}
-      style={{
-        maskImage: vertical 
-          ? 'linear-gradient(to bottom, transparent, white 10%, white 90%, transparent)'
-          : 'linear-gradient(to right, transparent, white 10%, white 90%, transparent)',
-        WebkitMaskImage: vertical 
-          ? 'linear-gradient(to bottom, transparent, white 10%, white 90%, transparent)'
-          : 'linear-gradient(to right, transparent, white 10%, white 90%, transparent)',
-      }}
-    >
-      {Array(repeat).fill(0).map((_, i) => (
-        <motion.div
-          key={i}
-          className={`flex shrink-0 ${vertical ? 'flex-col' : ''} ${pauseOnHover ? 'group-hover:[animation-play-state:paused]' : ''}`}
-          style={{ gap: `${gap}px` }}
-          animate={{
-            x: vertical ? 0 : reverse ? ['0%', '100%'] : ['0%', '-100%'],
-            y: vertical ? (reverse ? ['0%', '100%'] : ['0%', '-100%']) : 0,
-          }}
-          transition={{
-            duration,
-            repeat: Infinity,
-            ease: 'linear',
-          }}
-        >
-          {children}
-        </motion.div>
-      ))}
-    </div>
+    <>
+      <div
+        className={`group flex overflow-hidden ${vertical ? 'flex-col' : ''} ${className}`}
+        style={{
+          maskImage: vertical 
+            ? 'linear-gradient(to bottom, transparent, white 10%, white 90%, transparent)'
+            : 'linear-gradient(to right, transparent, white 10%, white 90%, transparent)',
+          WebkitMaskImage: vertical 
+            ? 'linear-gradient(to bottom, transparent, white 10%, white 90%, transparent)'
+            : 'linear-gradient(to right, transparent, white 10%, white 90%, transparent)',
+        }}
+      >
+        {Array(repeat).fill(0).map((_, i) => (
+          <div
+            key={i}
+            className={`flex shrink-0 ${vertical ? 'flex-col' : ''} ${pauseOnHover ? 'group-hover:[animation-play-state:paused]' : ''}`}
+            style={{ 
+              gap: `${gap}px`,
+              animation: `${direction} ${duration}s linear infinite`,
+            }}
+          >
+            {children}
+          </div>
+        ))}
+      </div>
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-100%); }
+        }
+        @keyframes marquee-reverse {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes marquee-vertical {
+          0% { transform: translateY(0%); }
+          100% { transform: translateY(-100%); }
+        }
+        @keyframes marquee-vertical-reverse {
+          0% { transform: translateY(0%); }
+          100% { transform: translateY(100%); }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -61,8 +78,3 @@ export function MarqueeItem({ children, className = "" }) {
 }
 
 export default Marquee;
-
-
-
-
-

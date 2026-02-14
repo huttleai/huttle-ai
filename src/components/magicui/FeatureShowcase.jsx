@@ -14,13 +14,12 @@ import {
 
 /**
  * FeatureShowcase - Auto-playing carousel showcasing app features
- * Replaces testimonials for "Coming Soon" landing page
+ * Optimized: Uses CSS for repeating animations, framer-motion only for transitions
  */
 
-// Animated Preview Components
+// Animated Preview Components - Use CSS animations for repeating effects
 const ViralBlueprintPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 overflow-hidden">
-    {/* Header */}
     <div className="flex items-center gap-2 mb-4">
       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
         <Sparkles size={16} className="text-white" />
@@ -28,7 +27,6 @@ const ViralBlueprintPreview = () => (
       <span className="text-white font-semibold text-sm">Viral Blueprint</span>
     </div>
     
-    {/* Static content representation of actual Viral Blueprint output */}
     <div className="space-y-3">
       <div>
         <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Hook</p>
@@ -55,20 +53,15 @@ const ViralBlueprintPreview = () => (
       </div>
     </div>
     
-    {/* Sparkle effects */}
-    <motion.div 
-      className="absolute top-4 right-4"
-      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-      transition={{ duration: 2, repeat: Infinity }}
-    >
+    {/* Sparkle - CSS animation instead of framer-motion */}
+    <div className="absolute top-4 right-4 feature-sparkle-pulse">
       <Sparkles size={20} className="text-yellow-400" />
-    </motion.div>
+    </div>
   </div>
 );
 
 const SmartCalendarPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-slate-50 to-white rounded-2xl p-4 overflow-hidden border border-slate-200">
-    {/* Calendar header */}
     <div className="flex items-center justify-between mb-3">
       <span className="font-semibold text-slate-800 text-sm">February 2026</span>
       <div className="flex gap-1">
@@ -81,7 +74,6 @@ const SmartCalendarPreview = () => (
       </div>
     </div>
     
-    {/* Calendar grid */}
     <div className="grid grid-cols-7 gap-1 text-center mb-2">
       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
         <div key={i} className="text-xs text-slate-400 font-medium">{day}</div>
@@ -93,7 +85,7 @@ const SmartCalendarPreview = () => (
         const hasPost = [3, 7, 10, 14, 18, 21, 25].includes(i + 1);
         const isOptimal = [7, 14, 21].includes(i + 1);
         return (
-          <motion.div
+          <div
             key={i}
             className={`aspect-square rounded-lg flex items-center justify-center text-xs relative ${
               hasPost 
@@ -102,84 +94,55 @@ const SmartCalendarPreview = () => (
                   : 'bg-cyan-100 text-cyan-700'
                 : 'text-slate-600 hover:bg-slate-50'
             }`}
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: i * 0.02 }}
           >
             {i + 1}
             {isOptimal && (
-              <motion.div 
-                className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full"
-                animate={{ scale: [1, 1.3, 1] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full feature-dot-pulse" />
             )}
-          </motion.div>
+          </div>
         );
       })}
     </div>
     
-    {/* Optimal time indicator */}
-    <motion.div 
-      className="mt-3 flex items-center gap-2 text-xs text-slate-500"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.8 }}
-    >
+    <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
       <div className="w-2 h-2 bg-green-400 rounded-full" />
       <span>Optimal posting time: 6:30 PM</span>
-    </motion.div>
+    </div>
   </div>
 );
 
 const ContentRemixPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-4 overflow-hidden border border-orange-200">
-    {/* Source content */}
-    <motion.div 
-      className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 mb-4"
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ delay: 0.2 }}
-    >
+    <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 mb-4">
       <div className="flex items-center gap-2 mb-2">
         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-red-500" />
         <span className="text-xs font-medium text-slate-700">Original Post</span>
       </div>
       <div className="h-2 bg-slate-200 rounded w-full mb-1" />
       <div className="h-2 bg-slate-200 rounded w-3/4" />
-    </motion.div>
+    </div>
     
-    {/* Remix arrow */}
-    <motion.div 
-      className="flex justify-center mb-3"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
-    >
+    <div className="flex justify-center mb-3">
       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center">
         <Repeat2 size={16} className="text-white" />
       </div>
-    </motion.div>
+    </div>
     
-    {/* Platform variations */}
     <div className="grid grid-cols-2 gap-2">
       {[
-        { name: 'TikTok', color: 'bg-black', delay: 0.6 },
-        { name: 'Instagram', color: 'bg-gradient-to-br from-purple-500 to-pink-500', delay: 0.7 },
-        { name: 'YouTube', color: 'bg-red-500', delay: 0.8 },
-        { name: 'LinkedIn', color: 'bg-blue-600', delay: 0.9 },
-      ].map((platform, i) => (
-        <motion.div
+        { name: 'TikTok', color: 'bg-black' },
+        { name: 'Instagram', color: 'bg-gradient-to-br from-purple-500 to-pink-500' },
+        { name: 'YouTube', color: 'bg-red-500' },
+        { name: 'LinkedIn', color: 'bg-blue-600' },
+      ].map((platform) => (
+        <div
           key={platform.name}
           className="bg-white rounded-lg p-2 shadow-sm border border-slate-100"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: platform.delay, type: 'spring' }}
         >
           <div className={`w-4 h-4 rounded ${platform.color} mb-1`} />
           <div className="text-xs font-medium text-slate-600">{platform.name}</div>
           <div className="h-1 bg-slate-100 rounded mt-1" />
-        </motion.div>
+        </div>
       ))}
     </div>
   </div>
@@ -187,9 +150,7 @@ const ContentRemixPreview = () => (
 
 const TrendRadarPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-emerald-900 to-green-800 rounded-2xl p-4 overflow-hidden">
-    {/* Radar visualization */}
     <div className="relative w-full aspect-square max-w-[180px] mx-auto">
-      {/* Radar circles */}
       {[1, 2, 3].map((ring) => (
         <div
           key={ring}
@@ -201,70 +162,47 @@ const TrendRadarPreview = () => (
         />
       ))}
       
-      {/* Radar sweep */}
-      <motion.div
-        className="absolute inset-0"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-      >
+      {/* Radar sweep - CSS animation */}
+      <div className="absolute inset-0 feature-radar-sweep">
         <div 
           className="absolute top-1/2 left-1/2 w-1/2 h-0.5 bg-gradient-to-r from-green-400 to-transparent origin-left"
           style={{ transform: 'translateY(-50%)' }}
         />
-      </motion.div>
+      </div>
       
-      {/* Trend blips */}
+      {/* Trend blips - CSS animation */}
       {[
-        { x: 30, y: 25, size: 'large', delay: 0 },
-        { x: 70, y: 40, size: 'medium', delay: 0.5 },
-        { x: 45, y: 65, size: 'small', delay: 1 },
-        { x: 60, y: 75, size: 'medium', delay: 1.5 },
+        { x: 30, y: 25, size: 'large', delay: '0s' },
+        { x: 70, y: 40, size: 'medium', delay: '0.5s' },
+        { x: 45, y: 65, size: 'small', delay: '1s' },
+        { x: 60, y: 75, size: 'medium', delay: '1.5s' },
       ].map((blip, i) => (
-        <motion.div
+        <div
           key={i}
-          className={`absolute rounded-full bg-green-400 ${
+          className={`absolute rounded-full bg-green-400 feature-blip-pulse ${
             blip.size === 'large' ? 'w-3 h-3' : blip.size === 'medium' ? 'w-2 h-2' : 'w-1.5 h-1.5'
           }`}
-          style={{ left: `${blip.x}%`, top: `${blip.y}%` }}
-          animate={{ 
-            scale: [1, 1.5, 1],
-            opacity: [0.5, 1, 0.5]
-          }}
-          transition={{ duration: 2, repeat: Infinity, delay: blip.delay }}
+          style={{ left: `${blip.x}%`, top: `${blip.y}%`, animationDelay: blip.delay }}
         />
       ))}
       
-      {/* Center point */}
       <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-white rounded-full transform -translate-x-1/2 -translate-y-1/2" />
     </div>
     
-    {/* Trending topics */}
-    <motion.div 
-      className="mt-3 space-y-1"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
-    >
+    <div className="mt-3 space-y-1">
       {['#TechTrends', '#AIContent', '#Viral2026'].map((tag, i) => (
-        <motion.div
-          key={tag}
-          className="flex items-center gap-2 text-xs"
-          initial={{ x: -10, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.7 + i * 0.2 }}
-        >
+        <div key={tag} className="flex items-center gap-2 text-xs">
           <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
           <span className="text-green-300">{tag}</span>
           <span className="text-green-500/50 ml-auto">↑ {120 - i * 30}%</span>
-        </motion.div>
+        </div>
       ))}
-    </motion.div>
+    </div>
   </div>
 );
 
 const AIPlanBuilderPreview = () => (
   <div className="relative w-full h-full bg-gradient-to-br from-slate-50 to-purple-50 rounded-2xl p-4 overflow-hidden border border-purple-200">
-    {/* Header */}
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
@@ -278,21 +216,17 @@ const AIPlanBuilderPreview = () => (
       </div>
     </div>
     
-    {/* Content plan cards */}
     <div className="space-y-2">
       {[
-        { day: 'Mon', type: 'Reel', platform: 'Instagram', color: 'from-pink-500 to-purple-500' },
-        { day: 'Tue', type: 'Story', platform: 'TikTok', color: 'from-slate-700 to-slate-900' },
-        { day: 'Wed', type: 'Post', platform: 'LinkedIn', color: 'from-blue-500 to-blue-600' },
-        { day: 'Thu', type: 'Video', platform: 'YouTube', color: 'from-red-500 to-red-600' },
-        { day: 'Fri', type: 'Thread', platform: 'X', color: 'from-slate-800 to-slate-900' },
-      ].map((item, i) => (
-        <motion.div
+        { day: 'Mon', type: 'Reel', platform: 'Instagram', color: 'from-pink-500 to-purple-500', width: '60%' },
+        { day: 'Tue', type: 'Story', platform: 'TikTok', color: 'from-slate-700 to-slate-900', width: '68%' },
+        { day: 'Wed', type: 'Post', platform: 'LinkedIn', color: 'from-blue-500 to-blue-600', width: '76%' },
+        { day: 'Thu', type: 'Video', platform: 'YouTube', color: 'from-red-500 to-red-600', width: '84%' },
+        { day: 'Fri', type: 'Thread', platform: 'X', color: 'from-slate-800 to-slate-900', width: '92%' },
+      ].map((item) => (
+        <div
           key={item.day}
           className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-100 shadow-sm"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 + i * 0.1 }}
         >
           <div className="w-10 text-xs font-bold text-slate-400">{item.day}</div>
           <div className={`w-6 h-6 rounded bg-gradient-to-br ${item.color} flex items-center justify-center`}>
@@ -300,39 +234,21 @@ const AIPlanBuilderPreview = () => (
           </div>
           <div className="flex-1">
             <div className="text-xs font-medium text-slate-700">{item.type}</div>
-            <motion.div 
-              className="h-1 bg-slate-100 rounded mt-1"
-              initial={{ width: 0 }}
-              animate={{ width: '100%' }}
-              transition={{ delay: 0.4 + i * 0.1, duration: 0.5 }}
-            >
-              <motion.div 
+            <div className="h-1 bg-slate-100 rounded mt-1">
+              <div 
                 className={`h-full bg-gradient-to-r ${item.color} rounded`}
-                initial={{ width: 0 }}
-                animate={{ width: `${60 + i * 8}%` }}
-                transition={{ delay: 0.6 + i * 0.1, duration: 0.4 }}
+                style={{ width: item.width }}
               />
-            </motion.div>
+            </div>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
     
-    {/* AI generating indicator */}
-    <motion.div 
-      className="mt-3 flex items-center gap-2 text-xs text-purple-600"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 1 }}
-    >
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-      >
-        <Sparkles size={12} />
-      </motion.div>
+    <div className="mt-3 flex items-center gap-2 text-xs text-purple-600">
+      <Sparkles size={12} className="feature-spin" />
       <span>AI-optimized for your niche</span>
-    </motion.div>
+    </div>
   </div>
 );
 
@@ -384,7 +300,6 @@ export function FeatureShowcase({ className = "" }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Auto-advance carousel - slower transition (8 seconds)
   useEffect(() => {
     if (isPaused) return;
     
@@ -410,33 +325,25 @@ export function FeatureShowcase({ className = "" }) {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeFeature.id}
-              initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-              transition={{ duration: 0.4 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
             >
-              {/* Icon */}
               <div className={`inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br ${activeFeature.gradient} mb-4 md:mb-6`}>
                 <activeFeature.icon size={24} className="text-white md:w-7 md:h-7" />
               </div>
               
-              {/* Title */}
               <h3 className="text-xl md:text-3xl lg:text-4xl font-bold text-slate-900 mb-3 md:mb-4">
                 {activeFeature.title}
               </h3>
               
-              {/* Description */}
               <p className="text-sm md:text-lg text-slate-600 leading-relaxed mb-6 md:mb-8">
                 {activeFeature.description}
               </p>
               
-              {/* Coming soon badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
-                <motion.div 
-                  className="w-2 h-2 bg-cyan-500 rounded-full"
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
+                <div className="w-2 h-2 bg-cyan-500 rounded-full feature-dot-pulse" />
                 <span className="text-sm font-medium text-slate-600">Available at launch</span>
               </div>
             </motion.div>
@@ -453,17 +360,9 @@ export function FeatureShowcase({ className = "" }) {
                     ? 'w-8 bg-gradient-to-r from-cyan-500 to-blue-500' 
                     : 'w-2 bg-slate-300 hover:bg-slate-400'
                 }`}
-              >
-                {index === activeIndex && (
-                  <motion.div
-                    className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500"
-                    layoutId="activeIndicator"
-                  />
-                )}
-              </button>
+              />
             ))}
             
-            {/* Pause indicator */}
             {isPaused && (
               <div className="ml-4 flex items-center gap-1 text-xs text-slate-400">
                 <Play size={12} />
@@ -473,21 +372,18 @@ export function FeatureShowcase({ className = "" }) {
           </div>
         </div>
         
-        {/* Right side - Animated preview */}
+        {/* Right side - Preview */}
         <div className="order-1 lg:order-2">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeFeature.id}
               className="relative max-w-sm mx-auto"
-              initial={{ opacity: 0, scale: 0.9, rotateY: -10 }}
-              animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-              exit={{ opacity: 0, scale: 0.9, rotateY: 10 }}
-              transition={{ duration: 0.5, type: 'spring' }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
             >
-              {/* Glow effect */}
               <div className={`absolute inset-0 bg-gradient-to-br ${activeFeature.gradient} opacity-20 blur-3xl rounded-full`} />
-              
-              {/* Preview container */}
               <div className="relative w-full">
                 <PreviewComponent />
               </div>
@@ -495,9 +391,46 @@ export function FeatureShowcase({ className = "" }) {
           </AnimatePresence>
         </div>
       </div>
+      
+      <style>{`
+        .feature-sparkle-pulse {
+          animation: sparkle-pulse 2s ease-in-out infinite;
+        }
+        @keyframes sparkle-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.2); opacity: 1; }
+        }
+        .feature-dot-pulse {
+          animation: dot-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes dot-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.3); }
+        }
+        .feature-radar-sweep {
+          animation: radar-sweep 4s linear infinite;
+        }
+        @keyframes radar-sweep {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .feature-blip-pulse {
+          animation: blip-pulse 2s ease-in-out infinite;
+        }
+        @keyframes blip-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.5); opacity: 1; }
+        }
+        .feature-spin {
+          animation: feature-spin 2s linear infinite;
+        }
+        @keyframes feature-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
 
 export default FeatureShowcase;
-

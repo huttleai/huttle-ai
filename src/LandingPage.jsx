@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
+import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
   ArrowRight, Check, Sparkles, Calendar, TrendingUp, 
   Zap, Play, Search, Instagram,
@@ -33,11 +33,13 @@ import {
 } from "./components/icons/FeatureIcons";
 
 // ============================================
-// ANIMATION VARIANTS & CONFIGS
+// ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const springConfig = { type: "spring", stiffness: 100, damping: 15 };
-const smoothSpring = { type: "spring", stiffness: 300, damping: 30 };
+const fadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0 }
+};
 
 const staggerContainer = {
   hidden: { opacity: 0 },
@@ -51,44 +53,11 @@ const staggerContainer = {
 };
 
 const staggerItem = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 24 },
   visible: { 
     opacity: 1, 
     y: 0,
-    transition: {
-      type: "spring",
-      damping: 15,
-      stiffness: 100,
-    }
-  }
-};
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.02,
-      delayChildren: 0.1,
-    }
-  }
-};
-
-const characterVariants = {
-  hidden: { 
-    opacity: 0, 
-    y: 30,
-    filter: "blur(12px)",
-  },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    filter: "blur(0px)",
-    transition: {
-      type: "spring",
-      damping: 12,
-      stiffness: 150,
-    }
+    transition: { duration: 0.4, ease: "easeOut" }
   }
 };
 
@@ -97,88 +66,65 @@ const characterVariants = {
 // ============================================
 
 const HeroBackground = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mql.matches);
+    const handler = (e) => setIsMobile(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Base gradient background - Light theme */}
+      {/* Base gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50 to-cyan-50/40" />
       
-      {/* Particle Network - Desktop version (hidden on mobile) */}
-      <div className="absolute inset-0 hidden md:block">
+      {/* Single ParticleNetwork - responsive config based on viewport */}
+      <div className="absolute inset-0">
         <ParticleNetwork 
-          particleCount={60}
+          particleCount={isMobile ? 35 : 60}
           particleColor="#01bad2"
           lineColor="#2B8FC7"
-          maxLineDistance={160}
-          particleSize={{ min: 3, max: 6 }}
-          speed={{ min: 0.2, max: 0.5 }}
-          mouseRepelRadius={130}
-          mouseRepelStrength={0.5}
-          className="opacity-100"
+          maxLineDistance={isMobile ? 120 : 160}
+          particleSize={isMobile ? { min: 2, max: 4 } : { min: 3, max: 6 }}
+          speed={isMobile ? { min: 0.15, max: 0.35 } : { min: 0.2, max: 0.5 }}
+          mouseRepelRadius={isMobile ? 80 : 130}
+          mouseRepelStrength={isMobile ? 0.3 : 0.5}
+          className={isMobile ? "opacity-80" : "opacity-100"}
         />
       </div>
       
-      {/* Particle Network - Mobile version (hidden on desktop) */}
-      <div className="absolute inset-0 md:hidden">
-        <ParticleNetwork 
-          particleCount={35}
-          particleColor="#01bad2"
-          lineColor="#2B8FC7"
-          maxLineDistance={120}
-          particleSize={{ min: 2, max: 4 }}
-          speed={{ min: 0.15, max: 0.35 }}
-          mouseRepelRadius={80}
-          mouseRepelStrength={0.3}
-          className="opacity-80"
-        />
-      </div>
-      
-      {/* Animated gradient orbs for depth - adjusted for light theme */}
-      <motion.div
-        className="absolute w-[300px] h-[300px] md:w-[800px] md:h-[800px] rounded-full"
+      {/* Animated gradient orbs - CSS animations instead of framer-motion */}
+      <div
+        className="absolute w-[300px] h-[300px] md:w-[800px] md:h-[800px] rounded-full hero-orb-1"
         style={{
           background: 'radial-gradient(circle, rgba(1,186,210,0.15) 0%, rgba(1,186,210,0) 70%)',
           filter: 'blur(80px)',
           left: '-20%',
           top: '-30%',
         }}
-        animate={{
-          x: [0, 50, 0],
-          y: [0, 30, 0],
-          scale: [1, 1.1, 1],
-        }}
-        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
       
-      <motion.div
-        className="absolute w-[200px] h-[200px] md:w-[600px] md:h-[600px] rounded-full"
+      <div
+        className="absolute w-[200px] h-[200px] md:w-[600px] md:h-[600px] rounded-full hero-orb-2"
         style={{
           background: 'radial-gradient(circle, rgba(43,143,199,0.12) 0%, rgba(43,143,199,0) 70%)',
           filter: 'blur(80px)',
           right: '-15%',
           top: '10%',
         }}
-        animate={{
-          x: [0, -40, 0],
-          y: [0, 40, 0],
-          scale: [1, 1.15, 1],
-        }}
-        transition={{ duration: 30, repeat: Infinity, ease: "easeInOut", delay: 3 }}
       />
       
-      <motion.div
-        className="absolute w-[250px] h-[250px] md:w-[500px] md:h-[500px] rounded-full hidden md:block"
+      <div
+        className="absolute w-[250px] h-[250px] md:w-[500px] md:h-[500px] rounded-full hidden md:block hero-orb-3"
         style={{
           background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, rgba(139,92,246,0) 70%)',
           filter: 'blur(80px)',
           left: '20%',
           bottom: '-10%',
         }}
-        animate={{
-          x: [0, 40, 0],
-          y: [0, -30, 0],
-          scale: [1, 1.1, 1],
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}
       />
 
       {/* Subtle dot pattern overlay */}
@@ -218,100 +164,22 @@ const ScrollProgress = () => {
 
 
 // ============================================
-// UTILITY COMPONENTS
+// UTILITY COMPONENTS (simplified)
 // ============================================
 
-const SplitText = ({ children, className = "" }) => {
-  const words = children.split(" ");
-  
+const GlassCard = ({ children, className = "" }) => {
   return (
-    <motion.span
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className={className}
-      style={{ display: "inline-block" }}
-    >
-      {words.map((word, wordIndex) => (
-        <span key={wordIndex} style={{ display: "inline-block", marginRight: "0.25em" }}>
-          {word.split("").map((char, charIndex) => (
-            <motion.span
-              key={charIndex}
-              variants={characterVariants}
-              style={{ display: "inline-block", transformOrigin: "bottom" }}
-            >
-              {char}
-            </motion.span>
-          ))}
-        </span>
-      ))}
-    </motion.span>
-  );
-};
-
-const TypingCursor = ({ show = true }) => (
-  <motion.span
-    className="inline-block w-[3px] h-[0.9em] bg-[#01bad2] ml-1 align-middle"
-    animate={{ opacity: show ? [1, 0] : 0 }}
-    transition={{ duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
-  />
-);
-
-const MagneticButton = ({ children, className = "", onClick, disabled = false, type = "button" }) => {
-  const ref = useRef(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  
-  const x = useSpring(position.x, smoothSpring);
-  const y = useSpring(position.y, smoothSpring);
-
-  const handleMouseMove = (e) => {
-    if (!ref.current || disabled) return;
-    const { left, top, width, height } = ref.current.getBoundingClientRect();
-    const centerX = left + width / 2;
-    const centerY = top + height / 2;
-    const deltaX = (e.clientX - centerX) * 0.2;
-    const deltaY = (e.clientY - centerY) * 0.2;
-    setPosition({ x: deltaX, y: deltaY });
-  };
-
-  const handleMouseLeave = () => {
-    setPosition({ x: 0, y: 0 });
-  };
-
-  return (
-    <motion.button
-      ref={ref}
-      type={type}
-      style={{ x, y }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-    >
-      {children}
-    </motion.button>
-  );
-};
-
-const GlassCard = ({ children, className = "", hover = true }) => {
-  return (
-    <motion.div
+    <div
       className={`
         relative overflow-hidden rounded-3xl
         bg-white/70 backdrop-blur-xl
         border border-white/40
         shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.2)]
-        ${hover ? 'hover:bg-white/80 hover:shadow-[0_16px_48px_rgba(0,0,0,0.12)]' : ''}
-        transition-all duration-300
         ${className}
       `}
-      whileHover={hover ? { y: -4 } : {}}
     >
       {children}
-    </motion.div>
+    </div>
   );
 };
 
@@ -325,10 +193,8 @@ const WaitlistModal = ({ isOpen, onClose }) => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [error, setError] = useState(null);
 
-  // Reset state when modal is closed
   const handleClose = () => {
     onClose();
-    // Reset after animation completes
     setTimeout(() => {
       setSubmitSuccess(false);
       setFormData({ firstName: '', lastName: '', email: '' });
@@ -354,9 +220,7 @@ const WaitlistModal = ({ isOpen, onClose }) => {
       
       if (response.ok) {
         setSubmitSuccess(true);
-        // Don't auto-close - let user read the success message and close manually
       } else {
-        // Handle API errors
         setError(data.details || data.error || 'Failed to join waitlist. Please try again.');
         console.error('Waitlist API error:', data);
       }
@@ -468,14 +332,14 @@ const WaitlistModal = ({ isOpen, onClose }) => {
                   </div>
                 )}
                 
-                <MagneticButton 
+                <button 
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full h-14 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? 'Joining...' : 'Join the Waitlist'}
                   {!isSubmitting && <ArrowRight size={18} />}
-                </MagneticButton>
+                </button>
               </form>
             )}
 
@@ -497,12 +361,10 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
   const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
 
   const handleProceedToCheckout = (e) => {
-    // Prevent any default behavior or form submission
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-
     window.location.href = stripeTestCheckoutUrl;
   };
 
@@ -585,13 +447,13 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
               >
                 Join Waitlist
               </button>
-              <MagneticButton 
+              <button 
                 onClick={(e) => handleProceedToCheckout(e)}
                 className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow flex items-center justify-center gap-2"
               >
                 Checkout
                 <ArrowRight size={16} />
-              </MagneticButton>
+              </button>
             </div>
 
             <p className="text-center text-xs text-slate-400 mt-4">
@@ -648,7 +510,6 @@ const SocialProofMarquee = () => {
 const OrbitingPlatformsSection = () => {
   return (
     <div className="relative min-h-[420px] md:min-h-[700px] lg:min-h-[800px] w-full overflow-hidden bg-gradient-to-b from-white to-slate-50 flex flex-col items-center justify-center py-10 md:py-32 px-4 md:px-8 lg:px-12">
-      {/* Subtle dot pattern background */}
       <div className="absolute inset-0 opacity-20 md:opacity-30">
         <div 
           className="absolute inset-0"
@@ -659,13 +520,12 @@ const OrbitingPlatformsSection = () => {
         />
       </div>
 
-      {/* Text content - centered with proper padding */}
       <motion.div 
         className="text-center relative z-20 max-w-3xl mx-auto mb-6 md:mb-16 px-1"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
+        viewport={{ once: true, amount: 0.3 }}
+        transition={{ duration: 0.5 }}
       >
         <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 mb-2.5 md:mb-6 tracking-tighter leading-tight">
           Create for every platform,<br className="hidden sm:block"/>
@@ -676,7 +536,6 @@ const OrbitingPlatformsSection = () => {
           </p>
       </motion.div>
 
-      {/* Orbiting Circles Container - Responsive sizes */}
       <div className="relative flex h-[220px] md:h-[500px] w-full items-center justify-center">
         {/* Mobile orbits */}
         <div className="block md:hidden absolute inset-0">
@@ -763,17 +622,15 @@ const BentoGrid = () => {
           className="mb-6 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
-          <motion.div 
-            className="inline-flex items-center gap-1.5 px-2 md:px-3 py-0.5 md:py-1.5 rounded-full bg-purple-100 text-purple-700 text-[9px] md:text-xs font-bold mb-2.5 md:mb-4 border border-purple-200"
-            animate={{ scale: [1, 1.02, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
+          <div 
+            className="inline-flex items-center gap-1.5 px-2 md:px-3 py-0.5 md:py-1.5 rounded-full bg-purple-100 text-purple-700 text-[9px] md:text-xs font-bold mb-2.5 md:mb-4 border border-purple-200 badge-pulse"
           >
             <Zap size={10} className="w-2.5 h-2.5 md:w-3 md:h-3" />
             More than just another smart calendar
-          </motion.div>
+          </div>
           <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter mb-2 md:mb-4 text-slate-900">
             Your AI Creative Director.
           </h2>
@@ -784,10 +641,10 @@ const BentoGrid = () => {
           {features.map((feature, i) => (
             <motion.div 
               key={i}
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i < 3 ? i * 0.1 : (i - 3) * 0.1 + 0.2, ease: "easeOut" }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.4, delay: i < 3 ? i * 0.08 : (i - 3) * 0.08 + 0.15 }}
             >
               <MagicCard 
                 className="p-2.5 sm:p-3 md:p-6 h-full border border-slate-200 bg-white hover:border-[#01bad2]/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
@@ -835,8 +692,8 @@ const PainPointsSection = () => {
           className="text-center mb-6 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
           <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-4">Sound Familiar?</h2>
           <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter text-white">The content struggle is real.</h3>
@@ -846,28 +703,20 @@ const PainPointsSection = () => {
           {painPoints.map((item, i) => (
             <motion.div 
               key={i}
-              initial={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6, delay: i * 0.15, ease: "easeOut" }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
             >
-              <motion.div 
-                className="group bg-slate-800/60 backdrop-blur-sm p-4 md:p-10 rounded-xl md:rounded-3xl border border-slate-700/50 hover:border-[#01bad2]/50 transition-all duration-300 cursor-pointer h-full flex flex-col"
-                whileHover={{ 
-                  y: -8,
-                  boxShadow: "0 25px 50px -12px rgba(1,186,210,0.2)",
-                }}
+              <div 
+                className="group bg-slate-800/60 backdrop-blur-sm p-4 md:p-10 rounded-xl md:rounded-3xl border border-slate-700/50 hover:border-[#01bad2]/50 transition-all duration-300 cursor-pointer h-full flex flex-col hover:-translate-y-2 hover:shadow-[0_25px_50px_-12px_rgba(1,186,210,0.2)]"
               >
-                <motion.div 
-                  className="text-2xl md:text-5xl mb-2 md:mb-6"
-                  whileHover={{ scale: 1.2, rotate: 10 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
+                <div className="text-2xl md:text-5xl mb-2 md:mb-6">
                   {item.emoji}
-                </motion.div>
+                </div>
                 <h4 className="text-sm md:text-xl font-bold mb-1.5 md:mb-3 text-white group-hover:text-[#01bad2] transition-colors">{item.title}</h4>
                 <p className="text-slate-300 leading-relaxed text-xs md:text-base flex-1">{item.text}</p>
-              </motion.div>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -877,7 +726,7 @@ const PainPointsSection = () => {
 };
 
 // ============================================
-// FEATURE SHOWCASE SECTION (Replaces Testimonials for Coming Soon)
+// FEATURE SHOWCASE SECTION
 // ============================================
 
 const FeatureShowcaseSection = () => {
@@ -888,8 +737,8 @@ const FeatureShowcaseSection = () => {
           className="text-center mb-8 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
             <span 
               className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
@@ -950,8 +799,8 @@ const FAQSectionComponent = () => {
           className="text-center mb-8 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
             <span 
               className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
@@ -981,18 +830,16 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
   return (
     <section id="pricing" className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
-      {/* Background effects */}
       <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/10 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/10 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto max-w-6xl relative z-10">
-        {/* Header */}
         <motion.div 
           className="text-center mb-10 md:mb-16"
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
           <span className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-white/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-white/10">
             Simple Pricing
@@ -1005,33 +852,27 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           </p>
         </motion.div>
 
-        {/* 3-Tier Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-center max-w-5xl mx-auto">
 
           {/* CARD 1: FOUNDING MEMBER (Primary) */}
           <motion.div 
             className="relative md:scale-105 md:z-10 order-1 md:order-2"
-            initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
           >
             <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-[#1E293B] p-6 md:p-8 border-2 border-[#06B6D4] overflow-hidden">
-              {/* Glow effect behind card */}
               <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-r from-[#06B6D4] to-[#22D3EE] opacity-20 blur-lg -z-10" />
               
-              {/* Best Value Badge */}
-              <motion.div 
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-amber-500/30"
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
+              <div 
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-amber-500/30 badge-pulse"
               >
                 🔥 BEST VALUE
-              </motion.div>
+              </div>
 
               <h3 className="text-lg md:text-xl font-bold text-white mb-1">Founding Member</h3>
               
-              {/* Price */}
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl md:text-5xl font-black text-white">
@@ -1042,7 +883,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 <p className="text-xs text-slate-400 mt-1">$16.58/mo equivalent</p>
               </div>
 
-              {/* Savings */}
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-sm text-slate-500 line-through">$357/yr</span>
                 <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Save 44%</span>
@@ -1050,13 +890,11 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <p className="text-sm text-slate-300 mb-4">Lock in the lowest price we'll ever offer.</p>
               
-              {/* Spots remaining */}
               <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
                 <Users size={14} className="text-amber-400 flex-shrink-0" />
                 <span className="text-xs font-bold text-amber-400">Only {foundingSpotsLeft} of 100 spots remaining</span>
               </div>
 
-              {/* Features */}
               <ul className="space-y-2.5 mb-6">
                 {[
                   'All Pro features forever',
@@ -1074,7 +912,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              {/* CTA */}
               <BorderBeamButton 
                 onClick={onOpenFoundersModal}
                 className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-base"
@@ -1087,23 +924,21 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             </div>
           </motion.div>
 
-          {/* CARD 2: BUILDERS CLUB (Secondary) */}
+          {/* CARD 2: BUILDERS CLUB */}
           <motion.div 
             className="order-2 md:order-1"
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.6, delay: 0.25 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-[#1E293B]/80 p-6 md:p-8 border border-slate-700/50 opacity-90">
-              {/* Badge */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-600/30 text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-600/30">
                 COMING MARCH 1
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-white mb-1">Builders Club</h3>
               
-              {/* Price */}
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl md:text-4xl font-black text-white">$249</span>
@@ -1115,7 +950,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               <p className="text-sm text-slate-400 mb-2">For the builders who move fast.</p>
               <p className="text-xs text-slate-500 mb-5">Available March 1–10 only</p>
 
-              {/* Features */}
               <ul className="space-y-2.5 mb-6">
                 {[
                   'All Pro features forever',
@@ -1130,7 +964,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              {/* Disabled CTA */}
               <button 
                 disabled 
                 className="w-full h-12 rounded-xl border border-slate-600 text-slate-500 font-medium text-sm cursor-not-allowed"
@@ -1141,23 +974,21 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             </div>
           </motion.div>
 
-          {/* CARD 3: REGULAR PRO (Reference price) */}
+          {/* CARD 3: REGULAR PRO */}
           <motion.div 
             className="order-3"
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.6, delay: 0.35 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-[#1E293B]/60 p-6 md:p-8 border border-slate-700/30">
-              {/* Badge */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-600/20 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-700/30">
                 STARTING MARCH 11
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-white mb-1">Pro</h3>
               
-              {/* Price */}
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl md:text-4xl font-black text-white">$357</span>
@@ -1168,7 +999,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <p className="text-sm text-slate-400 mb-5">Or $35/month billed monthly</p>
 
-              {/* Features */}
               <ul className="space-y-2.5 mb-6">
                 {[
                   'All features included',
@@ -1182,7 +1012,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              {/* Disabled CTA */}
               <button 
                 disabled 
                 className="w-full h-12 rounded-xl border border-slate-700/50 text-slate-500 font-medium text-sm cursor-not-allowed"
@@ -1204,16 +1033,15 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 const FinalCTASection = ({ onOpenFoundersModal }) => {
   return (
     <section className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
-      {/* Background orbs */}
       <div className="absolute -top-1/3 -left-1/4 w-[600px] h-[600px] bg-[#01bad2]/8 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute -bottom-1/3 -right-1/4 w-[500px] h-[500px] bg-[#2B8FC7]/8 blur-[120px] rounded-full pointer-events-none" />
       
       <div className="container mx-auto max-w-4xl text-center relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
         >
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-white tracking-tighter mb-3 md:mb-6 leading-tight">
             Stop Guessing.<br/>
@@ -1248,15 +1076,10 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
 };
 
 // ============================================
-// MAIN LANDING PAGE
-// ============================================
-
-// ============================================
 // POLICY MODAL COMPONENT
 // ============================================
 
 const PolicyModal = ({ isOpen, onClose, type }) => {
-  // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -1268,7 +1091,6 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
     };
   }, [isOpen]);
 
-  // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
@@ -1310,9 +1132,7 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">3. How We Use Your Information</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          We use the information we collect to:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">We use the information we collect to:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
           <li>Provide, maintain, and improve our services</li>
           <li>Process transactions and send related information</li>
@@ -1325,9 +1145,7 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">4. Information Sharing</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          We do not sell, trade, or rent your personal information to third parties. We may share your information with:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">We do not sell, trade, or rent your personal information to third parties. We may share your information with:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
           <li><span className="font-bold text-sm">Service Providers:</span> Third-party vendors who assist us in operating our services (e.g., Stripe for payments, email service providers)</li>
           <li><span className="font-bold text-sm">Legal Requirements:</span> When required by law or to protect our rights</li>
@@ -1336,16 +1154,12 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">5. Data Security</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">6. Your Rights</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          You have the right to:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">You have the right to:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
           <li>Access the personal data we hold about you</li>
           <li>Request correction of inaccurate data</li>
@@ -1353,30 +1167,22 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
           <li>Opt out of marketing communications</li>
           <li>Export your data</li>
         </ul>
-        <p className="text-sm text-slate-600 leading-relaxed mt-3">
-          To exercise these rights, contact us at support@huttleai.com.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mt-3">To exercise these rights, contact us at support@huttleai.com.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">7. Cookies</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          We use essential cookies to ensure our website functions properly. We may also use analytics cookies to understand how visitors interact with our site.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">We use essential cookies to ensure our website functions properly. We may also use analytics cookies to understand how visitors interact with our site.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">8. Changes to This Policy</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last updated" date.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last updated" date.</p>
       </section>
 
       <section>
         <h3 className="text-base font-bold text-slate-900 mb-3">9. Contact Us</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          If you have any questions about this Privacy Policy, please contact us at support@huttleai.com.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">If you have any questions about this Privacy Policy, please contact us at support@huttleai.com.</p>
       </section>
     </>
   );
@@ -1388,23 +1194,17 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">1. Acceptance of Terms</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          By accessing or using Huttle AI ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">By accessing or using Huttle AI ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">2. Description of Service</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          Huttle AI is an AI-powered content creation platform that helps users plan, create, and optimize social media content. Features include content generation, viral predictions, trend analysis, and scheduling tools.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">Huttle AI is an AI-powered content creation platform that helps users plan, create, and optimize social media content. Features include content generation, viral predictions, trend analysis, and scheduling tools.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">3. Account Registration</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          To use certain features, you must create an account. You agree to:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">To use certain features, you must create an account. You agree to:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
           <li>Provide accurate and complete information</li>
           <li>Maintain the security of your account credentials</li>
@@ -1425,16 +1225,12 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">5. Refund Policy</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">6. Acceptable Use</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          You agree NOT to use the Service to:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">You agree NOT to use the Service to:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
           <li>Violate any laws or regulations</li>
           <li>Generate content that is illegal, harmful, threatening, abusive, defamatory, or otherwise objectionable</li>
@@ -1456,9 +1252,7 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">8. Disclaimer of Warranties</h3>
-        <p className="text-sm text-slate-600 leading-relaxed mb-3">
-          The Service is provided "as is" and "as available" without warranties of any kind. We do not guarantee that:
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-3">The Service is provided "as is" and "as available" without warranties of any kind. We do not guarantee that:</p>
         <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
           <li>The Service will be uninterrupted or error-free</li>
           <li>AI-generated content will be accurate, complete, or suitable for any purpose</li>
@@ -1468,37 +1262,27 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">9. Limitation of Liability</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          To the maximum extent permitted by law, Huttle AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">To the maximum extent permitted by law, Huttle AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">10. Changes to Terms</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          We may modify these Terms at any time. We will notify users of significant changes via email or through the Service. Continued use after changes constitutes acceptance of the new Terms.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">We may modify these Terms at any time. We will notify users of significant changes via email or through the Service. Continued use after changes constitutes acceptance of the new Terms.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">11. Termination</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          We may suspend or terminate your account at any time for violation of these Terms. You may cancel your account at any time by contacting us.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">We may suspend or terminate your account at any time for violation of these Terms. You may cancel your account at any time by contacting us.</p>
       </section>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">12. Governing Law</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          These Terms shall be governed by the laws of the State of Delaware, United States, without regard to its conflict of law provisions.
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">These Terms shall be governed by the laws of the State of Delaware, United States, without regard to its conflict of law provisions.</p>
       </section>
 
       <section>
         <h3 className="text-base font-bold text-slate-900 mb-3">13. Contact Us</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          If you have any questions about these Terms, please contact us at support@huttleai.com
-        </p>
+        <p className="text-sm text-slate-600 leading-relaxed">If you have any questions about these Terms, please contact us at support@huttleai.com</p>
       </section>
     </>
   );
@@ -1512,14 +1296,12 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Overlay */}
           <motion.div 
             className="absolute inset-0"
             style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
             onClick={onClose}
           />
           
-          {/* Modal Container */}
           <motion.div 
             className="relative bg-white rounded-xl shadow-2xl w-[95%] md:w-full md:max-w-[700px] h-[90vh] md:max-h-[80vh] overflow-hidden flex flex-col"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1527,7 +1309,6 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            {/* Close Button */}
             <button 
               onClick={onClose}
               className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-slate-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -1536,7 +1317,6 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
               <X size={20} className="text-slate-500" />
             </button>
 
-            {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-5 md:p-8">
               {type === 'privacy' ? privacyContent : termsContent}
             </div>
@@ -1577,13 +1357,10 @@ export default function LandingPage() {
         </p>
       </div>
 
-      {/* NAVBAR - Light Theme */}
+      {/* NAVBAR */}
       <nav className="fixed top-9 md:top-9 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3">
-        <motion.div 
-          className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
+        <div 
+          className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50 nav-fade-in"
         >
           <div className="flex items-center gap-2 font-bold tracking-tight">
             <img src="/huttle-logo.png" alt="Huttle AI" className="h-6 md:h-8 w-auto" />
@@ -1610,21 +1387,20 @@ export default function LandingPage() {
             <LogIn className="w-4 h-4" />
             <span className="hidden md:inline">Login</span>
           </Link>
-        </motion.div>
+        </div>
       </nav>
 
-      {/* HERO SECTION - Premium Two-Column Layout */}
+      {/* HERO SECTION */}
       <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip">
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">
-          {/* Two-column grid on desktop, stacked on mobile */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 xl:gap-16 items-center">
             
             {/* LEFT COLUMN - Content */}
             <div className="text-center md:text-left order-1">
               
-              {/* HEADLINE */}
+              {/* HEADLINE - Simple CSS fade-in instead of per-character framer-motion */}
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
                 <BlurFade delay={0.2}>
                   <span className="block">Know What to Post</span>
@@ -1672,23 +1448,16 @@ export default function LandingPage() {
             
             {/* RIGHT COLUMN - iPhone Mockup with Floating Cards */}
             <div className="relative flex justify-center order-2 mt-6 lg:mt-0">
-              {/* Container - full width on mobile for larger phone, sized for cards on desktop */}
               <div className="relative w-full max-w-[500px] sm:max-w-[550px] mx-auto md:max-w-none md:w-[520px] md:mx-0 lg:w-[560px] xl:w-[620px] min-h-[480px] sm:min-h-[520px] md:h-[560px] lg:h-[600px]">
                 
-                {/* Floating Cards - Desktop/Tablet (md+) ONLY - Hidden on mobile */}
+                {/* Floating Cards - Desktop (md+) - CSS animations instead of framer-motion */}
                 {/* Top Left Card - Trending */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 180, y: 60, scale: 0.7 }}
-                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: -5 }}
-                  transition={{ duration: 1.3, delay: 0.9, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="absolute z-10 hidden md:block"
-                  style={{ left: '-8%', top: '12%' }}
+                <div 
+                  className="absolute z-10 hidden md:block hero-card-in"
+                  style={{ left: '-8%', top: '12%', animationDelay: '0.9s' }}
                 >
-                  <motion.div 
-                    animate={{ y: [0, -8, 0], rotate: [-5, -3, -5] }} 
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                  >
-                    <GlassCard className="w-[175px] lg:w-[190px] xl:w-[205px] p-3.5 lg:p-4" hover={false}>
+                  <div className="hero-float-1" style={{ transform: 'rotate(-5deg)' }}>
+                    <GlassCard className="w-[175px] lg:w-[190px] xl:w-[205px] p-3.5 lg:p-4">
                       <div className="flex items-center gap-2 mb-2.5">
                         <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg lg:rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
                           <TrendingUp size={16} />
@@ -1709,22 +1478,16 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Bottom Left Card - Scheduled */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 160, y: -40, scale: 0.7 }}
-                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: -6 }}
-                  transition={{ duration: 1.3, delay: 1.1, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="absolute z-10 hidden md:block"
-                  style={{ left: '0%', bottom: '15%' }}
+                <div 
+                  className="absolute z-10 hidden md:block hero-card-in"
+                  style={{ left: '0%', bottom: '15%', animationDelay: '1.1s' }}
                 >
-                  <motion.div 
-                    animate={{ y: [0, 6, 0], rotate: [-6, -4, -6] }} 
-                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                  >
-                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4" hover={false}>
+                  <div className="hero-float-2" style={{ transform: 'rotate(-6deg)' }}>
+                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4">
                       <div className="flex justify-between items-center mb-2.5">
                         <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
                         <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
@@ -1741,22 +1504,16 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Top Right Card - Viral Score */}
-                <motion.div 
-                  initial={{ opacity: 0, x: -180, y: 60, scale: 0.7 }}
-                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: 5 }}
-                  transition={{ duration: 1.3, delay: 1.0, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="absolute z-10 hidden md:block"
-                  style={{ right: '-8%', top: '10%' }}
+                <div 
+                  className="absolute z-10 hidden md:block hero-card-in"
+                  style={{ right: '-8%', top: '10%', animationDelay: '1.0s' }}
                 >
-                  <motion.div 
-                    animate={{ y: [0, -6, 0], rotate: [5, 7, 5] }} 
-                    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
-                  >
-                    <GlassCard className="w-[150px] lg:w-[165px] xl:w-[180px] p-3.5 lg:p-4" hover={false}>
+                  <div className="hero-float-3" style={{ transform: 'rotate(5deg)' }}>
+                    <GlassCard className="w-[150px] lg:w-[165px] xl:w-[180px] p-3.5 lg:p-4">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <Gauge size={12} className="text-[#01bad2]" />
                         <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
@@ -1767,22 +1524,16 @@ export default function LandingPage() {
                       </div>
                       <p className="text-[9px] lg:text-[10px] text-green-600 font-medium mt-1">High viral potential!</p>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Bottom Right Card - Audio Match */}
-                <motion.div 
-                  initial={{ opacity: 0, x: -160, y: -40, scale: 0.7 }}
-                  animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: 6 }}
-                  transition={{ duration: 1.3, delay: 1.2, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="absolute z-10 hidden md:block"
-                  style={{ right: '0%', bottom: '18%' }}
+                <div 
+                  className="absolute z-10 hidden md:block hero-card-in"
+                  style={{ right: '0%', bottom: '18%', animationDelay: '1.2s' }}
                 >
-                  <motion.div 
-                    animate={{ y: [0, 8, 0], rotate: [6, 8, 6] }} 
-                    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
-                  >
-                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4" hover={false}>
+                  <div className="hero-float-4" style={{ transform: 'rotate(6deg)' }}>
+                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <Music size={12} className="text-[#01bad2]" />
                         <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
@@ -1797,15 +1548,12 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
-                {/* iPhone Mockup - ON TOP with higher z-index so cards appear behind */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 30, x: 40 }}
-                  animate={{ opacity: 1, y: 0, x: 0 }}
-                  transition={{ duration: 1.0, delay: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  className="absolute z-30 inset-0 flex items-center justify-center pointer-events-none"
+                {/* iPhone Mockup */}
+                <div 
+                  className="absolute z-30 inset-0 flex items-center justify-center pointer-events-none hero-phone-in"
                 >
                   <div className="phone-float">
                     <img 
@@ -1814,18 +1562,13 @@ export default function LandingPage() {
                       className="w-[140vw] max-w-none sm:w-[120vw] sm:max-w-none md:w-[820px] md:max-w-none lg:w-[920px] xl:w-[1020px] h-auto drop-shadow-2xl"
                     />
                   </div>
-                </motion.div>
+                </div>
 
-                {/* Mobile Cards - All 4 tiles visible on mobile, tilted like desktop (hidden on md+) */}
+                {/* Mobile Cards - Simplified (no framer-motion) */}
                 {/* Top Left - Trending */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 20, scale: 0.9, rotate: -10 }}
-                  animate={{ opacity: 1, x: 0, scale: 1, rotate: -10 }}
-                  transition={{ duration: 0.8, delay: 0.7, ease: "easeOut" }}
-                  className="absolute z-10 md:hidden left-2 top-[20%] origin-center"
-                >
-                  <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                <div className="absolute z-10 md:hidden left-2 top-[20%] origin-center hero-card-mobile" style={{ animationDelay: '0.7s' }}>
+                  <div className="hero-float-1" style={{ transform: 'rotate(-10deg)' }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow">
                           <TrendingUp size={12} />
@@ -1846,18 +1589,13 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Bottom Left - Scheduled */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 20, scale: 0.9, rotate: -8 }}
-                  animate={{ opacity: 1, x: 0, scale: 1, rotate: -8 }}
-                  transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
-                  className="absolute z-10 md:hidden left-2 bottom-[25%] origin-center"
-                >
-                  <motion.div animate={{ y: [0, 5, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                <div className="absolute z-10 md:hidden left-2 bottom-[25%] origin-center hero-card-mobile" style={{ animationDelay: '1.0s' }}>
+                  <div className="hero-float-2" style={{ transform: 'rotate(-8deg)' }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
                       <div className="flex justify-between items-center mb-1.5">
                         <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
                         <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
@@ -1874,18 +1612,13 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Top Right - Viral Score */}
-                <motion.div 
-                  initial={{ opacity: 0, x: -20, scale: 0.9, rotate: 10 }}
-                  animate={{ opacity: 1, x: 0, scale: 1, rotate: 10 }}
-                  transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
-                  className="absolute z-10 md:hidden right-2 top-[20%] origin-center"
-                >
-                  <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                <div className="absolute z-10 md:hidden right-2 top-[20%] origin-center hero-card-mobile" style={{ animationDelay: '0.8s' }}>
+                  <div className="hero-float-3" style={{ transform: 'rotate(10deg)' }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
                       <div className="flex items-center gap-1 mb-1.5">
                         <Gauge size={10} className="text-[#01bad2]" />
                         <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Viral</span>
@@ -1896,18 +1629,13 @@ export default function LandingPage() {
                       </div>
                       <p className="text-[7px] text-green-600 font-medium mt-0.5">High potential!</p>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
                 {/* Bottom Right - Audio Match */}
-                <motion.div 
-                  initial={{ opacity: 0, x: -20, scale: 0.9, rotate: 8 }}
-                  animate={{ opacity: 1, x: 0, scale: 1, rotate: 8 }}
-                  transition={{ duration: 0.8, delay: 1.1, ease: "easeOut" }}
-                  className="absolute z-10 md:hidden right-2 bottom-[25%] origin-center"
-                >
-                  <motion.div animate={{ y: [0, 5, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl" hover={false}>
+                <div className="absolute z-10 md:hidden right-2 bottom-[25%] origin-center hero-card-mobile" style={{ animationDelay: '1.1s' }}>
+                  <div className="hero-float-4" style={{ transform: 'rotate(8deg)' }}>
+                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <Music size={10} className="text-[#01bad2]" />
                         <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Audio</span>
@@ -1922,8 +1650,8 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </GlassCard>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
 
               </div>
             </div>
@@ -1931,42 +1659,35 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scroll Indicator */}
-        <motion.div 
-          className="flex justify-center mt-8 md:mt-12 ml-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.6 }}
-        >
-          <motion.button
+        {/* Scroll Indicator - CSS animation */}
+        <div className="flex justify-center mt-8 md:mt-12 ml-2 scroll-indicator-fade">
+          <button
             onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-[#01bad2] transition-colors"
-            animate={{ y: [0, 6, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="flex flex-col items-center gap-1 text-slate-400 hover:text-[#01bad2] transition-colors scroll-bounce"
           >
             <span className="text-xs font-medium tracking-wide uppercase">Scroll</span>
             <ChevronDown size={20} />
-          </motion.button>
-        </motion.div>
+          </button>
+        </div>
       </section>
 
 
-      {/* FEATURE MARQUEE - Show breadth of features */}
+      {/* FEATURE MARQUEE */}
       <SocialProofMarquee />
 
-      {/* PAIN POINTS SECTION - Agitate the problem */}
+      {/* PAIN POINTS SECTION */}
       <PainPointsSection />
 
-      {/* BENTO FEATURE GRID - Show the solution */}
+      {/* BENTO FEATURE GRID */}
       <BentoGrid />
 
-      {/* FEATURE SHOWCASE SECTION - Deep dive on features */}
+      {/* FEATURE SHOWCASE SECTION */}
       <FeatureShowcaseSection />
 
-      {/* ORBITING PLATFORMS SECTION - Platform support */}
+      {/* ORBITING PLATFORMS SECTION */}
       <OrbitingPlatformsSection />
 
-      {/* PRICING SECTION - 3-Tier Pricing */}
+      {/* PRICING SECTION */}
       <PricingSection onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
 
       {/* FAQ SECTION */}
@@ -1980,37 +1701,27 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="py-12 md:py-16 bg-white">
         <div className="container mx-auto px-4 md:px-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
-          {/* Logo */}
           <div className="flex items-center gap-2 font-bold text-slate-900">
             <img src="/huttle-logo.png" alt="Huttle AI" className="h-8 md:h-10 w-auto" />
           </div>
           
-          {/* Center - Legal Links */}
           <div className="flex-1 text-center">
             <p className="text-sm text-slate-500">
               © 2026 Huttle AI · <button onClick={() => setIsPrivacyModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</button> · <button onClick={() => setIsTermsModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</button>
             </p>
           </div>
           
-          {/* Right - Placeholder for social icons if needed */}
           <div className="w-8 md:w-10"></div>
         </div>
       </footer>
 
       <style>{`
-        /* Smooth scroll for the whole page */
+        /* Smooth scroll */
         html { scroll-behavior: smooth; }
 
         /* Announcement bar shimmer */
         .announcement-shimmer {
-          background: linear-gradient(
-            90deg,
-            transparent 0%,
-            rgba(6, 182, 212, 0.08) 40%,
-            rgba(6, 182, 212, 0.15) 50%,
-            rgba(6, 182, 212, 0.08) 60%,
-            transparent 100%
-          );
+          background: linear-gradient(90deg, transparent 0%, rgba(6,182,212,0.08) 40%, rgba(6,182,212,0.15) 50%, rgba(6,182,212,0.08) 60%, transparent 100%);
           background-size: 200% 100%;
           animation: shimmer 3s ease-in-out infinite;
         }
@@ -2019,13 +1730,74 @@ export default function LandingPage() {
           100% { background-position: -200% 0; }
         }
 
-        /* Phone floating animation */
+        /* Nav fade in */
+        .nav-fade-in {
+          animation: nav-fade 0.6s ease-out 0.1s both;
+        }
+        @keyframes nav-fade {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Phone floating animation - CSS only */
         .phone-float {
           animation: phone-float 6s ease-in-out infinite;
         }
         @keyframes phone-float {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-10px); }
+        }
+
+        /* Phone entrance */
+        .hero-phone-in {
+          animation: hero-phone-in 1s ease-out 0.6s both;
+        }
+        @keyframes hero-phone-in {
+          from { opacity: 0; transform: translateY(30px) translateX(40px); }
+          to { opacity: 1; transform: translateY(0) translateX(0); }
+        }
+
+        /* Hero floating cards - 4 different float patterns (CSS, not framer-motion) */
+        .hero-float-1 { animation: hero-float-1 4s ease-in-out infinite; }
+        .hero-float-2 { animation: hero-float-2 5s ease-in-out 0.5s infinite; }
+        .hero-float-3 { animation: hero-float-3 3.5s ease-in-out 0.3s infinite; }
+        .hero-float-4 { animation: hero-float-4 4.5s ease-in-out 0.7s infinite; }
+
+        @keyframes hero-float-1 {
+          0%, 100% { transform: rotate(-5deg) translateY(0); }
+          50% { transform: rotate(-3deg) translateY(-8px); }
+        }
+        @keyframes hero-float-2 {
+          0%, 100% { transform: rotate(-6deg) translateY(0); }
+          50% { transform: rotate(-4deg) translateY(6px); }
+        }
+        @keyframes hero-float-3 {
+          0%, 100% { transform: rotate(5deg) translateY(0); }
+          50% { transform: rotate(7deg) translateY(-6px); }
+        }
+        @keyframes hero-float-4 {
+          0%, 100% { transform: rotate(6deg) translateY(0); }
+          50% { transform: rotate(8deg) translateY(8px); }
+        }
+
+        /* Hero card entrance - desktop */
+        .hero-card-in {
+          animation: hero-card-in 1s ease-out both;
+          animation-delay: inherit;
+        }
+        @keyframes hero-card-in {
+          from { opacity: 0; transform: scale(0.7); }
+          to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Hero card entrance - mobile */
+        .hero-card-mobile {
+          animation: hero-card-mobile 0.8s ease-out both;
+          animation-delay: inherit;
+        }
+        @keyframes hero-card-mobile {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
         }
 
         /* CTA pulse glow */
@@ -2037,7 +1809,16 @@ export default function LandingPage() {
           50% { box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
         }
 
-        /* Pricing card border glow animation */
+        /* Badge pulse */
+        .badge-pulse {
+          animation: badge-pulse 2s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.03); }
+        }
+
+        /* Pricing card border glow */
         .pricing-card-glow {
           animation: border-glow 4s ease-in-out infinite;
         }
@@ -2046,13 +1827,46 @@ export default function LandingPage() {
           50% { border-color: #22D3EE; box-shadow: 0 0 35px rgba(6, 182, 212, 0.35); }
         }
 
-        /* Old glow pulse for backwards compat */
-        @keyframes glow-pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(1,186,210,0.3), 0 10px 40px rgba(1,186,210,0.2); }
-          50% { box-shadow: 0 0 30px rgba(1,186,210,0.5), 0 10px 60px rgba(1,186,210,0.3); }
+        /* Scroll indicator */
+        .scroll-indicator-fade {
+          animation: scroll-fade 0.6s ease-out 1.5s both;
         }
-        .animate-glow-pulse {
-          animation: glow-pulse 2s ease-in-out infinite;
+        @keyframes scroll-fade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .scroll-bounce {
+          animation: scroll-bounce 2s ease-in-out infinite;
+        }
+        @keyframes scroll-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(6px); }
+        }
+
+        /* Hero orb animations - CSS instead of framer-motion */
+        .hero-orb-1 {
+          animation: hero-orb-1 25s ease-in-out infinite;
+          will-change: transform;
+        }
+        .hero-orb-2 {
+          animation: hero-orb-2 30s ease-in-out 3s infinite;
+          will-change: transform;
+        }
+        .hero-orb-3 {
+          animation: hero-orb-3 20s ease-in-out 5s infinite;
+          will-change: transform;
+        }
+        @keyframes hero-orb-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(50px, 30px) scale(1.1); }
+        }
+        @keyframes hero-orb-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-40px, 40px) scale(1.15); }
+        }
+        @keyframes hero-orb-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(40px, -30px) scale(1.1); }
         }
 
         /* Global button enhancements */

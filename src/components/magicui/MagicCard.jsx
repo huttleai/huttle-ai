@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
 
 /**
  * MagicCard - Card with interactive spotlight effect that follows cursor
- * Creates a premium, glassmorphism-style card with mouse tracking
+ * Optimized: Only runs animations on hover (no continuous framer-motion)
+ * Uses CSS transitions instead of framer-motion for hover effects
  */
 export function MagicCard({ 
   children, 
@@ -18,50 +18,38 @@ export function MagicCard({
   const ref = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  
-  const springConfig = { damping: 25, stiffness: 150 };
-  const mouseXSpring = useSpring(mouseX, springConfig);
-  const mouseYSpring = useSpring(mouseY, springConfig);
 
   const handleMouseMove = (e) => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    mouseX.set(x);
-    mouseY.set(y);
-    setMousePosition({ x, y });
+    setMousePosition({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
   };
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      className={`relative overflow-hidden bg-white ${className}`}
+      className={`relative overflow-hidden bg-white transition-all duration-300 ${isHovered ? '-translate-y-2 scale-[1.02]' : ''} ${className}`}
       style={{ borderRadius }}
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      whileHover={{ y: -8, scale: 1.02 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       {/* Border gradient effect */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
+      <div
+        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
         style={{
           borderRadius,
           background: `linear-gradient(135deg, ${gradientFrom}20, ${gradientTo}20)`,
           opacity: isHovered ? 1 : 0,
         }}
-        animate={{ opacity: isHovered ? 1 : 0 }}
-        transition={{ duration: 0.3 }}
       />
       
-      {/* Animated border */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
+      {/* Border */}
+      <div
+        className="absolute inset-0 pointer-events-none transition-all duration-300"
         style={{
           borderRadius,
           border: '2px solid transparent',
@@ -69,47 +57,32 @@ export function MagicCard({
             ? `linear-gradient(white, white) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientTo}) border-box`
             : 'linear-gradient(white, white) padding-box, linear-gradient(135deg, #e2e8f0, #e2e8f0) border-box',
         }}
-        animate={{ 
-          opacity: 1,
-        }}
-        transition={{ duration: 0.3 }}
       />
       
-      {/* Spotlight effect */}
+      {/* Spotlight effect - only renders when hovered */}
       {isHovered && (
-        <motion.div
+        <div
           className="absolute pointer-events-none"
           style={{
             width: gradientSize,
             height: gradientSize,
             borderRadius: '50%',
             background: `radial-gradient(circle, ${gradientColor} 0%, transparent 70%)`,
-            left: mouseXSpring,
-            top: mouseYSpring,
-            x: '-50%',
-            y: '-50%',
+            left: mousePosition.x - gradientSize / 2,
+            top: mousePosition.y - gradientSize / 2,
             opacity: gradientOpacity,
+            transition: 'left 0.1s ease-out, top 0.1s ease-out',
           }}
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: gradientOpacity, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.5 }}
-          transition={{ duration: 0.2 }}
         />
       )}
       
-      {/* Shimmer sweep effect on hover */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
+      {/* Shimmer sweep effect - only on hover via CSS */}
+      <div
+        className={`absolute inset-0 pointer-events-none ${isHovered ? 'magic-shimmer-active' : ''}`}
         style={{
           background: 'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.5) 50%, transparent 75%)',
           backgroundSize: '200% 100%',
-        }}
-        animate={{
-          backgroundPosition: isHovered ? ['200% 0%', '-200% 0%'] : '200% 0%',
-        }}
-        transition={{
-          duration: 1.5,
-          ease: 'easeInOut',
+          backgroundPosition: '200% 0%',
         }}
       />
       
@@ -117,13 +90,18 @@ export function MagicCard({
       <div className="relative z-10">
         {children}
       </div>
-    </motion.div>
+      
+      <style>{`
+        .magic-shimmer-active {
+          animation: magic-shimmer 1.5s ease-in-out forwards;
+        }
+        @keyframes magic-shimmer {
+          from { background-position: 200% 0%; }
+          to { background-position: -200% 0%; }
+        }
+      `}</style>
+    </div>
   );
 }
 
 export default MagicCard;
-
-
-
-
-
