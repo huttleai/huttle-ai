@@ -58,7 +58,7 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
                   <span className="text-3xl md:text-4xl font-black text-slate-500">$35</span>
                   <span className="text-sm md:text-base text-slate-500">/month</span>
                 </div>
-                <p className="text-xs md:text-sm text-slate-500 mt-1">or $336/year (20% discount)</p>
+                <p className="text-xs md:text-sm text-slate-500 mt-1">or $357/year (15% discount)</p>
               </div>
 
               {/* Features List */}
