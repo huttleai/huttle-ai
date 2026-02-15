@@ -76,16 +76,45 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to lookup user profile' });
     }
 
-    if (!profile?.stripe_customer_id) {
+    let stripeCustomerId = profile?.stripe_customer_id;
+
+    // Fallback: If no stripe_customer_id in DB, search Stripe by email
+    // This handles Founders Club members who paid via one-time checkout
+    // but whose customer ID wasn't saved to the profile during webhook processing
+    if (!stripeCustomerId && user.email) {
+      console.log('⚠️ No stripe_customer_id in profile, searching Stripe by email:', user.email);
+      try {
+        const customers = await stripe.customers.list({
+          email: user.email,
+          limit: 1,
+        });
+
+        if (customers.data.length > 0) {
+          stripeCustomerId = customers.data[0].id;
+          console.log('✅ Found Stripe customer by email:', stripeCustomerId);
+
+          // Backfill the stripe_customer_id in the profile for future lookups
+          await supabase
+            .from('user_profile')
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq('user_id', user.id)
+            .catch((err) => console.error('Failed to backfill stripe_customer_id:', err));
+        }
+      } catch (searchError) {
+        console.error('Stripe customer search error:', searchError);
+      }
+    }
+
+    if (!stripeCustomerId) {
       return res.status(400).json({ 
-        error: 'No subscription found. Please subscribe to a plan first.' 
+        error: 'No billing account found. Need help? Contact support@huttleai.com' 
       });
     }
 
-    // Create portal session
+    // Create portal session using the customer ID (not subscription ID)
     const session = await stripe.billingPortal.sessions.create({
-      customer: profile.stripe_customer_id,
-      return_url: `${appUrl}/subscription`,
+      customer: stripeCustomerId,
+      return_url: `${appUrl}/dashboard/subscription`,
     });
 
     return res.status(200).json({

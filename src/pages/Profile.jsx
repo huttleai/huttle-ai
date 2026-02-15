@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { User, Mail, Phone, MapPin, Save } from 'lucide-react';
+import { User, Mail, MapPin, Save, Briefcase } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { formatDisplayName } from '../utils/brandContextBuilder';
 
@@ -12,40 +12,54 @@ export default function Profile() {
   const { brandProfile, updateBrandData, refreshBrandData } = useBrand();
   const { showToast } = useToast();
   
-  const defaultName = useMemo(() => (
-    brandProfile?.brandName
+  // Full Name: prioritize first_name from brand profile, then auth metadata, then fallbacks
+  const defaultFullName = useMemo(() => (
+    brandProfile?.firstName
+      || user?.user_metadata?.first_name
       || user?.user_metadata?.name
       || user?.user_metadata?.full_name
       || user?.name
       || user?.email?.split('@')[0]
       || ''
-  ), [brandProfile?.brandName, user?.user_metadata?.name, user?.user_metadata?.full_name, user?.name, user?.email]);
+  ), [brandProfile?.firstName, user?.user_metadata?.first_name, user?.user_metadata?.name, user?.user_metadata?.full_name, user?.name, user?.email]);
+
+  // Brand Name: separate field from full name
+  const defaultBrandName = useMemo(() => (
+    brandProfile?.brandName || ''
+  ), [brandProfile?.brandName]);
 
   const defaultEmail = user?.email || '';
 
   const [formData, setFormData] = useState({
-    name: defaultName,
+    fullName: defaultFullName,
+    brandName: defaultBrandName,
     email: defaultEmail,
-    phone: '',
     location: ''
   });
 
   useEffect(() => {
     setFormData(prev => ({
       ...prev,
-      name: defaultName,
+      fullName: defaultFullName,
+      brandName: defaultBrandName,
       email: defaultEmail
     }));
-  }, [defaultName, defaultEmail]);
+  }, [defaultFullName, defaultBrandName, defaultEmail]);
 
   const handleSave = async () => {
-    const trimmedName = formData.name.trim();
+    const trimmedFullName = formData.fullName.trim();
+    const trimmedBrandName = formData.brandName.trim();
     const trimmedEmail = formData.email.trim();
 
     try {
-      if (trimmedName) {
-        await updateBrandData({ brandName: trimmedName });
-        await updateUser({ name: trimmedName, full_name: trimmedName });
+      // Update full name in auth metadata
+      if (trimmedFullName) {
+        await updateUser({ name: trimmedFullName, full_name: trimmedFullName, first_name: trimmedFullName });
+      }
+
+      // Update brand name in brand profile (separate from personal name)
+      if (trimmedBrandName !== defaultBrandName) {
+        await updateBrandData({ brandName: trimmedBrandName });
       }
 
       if (trimmedEmail && trimmedEmail !== user?.email) {
@@ -68,7 +82,7 @@ export default function Profile() {
     }
   };
 
-  const displayName = formatDisplayName(defaultName);
+  const displayName = formatDisplayName(defaultFullName);
   const isFoundingMember = userTier === 'founders' || userTier === 'founder';
 
   return (
@@ -116,10 +130,26 @@ export default function Profile() {
               </label>
               <input
                 type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                value={formData.fullName}
+                onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+                placeholder="Your full name"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Briefcase className="w-4 h-4 inline mr-2" />
+                Brand / Business Name
+              </label>
+              <input
+                type="text"
+                value={formData.brandName}
+                onChange={(e) => setFormData(prev => ({ ...prev, brandName: e.target.value }))}
+                placeholder="Your brand or business name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-500">This name is used for AI-generated content and your brand voice.</p>
             </div>
 
             <div>
@@ -131,20 +161,6 @@ export default function Profile() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Phone className="w-4 h-4 inline mr-2" />
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                placeholder="+1 (555) 000-0000"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
               />
             </div>
@@ -174,9 +190,9 @@ export default function Profile() {
             </button>
             <button 
               onClick={() => setFormData({
-                name: defaultName,
+                fullName: defaultFullName,
+                brandName: defaultBrandName,
                 email: defaultEmail,
-                phone: '',
                 location: ''
               })}
               className="btn-secondary"

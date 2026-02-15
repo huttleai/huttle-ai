@@ -74,23 +74,31 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const audience = getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
 
+    const platformFilter = platform !== 'all' ? `on ${platform}` : 'across TikTok, Instagram, X (Twitter), YouTube, and Facebook';
+
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend analysis expert. Return trends as a numbered list. Each trend must follow this exact format on a single line:\n\nNUMBER. TREND_NAME | Platforms: PLATFORM1, PLATFORM2 | DESCRIPTION\n\nDo NOT use markdown tables, headers (###), or any other formatting. Only use the numbered list format above. Keep each trend to a single line.'
+        content: 'You are a social media trend intelligence analyst. You track REAL viral content, trending audio, creator activity, and engagement patterns across TikTok, Instagram, X, YouTube, and Facebook.\n\nReturn trends as a numbered list. Each trend MUST follow this exact format on a single line:\n\nNUMBER. TREND_NAME | Platforms: PLATFORM1, PLATFORM2 | DESCRIPTION\n\nDo NOT use markdown tables, headers (###), or any other formatting. Only the numbered list.\n\nIMPORTANT: Every trend must be a REAL social media trend from the last 7 days — not generic industry news. Include specific details like trending sounds, content formats, viral post examples, or creator names when possible. Focus on what content creators are actually posting and what is getting engagement.'
       },
       {
         role: 'user',
-        content: `What are the top 10 trending topics in ${niche} ${platform !== 'all' ? `on ${platform}` : 'across social media platforms'} right now?
+        content: `What are the top 10 VIRAL social media trends in the ${niche} niche ${platformFilter} right now (last 7 days)?
 
 Target Audience: ${audience}
 
 Brand Context:
 ${brandContext}
 
-For each trend provide: the trend name, which platforms it's trending on, and a brief description of the trend and content angle.
+For each trend, include ALL of the following in the description:
+- What the trend actually is (specific format, challenge, sound, or content style)
+- Why it's going viral (what's driving engagement)
+- A specific content angle or hook a ${niche} creator could use
+- Mention any specific creators, sounds, or viral posts if relevant
 
-Prioritize trends that align with the brand profile. Return ONLY the numbered list, no extra commentary.`
+Focus on ACTIONABLE social media trends: trending sounds, content formats, viral hooks, challenge formats, editing styles, or conversation topics that are getting high engagement. Do NOT include generic business news, industry reports, or marketing tips.
+
+Return ONLY the numbered list, no commentary or intro text.`
       }
     ], 0.2);
 

@@ -13,6 +13,9 @@ export function AuthProvider({ children }) {
   // Refs to track current state without stale closures in auth listener
   const currentUserIdRef = useRef(null);
   const profileCheckedRef = useRef(false);
+  // Track whether initializeSession has completed to prevent onAuthStateChange
+  // from prematurely setting loading = false during the INITIAL_SESSION race
+  const initialLoadCompleteRef = useRef(false);
 
   // Memoized checkUserProfile to prevent recreation on every render
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
@@ -170,6 +173,8 @@ export function AuthProvider({ children }) {
           console.log('✅ [Auth] Setting loading to false');
           setLoading(false);
         }
+        // Mark initial load as complete so onAuthStateChange can set loading for subsequent events
+        initialLoadCompleteRef.current = true;
       }
     };
 
@@ -229,7 +234,15 @@ export function AuthProvider({ children }) {
         console.error('❌ [Auth] Error handling auth state change:', error);
         setProfileChecked(true);
       } finally {
-        if (isMounted) {
+        // Only set loading = false for events AFTER the initial session setup.
+        // INITIAL_SESSION races with initializeSession() — let initializeSession
+        // handle the initial loading state to prevent premature redirect to login.
+        if (isMounted && event !== 'INITIAL_SESSION') {
+          setLoading(false);
+        }
+        // If initializeSession already completed but INITIAL_SESSION arrived late,
+        // it's safe to set loading false
+        if (isMounted && event === 'INITIAL_SESSION' && initialLoadCompleteRef.current) {
           setLoading(false);
         }
       }
@@ -343,6 +356,10 @@ export function AuthProvider({ children }) {
     if (!user) return { success: false, error: 'Not authenticated' };
     
     console.log('✅ [Auth] completeOnboarding called with:', profileData);
+    
+    // Signal to GuidedTour that onboarding just completed — tour should trigger
+    // This must be set BEFORE the state updates that cause the Dashboard to mount
+    localStorage.setItem('show_guided_tour', 'pending');
     
     // First refresh the profile from database to get the complete data
     await checkUserProfile(user.id);

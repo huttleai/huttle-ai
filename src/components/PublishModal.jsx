@@ -1,87 +1,108 @@
-import { useState, useMemo } from 'react';
-import { X, ExternalLink, Copy, Check, AlertCircle, Instagram, Facebook, Youtube, QrCode, Smartphone, Monitor } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, ExternalLink, Copy, Check, CheckCircle2, Instagram, Facebook, Youtube, Download, Clipboard, ArrowRight, Image } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { supabase } from '../config/supabase';
-import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
+import { supabase, getSignedUrl } from '../config/supabase';
+import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
-// Platform deep link configurations
+// Platform configurations
 const PLATFORM_CONFIGS = {
   instagram: {
     name: 'Instagram',
     icon: Instagram,
     color: 'from-purple-600 to-pink-600',
-    deepLink: (url, caption, hashtags) => {
-      const text = `${caption}\n\n${hashtags}`.trim();
-      return `instagram://library?AssetPath=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-    },
-    fallbackUrl: 'https://www.instagram.com/create/story/',
-    instructions: 'Opens Instagram app to upload with pre-filled caption'
+    uploadUrl: 'https://www.instagram.com/',
+    appScheme: 'instagram://',
+    instructions: 'Open Instagram, tap + to create, upload your media, then paste the caption.'
   },
   facebook: {
     name: 'Facebook',
     icon: Facebook,
     color: 'from-blue-600 to-blue-800',
-    deepLink: (url, caption, hashtags) => {
-      const text = `${caption}\n\n${hashtags}`.trim();
-      return `fb://compose?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-    },
-    fallbackUrl: 'https://www.facebook.com/dialog/share',
-    instructions: 'Opens Facebook app to create post with your content'
+    uploadUrl: 'https://www.facebook.com/',
+    appScheme: 'fb://',
+    instructions: 'Open Facebook, tap "What\'s on your mind?", upload media, then paste caption.'
   },
   tiktok: {
     name: 'TikTok',
     icon: ({ className }) => <span className={className}>🎵</span>,
     color: 'from-black to-gray-800',
-    deepLink: (url, caption, hashtags) => {
-      const text = `${caption}\n\n${hashtags}`.trim();
-      return `snssdk1233://upload?video=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
-    },
-    fallbackUrl: 'https://www.tiktok.com/upload',
-    instructions: 'Opens TikTok app to upload video with pre-filled caption'
+    uploadUrl: 'https://www.tiktok.com/upload',
+    appScheme: 'snssdk1233://',
+    instructions: 'Open TikTok, tap + to upload your video, then paste the caption.'
   },
   youtube: {
     name: 'YouTube',
     icon: Youtube,
     color: 'from-red-600 to-red-800',
-    deepLink: (url, caption, hashtags, title) => {
-      const description = `${caption}\n\n${hashtags}`.trim();
-      return `youtube://upload?video=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`;
-    },
-    fallbackUrl: 'https://studio.youtube.com/upload',
-    instructions: 'Opens YouTube Studio to upload with pre-filled details'
+    uploadUrl: 'https://studio.youtube.com/upload',
+    appScheme: 'youtube://',
+    instructions: 'Open YouTube Studio, tap upload, add your video, then paste title and description.'
   },
   twitter: {
     name: 'X (Twitter)',
     icon: ({ className }) => <span className={className}>𝕏</span>,
     color: 'from-black to-gray-900',
-    deepLink: (url, caption, hashtags) => {
-      const text = `${caption}\n\n${hashtags}`.trim();
-      return `twitter://post?message=${encodeURIComponent(text)}`;
-    },
-    fallbackUrl: 'https://twitter.com/intent/tweet',
-    instructions: 'Opens X app to create post with your caption'
+    uploadUrl: 'https://twitter.com/compose/tweet',
+    appScheme: 'twitter://',
+    instructions: 'Open X, tap compose, paste your caption, and attach media if needed.'
   }
+};
+
+/**
+ * Map a post platform name (e.g. "Instagram", "X") to a PLATFORM_CONFIGS key
+ */
+const mapPlatformToConfigKey = (platformName) => {
+  if (!platformName) return '';
+  const p = platformName.toLowerCase().trim();
+  if (p.includes('instagram')) return 'instagram';
+  if (p.includes('facebook')) return 'facebook';
+  if (p.includes('tiktok')) return 'tiktok';
+  if (p.includes('youtube')) return 'youtube';
+  if (p.includes('twitter') || p === 'x') return 'twitter';
+  return '';
 };
 
 export default function PublishModal({ isOpen, onClose, post }) {
   const { addToast } = useToast();
   const { preferredPlatformIds } = usePreferredPlatforms();
   const [selectedPlatform, setSelectedPlatform] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState({});
   const [publishing, setPublishing] = useState(false);
-  const [showQRCode, setShowQRCode] = useState(false);
-  const [activeTab, setActiveTab] = useState('direct'); // 'direct' or 'qr'
+  const [published, setPublished] = useState(false);
+  const [downloadingMedia, setDownloadingMedia] = useState(false);
 
-  // Filter PLATFORM_CONFIGS to only show user's preferred platforms
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Determine the pre-selected platform from the post's platforms array
+  const postPlatformKey = useMemo(() => {
+    const platforms = post?.platforms || [];
+    if (platforms.length > 0) {
+      return mapPlatformToConfigKey(platforms[0]);
+    }
+    return '';
+  }, [post?.platforms]);
+
+  // Auto-select platform when modal opens
+  useEffect(() => {
+    if (isOpen && postPlatformKey) {
+      setSelectedPlatform(postPlatformKey);
+    }
+    if (isOpen) {
+      setPublished(false);
+      setCompletedSteps({});
+      setPublishing(false);
+      setDownloadingMedia(false);
+    }
+  }, [isOpen, postPlatformKey]);
+
+  // Filter to user's preferred platforms
   const filteredPlatformConfigs = useMemo(() => {
-    // Map our platform IDs to the PLATFORM_CONFIGS keys
     const idToConfigKey = {
       'instagram': 'instagram',
       'facebook': 'facebook',
       'tiktok': 'tiktok',
       'youtube': 'youtube',
-      'x': 'twitter' // PLATFORM_CONFIGS uses 'twitter' as the key
+      'x': 'twitter'
     };
     
     const filtered = {};
@@ -92,374 +113,359 @@ export default function PublishModal({ isOpen, onClose, post }) {
       }
     });
     
-    // If no platforms are preferred, show all (fallback)
     return Object.keys(filtered).length > 0 ? filtered : PLATFORM_CONFIGS;
   }, [preferredPlatformIds]);
 
   if (!isOpen || !post) return null;
 
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const selectedConfig = selectedPlatform ? PLATFORM_CONFIGS[selectedPlatform] : null;
+  const hasMedia = post.media?.length > 0 || post.storage_path;
+  const fullText = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
 
-  // Generate deep link for selected platform
-  const getDeepLink = () => {
-    if (!selectedPlatform) return '';
+  const markStep = (step) => {
+    setCompletedSteps(prev => ({ ...prev, [step]: true }));
+  };
+
+  // Step 1: Copy caption + hashtags
+  const handleCopyCaption = async () => {
+    try {
+      await navigator.clipboard.writeText(fullText);
+      markStep('copy');
+      addToast('Caption and hashtags copied!', 'success');
+    } catch (error) {
+      addToast('Failed to copy. Please select and copy manually.', 'error');
+    }
+  };
+
+  // Step 2: Download media (if available)
+  const handleDownloadMedia = async () => {
+    setDownloadingMedia(true);
+    try {
+      // Try to get a signed URL for the media
+      let downloadUrl = null;
+      
+      if (post.storage_path) {
+        const result = await getSignedUrl(post.storage_path, 300); // 5 min expiry
+        if (result.success) {
+          downloadUrl = result.signedUrl;
+        }
+      } else if (post.media?.length > 0) {
+        const firstMedia = post.media[0];
+        if (firstMedia.storagePath) {
+          const result = await getSignedUrl(firstMedia.storagePath, 300);
+          if (result.success) {
+            downloadUrl = result.signedUrl;
+          }
+        } else if (firstMedia.url && !firstMedia.url.startsWith('blob:')) {
+          downloadUrl = firstMedia.url;
+        }
+      }
+
+      if (downloadUrl) {
+        // Trigger download via hidden anchor
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = post.title ? `${post.title.replace(/[^a-zA-Z0-9]/g, '_')}` : 'media';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        markStep('download');
+        addToast(isMobile ? 'Media downloading. Save to camera roll.' : 'Media downloaded!', 'success');
+      } else {
+        addToast('No media file available for this post.', 'info');
+      }
+    } catch (error) {
+      console.error('Media download error:', error);
+      addToast('Failed to download media. Try again.', 'error');
+    } finally {
+      setDownloadingMedia(false);
+    }
+  };
+
+  // Step 3: Open platform
+  const handleOpenPlatform = () => {
     const config = PLATFORM_CONFIGS[selectedPlatform];
-    const mediaUrl = post.storage_path || post.url || '';
-    const caption = post.caption || '';
-    const hashtags = post.hashtags || '';
-    const title = post.title || 'Untitled Post';
-    return config.deepLink(mediaUrl, caption, hashtags, title);
-  };
+    if (!config) return;
 
-  // Generate QR code data (deep link + content info)
-  const getQRData = () => {
-    if (!selectedPlatform) return '';
-    const deepLink = getDeepLink();
-    // For QR, we use the deep link directly - when scanned on mobile, it will open the app
-    return deepLink;
-  };
-
-  const handlePublish = async () => {
-    if (!selectedPlatform) {
-      addToast('Please select a platform', 'warning');
-      return;
+    if (isMobile) {
+      // Try app scheme first, fallback to web
+      const appWindow = window.open(config.appScheme, '_blank');
+      setTimeout(() => {
+        if (!appWindow || appWindow.closed) {
+          window.open(config.uploadUrl, '_blank');
+        }
+      }, 800);
+    } else {
+      window.open(config.uploadUrl, '_blank');
     }
 
+    markStep('open');
+    addToast(`Opening ${config.name}...`, 'success');
+  };
+
+  // Step 4: Mark as published
+  const handleMarkPublished = async () => {
     setPublishing(true);
-
-    try {
-      const config = PLATFORM_CONFIGS[selectedPlatform];
-      const deepLink = getDeepLink();
-
-      // Track publish attempt
-      const { data: userData } = await supabase.auth.getUser();
+    
+    // Track publish attempt (non-blocking)
+    supabase.auth.getUser().then(({ data: userData }) => {
       if (userData?.user) {
-        await supabase.from('user_publishes').insert({
+        supabase.from('user_publishes').insert({
           user_id: userData.user.id,
           post_id: post.id,
           platform: selectedPlatform,
-          deep_link_used: true
-        }).catch(() => {}); // Ignore if table doesn't exist
+          deep_link_used: isMobile
+        }).catch(() => {});
       }
+    });
 
-      // Try to open deep link
-      if (isMobile) {
-        // Mobile: Try deep link first, fallback to web
-        const opened = window.open(deepLink, '_blank');
-        
-        // If deep link fails, try fallback after delay
-        setTimeout(() => {
-          if (!opened || opened.closed) {
-            window.open(config.fallbackUrl, '_blank');
-            addToast(`Opening ${config.name} in browser`, 'info');
-          }
-        }, 1000);
-        
-        addToast(`Opening ${config.name} app...`, 'success');
-      } else {
-        // Desktop: Copy to clipboard and open web version
-        const fullText = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
-        await navigator.clipboard.writeText(fullText);
-        
-        window.open(config.fallbackUrl, '_blank');
-        addToast(`Caption copied! Opening ${config.name} in browser`, 'success');
-      }
+    setPublished(true);
+    setPublishing(false);
+    addToast('Post marked as published!', 'success');
 
-      // Close modal after short delay
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-
-    } catch (error) {
-      console.error('Publish error:', error);
-      
-      // Fallback: Copy to clipboard
-      try {
-        const fullText = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
-        await navigator.clipboard.writeText(fullText);
-        addToast('Caption copied to clipboard! Paste in your app', 'info');
-      } catch (clipError) {
-        addToast('Failed to publish. Please copy manually.', 'error');
-      }
-    } finally {
-      setPublishing(false);
-    }
+    setTimeout(() => {
+      onClose();
+    }, 1500);
   };
 
-  const handleCopyContent = async () => {
-    try {
-      const fullText = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
-      await navigator.clipboard.writeText(fullText);
-      setCopied(true);
-      addToast('Content copied to clipboard!', 'success');
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      addToast('Failed to copy content', 'error');
-    }
-  };
+  const allStepsDone = completedSteps.copy && completedSteps.open;
 
-  const handleCopyAndShowQR = async () => {
-    // Copy content to clipboard first
-    try {
-      const fullText = `${post.caption || ''}\n\n${post.hashtags || ''}`.trim();
-      await navigator.clipboard.writeText(fullText);
-      addToast('Caption copied! Now scan QR code with your phone', 'success');
-    } catch (error) {
-      // Continue even if copy fails
+  // Build checklist steps
+  const steps = [
+    {
+      id: 'copy',
+      label: 'Copy caption & hashtags',
+      description: 'Copies everything to your clipboard',
+      icon: Clipboard,
+      action: handleCopyCaption,
+      actionLabel: completedSteps.copy ? 'Copied!' : 'Copy',
+      completed: !!completedSteps.copy,
+      required: true
+    },
+    ...(hasMedia ? [{
+      id: 'download',
+      label: isMobile ? 'Save media to device' : 'Download media',
+      description: isMobile ? 'Save to your camera roll' : 'Save the image/video to your computer',
+      icon: Download,
+      action: handleDownloadMedia,
+      actionLabel: downloadingMedia ? 'Saving...' : (completedSteps.download ? 'Saved!' : (isMobile ? 'Save' : 'Download')),
+      completed: !!completedSteps.download,
+      loading: downloadingMedia,
+      required: false
+    }] : []),
+    {
+      id: 'open',
+      label: `Open ${selectedConfig?.name || 'platform'}`,
+      description: isMobile ? 'Opens the app on your phone' : 'Opens the website in a new tab',
+      icon: ExternalLink,
+      action: handleOpenPlatform,
+      actionLabel: completedSteps.open ? 'Opened!' : 'Open',
+      completed: !!completedSteps.open,
+      required: true
+    },
+    {
+      id: 'paste',
+      label: 'Paste & publish',
+      description: selectedConfig?.instructions || 'Paste your caption and upload media',
+      icon: ArrowRight,
+      action: null, // No button — this is a manual step
+      completed: false,
+      required: false,
+      isManual: true
     }
-    setShowQRCode(true);
-  };
+  ];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-fadeIn">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-2xl font-bold text-huttle-primary">Publish to Social Media</h2>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Publish Post</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Follow the steps below to publish</p>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Preview */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-huttle-primary" />
-            Post Preview
-          </h3>
-          
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <h4 className="font-bold text-gray-900 mb-2">{post.title}</h4>
-            {post.caption && (
-              <p className="text-gray-700 mb-2 whitespace-pre-wrap line-clamp-3">{post.caption}</p>
-            )}
-            {post.hashtags && (
-              <p className="text-sm text-huttle-primary">{post.hashtags}</p>
-            )}
-          </div>
-
-          <button
-            onClick={handleCopyContent}
-            className="mt-3 flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-green-600" />
-                <span className="text-green-600">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                <span>Copy Caption & Hashtags</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Tab Selector - Only show on desktop */}
-        {!isMobile && (
-          <div className="px-6 pt-4">
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => { setActiveTab('direct'); setShowQRCode(false); }}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
-                  activeTab === 'direct'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Monitor className="w-4 h-4" />
-                Direct Publish
-              </button>
-              <button
-                onClick={() => { setActiveTab('qr'); setShowQRCode(true); }}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
-                  activeTab === 'qr'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <QrCode className="w-4 h-4" />
-                QR Code Bridge
-              </button>
+        {/* Success State */}
+        {published ? (
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Published!</h3>
+            <p className="text-sm text-gray-600">
+              Your post has been marked as published on {selectedConfig?.name}.
+            </p>
           </div>
-        )}
-
-        {/* Platform Selection */}
-        <div className="p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Select Platform</h3>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-            {Object.entries(filteredPlatformConfigs).map(([key, config]) => {
-              const Icon = config.icon;
-              const isSelected = selectedPlatform === key;
-              
-              return (
-                <button
-                  key={key}
-                  onClick={() => setSelectedPlatform(key)}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    isSelected
-                      ? 'border-huttle-primary bg-huttle-primary/5 shadow-md scale-105'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center mx-auto mb-2`}>
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <p className="text-sm font-semibold text-gray-900">{config.name}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* QR Code Display */}
-          {activeTab === 'qr' && selectedPlatform && (
-            <div className="mb-6 p-6 bg-gradient-to-br from-slate-50 to-white rounded-xl border-2 border-dashed border-slate-200">
-              <div className="text-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary rounded-full text-sm font-semibold mb-4">
-                  <Smartphone className="w-4 h-4" />
-                  Scan with your phone
-                </div>
-                
-                <div className="flex justify-center mb-4">
-                  <div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100">
-                    <QRCodeSVG
-                      value={getQRData()}
-                      size={180}
-                      level="H"
-                      includeMargin={true}
-                      bgColor="#ffffff"
-                      fgColor="#1a1a1a"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <p className="font-semibold text-gray-900">
-                    How to use:
-                  </p>
-                  <ol className="text-left max-w-xs mx-auto space-y-2 text-gray-600">
-                    <li className="flex items-start gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-huttle-primary text-white text-xs flex items-center justify-center font-bold">1</span>
-                      <span>Content is copied to your clipboard</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-huttle-primary text-white text-xs flex items-center justify-center font-bold">2</span>
-                      <span>Scan QR code with your phone camera</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-huttle-primary text-white text-xs flex items-center justify-center font-bold">3</span>
-                      <span>Open the link to launch {PLATFORM_CONFIGS[selectedPlatform]?.name}</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-huttle-primary text-white text-xs flex items-center justify-center font-bold">4</span>
-                      <span>Paste your caption and post!</span>
-                    </li>
-                  </ol>
-                </div>
-
-                <button
-                  onClick={handleCopyContent}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors text-sm font-medium"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy Caption First
-                    </>
+        ) : (
+          <>
+            {/* Post Preview */}
+            <div className="px-5 pt-4 pb-3">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-start gap-3">
+                  {/* Media thumbnail */}
+                  {hasMedia && (
+                    <div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <Image className="w-5 h-5 text-gray-400" />
+                    </div>
                   )}
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-gray-900 text-sm truncate">{post.title}</h4>
+                    {post.caption && (
+                      <p className="text-gray-600 text-xs whitespace-pre-wrap line-clamp-2 mt-0.5">{post.caption}</p>
+                    )}
+                    {post.hashtags && (
+                      <p className="text-xs text-huttle-primary mt-1 line-clamp-1">{post.hashtags}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Instructions for Direct Publish */}
-          {activeTab === 'direct' && selectedPlatform && (
-            <div className="bg-huttle-50 border border-huttle-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-gray-900">
-                <strong>How it works:</strong> {PLATFORM_CONFIGS[selectedPlatform].instructions}
-                {!isMobile && ' Your caption will be copied to clipboard automatically.'}
-              </p>
-            </div>
-          )}
+            {/* Platform Selection */}
+            {!selectedPlatform ? (
+              <div className="px-5 pb-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Where are you publishing?</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.entries(filteredPlatformConfigs).map(([key, config]) => {
+                    const Icon = config.icon;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedPlatform(key)}
+                        className="p-3 rounded-xl border-2 border-gray-200 hover:border-huttle-primary hover:bg-huttle-primary/5 transition-all text-center"
+                      >
+                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center mx-auto mb-1.5`}>
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                        <p className="text-xs font-medium text-gray-700">{config.name}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Step-by-Step Checklist */
+              <div className="px-5 pb-5">
+                {/* Platform header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedConfig.color} flex items-center justify-center`}>
+                      <selectedConfig.icon className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">{selectedConfig.name}</span>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedPlatform(''); setCompletedSteps({}); }}
+                    className="text-xs text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                  >
+                    Change
+                  </button>
+                </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-semibold"
-            >
-              Cancel
-            </button>
-            {activeTab === 'direct' && (
-              <button
-                onClick={handlePublish}
-                disabled={!selectedPlatform || publishing}
-                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                  selectedPlatform && !publishing
-                    ? 'bg-huttle-primary text-white hover:bg-huttle-primary-dark shadow-md'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {publishing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <span>Publishing...</span>
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="w-5 h-5" />
-                    <span>Publish Now</span>
-                  </>
+                {/* Steps */}
+                <div className="space-y-2.5">
+                  {steps.map((step, idx) => {
+                    const StepIcon = step.icon;
+                    return (
+                      <div
+                        key={step.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          step.completed
+                            ? 'border-green-200 bg-green-50/50'
+                            : step.isManual
+                            ? 'border-gray-100 bg-gray-50/50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        {/* Step number / check */}
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                          step.completed
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {step.completed ? <Check className="w-3.5 h-3.5" /> : idx + 1}
+                        </div>
+
+                        {/* Step info */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${step.completed ? 'text-green-700' : 'text-gray-900'}`}>
+                            {step.label}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">{step.description}</p>
+                        </div>
+
+                        {/* Action button */}
+                        {step.action && (
+                          <button
+                            onClick={step.action}
+                            disabled={step.loading}
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 flex items-center gap-1.5 ${
+                              step.completed
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark shadow-sm'
+                            }`}
+                          >
+                            {step.loading && (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                            )}
+                            <StepIcon className="w-3.5 h-3.5" />
+                            {step.actionLabel}
+                          </button>
+                        )}
+
+                        {/* Manual step indicator */}
+                        {step.isManual && (
+                          <span className="text-xs text-gray-400 italic flex-shrink-0">Manual</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mark as Published button */}
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleMarkPublished}
+                    disabled={!allStepsDone || publishing}
+                    className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm ${
+                      allStepsDone && !publishing
+                        ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {publishing ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Mark as Published</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {!allStepsDone && (
+                  <p className="text-center text-xs text-gray-400 mt-2">
+                    Complete the Copy and Open steps to mark as published
+                  </p>
                 )}
-              </button>
-            )}
-            {activeTab === 'qr' && (
-              <button
-                onClick={handleCopyAndShowQR}
-                disabled={!selectedPlatform}
-                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                  selectedPlatform
-                    ? 'bg-huttle-primary text-white hover:bg-huttle-primary-dark shadow-md'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                <QrCode className="w-5 h-5" />
-                <span>Copy & Show QR</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Detection Notice - Only show in direct tab */}
-        {!isMobile && activeTab === 'direct' && (
-          <div className="px-6 pb-6">
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <Smartphone className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-amber-900 mb-1">
-                    Want to post from your phone?
-                  </p>
-                  <p className="text-xs text-amber-700">
-                    Switch to the "QR Code Bridge" tab to scan a QR code with your phone and post directly from the mobile app.
-                  </p>
-                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

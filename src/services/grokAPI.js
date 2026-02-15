@@ -408,6 +408,115 @@ Number them 1-4. Vary the approach for each hook.`
   }
 }
 
+/**
+ * Generate styled CTAs grouped by category (Direct, Soft, Urgency, Question, Story)
+ * @param {Object} params - { promoting, goalType, platform }
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Styled CTAs grouped by category
+ */
+export async function generateStyledCTAs(params, brandData, platform = 'instagram') {
+  const { promoting, goalType } = params;
+
+  const goalLabels = {
+    'engagement': 'Drive Engagement (comments, shares, saves)',
+    'sales': 'Drive Sales/Conversions (purchases, sign-ups, downloads)',
+    'dms': 'Drive DMs/Leads (direct messages, inquiries)'
+  };
+
+  // Demo mode
+  if (isDemoMode()) {
+    await simulateDelay(800, 1500);
+    return {
+      success: true,
+      ctas: [
+        { style: 'Direct', cta: `Grab your spot — link in bio`, tip: 'Clear and straightforward works best for high-intent audiences' },
+        { style: 'Soft', cta: `Save this for your next session`, tip: 'Low-pressure CTAs boost saves and shares' },
+        { style: 'Urgency', cta: `Only 10 spots left — DM "YES" now`, tip: 'Scarcity creates immediate action' },
+        { style: 'Question', cta: `Would you try this? Drop a comment below`, tip: 'Questions drive comment engagement by 3x' },
+        { style: 'Story', cta: `I went from burnt out to blissed out. Here's how...`, tip: 'Story-driven CTAs create emotional connection' }
+      ],
+      platformTip: `On ${platform}, soft CTAs and questions tend to drive the most engagement.`
+    };
+  }
+
+  try {
+    const platformData = getPlatform(platform);
+    const ctaGuidelines = getCTAGuidelines(platform);
+    const systemPrompt = buildSystemPrompt(
+      'You are a CTA specialist who creates compelling calls-to-action. You understand platform psychology and what drives people to take action on different social media platforms.',
+      brandData
+    );
+
+    const data = await callGrokAPI([
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: `Generate 5 CTAs for someone promoting: "${promoting}"
+Goal: ${goalLabels[goalType] || goalType}
+Platform: ${platformData?.name || platform}
+
+Platform CTA style: ${ctaGuidelines.style}
+Platform examples: ${ctaGuidelines.examples.join(', ')}
+
+Generate exactly 5 CTAs, one for each style below. Return ONLY a JSON object:
+{
+  "ctas": [
+    { "style": "Direct", "cta": "straightforward ask CTA text here", "tip": "why this style works on ${platformData?.name || platform}" },
+    { "style": "Soft", "cta": "low-pressure CTA text here", "tip": "why this style works" },
+    { "style": "Urgency", "cta": "time-sensitive CTA text here", "tip": "why this style works" },
+    { "style": "Question", "cta": "engagement-first question CTA here", "tip": "why this style works" },
+    { "style": "Story", "cta": "narrative hook CTA here", "tip": "why this style works" }
+  ],
+  "platformTip": "which CTA style tends to perform best on ${platformData?.name || platform} and why"
+}
+
+IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Use platform conventions for ${platformData?.name || platform}.`
+      }
+    ], 0.7);
+
+    let parsed;
+    try {
+      const content = data.content || '';
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch {
+      parsed = null;
+    }
+
+    if (parsed?.ctas) {
+      return { success: true, ctas: parsed.ctas, platformTip: parsed.platformTip || '', usage: data.usage };
+    }
+
+    // Fallback parsing
+    return {
+      success: true,
+      ctas: [
+        { style: 'Direct', cta: `Get started with ${promoting} — link in bio`, tip: 'Clear and action-oriented' },
+        { style: 'Soft', cta: `Save this for later`, tip: 'Low pressure drives saves' },
+        { style: 'Urgency', cta: `Limited time — DM to reserve your spot`, tip: 'Scarcity creates urgency' },
+        { style: 'Question', cta: `Would you try this? Let me know below`, tip: 'Questions boost comments' },
+        { style: 'Story', cta: `This changed everything for me. Here's how...`, tip: 'Stories create connection' }
+      ],
+      platformTip: `On ${platformData?.name || platform}, questions and soft CTAs drive the most engagement.`,
+      usage: data.usage
+    };
+  } catch (error) {
+    console.error('Grok API Error:', error);
+    return {
+      success: true,
+      ctas: [
+        { style: 'Direct', cta: `Ready for ${promoting}? Link in bio`, tip: 'Straightforward works on most platforms' },
+        { style: 'Soft', cta: `Save this for when you need it`, tip: 'Soft CTAs boost saves' },
+        { style: 'Urgency', cta: `Don't miss out — DM me "START" now`, tip: 'Urgency drives immediate action' },
+        { style: 'Question', cta: `Would you try ${promoting}? Drop a comment`, tip: 'Questions drive engagement' },
+        { style: 'Story', cta: `I used to struggle with this. Then I found ${promoting}...`, tip: 'Stories build trust' }
+      ],
+      platformTip: `Mix different CTA styles for best results on ${platform}.`,
+      usage: { fallback: true }
+    };
+  }
+}
+
 export async function generateCTAs(goal, brandData, platform = 'instagram') {
   // Check if demo mode is enabled AND no real goal - return mock data
   if (isDemoMode() && !goal?.trim()) {
@@ -1107,5 +1216,149 @@ Number them 1-4.`
       usage: { fallback: true },
       note: `Using demo ${mediaType} ideas due to API unavailability`
     };
+  }
+}
+
+/**
+ * Generate visual brainstorm results — AI Image Prompts or Manual Shoot Guide
+ * @param {Object} params - { topic, platform, contentFormat, outputType }
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Generated prompts or shoot guide
+ */
+export async function generateVisualBrainstorm(params, brandData) {
+  const { topic, platform, contentFormat, outputType } = params;
+
+  // Demo mode fallback
+  if (isDemoMode()) {
+    await simulateDelay(1000, 2000);
+    if (outputType === 'ai-prompt') {
+      return {
+        success: true,
+        type: 'ai-prompt',
+        prompts: [
+          `Silhouette of a person doing ${topic}, golden hour lighting, warm orange and purple sky, gentle atmosphere, shot from low angle, cinematic composition, 4:5 aspect ratio for ${platform}`,
+          `Flat lay arrangement themed around ${topic}, minimalist aesthetic, soft natural light, pastel color palette, overhead shot, clean composition, square format`,
+          `Dynamic action shot capturing the essence of ${topic}, vibrant colors, motion blur effect, shallow depth of field, editorial style photography, vertical format for mobile`
+        ]
+      };
+    }
+    return {
+      success: true,
+      type: 'shoot-guide',
+      guide: {
+        shotList: [
+          `Wide establishing shot capturing the full scene of ${topic}`,
+          `Close-up detail shot highlighting textures and key elements`,
+          `Over-the-shoulder or POV perspective for viewer immersion`,
+          `Behind-the-scenes candid moment showing authenticity`
+        ],
+        lighting: `Natural golden hour lighting recommended for ${topic}. Shoot during the first/last hour of sunlight for warm, flattering tones. If shooting indoors, position near large windows for soft diffused light.`,
+        composition: `Use the rule of thirds to place your subject off-center. Try shooting from a low angle to add drama and presence. Include leading lines to draw the viewer's eye to the focal point.`,
+        propsAndStyling: `Keep it minimal and authentic. Include items that relate directly to ${topic}. Use complementary colors that align with your brand palette. Ensure the background is clean and uncluttered.`,
+        moodAndPalette: `Aim for an aspirational yet approachable mood. Color palette: warm earth tones mixed with your brand colors. The overall vibe should feel authentic, not overly staged.`,
+        platformTips: `For ${platform} ${contentFormat}: Use ${contentFormat === 'Reel' || contentFormat === 'Video' || contentFormat === 'Story' ? '9:16 vertical' : contentFormat === 'Image' ? '4:5 portrait or 1:1 square' : '4:5 portrait'} aspect ratio. ${contentFormat === 'Carousel' ? 'Plan 5-8 slides with a strong cover image and clear visual progression.' : contentFormat === 'Reel' || contentFormat === 'Video' ? 'Keep it under 60 seconds. Hook in the first 2 seconds.' : 'Make the first image scroll-stopping — bold colors or intriguing composition.'}`
+      }
+    };
+  }
+
+  try {
+    const platformData = getPlatform(platform);
+    const platformContext = buildPlatformContext(platform, 'visual');
+
+    if (outputType === 'ai-prompt') {
+      const systemPrompt = buildSystemPrompt(
+        'You are an expert AI image prompt engineer. You create highly detailed, specific prompts for AI image generators like Midjourney, DALL-E, and Stable Diffusion. Your prompts are copy-ready and produce stunning, platform-optimized visuals.',
+        brandData
+      );
+
+      const data = await callGrokAPI([
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `Generate exactly 3 detailed AI image generation prompts for this content topic: "${topic}"
+
+Target platform: ${platformData?.name || platform}
+Content format: ${contentFormat}
+${platformContext}
+
+REQUIREMENTS:
+- Each prompt must be a single, detailed paragraph ready to paste into Midjourney/DALL-E
+- Include specific visual details: subject, setting, lighting, camera angle, mood, colors, style
+- Include the appropriate aspect ratio for ${platformData?.name || platform} ${contentFormat}
+- Each prompt should take a DIFFERENT creative angle on the topic "${topic}"
+- Be highly specific to the topic — never be generic or use "behind-the-scenes" clichés
+- Include style modifiers (cinematic, editorial, minimalist, vibrant, etc.)
+
+Return ONLY a JSON array of 3 prompt strings, like:
+["prompt 1 text here", "prompt 2 text here", "prompt 3 text here"]`
+        }
+      ], 0.8);
+
+      let prompts;
+      try {
+        const content = data.content || '';
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        prompts = jsonMatch ? JSON.parse(jsonMatch[0]) : [content];
+      } catch {
+        prompts = (data.content || '').split(/\d+\./).filter(p => p.trim()).map(p => p.trim());
+      }
+
+      return { success: true, type: 'ai-prompt', prompts: prompts.slice(0, 3), usage: data.usage };
+    } else {
+      // Manual shoot guide
+      const systemPrompt = buildSystemPrompt(
+        'You are a professional creative director and photography consultant. You create detailed, actionable creative briefs for content creators who will shoot their own photos and videos. Your guidance is practical, specific, and tailored to the content topic and platform.',
+        brandData
+      );
+
+      const data = await callGrokAPI([
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `Create a detailed manual shoot guide for this content topic: "${topic}"
+
+Target platform: ${platformData?.name || platform}
+Content format: ${contentFormat}
+${platformContext}
+
+Return a JSON object with this exact structure:
+{
+  "shotList": ["shot 1 description", "shot 2 description", "shot 3 description", "shot 4 description"],
+  "lighting": "Detailed lighting recommendations specific to '${topic}'",
+  "composition": "Camera angles, framing tips, and composition guidance",
+  "propsAndStyling": "What to include in the frame, styling recommendations",
+  "moodAndPalette": "The vibe to aim for, recommended color palette",
+  "platformTips": "Aspect ratio, format considerations, and best practices for ${platformData?.name || platform} ${contentFormat}"
+}
+
+Be HIGHLY SPECIFIC to the topic "${topic}" — never give generic photography advice. Every recommendation should relate directly to capturing this specific content.`
+        }
+      ], 0.7);
+
+      let guide;
+      try {
+        const content = data.content || '';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        guide = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      } catch {
+        guide = null;
+      }
+
+      if (!guide) {
+        guide = {
+          shotList: [`Wide shot of ${topic}`, `Close-up detail shot`, `Action/movement capture`, `Behind-the-scenes candid`],
+          lighting: `Use natural light when possible for ${topic}. Golden hour provides the most flattering tones.`,
+          composition: `Rule of thirds with the subject slightly off-center. Try multiple angles.`,
+          propsAndStyling: `Keep props minimal and directly related to ${topic}. Ensure clean backgrounds.`,
+          moodAndPalette: `Aim for an authentic, aspirational mood with warm tones.`,
+          platformTips: `Optimize for ${platformData?.name || platform} ${contentFormat} format and aspect ratio.`
+        };
+      }
+
+      return { success: true, type: 'shoot-guide', guide, usage: data.usage };
+    }
+  } catch (error) {
+    console.error('Visual brainstorm error:', error);
+    return { success: false, error: error.message || 'Failed to generate visual brainstorm' };
   }
 }

@@ -82,9 +82,10 @@ export default function Subscription() {
       features: [
         'Everything in Essentials, plus:',
         '800 AI generations/month',
-        '25GB storage',
-        'Content Repurposer',
-        'Trend Forecaster',
+        '50GB storage',
+        'Viral Blueprint',
+        'Content Remix Studio',
+        'Trend Lab',
         'Huttle Agent (Coming Soon)',
         'Priority Email Support'
       ],
@@ -378,7 +379,7 @@ export default function Subscription() {
                   <h2 className="text-xl font-bold text-gray-900 mb-1">You're one of the first 100 members</h2>
                   <p className="text-gray-600">
                     As a Founders Club member, you have lifetime access to exclusive benefits and pricing that will never be available again.
-                    Thank you for believing in Huttle from the beginning.
+                    Thank you for believing in Huttle AI from the beginning.
                   </p>
                 </div>
               </div>
@@ -392,7 +393,7 @@ export default function Subscription() {
                     </div>
                     <h3 className="font-semibold text-gray-900">All Pro Features</h3>
                   </div>
-                  <p className="text-sm text-gray-600">Full access to every Pro feature including 800 AI generations/month, 25GB storage, Content Repurposer, Trend Forecaster, and more.</p>
+                  <p className="text-sm text-gray-600">Full access to every Pro feature including 800 AI generations/month, 50GB storage, Viral Blueprint, Content Remix Studio, Trend Lab, and more.</p>
                 </div>
 
                 <div className="bg-white rounded-xl p-5 border border-amber-100">
@@ -422,7 +423,7 @@ export default function Subscription() {
                     </div>
                     <h3 className="font-semibold text-gray-900">Early Access</h3>
                   </div>
-                  <p className="text-sm text-gray-600">Be the first to try new features including Huttle Agent, advanced analytics, and upcoming AI capabilities before they launch publicly.</p>
+                  <p className="text-sm text-gray-600">Be the first to try new features and upcoming AI capabilities before they launch publicly.</p>
                 </div>
               </div>
             </div>
@@ -483,11 +484,11 @@ export default function Subscription() {
               <div className="space-y-6">
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">Will my price ever change?</h3>
-                  <p className="text-gray-600 text-sm">Never. Your $199/year rate is permanently locked as long as you maintain your membership. Even as we add premium features and increase public pricing, your rate stays the same.</p>
+                  <p className="text-gray-600 text-sm">Never. Your rate is permanently locked as long as you maintain your membership. Even as we add premium features and increase public pricing, your rate stays the same.</p>
                 </div>
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">What if I cancel and want to rejoin?</h3>
-                  <p className="text-gray-600 text-sm">Your founding rate is tied to your active membership. If you cancel, you may not be able to rejoin at the $199/year rate as the Founders Club is limited to the first 100 members.</p>
+                  <p className="text-gray-600 text-sm">Your founding rate is tied to your active membership. If you cancel, you will not be able to rejoin at the exclusive Founders Club annual rate.</p>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">How do I get priority support?</h3>
@@ -496,7 +497,128 @@ export default function Subscription() {
               </div>
             </div>
           </div>
+        ) : userTier !== TIERS.FREE ? (
+        /* Subscribed User View (Essentials / Pro) — Billing Management Only */
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-400 flex items-center justify-center shadow-lg">
+              <CreditCard className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+                Billing
+              </h1>
+              <p className="text-base text-gray-600">
+                Manage your subscription and payment method
+              </p>
+            </div>
+          </div>
+
+          {/* Current Plan Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-8 mb-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-400 flex items-center justify-center shadow-lg shadow-huttle-primary/20">
+                {userTier === TIERS.PRO ? <Crown className="w-6 h-6 text-white" /> : <Zap className="w-6 h-6 text-white" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {userTier === TIERS.PRO ? 'Pro' : 'Essentials'} Plan
+                  </h2>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    Active
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm mb-4">
+                  {userTier === TIERS.PRO 
+                    ? '800 AI generations/month, 50GB storage, all features included' 
+                    : '200 AI generations/month, 5GB storage, Trend Lab & Plan Builder'}
+                </p>
+
+                {subscriptionInfo?.currentPeriodEnd && (
+                  <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
+                    <CalendarCheck className="w-4 h-4 text-gray-400" />
+                    <span>
+                      Next billing date:{' '}
+                      <span className="font-semibold text-gray-900">
+                        {new Date(subscriptionInfo.currentPeriodEnd).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-3">
+                  <button 
+                    onClick={handleManagePayment}
+                    disabled={loading === 'portal' || loading === 'cancel'}
+                    className="btn-primary"
+                  >
+                    {loading === 'portal' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Opening...
+                      </>
+                    ) : (
+                      <>
+                        Manage Billing
+                        <ExternalLink className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                  
+                  <button 
+                    onClick={handleCancelSubscription}
+                    disabled={loading === 'portal' || loading === 'cancel'}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    {loading === 'cancel' ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Opening...
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4" />
+                        Cancel Subscription
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* FAQ Section */}
+          <div className="card p-6 lg:p-8 max-w-3xl mx-auto">
+            <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+            <div className="space-y-6">
+              <div className="pb-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
+                <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund — no questions asked. After 7 days, all sales are final.</p>
+              </div>
+              <div className="pb-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
+                <p className="text-gray-600 text-sm">Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.</p>
+              </div>
+              <div className="pb-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900 mb-2">How do I update my payment method?</h3>
+                <p className="text-gray-600 text-sm">Click "Manage Billing" above to open the Stripe billing portal, where you can update your card, view invoices, and manage your subscription.</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Do AI generations roll over?</h3>
+                <p className="text-gray-600 text-sm">AI generations reset at the beginning of each billing cycle and do not roll over to the next month.</p>
+              </div>
+            </div>
+          </div>
+        </div>
         ) : (
+        /* Free Tier View — Show Upgrade Plan Cards */
         <>
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
@@ -633,77 +755,13 @@ export default function Subscription() {
           </div>
         </div>
 
-        {/* Payment Method Section */}
-        {userTier !== TIERS.FREE && (
-          <div className="card p-6 lg:p-8 mb-8 max-w-3xl mx-auto">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-400 flex items-center justify-center shadow-lg shadow-huttle-primary/20">
-                <CreditCard className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-xl font-display font-bold text-gray-900 mb-2">Billing & Payment</h2>
-                <p className="text-gray-600 mb-4">
-                  Manage your subscription, update payment method, and view invoices through Stripe's secure billing portal.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button 
-                    onClick={handleManagePayment}
-                    disabled={loading === 'portal' || loading === 'cancel'}
-                    className="btn-primary"
-                  >
-                    {loading === 'portal' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Opening...
-                      </>
-                    ) : (
-                      <>
-                        Manage Billing
-                        <ExternalLink className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                  
-                  <button 
-                    onClick={handleCancelSubscription}
-                    disabled={loading === 'portal' || loading === 'cancel'}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    {loading === 'cancel' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Opening...
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-4 h-4" />
-                        Cancel Subscription
-                      </>
-                    )}
-                  </button>
-                </div>
-                
-                {subscriptionInfo?.currentPeriodEnd && (
-                  <p className="text-sm text-gray-500 mt-4">
-                    Your subscription renews on {new Date(subscriptionInfo.currentPeriodEnd).toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* FAQ Section */}
         <div className="card p-6 lg:p-8 max-w-3xl mx-auto">
           <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-6">
             <div className="pb-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-              <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund—no questions asked. After 7 days, all sales are final.</p>
+              <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund — no questions asked. After 7 days, all sales are final.</p>
             </div>
             <div className="pb-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>

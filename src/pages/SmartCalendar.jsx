@@ -186,6 +186,7 @@ export default function SmartCalendar() {
         keywords: post.keywords || '',
         imagePrompt: post.imagePrompt || '',
         videoPrompt: post.videoPrompt || '',
+        media: post.media || [],
         optimal: false,
         editable: true,
         createdAt: post.createdAt,

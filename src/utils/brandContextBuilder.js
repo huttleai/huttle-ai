@@ -401,57 +401,28 @@ export function buildBriefBrandContext(brandData) {
 }
 
 /**
- * Gets personalized greeting based on profile type (account_type)
- * - solo_creator / creator → "Hey {FirstName}!" using firstName field
- * - brand_business / brand → "Hey {BrandName}!" using brandName field
+ * Gets personalized greeting — always uses first name
+ * - Uses firstName from brand profile, or fallback from user metadata
  * - Fallback if no name → "Hey there!" with profile completion nudge
- * 
+ *
  * @param {Object} brandData - Brand data from BrandContext
- * @param {string} fallbackName - Fallback name if none in profile
+ * @param {string} fallbackName - Fallback name if none in profile (e.g. from user metadata)
  * @returns {Object} Greeting object with message, name, and needsProfile flag
  */
 export function getPersonalizedGreeting(brandData, fallbackName = 'there') {
   const isCreator = isCreatorProfile(brandData);
-  
-  if (isCreator) {
-    // Solo Creator → use firstName field
-    const rawName = brandData?.firstName || fallbackName;
-    const firstName = formatDisplayName(rawName).split(' ')[0].replace('@', '');
-    const hasName = !!brandData?.firstName;
-    
-    return {
-      message: hasName ? `Hey ${firstName}! Ready to create?` : 'Hey there! Ready to create?',
-      shortMessage: hasName ? `Hey ${firstName}!` : 'Hey there!',
-      name: hasName ? firstName : 'there',
-      isCreator: true,
-      needsProfile: !hasName,
-    };
-  }
-  
-  // Brand / Business → use brandName field
-  const brandName = formatDisplayName(brandData?.brandName || '');
-  const hasBrandName = !!brandData?.brandName;
-  
-  // If no brand name, try firstName as fallback
-  if (!hasBrandName) {
-    const firstName = formatDisplayName(brandData?.firstName || fallbackName).split(' ')[0];
-    const hasFirstName = !!brandData?.firstName;
-    
-    return {
-      message: hasFirstName ? `Hey ${firstName}!` : 'Hey there!',
-      shortMessage: hasFirstName ? `Hey ${firstName}!` : 'Hey there!',
-      name: hasFirstName ? firstName : 'there',
-      isCreator: false,
-      needsProfile: !hasFirstName,
-    };
-  }
-  
+
+  // Always use first name for greeting (creator and brand alike)
+  const rawName = brandData?.firstName || fallbackName;
+  const firstName = formatDisplayName(rawName).split(' ')[0].replace('@', '');
+  const hasName = !!(brandData?.firstName || (fallbackName && fallbackName !== 'there'));
+
   return {
-    message: `Hey ${brandName}!`,
-    shortMessage: `Hey ${brandName}!`,
-    name: brandName,
-    isCreator: false,
-    needsProfile: false,
+    message: hasName ? `Hey ${firstName}! Ready to create?` : 'Hey there! Ready to create?',
+    shortMessage: hasName ? `Hey ${firstName}!` : 'Hey there!',
+    name: hasName ? firstName : 'there',
+    isCreator,
+    needsProfile: !hasName,
   };
 }
 

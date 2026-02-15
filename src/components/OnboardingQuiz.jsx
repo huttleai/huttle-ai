@@ -3,6 +3,7 @@ import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, Me
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
 import { BrandContext, useBrand } from '../context/BrandContext';
+import { formatEnumLabel, formatEnumArray } from '../utils/formatEnumLabel';
 
 // Profile types - clean monochrome design
 const PROFILE_TYPES = [
@@ -363,31 +364,32 @@ export default function OnboardingQuiz({ onComplete }) {
       const userId = userData.user.id;
       console.log('Saving profile for user:', userId);
 
-      // Helper to capitalize first letter
-      const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
-      const capitalizeArray = (arr) => Array.isArray(arr) ? [...new Set(arr)].map(capitalize) : arr;
+      // Use formatEnumLabel to convert snake_case enum values to human-readable labels
+      const formatArray = (arr) => Array.isArray(arr) ? [...new Set(arr)].map(formatEnumLabel) : arr;
       
-      // Prepare complete profile data with all fields (capitalize selections)
+      // Prepare complete profile data with all fields (format enum labels)
       // Null out fields that don't apply to the chosen profile type
       const profileData = {
         user_id: userId,
         first_name: formData.first_name.trim(),
         profile_type: formData.profile_type,
-        creator_archetype: isCreator && formData.creator_archetype ? capitalize(formData.creator_archetype) : null,
+        creator_archetype: isCreator && formData.creator_archetype ? formatEnumLabel(formData.creator_archetype) : null,
         brand_name: formData.brand_name?.trim() || null,
         industry: !isCreator
-          ? (formData.industry === 'other' && formData.industry_custom ? capitalize(formData.industry_custom.trim()) : (formData.industry ? capitalize(formData.industry) : null))
+          ? (formData.industry === 'other' && formData.industry_custom
+              ? formData.industry_custom.trim().charAt(0).toUpperCase() + formData.industry_custom.trim().slice(1)
+              : (formData.industry ? formatEnumLabel(formData.industry) : null))
           : null,
-        niche: Array.isArray(formData.niche) ? capitalizeArray(formData.niche).join(', ') : capitalize(formData.niche),
-        target_audience: capitalizeArray(formData.target_audience),
-        content_goals: capitalizeArray(formData.content_goals),
-        posting_frequency: capitalize(formData.posting_frequency),
-        preferred_platforms: capitalizeArray(formData.preferred_platforms),
-        brand_voice_preference: capitalize(formData.brand_voice_preference),
+        niche: Array.isArray(formData.niche) ? formData.niche.map(formatEnumLabel).join(', ') : formatEnumLabel(formData.niche),
+        target_audience: formatArray(formData.target_audience),
+        content_goals: formatArray(formData.content_goals),
+        posting_frequency: formatEnumLabel(formData.posting_frequency),
+        preferred_platforms: formatArray(formData.preferred_platforms),
+        brand_voice_preference: formatEnumLabel(formData.brand_voice_preference),
         // Viral content strategy fields
-        content_strengths: capitalizeArray(formData.content_strengths),
-        biggest_challenge: formData.biggest_challenge ? capitalize(formData.biggest_challenge) : null,
-        emotional_triggers: capitalizeArray(formData.emotional_triggers),
+        content_strengths: formatArray(formData.content_strengths),
+        biggest_challenge: formData.biggest_challenge ? formatEnumLabel(formData.biggest_challenge) : null,
+        emotional_triggers: formatArray(formData.emotional_triggers),
         quiz_completed_at: new Date().toISOString(),
         onboarding_step: totalSteps
       };
@@ -1185,10 +1187,9 @@ export default function OnboardingQuiz({ onComplete }) {
                       try {
                         const { data: userData } = await supabase.auth.getUser();
                         if (userData?.user) {
-                          const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
                           const nicheValue = Array.isArray(formData.niche) 
-                            ? formData.niche.map(capitalize).join(', ') 
-                            : (formData.niche ? capitalize(formData.niche) : null);
+                            ? formData.niche.map(formatEnumLabel).join(', ') 
+                            : (formData.niche ? formatEnumLabel(formData.niche) : null);
                           await supabase
                             .from('user_profile')
                             .upsert({

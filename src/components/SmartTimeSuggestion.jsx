@@ -112,9 +112,10 @@ export default function SmartTimeSuggestion({
         const adjustedHours = Math.max(0, Math.min(23, hours + adjustment.timeShift));
         const adjustedTime = `${String(adjustedHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
-        // Find next best day
+        // Find next best day — start from tomorrow (i=1) so suggestions are for future days
         let bestDate = new Date(today);
-        for (let i = 0; i < 7; i++) {
+        bestDate.setDate(today.getDate() + 1); // Default to tomorrow
+        for (let i = 1; i <= 7; i++) {
           const checkDate = new Date(today);
           checkDate.setDate(today.getDate() + i);
           const dayName = dayNames[checkDate.getDay()];

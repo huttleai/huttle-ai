@@ -358,7 +358,10 @@ export default function AIPlanBuilder() {
             </p>
           </div>
         </div>
-        {/* Per-feature usage meter */}
+      </div>
+      
+      {/* Per-feature usage meter */}
+      <div className="mt-2 mb-6">
         <AIUsageMeter
           used={planUsage.featureUsed}
           limit={planUsage.featureLimit}

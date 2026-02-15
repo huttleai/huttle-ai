@@ -68,6 +68,19 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
 
     if (error) {
       console.error('Error creating job directly:', error);
+      // Provide actionable error messages for common issues
+      if (error.message?.includes('row-level security') || error.code === '42501' || error.code === '42000') {
+        console.error('[PlanBuilder] RLS policy issue on jobs table. Verify migrations have been applied.');
+        throw new Error('Permission error creating job. The database security policies may need to be updated. Please contact support.');
+      }
+      if (error.message?.includes('violates foreign key') || error.code === '23503') {
+        console.error('[PlanBuilder] FK constraint error — user may not exist in referenced table');
+        throw new Error('Account setup incomplete. Please try logging out and back in.');
+      }
+      if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+        console.error('[PlanBuilder] Jobs table does not exist. Database migration needed.');
+        throw new Error('Feature not yet configured. Please contact support.');
+      }
       throw error;
     }
 

@@ -22,6 +22,7 @@ export function ContentProvider({ children }) {
   
   // Safety check for AuthContext
   const user = authContext?.user || null;
+  const authLoading = authContext?.loading ?? true;
   
   const [savedContent, setSavedContent] = useState([]);
   const [scheduledPosts, setScheduledPosts] = useState([]);
@@ -38,6 +39,8 @@ export function ContentProvider({ children }) {
   };
 
   // Load on mount and when user changes
+  // CRITICAL: Wait for auth to fully resolve before querying Supabase.
+  // This prevents failed queries (and "Using offline data" toasts) during session restoration.
   useEffect(() => {
     if (skipAuth) {
       seedDevModeScheduledPosts();
@@ -48,6 +51,9 @@ export function ContentProvider({ children }) {
       return;
     }
 
+    // Don't query Supabase while auth is still loading — session may not be ready
+    if (authLoading) return;
+
     if (user?.id) {
       loadScheduledPosts();
       loadUserPreferences();
@@ -57,7 +63,7 @@ export function ContentProvider({ children }) {
     }
     // Load saved content regardless of user (from localStorage)
     loadSavedContent();
-  }, [user, skipAuth]);
+  }, [user, skipAuth, authLoading]);
 
   // Load user preferences (timezone, etc.)
   const loadUserPreferences = async () => {

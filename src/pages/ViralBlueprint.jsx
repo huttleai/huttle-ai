@@ -47,9 +47,8 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 
-// TODO: N8N_WORKFLOW - Import workflow service when ready
 import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
-import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+import { WORKFLOW_NAMES } from '../utils/workflowConstants';
 
 // N8N Webhook URL for Viral Blueprint generation (via serverless proxy to avoid CORS)
 const N8N_WEBHOOK_URL = '/api/viral-blueprint-proxy';
@@ -266,7 +265,7 @@ const generateMockBlueprint = (platform, postType, topic) => {
           : 'Clean & Professional',
       bpm: platform === 'TikTok' ? '120-140' : '90-110',
       suggestion: platform === 'TikTok' 
-        ? 'Use trending sounds from the Discover page' 
+        ? 'Use trending sounds that match this energy for maximum reach' 
         : 'Original audio performs best on this platform'
     } : null,
     viralScore: Math.floor(Math.random() * 20) + 75
@@ -294,16 +293,35 @@ const adaptBlueprintResponse = (data) => {
   let directorsCut = [];
   let isVideo = false;
 
-  // Handle nested response structures: { data: { blueprint: { ... } } } or { blueprint: { ... } }
+  console.log('[Blueprint Adapter] Input data type:', typeof data, '| Keys:', data ? Object.keys(data) : 'null');
+
+  // Handle nested response structures — try many common wrappers
   let blueprintData = null;
-  if (data?.data?.blueprint && typeof data.data.blueprint === 'object') {
-    blueprintData = data.data.blueprint;
-  } else if (data?.blueprint && typeof data.blueprint === 'object') {
-    blueprintData = data.blueprint;
-  } else if (data && typeof data === 'object' && (data.hooks || data.content_script || data.seo_keywords)) {
-    // Flat format with blueprint fields at root level
-    blueprintData = data;
+  const unwrap = (obj) => {
+    if (!obj || typeof obj !== 'object') return null;
+    // Direct blueprint fields at this level
+    if (obj.hooks || obj.content_script || obj.seo_keywords || obj.suggested_hashtags) return obj;
+    // Common wrapper keys
+    for (const key of ['blueprint', 'data', 'result', 'output', 'response', 'payload']) {
+      if (obj[key] && typeof obj[key] === 'object') {
+        const inner = unwrap(obj[key]);
+        if (inner) return inner;
+      }
+    }
+    return null;
+  };
+
+  blueprintData = unwrap(data);
+
+  // Also check if blueprintData is at root level for known structures
+  if (!blueprintData && data && typeof data === 'object') {
+    if (data.directors_cut || data.slide_breakdown || data.tweet_breakdown ||
+        data.frame_breakdown || data.caption_structure || data.directorsCut) {
+      blueprintData = null; // Let the format-specific handlers below take over
+    }
   }
+
+  console.log('[Blueprint Adapter] Resolved blueprintData:', blueprintData ? Object.keys(blueprintData) : 'null (will try format-specific handlers)');
 
   // 0a. NEW: Nested blueprint format: { blueprint: { viral_score, hooks, content_script, seo_keywords, suggested_hashtags } }
   if (blueprintData && (blueprintData.hooks || blueprintData.content_script || blueprintData.seo_keywords || blueprintData.suggested_hashtags)) {
@@ -509,10 +527,53 @@ const adaptBlueprintResponse = (data) => {
     };
   }
 
+  // ULTIMATE FALLBACK: if directorsCut is still empty, try to extract any text content
+  if (directorsCut.length === 0) {
+    console.warn('[Blueprint Adapter] No structured content found. Attempting text fallback.');
+    // Look for any string field in the data that could be the content
+    const textFields = ['content', 'text', 'script', 'body', 'message', 'analysis', 'output', 'result'];
+    let fallbackText = '';
+    for (const key of textFields) {
+      if (data[key] && typeof data[key] === 'string' && data[key].length > 20) {
+        fallbackText = data[key];
+        break;
+      }
+    }
+    // Also check nested data/blueprint/result wrappers for string content
+    if (!fallbackText) {
+      for (const wrapper of ['data', 'blueprint', 'result', 'output']) {
+        const nested = data[wrapper];
+        if (nested && typeof nested === 'object') {
+          for (const key of textFields) {
+            if (nested[key] && typeof nested[key] === 'string' && nested[key].length > 20) {
+              fallbackText = nested[key];
+              break;
+            }
+          }
+          if (fallbackText) break;
+        }
+      }
+    }
+
+    if (fallbackText) {
+      directorsCut = [{
+        step: 1,
+        title: 'Content Blueprint',
+        script: fallbackText,
+        text: fallbackText,
+        visual: '',
+        visualSuggestion: ''
+      }];
+      console.log('[Blueprint Adapter] Text fallback applied, length:', fallbackText.length);
+    } else {
+      console.error('[Blueprint Adapter] No usable content found in response. Full data:', JSON.stringify(data).substring(0, 500));
+    }
+  }
+
   return {
     isVideoContent: isVideo,
     directorsCut,
-    viralScore,
+    viralScore: viralScore || 85,
     audioVibe,
     seoStrategy
   };
@@ -731,28 +792,10 @@ export default function ViralBlueprint() {
         'Story': 'Story'
       };
 
-      // Check if n8n workflow is configured
-      const workflowConfigured = isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT);
-      
-      if (!workflowConfigured) {
-        console.log('[Viral Blueprint] n8n workflow not configured, using fallback generator');
-        
-        // Use mock blueprint generator with user's actual topic as fallback
-        const fallbackBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
-        
-        setGeneratedBlueprint(fallbackBlueprint);
-        setIsGenerating(false);
-        
-        // Update usage
-        const newUsage = usageCount + 1;
-        setUsageCount(newUsage);
-        localStorage.setItem('viralBlueprintUsage', newUsage.toString());
-
-        showToast('Blueprint generated!', 'success');
-        setCurrentView('results');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+      // Always try the Vercel proxy first (it forwards to n8n webhook server-side).
+      // The proxy handles "not configured" with a clear error response.
+      // Fallback to mock generator only on proxy failure.
+      console.log('[Viral Blueprint] Using Vercel proxy to reach n8n workflow');
 
       // Build payload matching what the proxy expects
       const payload = {
@@ -865,6 +908,12 @@ export default function ViralBlueprint() {
         hasAudioVibe: !!adaptedBlueprint.audioVibe,
         seoKeywordsCount: adaptedBlueprint.seoStrategy?.visualKeywords?.length
       });
+
+      // Validate that the adapter produced usable content
+      if (!adaptedBlueprint.directorsCut || adaptedBlueprint.directorsCut.length === 0) {
+        console.error('[N8N] Adapter produced empty directorsCut. Raw response:', JSON.stringify(responseData).substring(0, 1000));
+        throw new Error('INVALID_BLUEPRINT_STRUCTURE');
+      }
 
       // Set state with adapted blueprint, falling back to UI-based video detection
       setGeneratedBlueprint({

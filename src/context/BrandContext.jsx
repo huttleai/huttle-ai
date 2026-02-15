@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../config/supabase';
 import { AuthContext } from './AuthContext';
+import { formatEnumLabel, formatEnumArray } from '../utils/formatEnumLabel';
 
 export const BrandContext = createContext();
 
@@ -87,21 +88,24 @@ export function BrandProvider({ children }) {
           }
         } else if (data) {
           // Map user_profile fields to brandData structure
+          // Apply formatEnumLabel to convert snake_case values to human-readable labels
           const mappedData = {
             firstName: data.first_name || '',
             profileType: data.profile_type || 'brand',
-            creatorArchetype: data.creator_archetype || '',
+            creatorArchetype: data.creator_archetype ? formatEnumLabel(data.creator_archetype) : '',
             brandName: data.brand_name || '',
-            niche: data.niche || '',
-            industry: data.industry || '',
-            targetAudience: data.target_audience || '',
-            brandVoice: data.brand_voice_preference || '',
+            niche: data.niche ? formatEnumArray(data.niche) : '',
+            industry: data.industry ? formatEnumLabel(data.industry) : '',
+            targetAudience: Array.isArray(data.target_audience)
+              ? formatEnumArray(data.target_audience)
+              : (data.target_audience ? formatEnumArray(data.target_audience) : ''),
+            brandVoice: data.brand_voice_preference ? formatEnumLabel(data.brand_voice_preference) : '',
             platforms: data.preferred_platforms || [],
             goals: data.content_goals || [],
             // Viral content strategy fields
             contentStrengths: data.content_strengths || [],
-            biggestChallenge: data.biggest_challenge || '',
-            hookStylePreference: data.hook_style_preference || '',
+            biggestChallenge: data.biggest_challenge ? formatEnumLabel(data.biggest_challenge) : '',
+            hookStylePreference: data.hook_style_preference ? formatEnumLabel(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
           };
           setBrandData(mappedData);

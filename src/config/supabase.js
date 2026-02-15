@@ -297,10 +297,14 @@ export async function getOverallAIUsageCount(userId) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
+    // Only count 'aiGenerations' rows to avoid double-counting.
+    // Each feature usage creates a feature-specific row + an 'aiGenerations' row.
+    // If we counted ALL rows, we'd double the actual usage.
     const { count, error } = await supabase
       .from(TABLES.ACTIVITY)
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .eq('feature', 'aiGenerations')
       .gte('created_at', startOfMonth.toISOString());
 
     if (error) throw error;
@@ -532,11 +536,30 @@ export async function getSocialUpdates(months = 12, platforms = null) {
 }
 
 /**
+ * Sanitize a filename for Supabase Storage.
+ * Replaces spaces, special characters, and non-ASCII with underscores.
+ * Preserves the file extension.
+ */
+function sanitizeFileName(fileName) {
+  if (!fileName) return 'unnamed_file';
+  const lastDot = fileName.lastIndexOf('.');
+  const ext = lastDot > 0 ? fileName.slice(lastDot) : '';
+  const base = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
+  const sanitized = base
+    .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace special chars with underscore
+    .replace(/_+/g, '_')              // Collapse consecutive underscores
+    .replace(/^_|_$/g, '')            // Trim leading/trailing underscores
+    .substring(0, 100);               // Limit length
+  return (sanitized || 'file') + ext.toLowerCase();
+}
+
+/**
  * Upload file to Supabase Storage bucket (private bucket)
  */
 export async function uploadFileToStorage(userId, file, type) {
   try {
-    const filePath = `${userId}/${type}s/${Date.now()}-${file.name}`;
+    const safeName = sanitizeFileName(file.name);
+    const filePath = `${userId}/${type}s/${Date.now()}-${safeName}`;
 
     const { data, error } = await supabase.storage
       .from('content-library')

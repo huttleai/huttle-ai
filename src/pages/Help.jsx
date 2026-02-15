@@ -34,7 +34,7 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations are used when Trend Lab, AI Plan Builder, or AI Power Tools create content for you. Each AI action (generating captions, hashtags, content ideas, etc.) counts as one generation. Your subscription plan determines your monthly limit.'
+      answer: 'AI generations power all of Huttle AI\'s intelligent features. Your subscription includes a monthly pool of 800 total AI generations, plus individual limits on advanced features to ensure fair usage:\n\n• Trend Discovery (Quick Scan): 200/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Viral Blueprint: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Quality Scorer, Visual Brainstormer): Unlimited individual use — they count toward your 800 monthly total but have no individual cap.\n\nYour usage resets at the start of each billing cycle. You can track your usage in the sidebar AI meter and on each advanced feature\'s page.'
     },
     {
       question: 'When do my AI generations reset?',
@@ -55,10 +55,6 @@ export default function Help() {
     {
       question: 'What is Brand Voice and how do I set it up?',
       answer: 'Brand Voice helps AI understand your unique style. Go to Brand Voice page, describe your brand personality, tone, target audience, and key messaging. The AI will then generate content that matches your brand identity.'
-    },
-    {
-      question: 'What are the differences between subscription tiers?',
-      answer: 'Free tier includes 20 AI generations/month and basic features. Essentials ($9/mo) offers 200 generations, full calendar access, and Trend Lab. Pro ($19/mo) includes 800 generations, Content Remix Studio, Viral Blueprint, priority support, and 50GB storage.'
     },
     {
       question: 'How do I save content to my Content Library?',
@@ -336,7 +332,7 @@ export default function Help() {
           {faqs.map((faq, i) => (
             <div key={i} className="border-b border-gray-200 pb-4 last:border-0">
               <h3 className="font-semibold text-gray-900 mb-2">{faq.question}</h3>
-              <p className="text-sm text-gray-600">{faq.answer}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-line">{faq.answer}</p>
             </div>
           ))}
         </div>

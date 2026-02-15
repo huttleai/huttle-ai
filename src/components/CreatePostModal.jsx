@@ -125,7 +125,37 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     { name: 'Carousel', icon: Image }
   ];
 
-  const optimalTimes = [
+  // Platform-aware optimal posting times
+  const PLATFORM_OPTIMAL = {
+    Instagram: [
+      { time: '11:00', label: 'Best Time', optimal: true },
+      { time: '13:00', label: 'Optimized', optimal: true },
+      { time: '19:00', label: 'Best Time', optimal: true },
+    ],
+    TikTok: [
+      { time: '19:00', label: 'Best Time', optimal: true },
+      { time: '21:00', label: 'Optimized', optimal: true },
+      { time: '12:00', label: 'Lunch Break', optimal: true },
+    ],
+    X: [
+      { time: '09:00', label: 'Best Time', optimal: true },
+      { time: '12:00', label: 'Optimized', optimal: true },
+      { time: '17:00', label: 'End of Work', optimal: true },
+    ],
+    Facebook: [
+      { time: '13:00', label: 'Best Time', optimal: true },
+      { time: '11:00', label: 'Optimized', optimal: true },
+      { time: '15:00', label: 'Mid-Afternoon', optimal: true },
+    ],
+    YouTube: [
+      { time: '14:00', label: 'Best Time', optimal: true },
+      { time: '16:00', label: 'Optimized', optimal: true },
+      { time: '12:00', label: 'Noon', optimal: true },
+    ],
+  };
+
+  const selectedPlatform = postData.platforms?.[0] || '';
+  const optimalTimes = PLATFORM_OPTIMAL[selectedPlatform] || [
     { time: '09:00', label: 'Best Time', optimal: true },
     { time: '12:00', label: 'Optimized', optimal: true },
     { time: '18:00', label: 'Best Time', optimal: true },
@@ -152,27 +182,24 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     try {
       // Generate caption with brand context
       const platform = postData.platforms.length > 0 ? postData.platforms[0] : 'instagram';
+      const niche = brandData?.niche || '';
+      const audience = brandData?.targetAudience || '';
       
-      console.log('Generating AI content for:', postData.title, 'platform:', platform);
+      console.log('Generating AI content for:', postData.title, 'platform:', platform, 'niche:', niche);
       
-      const captionResult = await generateCaption(
-        { topic: postData.title, platform, length: 'medium' },
-        brandData
-      );
-
-      // Generate hashtags with brand context
-      const hashtagResult = await generateHashtags(postData.title, brandData, platform);
-
-      // Generate visual ideas with brand context
-      const visualResult = await generateVisualIdeas(postData.title, brandData, platform);
+      // Run all three API calls in parallel for speed
+      const [captionResult, hashtagResult, visualResult] = await Promise.allSettled([
+        generateCaption({ topic: postData.title, platform, length: 'medium' }, brandData),
+        generateHashtags(postData.title, brandData, platform),
+        generateVisualIdeas(postData.title, brandData, platform)
+      ]);
 
       // Parse visual ideas for image and video prompts
       let imagePrompt = '';
       let videoPrompt = '';
       
-      if (visualResult.success && visualResult.ideas) {
-        const ideas = visualResult.ideas;
-        // Extract first idea for image, second for video (if available)
+      if (visualResult.status === 'fulfilled' && visualResult.value?.success && visualResult.value?.ideas) {
+        const ideas = visualResult.value.ideas;
         const ideaSections = ideas.split(/\d+\./);
         if (ideaSections.length > 1) {
           imagePrompt = ideaSections[1]?.trim().substring(0, 500) || '';
@@ -184,54 +211,69 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
 
       // Parse caption - handle numbered list format
       let captionText = '';
-      if (captionResult.success && captionResult.caption) {
+      const captionData = captionResult.status === 'fulfilled' ? captionResult.value : null;
+      if (captionData?.success && captionData?.caption) {
         // If it's a numbered list, take the first caption
-        const captions = captionResult.caption.split(/\d+\./).filter(c => c.trim());
-        captionText = captions.length > 0 ? captions[0].trim() : captionResult.caption.trim();
+        const captions = captionData.caption.split(/\d+\./).filter(c => c.trim());
+        captionText = captions.length > 0 ? captions[0].trim() : captionData.caption.trim();
+        // Remove leading/trailing quotes or asterisks from parsed caption
+        captionText = captionText.replace(/^["*]+|["*]+$/g, '').trim();
       } else {
-        captionText = `Check out this amazing ${postData.title}! 🚀\n\nDiscover how you can elevate your experience. What are your thoughts? Drop a comment below! 👇`;
+        console.warn('Caption generation failed or returned empty:', captionData);
       }
 
       // Parse hashtags - extract just the hashtag tags if in detailed format
       let hashtagsText = '';
-      if (hashtagResult.success && hashtagResult.hashtags) {
-        // Check if we have pre-parsed hashtag data
-        if (hashtagResult.hashtagData) {
-          hashtagsText = hashtagResult.hashtagData.map(h => h.tag).join(' ');
+      let keywordsFromHashtags = '';
+      const hashtagData = hashtagResult.status === 'fulfilled' ? hashtagResult.value : null;
+      if (hashtagData?.success && hashtagData?.hashtags) {
+        if (hashtagData.hashtagData) {
+          hashtagsText = hashtagData.hashtagData.map(h => h.tag).join(' ');
+          // Derive keywords from hashtag data (strip # prefix)
+          keywordsFromHashtags = hashtagData.hashtagData
+            .slice(0, 5)
+            .map(h => h.tag.replace(/^#/, ''))
+            .join(', ');
         } else {
-          // Extract hashtags from text
-          const hashtagMatches = hashtagResult.hashtags.match(/#\w+/g);
-          hashtagsText = hashtagMatches ? hashtagMatches.slice(0, 10).join(' ') : hashtagResult.hashtags.split('\n')[0];
+          const hashtagMatches = hashtagData.hashtags.match(/#\w+/g);
+          hashtagsText = hashtagMatches ? hashtagMatches.slice(0, 10).join(' ') : hashtagData.hashtags.split('\n')[0];
+          // Derive keywords from extracted hashtags
+          if (hashtagMatches) {
+            keywordsFromHashtags = hashtagMatches.slice(0, 5).map(h => h.replace(/^#/, '')).join(', ');
+          }
         }
-      } else {
-        hashtagsText = '#fitness #workout #motivation #health #gym';
       }
+
+      // Build smart keywords from hashtags + niche context (not just splitting the title)
+      const keywords = keywordsFromHashtags
+        || [postData.title, niche, audience].filter(Boolean).join(', ').substring(0, 100);
 
       // Update post data with AI-generated content
       setPostData(prev => ({
         ...prev,
-        caption: captionText,
-        hashtags: hashtagsText,
-        keywords: postData.title.split(' ').slice(0, 5).join(', '),
-        imagePrompt: imagePrompt || `Create a vibrant, eye-catching image featuring ${prev.title}. Modern design, professional quality.`,
-        videoPrompt: videoPrompt || `Short-form video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
+        caption: captionText || prev.caption,
+        hashtags: hashtagsText || prev.hashtags,
+        keywords,
+        imagePrompt: imagePrompt || `Create a vibrant, eye-catching image for a ${niche || 'social media'} post about "${prev.title}". Modern design, professional quality, engaging composition.`,
+        videoPrompt: videoPrompt || `Short-form video about "${prev.title}" for ${platform}. 15-30 seconds, dynamic transitions, upbeat energy.`
       }));
 
       showToast('AI content generated with your brand voice!', 'success');
     } catch (error) {
       console.error('AI generation error:', error);
       
-      // Provide fallback fitness-themed content on error
+      const niche = brandData?.niche || 'your niche';
+      // Brand-aware fallback instead of hardcoded fitness content
       setPostData(prev => ({
         ...prev,
-        caption: `Ready to crush your ${postData.title} goals? 💪\n\nConsistency is key to success. Every rep, every set, every day brings you closer to your best self!\n\nWhat's your motivation today? Drop it below! 👇`,
-        hashtags: '#fitness #motivation #workout #healthylifestyle #gymlife',
-        keywords: postData.title.split(' ').slice(0, 5).join(', '),
-        imagePrompt: `Create a motivational fitness image featuring ${prev.title}. High energy, professional quality, inspiring composition.`,
-        videoPrompt: `Short-form fitness video showcasing ${prev.title}. 15-30 seconds, dynamic transitions, upbeat music.`
+        caption: prev.caption || `Here's what you need to know about ${postData.title}.\n\nWe put this together to help you get real results. Save this for later and share it with someone who needs it.\n\nWhat questions do you have? Drop them below! 👇`,
+        hashtags: prev.hashtags || `#${postData.title.replace(/\s+/g, '').toLowerCase()} #${niche.replace(/\s+/g, '').toLowerCase()} #trending #viral #contentcreator`,
+        keywords: `${postData.title}, ${niche}`,
+        imagePrompt: prev.imagePrompt || `Create an engaging image for a ${niche} post about "${prev.title}". Clean, professional, scroll-stopping.`,
+        videoPrompt: prev.videoPrompt || `Short-form video about "${prev.title}". 15-30 seconds, dynamic transitions, compelling hook.`
       }));
       
-      showToast('Generated content with fallback data. API may be temporarily unavailable.', 'info');
+      showToast('Generated content with fallback data. AI service may be temporarily unavailable.', 'info');
     } finally {
       setIsGenerating(false);
     }

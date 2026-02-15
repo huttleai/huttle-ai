@@ -1,21 +1,7 @@
 import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { getFeatureUsageCount, getOverallAIUsageCount, trackUsage, TIER_LIMITS, TIERS } from '../config/supabase';
-
-/**
- * Per-feature limit map for Pro/Founder tier.
- * Features not listed here count toward the overall cap but have no individual limit.
- */
-const FEATURE_LIMITS = {
-  trendQuickScan: 200,
-  trendDeepDive: 50,
-  contentRemix: 75,
-  viralBlueprint: 40,
-  planBuilder: 20,
-};
-
-/** Overall monthly generation cap */
-const OVERALL_LIMIT = 800;
 
 /**
  * useAIUsage — track and gate AI feature usage.
@@ -38,13 +24,16 @@ const OVERALL_LIMIT = 800;
  */
 export default function useAIUsage(featureName = null) {
   const { user } = useContext(AuthContext);
+  const { userTier } = useSubscription();
   const [overallUsed, setOverallUsed] = useState(0);
   const [featureUsed, setFeatureUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
 
-  const featureLimit = featureName ? (FEATURE_LIMITS[featureName] ?? null) : null;
-  const overallLimit = OVERALL_LIMIT;
+  // Get limits from tier config instead of hardcoding
+  const tierLimits = TIER_LIMITS[userTier] || TIER_LIMITS[TIERS.FOUNDER] || {};
+  const featureLimit = featureName ? (tierLimits[featureName] ?? null) : null;
+  const overallLimit = tierLimits.aiGenerations || 800;
 
   const isOverallLimitReached = overallUsed >= overallLimit;
   const isFeatureLimitReached = featureLimit !== null && featureUsed >= featureLimit;

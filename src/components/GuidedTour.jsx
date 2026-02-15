@@ -9,19 +9,37 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
   const { user } = useContext(AuthContext);
 
   useEffect(() => {
-    // Only show tour to authenticated users who just completed onboarding
-    // and haven't seen the tour yet
+    // Only show tour to authenticated users who haven't seen the tour yet
     let timer = null;
     let isMounted = true;
+    
+    const showTour = (delayMs) => {
+      if (isMounted) {
+        timer = setTimeout(() => {
+          if (isMounted) setIsActive(true);
+        }, delayMs);
+      }
+    };
     
     const checkTourStatus = async () => {
       if (!user) return;
       
-      // Check localStorage first (fast, works for all users)
+      // Check if tour was already completed (localStorage = fast check)
       const localCompleted = localStorage.getItem(storageKey);
       if (localCompleted) return;
       
-      // Try checking database, but gracefully handle missing column
+      // Check if onboarding JUST completed — this is the primary trigger for first-time users.
+      // The 'show_guided_tour' flag is set by completeOnboarding in AuthContext
+      // right before the transition from OnboardingQuiz to Dashboard.
+      const onboardingJustCompleted = localStorage.getItem('show_guided_tour');
+      if (onboardingJustCompleted === 'pending') {
+        // Clear the flag and show tour after a short delay for UI to settle
+        localStorage.setItem('show_guided_tour', 'shown');
+        showTour(1500);
+        return;
+      }
+      
+      // For returning users: check database, gracefully handle missing column
       try {
         const { data, error } = await supabase
           .from('user_profile')
@@ -38,28 +56,20 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
           }
           
           // Show tour if localStorage doesn't have it marked
-          if (isMounted) {
-            timer = setTimeout(() => {
-              if (isMounted) setIsActive(true);
-            }, 2000);
-          }
+          showTour(2000);
           return;
         }
         
         // Only show tour if user has NOT seen it yet
         const dbCompleted = data?.has_seen_tour;
         
-        if (!dbCompleted && isMounted) {
-          timer = setTimeout(() => {
-            if (isMounted) setIsActive(true);
-          }, 2000);
+        if (!dbCompleted) {
+          showTour(2000);
         }
       } catch (error) {
         // Silently fall back to localStorage-only behavior
-        if (!localCompleted && isMounted) {
-          timer = setTimeout(() => {
-            if (isMounted) setIsActive(true);
-          }, 2000);
+        if (!localCompleted) {
+          showTour(2000);
         }
       }
     };
@@ -92,6 +102,8 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
   const markTourComplete = async () => {
     // Mark tour as complete in localStorage (fallback)
     localStorage.setItem(storageKey, 'true');
+    // Clean up the onboarding signal flag
+    localStorage.removeItem('show_guided_tour');
     
     // Also mark in Supabase for persistence across devices
     if (user) {

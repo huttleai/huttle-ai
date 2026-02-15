@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, BookOpen, Users, MessageSquare, ExternalLink } from 'lucide-react';
+import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, BookOpen, Users, ExternalLink } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -129,10 +129,60 @@ export default function ContentRemix() {
   };
 
   /**
-   * Parse AI response into per-platform sections
+   * Ensure a value is a renderable string (guards against objects from API)
+   */
+  const ensureString = (val) => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      // If it has a 'content' or 'text' key, use that
+      if (val.content && typeof val.content === 'string') return val.content;
+      if (val.text && typeof val.text === 'string') return val.text;
+      return JSON.stringify(val, null, 2);
+    }
+    return String(val);
+  };
+
+  /**
+   * Split a single platform's content into distinct variations
+   */
+  const splitIntoVariations = (content) => {
+    if (!content) return [ensureString(content)];
+
+    // Try splitting by numbered headers: "1.", "2.", "3." or "Variation 1", etc.
+    const numberedSplit = content.split(/\n\s*(?:\d+[\.\)]\s+|(?:Variation|Option|Version)\s*\d+[:\.\s])/i);
+    if (numberedSplit.length >= 2) {
+      // First item may be empty or a preamble — filter out empties
+      return numberedSplit.map(v => v.trim()).filter(v => v.length > 15).slice(0, 3);
+    }
+
+    // Try splitting by markdown headers: "### " or "## "
+    const headerSplit = content.split(/\n\s*#{2,3}\s+/);
+    if (headerSplit.length >= 2) {
+      return headerSplit.map(v => v.trim()).filter(v => v.length > 15).slice(0, 3);
+    }
+
+    // Try splitting by double newlines (paragraphs)
+    const paragraphs = content.split(/\n\n+/).map(v => v.trim()).filter(v => v.length > 20);
+    if (paragraphs.length >= 2) {
+      return paragraphs.slice(0, 3);
+    }
+
+    // Return as single variation
+    return [content.trim()];
+  };
+
+  /**
+   * Parse AI response into per-platform sections with variations
    */
   const parseRemixOutput = (rawContent) => {
     if (!rawContent) return [];
+
+    // Guard: ensure rawContent is a string (n8n may return objects)
+    if (typeof rawContent !== 'string') {
+      console.warn('[ContentRemix] parseRemixOutput received non-string:', typeof rawContent);
+      rawContent = ensureString(rawContent);
+    }
 
     const sections = [];
     // Match ### Platform or **Platform** headers
@@ -148,9 +198,10 @@ export default function ContentRemix() {
 
         // Only include platforms the user selected
         if (selectedPlatforms.some(p => p.toLowerCase() === platformName.toLowerCase())) {
+          const variations = splitIntoVariations(content.replace(/^[\s\-:]+/, '').trim());
           sections.push({
             platform: platformName,
-            content: content.replace(/^[\s\-:]+/, '').trim(),
+            variations,
           });
         }
       });
@@ -158,9 +209,10 @@ export default function ContentRemix() {
 
     // Fallback: if no platform headers found, show as a single block
     if (sections.length === 0) {
+      const variations = splitIntoVariations(rawContent.trim());
       sections.push({
         platform: 'All Platforms',
-        content: rawContent.trim(),
+        variations,
       });
     }
 
@@ -213,8 +265,9 @@ export default function ContentRemix() {
       });
 
       if (result.success && result.content) {
-        const parsed = parseRemixOutput(result.content);
-        setRemixResults({ raw: result.content, sections: parsed });
+        const safeContent = ensureString(result.content);
+        const parsed = parseRemixOutput(safeContent);
+        setRemixResults({ raw: safeContent, sections: parsed });
         const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
         showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
         setCurrentStep(4);
@@ -226,9 +279,10 @@ export default function ContentRemix() {
       const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
 
       if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
-        const content = grokResult.remixed || grokResult.ideas;
-        const parsed = parseRemixOutput(content);
-        setRemixResults({ raw: content, sections: parsed });
+        const rawContent = grokResult.remixed || grokResult.ideas;
+        const safeContent = ensureString(rawContent);
+        const parsed = parseRemixOutput(safeContent);
+        setRemixResults({ raw: safeContent, sections: parsed });
         const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
         showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
         setCurrentStep(4);
@@ -268,7 +322,8 @@ export default function ContentRemix() {
   };
 
   const handleCopy = (text, id) => {
-    navigator.clipboard.writeText(text);
+    const copyText = typeof text === 'string' ? text : ensureString(text);
+    navigator.clipboard.writeText(copyText);
     setCopiedId(id);
     showToast(`Content copied! ${getToastDisclaimer('general')}`, 'success');
     setTimeout(() => setCopiedId(null), 2000);
@@ -288,6 +343,9 @@ export default function ContentRemix() {
     setRemixError(null);
     setCurrentStep(3);
   };
+
+  // Loading state - show skeleton on step 4 while generating
+  const isRemixing = isLoading && currentStep === 3;
 
   const canProceedToStep2 = remixInput.trim().length > 10;
   const canProceedToStep3 = canProceedToStep2 && remixGoal;
@@ -602,42 +660,74 @@ export default function ContentRemix() {
               </p>
             </div>
 
-            {/* Platform Sections */}
-            {remixResults.sections.map((section, idx) => {
+            {/* Platform Sections with Variations */}
+            {remixResults.sections.map((section, sIdx) => {
               const style = PLATFORM_STYLES[section.platform] || { badge: 'bg-gray-600' };
-              const isCopied = copiedId === `section-${idx}`;
               return (
-                <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  {/* Platform Header */}
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50/50">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold text-white px-3 py-1 rounded-full ${style.badge}`}>
-                        {section.platform}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleCopy(section.content, `section-${idx}`)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        {isCopied ? 'Copied!' : 'Copy'}
-                      </button>
-                      <button
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-huttle-50 text-huttle-primary border border-huttle-200 rounded-lg hover:bg-huttle-100 transition-colors"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        Save to Library
-                      </button>
-                    </div>
+                <div key={sIdx} className="space-y-3">
+                  {/* Platform Label */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className={`text-xs font-bold text-white px-3 py-1 rounded-full ${style.badge}`}>
+                      {section.platform}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {section.variations.length} variation{section.variations.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
 
-                  {/* Content */}
-                  <div className="p-5">
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                      {section.content}
-                    </div>
-                  </div>
+                  {/* Variation Cards */}
+                  {section.variations.map((variation, vIdx) => {
+                    const variationId = `s${sIdx}-v${vIdx}`;
+                    const isCopied = copiedId === variationId;
+                    return (
+                      <div key={vIdx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        {/* Variation Header */}
+                        {section.variations.length > 1 && (
+                          <div className="px-5 py-2.5 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                              Variation {vIdx + 1}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div className="p-5">
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            {typeof variation === 'string' ? variation : ensureString(variation)}
+                          </div>
+                        </div>
+
+                        {/* Action Bar */}
+                        <div className="px-5 py-3 bg-gray-50/30 border-t border-gray-100 flex items-center gap-2">
+                          <button
+                            onClick={() => handleCopy(variation, variationId)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            {isCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            {isCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const varText = typeof variation === 'string' ? variation : ensureString(variation);
+                              sessionStorage.setItem('createPostContent', varText.substring(0, 500));
+                              showToast('Opening post creator...', 'success');
+                              navigate('/dashboard/smart-calendar');
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-huttle-50 text-huttle-primary border border-huttle-200 rounded-lg hover:bg-huttle-100 transition-colors"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            Use in Post
+                          </button>
+                          <button
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

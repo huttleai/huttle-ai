@@ -548,18 +548,65 @@ const generalTrendingTopics = [
  * @param {string} industry - User's industry from BrandContext
  * @returns {Array} Matching trending topics
  */
+/**
+ * Alias map: maps common niche/industry values to trendingTopicsByNiche keys.
+ * Handles both raw enum values and formatted labels.
+ */
+const NICHE_ALIASES = {
+  // Fitness
+  fitness: 'fitness', 'fitness & wellness': 'fitness', 'fitness & sports': 'fitness',
+  health: 'fitness', healthcare: 'fitness', 'healthcare & wellness': 'fitness',
+  wellness: 'fitness', sports: 'fitness',
+  // Beauty
+  beauty: 'beauty', 'beauty & skincare': 'beauty', 'beauty & cosmetics': 'beauty',
+  fashion: 'beauty', 'fashion & beauty': 'beauty', 'fashion & apparel': 'beauty',
+  skincare: 'beauty', cosmetics: 'beauty',
+  // Medical Spa
+  'medical spa': 'medical spa', medspa: 'medical spa', aesthetics: 'medical spa',
+  // Tech
+  tech: 'tech', technology: 'tech', 'tech & gadgets': 'tech',
+  'technology & software': 'tech', software: 'tech', saas: 'tech',
+  // Food
+  food: 'food', 'food & cooking': 'food', 'food & beverage': 'food',
+  cooking: 'food', restaurant: 'food', recipes: 'food',
+  // Business
+  business: 'business', finance: 'business', 'finance & insurance': 'business',
+  'real estate': 'business', real_estate: 'business', retail: 'business',
+  'retail & e-commerce': 'business', ecommerce: 'business',
+  services: 'business', 'professional services': 'business',
+  'personal growth': 'business', entrepreneurship: 'business',
+  marketing: 'business',
+};
+
 export const getMockTrendingTopics = (niche = '', industry = '') => {
-  const key = (niche || industry || '').toLowerCase().trim();
+  // Try niche first, then industry
+  const candidates = [niche, industry].filter(Boolean);
   
-  // Try exact match first, then partial match
-  if (trendingTopicsByNiche[key]) {
-    return trendingTopicsByNiche[key];
-  }
-  
-  // Partial keyword matching
-  for (const [nicheKey, topics] of Object.entries(trendingTopicsByNiche)) {
-    if (key.includes(nicheKey) || nicheKey.includes(key)) {
-      return topics;
+  for (const raw of candidates) {
+    const key = raw.toLowerCase().trim();
+    
+    // 1. Exact match on mock data keys
+    if (trendingTopicsByNiche[key]) {
+      return trendingTopicsByNiche[key];
+    }
+    
+    // 2. Alias map lookup
+    if (NICHE_ALIASES[key]) {
+      return trendingTopicsByNiche[NICHE_ALIASES[key]] || [];
+    }
+    
+    // 3. Partial keyword matching (e.g. "Health & Fitness" contains "fitness")
+    for (const [nicheKey, topics] of Object.entries(trendingTopicsByNiche)) {
+      if (key.includes(nicheKey) || nicheKey.includes(key)) {
+        return topics;
+      }
+    }
+    
+    // 4. Partial alias matching (e.g. "tech & gadgets" contains "tech")
+    for (const [aliasKey, mappedKey] of Object.entries(NICHE_ALIASES)) {
+      if (key.includes(aliasKey) || aliasKey.includes(key)) {
+        return trendingTopicsByNiche[mappedKey] || [];
+      }
     }
   }
   

@@ -21,10 +21,10 @@ export function SubscriptionProvider({ children }) {
   // Check if in demo mode (Stripe not configured)
   const demoMode = isDemoMode();
   
-  // Founders Only: ALL authenticated users are effectively Pro.
+  // Founders Only: ALL authenticated users are Founders Club members.
   // No free/essentials tier enforcement — paid-entry app.
   const getInitialTier = () => {
-    return TIERS.PRO;
+    return TIERS.FOUNDER;
   };
   
   const [userTier, setUserTier] = useState(getInitialTier);
@@ -68,17 +68,17 @@ export function SubscriptionProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [skipAuth]);
 
-  // Founders Only: Force Pro tier for ALL authenticated users.
+  // Founders Only: Force Founders Club tier for ALL authenticated users.
   // This bypasses Stripe tier lookups entirely — every user is a founding member.
   useEffect(() => {
-    setUserTier(TIERS.PRO);
+    setUserTier(TIERS.FOUNDER);
     setLoading(false);
     
     if (userId) {
       refreshStorageUsage();
     }
     
-    console.log('🚀 Founders Only: All users set to Pro tier');
+    console.log('🚀 Founders Only: All users set to Founders Club tier');
   }, [userId]);
 
   const loadUserTier = async () => {
@@ -100,8 +100,8 @@ export function SubscriptionProvider({ children }) {
   }, []);
 
   const getFeatureLimit = useCallback((feature) => {
-    // Founders Only: Unlimited for all features
-    return TIER_LIMITS[TIERS.PRO]?.[feature] || Infinity;
+    // Founders Only: Use Founder tier limits (equivalent to Pro)
+    return TIER_LIMITS[TIERS.FOUNDER]?.[feature] || TIER_LIMITS[TIERS.PRO]?.[feature] || Infinity;
   }, []);
 
   const getAuthoritativeRemainingUsage = useCallback(async (feature) => {

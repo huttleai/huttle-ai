@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, Lightbulb, Users, BookOpen } from 'lucide-react';
+import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, Lightbulb, Users, BookOpen, PenLine } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
 import MarkdownRenderer from './MarkdownRenderer';
 import { scanTrendingTopics } from '../services/perplexityAPI';
@@ -23,18 +23,41 @@ function parseAnalysisSections(analysis) {
 
   const sections = [];
   const sectionMap = {
+    // Overview / Trend Landscape
     overview: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
     summary: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
+    'trend landscape': { title: 'Trend Landscape', icon: 'sparkles', color: 'huttle-primary' },
+    'trend overview': { title: 'Trend Overview', icon: 'sparkles', color: 'huttle-primary' },
+    // Key Insights / Content Gap
     'key insights': { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
     insights: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
     takeaways: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
+    'content gap': { title: 'Content Gap Analysis', icon: 'lightbulb', color: 'amber-500' },
+    'gap analysis': { title: 'Content Gap Analysis', icon: 'lightbulb', color: 'amber-500' },
+    // Content Opportunities / Ideas
     'content opportunities': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
     'content ideas': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
+    'actionable content': { title: 'Content Ideas', icon: 'target', color: 'green-600' },
     opportunities: { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
+    // Competitor Intelligence
+    'competitor': { title: 'Competitor Intelligence', icon: 'users', color: 'blue-600' },
+    'competitor intelligence': { title: 'Competitor Intelligence', icon: 'users', color: 'blue-600' },
+    'competitor moves': { title: 'Competitor Moves', icon: 'users', color: 'blue-600' },
+    // Audience
     'audience angle': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
     audience: { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
     'who cares': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
     'target audience': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
+    // Timing / Recommended Actions
+    'timing': { title: 'Timing Intelligence', icon: 'clock', color: 'orange-500' },
+    'timing intelligence': { title: 'Timing Intelligence', icon: 'clock', color: 'orange-500' },
+    'recommended actions': { title: 'Recommended Actions', icon: 'target', color: 'green-600' },
+    // Viral / Formats
+    'viral content': { title: 'Viral Content Examples', icon: 'flame', color: 'red-500' },
+    'trending formats': { title: 'Trending Formats & Sounds', icon: 'music', color: 'purple-500' },
+    // Confidence
+    'confidence': { title: 'Confidence Assessment', icon: 'shield', color: 'gray-600' },
+    'confidence assessment': { title: 'Confidence Assessment', icon: 'shield', color: 'gray-600' },
   };
 
   // Try splitting by markdown headers (## or ###)
@@ -80,16 +103,37 @@ function parseAnalysisSections(analysis) {
 }
 
 /**
+ * Map section color keys to full Tailwind classes (JIT-safe)
+ */
+const SECTION_COLOR_MAP = {
+  'huttle-primary': 'text-huttle-primary',
+  'amber-500': 'text-amber-500',
+  'green-600': 'text-green-600',
+  'blue-600': 'text-blue-600',
+  'gray-600': 'text-gray-600',
+};
+
+const SECTION_BG_MAP = {
+  'huttle-primary': 'bg-huttle-50',
+  'amber-500': 'bg-amber-50',
+  'green-600': 'bg-green-50',
+  'blue-600': 'bg-blue-50',
+  'gray-600': 'bg-gray-50',
+};
+
+/**
  * Render a section icon by name
  */
-function SectionIcon({ name, className }) {
+function SectionIcon({ name, colorKey }) {
+  const colorClass = SECTION_COLOR_MAP[colorKey] || 'text-gray-600';
+  const cls = `w-4.5 h-4.5 ${colorClass}`;
   switch (name) {
-    case 'lightbulb': return <Lightbulb className={className} />;
-    case 'target': return <Target className={className} />;
-    case 'users': return <Users className={className} />;
-    case 'book': return <BookOpen className={className} />;
+    case 'lightbulb': return <Lightbulb className={cls} />;
+    case 'target': return <Target className={cls} />;
+    case 'users': return <Users className={cls} />;
+    case 'book': return <BookOpen className={cls} />;
     case 'sparkles':
-    default: return <Sparkles className={className} />;
+    default: return <Sparkles className={cls} />;
   }
 }
 
@@ -480,12 +524,18 @@ export default function TrendDiscoveryHub() {
     setTimeout(() => setCopiedIdea(null), 2000);
   };
 
-  const handleSendToRemix = (content) => {
-    // Navigate to Content Remix page
-    // Store content in sessionStorage for the remix page to pick up
-    sessionStorage.setItem('remixContent', content.substring(0, 500));
-    showToast('Opening Content Remix Studio...', 'success');
-    navigate('/dashboard/content-remix');
+  const handleDeepDiveFromTrend = (trendName) => {
+    // Pre-fill the deep dive topic and switch to deep dive mode
+    setDeepDiveTopic(trendName);
+    setActiveMode('deepDive');
+    showToast('Switched to Deep Dive — hit Analyze to explore this trend', 'success');
+  };
+
+  const handleCreatePostFromTrend = (trendName) => {
+    // Navigate to Smart Calendar with trend context for post creation
+    sessionStorage.setItem('createPostContent', trendName.substring(0, 200));
+    showToast('Opening post creator...', 'success');
+    navigate('/dashboard/smart-calendar');
   };
 
   const handleAddToLibrary = async (content, type = 'trend', itemIndex = null) => {
@@ -815,31 +865,34 @@ export default function TrendDiscoveryHub() {
                                   e.stopPropagation();
                                   handleAddToLibrary(trend.name + (trend.description ? ': ' + trend.description : ''), 'trend', `trend-${i}`);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-xl text-sm font-medium transition-all"
-                                title="Add to Library"
+                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 text-gray-600 rounded-lg text-xs font-medium transition-all"
+                                title="Save to Library"
                               >
                                 {savedTrendIndex === `trend-${i}` ? (
-                                  <>
-                                    <Check className="w-4 h-4 text-green-600" />
-                                    <span className="text-green-600">Saved!</span>
-                                  </>
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
                                 ) : (
-                                  <>
-                                    <FolderPlus className="w-4 h-4 text-huttle-primary" />
-                                    <span>Save</span>
-                                  </>
+                                  <FolderPlus className="w-3.5 h-3.5" />
                                 )}
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleSendToRemix(trend.name + (trend.description ? ': ' + trend.description : ''));
+                                  handleDeepDiveFromTrend(trend.name);
                                 }}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-xl text-sm font-semibold transition-all shadow-md hover:shadow-lg hover:shadow-huttle-500/30 hover:scale-105"
+                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-lg text-xs font-medium transition-all hover:bg-huttle-50"
                               >
-                                <Sparkles className="w-4 h-4" />
-                                <span>Use This</span>
-                                <ArrowUpRight className="w-3.5 h-3.5" />
+                                <Target className="w-3.5 h-3.5 text-huttle-primary" />
+                                <span>Deep Dive</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCreatePostFromTrend(trend.name + (trend.description ? ': ' + trend.description : ''));
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:bg-huttle-primary-dark hover:shadow-md"
+                              >
+                                <PenLine className="w-3.5 h-3.5" />
+                                <span>Create Post</span>
                               </button>
                             </div>
                           </div>
@@ -1044,11 +1097,11 @@ export default function TrendDiscoveryHub() {
                           <div className="space-y-3">
                             {analysisSections.map((section, idx) => (
                               <div key={idx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                                <div className="px-5 py-3.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
-                                  <SectionIcon name={section.icon} className={`w-4.5 h-4.5 text-${section.color}`} />
+                                <div className={`px-5 py-3.5 border-b border-gray-100 flex items-center gap-2.5 ${SECTION_BG_MAP[section.color] || 'bg-gray-50'}`}>
+                                  <SectionIcon name={section.icon} colorKey={section.color} />
                                   <h4 className="font-semibold text-gray-900 text-sm">{section.title}</h4>
                                 </div>
-                                <div className="p-5">
+                                <div className="p-5 text-sm text-gray-700 leading-relaxed">
                                   <MarkdownRenderer content={section.content} />
                                 </div>
                               </div>
@@ -1121,11 +1174,11 @@ export default function TrendDiscoveryHub() {
                                 )}
                               </button>
                               <button
-                                onClick={() => handleSendToRemix(idea.content)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-lg text-xs font-medium hover:shadow-md transition-all"
+                                onClick={() => handleCreatePostFromTrend(idea.content)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary text-white rounded-lg text-xs font-medium hover:bg-huttle-primary-dark hover:shadow-md transition-all"
                               >
-                                <Shuffle className="w-3 h-3" />
-                                <span>Remix</span>
+                                <PenLine className="w-3 h-3" />
+                                <span>Use in Post</span>
                               </button>
                             </div>
                           </div>

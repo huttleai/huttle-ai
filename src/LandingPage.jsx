@@ -876,7 +876,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl md:text-5xl font-black text-white">
-                    $<NumberTicker value={199} startValue={0} duration={0.8} triggerOnView={true} />
+                    $<NumberTicker value={199} startValue={199} duration={0.8} triggerOnView={true} />
                   </span>
                   <span className="text-sm md:text-base text-slate-400">/year</span>
                 </div>

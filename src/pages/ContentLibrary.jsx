@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useMemo } from 'react';
-import { FolderOpen, Upload, Search, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus, Play, Sparkles, ArrowUpRight, CloudUpload } from 'lucide-react';
+import { FolderOpen, Upload, Search, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus, Play, Sparkles, ArrowUpRight, CloudUpload, Copy } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -411,21 +411,37 @@ export default function ContentLibrary() {
     );
   };
 
+  const handleCopyToClipboard = async () => {
+    if (!selectedItem || !selectedItem.content) return;
+    try {
+      await navigator.clipboard.writeText(selectedItem.content);
+      addToast('Copied to clipboard!', 'success');
+    } catch (error) {
+      console.error('Copy failed:', error);
+      addToast('Failed to copy to clipboard', 'error');
+    }
+  };
+
+  const handleDownloadText = () => {
+    if (!selectedItem) return;
+    const blob = new Blob([selectedItem.content || ''], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedItem.name}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addToast('Download started!', 'success');
+  };
+
   const handleDownload = async () => {
     if (!selectedItem) return;
 
     try {
       if (selectedItem.type === 'text') {
-        const blob = new Blob([selectedItem.content || ''], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${selectedItem.name}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        addToast('Download started!', 'success');
+        handleDownloadText();
         return;
       }
 
@@ -1538,11 +1554,18 @@ export default function ContentLibrary() {
                           Edit
                         </button>
                         <button
-                          onClick={handleDownload}
+                          onClick={handleCopyToClipboard}
                           className="flex-1 px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
                         >
+                          <Copy className="w-4 h-4" />
+                          Copy to Clipboard
+                        </button>
+                        <button
+                          onClick={handleDownloadText}
+                          className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2 text-gray-600"
+                          title="Download as .txt file"
+                        >
                           <Download className="w-4 h-4" />
-                          Download
                         </button>
                       </>
                     )

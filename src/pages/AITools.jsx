@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Save, Calendar, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Save, Calendar, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, ArrowRight } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -15,7 +15,9 @@ import {
   generateHashtags, 
   generateHooks, 
   generateCTAs,
-  generateVisualIdeas 
+  generateStyledCTAs,
+  generateVisualIdeas,
+  generateVisualBrainstorm 
 } from '../services/grokAPI';
 import { useNavigate } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
@@ -56,10 +58,13 @@ export default function AITools() {
   const [generatedHooks, setGeneratedHooks] = useState([]);
   const [isLoadingHooks, setIsLoadingHooks] = useState(false);
 
-  // CTA Suggester State
-  const [ctaGoal, setCtaGoal] = useState('');
+  // CTA Suggester State (redesigned)
+  const [ctaPromoting, setCtaPromoting] = useState('');
+  const [ctaGoalType, setCtaGoalType] = useState('');
+  const [ctaGoal, setCtaGoal] = useState(''); // kept for legacy compat
   const [ctaPlatform, setCtaPlatform] = useState('instagram');
   const [generatedCTAs, setGeneratedCTAs] = useState([]);
+  const [styledCTAs, setStyledCTAs] = useState(null);
   const [isLoadingCTAs, setIsLoadingCTAs] = useState(false);
 
   // Content Quality Scorer State
@@ -70,8 +75,11 @@ export default function AITools() {
   // Visual Brainstormer State
   const [visualPrompt, setVisualPrompt] = useState('');
   const [visualPlatform, setVisualPlatform] = useState('instagram');
+  const [visualContentFormat, setVisualContentFormat] = useState('Image');
+  const [visualOutputType, setVisualOutputType] = useState('');
   const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
+  const [visualBrainstormResult, setVisualBrainstormResult] = useState(null);
   
   // AI Usage Tracking
   const [aiGensUsed, setAiGensUsed] = useState(0);
@@ -318,23 +326,29 @@ export default function AITools() {
     }
   };
 
-  // CTA Suggester Handler
+  // CTA Suggester Handler (redesigned)
   const handleGenerateCTAs = async () => {
-    if (!ctaGoal.trim()) {
-      showToast('Please enter your goal', 'warning');
+    if (!ctaPromoting.trim()) {
+      showToast('Please describe what you\'re promoting', 'warning');
+      return;
+    }
+    if (!ctaGoalType) {
+      showToast('Please select a goal', 'warning');
       return;
     }
 
-    if (!checkAIUsage()) return;
-
     setIsLoadingCTAs(true);
+    setStyledCTAs(null);
     try {
-      const result = await generateCTAs(ctaGoal, brandData, ctaPlatform);
+      const result = await generateStyledCTAs(
+        { promoting: ctaPromoting, goalType: ctaGoalType },
+        brandData,
+        ctaPlatform
+      );
       const platformData = getPlatform(ctaPlatform);
 
       if (result.success) {
-        const ctas = result.ctas.split(/\d+\./).filter(c => c.trim());
-        setGeneratedCTAs(ctas.length > 0 ? ctas : [result.ctas]);
+        setStyledCTAs(result);
         incrementAIUsage();
         showToast(`CTAs generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
@@ -455,62 +469,42 @@ export default function AITools() {
     }
   };
 
-  // Visual Brainstormer Handler
-  const handleGenerateVisualIdeas = async () => {
+  // Visual Brainstormer Handler (redesigned)
+  const handleGenerateVisualBrainstorm = async () => {
     if (!visualPrompt.trim()) {
-      showToast('Please describe your visual concept', 'warning');
+      showToast('Please describe what your content is about', 'warning');
+      return;
+    }
+    if (!visualOutputType) {
+      showToast('Please choose an output type', 'warning');
       return;
     }
 
-    if (!checkAIUsage()) return;
-
     setIsLoadingVisualIdeas(true);
+    setVisualBrainstormResult(null);
     try {
-      const result = await generateVisualIdeas(visualPrompt, brandData, visualPlatform);
-      const platformData = getPlatform(visualPlatform);
+      const result = await generateVisualBrainstorm(
+        { topic: visualPrompt, platform: visualPlatform, contentFormat: visualContentFormat, outputType: visualOutputType },
+        brandData
+      );
       
-      let ideas = [];
-      if (result.success && result.ideas) {
-        const content = result.ideas;
-        try {
-          const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            ideas = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-          } else {
-            ideas = JSON.parse(content);
-          }
-        } catch {
-          const ideaSections = content.split(/\d+\./).filter(s => s.trim());
-          ideas = ideaSections.slice(0, 4).map((section, i) => ({
-            title: `${visualPrompt} - Concept ${i + 1}`,
-            description: section.trim().substring(0, 200),
-            style: 'Creative visual style',
-            platform: platformData?.name || 'Instagram',
-            type: platformData?.contentFormats?.[i % platformData.contentFormats.length] || 'image'
-          }));
-        }
+      if (result.success) {
+        setVisualBrainstormResult(result);
+        incrementAIUsage();
+        showToast(`Visual brainstorm generated! ${getToastDisclaimer('general')}`, 'success');
+      } else {
+        showToast(result.error || 'Failed to generate visual brainstorm', 'error');
       }
-      
-      if (ideas.length === 0) {
-        const formats = platformData?.contentFormats || ['image', 'video', 'carousel', 'image'];
-        ideas = [
-          { title: `${visualPrompt} - Concept 1`, description: 'A visually striking composition that captures attention', style: 'Cinematic 4K with dramatic lighting', platform: platformData?.name || 'Instagram', type: formats[0] || 'image' },
-          { title: `${visualPrompt} - Concept 2`, description: 'Dynamic movement and energy to engage viewers', style: 'Fast-paced editing with bold colors', platform: platformData?.name || 'Instagram', type: formats[1] || 'video' },
-          { title: `${visualPrompt} - Concept 3`, description: 'Clean, minimalist approach with focus on key elements', style: 'Minimalist flat design', platform: platformData?.name || 'Instagram', type: formats[2] || 'carousel' },
-          { title: `${visualPrompt} - Concept 4`, description: 'Artistic interpretation with creative flair', style: 'Watercolor illustration style', platform: platformData?.name || 'Instagram', type: formats[3] || 'image' }
-        ];
-      }
-
-      setGeneratedVisualIdeas(ideas);
-      incrementAIUsage();
-      showToast(`Visual ideas generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
     } catch (error) {
       console.error('Visual brainstorm error:', error);
-      showToast('Error generating visual ideas', 'error');
+      showToast('Error generating visual brainstorm', 'error');
     } finally {
       setIsLoadingVisualIdeas(false);
     }
   };
+
+  // Legacy handler kept for backward compat
+  const handleGenerateVisualIdeas = handleGenerateVisualBrainstorm;
 
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text);
@@ -583,9 +577,6 @@ export default function AITools() {
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       
       <div className="relative z-10 max-w-full">
-        {/* AI Lock Overlay */}
-        {isAILocked && <AIFeatureLock used={aiGensUsed} limit={aiGensLimit} />}
-        
         {/* Header */}
         <div className="mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
@@ -599,16 +590,6 @@ export default function AITools() {
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">
                 Generate captions, hashtags, hooks, and more
               </p>
-              
-              {/* AI Usage Indicator - Below title on mobile */}
-              {aiGensLimit !== Infinity && (
-                <div className="flex items-center gap-1.5 md:gap-2 mt-2 inline-flex px-2.5 md:px-3 py-1.5 md:py-2 bg-white rounded-lg md:rounded-xl border border-gray-200 shadow-soft">
-                  <div className="w-1.5 h-1.5 rounded-full bg-huttle-cyan animate-pulse" />
-                  <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
-                    <span className="text-gray-900 font-bold">{aiGensUsed}</span>/{aiGensLimit} used
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -987,7 +968,7 @@ export default function AITools() {
           </div>
         )}
 
-        {/* CTA Suggester */}
+        {/* CTA Suggester — Redesigned */}
         {activeTool === 'cta' && (
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
@@ -997,15 +978,50 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">CTA Suggester</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Generate powerful call-to-action phrases</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Generate powerful call-to-action phrases tailored to your goal</p>
             </div>
 
-            <div className="p-4 md:p-5 space-y-3 md:space-y-4">
+            <div className="p-4 md:p-5 space-y-4">
+              {/* What are you promoting? */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Your Goal</label>
-                <input type="text" value={ctaGoal} onChange={(e) => setCtaGoal(e.target.value)} placeholder="e.g., increase engagement, drive sales, get DMs" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">What are you promoting?</label>
+                <input
+                  type="text"
+                  value={ctaPromoting}
+                  onChange={(e) => setCtaPromoting(e.target.value)}
+                  placeholder="e.g., My new online yoga course, Free ebook download, DM me for coaching"
+                  className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm"
+                />
               </div>
-              
+
+              {/* Goal Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Goal</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'engagement', icon: MessageCircle, label: 'Drive Engagement', desc: 'Comments, shares, saves' },
+                    { id: 'sales', icon: DollarSign, label: 'Drive Sales', desc: 'Purchases, sign-ups, downloads' },
+                    { id: 'dms', icon: Mail, label: 'Drive DMs/Leads', desc: 'Direct messages, inquiries' }
+                  ].map((goal) => (
+                    <button
+                      key={goal.id}
+                      onClick={() => setCtaGoalType(goal.id)}
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
+                        ctaGoalType === goal.id
+                          ? 'border-huttle-primary bg-cyan-50 shadow-sm'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <goal.icon className={`w-4 h-4 ${ctaGoalType === goal.id ? 'text-huttle-primary' : 'text-gray-400'}`} />
+                        <span className="font-semibold text-gray-900 text-xs">{goal.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">{goal.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Platform Selector */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
@@ -1018,7 +1034,7 @@ export default function AITools() {
               </div>
 
               {/* Brand Voice Toggle */}
-              <div className="bg-gray-50 rounded-lg border border-gray-200 px-2.5 md:px-3 py-2 md:py-2.5 relative group">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 px-2.5 md:px-3 py-2 md:py-2.5">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <div className="relative flex-shrink-0">
                     <input
@@ -1029,43 +1045,61 @@ export default function AITools() {
                     />
                     <div className="w-8 h-[18px] md:w-9 md:h-5 bg-gray-300 peer-focus:ring-2 peer-focus:ring-huttle-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-[14px] after:w-[14px] md:after:h-4 md:after:w-4 after:transition-all peer-checked:bg-huttle-primary"></div>
                   </div>
-                  <span className="text-xs font-medium text-gray-600 flex-1">
-                    Apply my brand voice
-                  </span>
+                  <span className="text-xs font-medium text-gray-600 flex-1">Apply my brand voice</span>
                 </label>
-                {brandData?.brandVoice && (
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-20">
-                    Brand voice: <span className="font-bold text-huttle-cyan">{brandData.brandVoice}</span>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                      <div className="border-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              <button onClick={handleGenerateCTAs} disabled={isLoadingCTAs} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+              <button
+                onClick={handleGenerateCTAs}
+                disabled={isLoadingCTAs || !ctaPromoting.trim() || !ctaGoalType}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isLoadingCTAs ? <LoadingSpinner size="sm" /> : <Target className="w-4 h-4" />}
-                <span>{isLoadingCTAs ? 'Generating...' : 'Generate CTAs'}</span>
+                <span>{isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
               </button>
 
-              {generatedCTAs.length > 0 && (
+              {/* Results — Styled CTAs */}
+              {styledCTAs?.ctas && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={3} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
-                  <div className="space-y-2">
-                    {generatedCTAs.map((cta, i) => {
-                      const platformData = getPlatform(ctaPlatform);
+                  
+                  {/* Platform tip */}
+                  {styledCTAs.platformTip && (
+                    <div className="text-xs text-huttle-primary bg-huttle-primary/5 border border-huttle-primary/10 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{styledCTAs.platformTip}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-2.5">
+                    {styledCTAs.ctas.map((item, i) => {
+                      const styleColors = {
+                        'Direct': 'bg-blue-50 border-blue-200 text-blue-700',
+                        'Soft': 'bg-green-50 border-green-200 text-green-700',
+                        'Urgency': 'bg-red-50 border-red-200 text-red-700',
+                        'Question': 'bg-purple-50 border-purple-200 text-purple-700',
+                        'Story': 'bg-amber-50 border-amber-200 text-amber-700'
+                      };
                       return (
-                        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                          <div className="flex-1">
-                            <p className="text-sm text-gray-800 font-medium">{cta.trim()}</p>
-                            <p className="text-xs text-gray-500 mt-1">Best for: {platformData?.name || 'All platforms'}</p>
+                        <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${styleColors[item.style] || 'bg-gray-100 border-gray-200 text-gray-600'}`}>
+                              {item.style}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-1.5 ml-2">
-                            <button onClick={() => handleAddToLibrary(cta.trim(), 'cta', { input: ctaGoal, platform: ctaPlatform }, `cta-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
-                              {savedIndex === `cta-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                          <p className="text-sm text-gray-800 font-medium mb-2">{item.cta}</p>
+                          {item.tip && (
+                            <p className="text-xs text-gray-500 mb-3 italic">{item.tip}</p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button onClick={() => handleCopy(item.cta, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
+                              {copiedIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
                             </button>
-                            <button onClick={() => handleCopy(cta.trim(), `cta-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
-                              {copiedIndex === `cta-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                            <button onClick={() => handleAddToLibrary(item.cta, 'cta', { input: ctaPromoting, platform: ctaPlatform, style: item.style }, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
+                              {savedIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save</span></>}
+                            </button>
+                            <button onClick={() => handleScheduleContent(item.cta, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
+                              {scheduledIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><ArrowRight className="w-3 h-3 text-gray-600" /><span>Use in Post</span></>}
                             </button>
                           </div>
                         </div>
@@ -1163,7 +1197,7 @@ export default function AITools() {
           </div>
         )}
 
-        {/* Visual Brainstormer */}
+        {/* Visual Brainstormer — Redesigned */}
         {activeTool === 'visual-brainstorm' && (
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
@@ -1173,14 +1207,19 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">Visual Brainstormer</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Generate creative image and video concepts</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Get AI image prompts or a manual shoot guide for your content</p>
             </div>
 
             <div className="p-4 md:p-5 space-y-4">
+              {/* Step 1: Input */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Describe Your Visual Concept</label>
-                <textarea value={visualPrompt} onChange={(e) => setVisualPrompt(e.target.value)} placeholder="e.g., futuristic coffee shop interior, sunset yoga session on beach" className="w-full p-3 border border-gray-200 rounded-lg resize-none h-28 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
-                <p className="text-xs text-gray-500 mt-2">Be specific! Include mood, setting, colors, or visual style.</p>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">What's your content about?</label>
+                <textarea
+                  value={visualPrompt}
+                  onChange={(e) => setVisualPrompt(e.target.value)}
+                  placeholder="e.g., Sunset yoga on the beach, Coffee shop morning routine, Behind-the-scenes at a photoshoot"
+                  className="w-full p-3 border border-gray-200 rounded-lg resize-none h-20 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm"
+                />
               </div>
 
               {/* Platform Selector */}
@@ -1192,6 +1231,61 @@ export default function AITools() {
                   contentType="visual"
                   showTips={true}
                 />
+              </div>
+
+              {/* Content Format */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Content Format</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Image', 'Carousel', 'Video', 'Story', 'Reel'].map((format) => (
+                    <button
+                      key={format}
+                      onClick={() => setVisualContentFormat(format)}
+                      className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        visualContentFormat === format
+                          ? 'bg-huttle-primary text-white shadow-md'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {format}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 2: Output Type */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Choose Output Type</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setVisualOutputType('ai-prompt')}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      visualOutputType === 'ai-prompt'
+                        ? 'border-huttle-primary bg-cyan-50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Bot className="w-5 h-5 text-huttle-primary" />
+                      <span className="font-semibold text-gray-900 text-sm">AI Image Prompt</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">Get detailed prompts for Midjourney, DALL-E, or any AI image generator</p>
+                  </button>
+                  <button
+                    onClick={() => setVisualOutputType('shoot-guide')}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      visualOutputType === 'shoot-guide'
+                        ? 'border-huttle-primary bg-cyan-50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Camera className="w-5 h-5 text-huttle-primary" />
+                      <span className="font-semibold text-gray-900 text-sm">Manual Shoot Guide</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">Get a creative brief for shooting it yourself: angles, lighting, composition, props, mood</p>
+                  </button>
+                </div>
               </div>
 
               {/* Brand Voice Toggle */}
@@ -1210,47 +1304,139 @@ export default function AITools() {
                     Apply my brand voice
                   </span>
                 </label>
-                {brandData?.brandVoice && (
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-20">
-                    Brand voice: <span className="font-bold text-huttle-cyan">{brandData.brandVoice}</span>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                      <div className="border-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              <button onClick={handleGenerateVisualIdeas} disabled={isLoadingVisualIdeas} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+              <button
+                onClick={handleGenerateVisualBrainstorm}
+                disabled={isLoadingVisualIdeas || !visualPrompt.trim() || !visualOutputType}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isLoadingVisualIdeas ? <LoadingSpinner size="sm" /> : <Lightbulb className="w-4 h-4" />}
-                <span>{isLoadingVisualIdeas ? 'Generating...' : 'Generate Visual Ideas'}</span>
+                <span>{isLoadingVisualIdeas ? 'Generating (10-15 sec)...' : 'Generate'}</span>
               </button>
 
-              {generatedVisualIdeas.length > 0 && (
+              {/* Results — AI Image Prompts */}
+              {visualBrainstormResult?.type === 'ai-prompt' && visualBrainstormResult.prompts && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
-                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded mb-3">These are concept descriptions. Export to Midjourney, DALL-E, or other tools to create!</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {generatedVisualIdeas.map((idea, i) => (
-                      <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                        <div className="flex items-start justify-between mb-2 gap-2">
-                          <h5 className="font-medium text-gray-900 text-xs md:text-sm flex-1 min-w-0">{idea.title}</h5>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => handleAddToLibrary(JSON.stringify(idea, null, 2), 'visual-idea', { input: visualPrompt }, `visual-${i}`)} className="p-1 hover:bg-white rounded flex-shrink-0" title="Add to Library">
-                              {savedIndex === `visual-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
-                            </button>
-                            <button onClick={() => handleCopy(JSON.stringify(idea, null, 2), `visual-${i}`)} className="p-1 hover:bg-white rounded flex-shrink-0">
-                              {copiedIndex === `visual-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                            </button>
-                          </div>
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
+                    <Bot className="w-3.5 h-3.5 text-huttle-primary flex-shrink-0" />
+                    Copy these prompts directly into Midjourney, DALL-E, or any AI image generator.
+                  </p>
+                  <div className="space-y-3">
+                    {visualBrainstormResult.prompts.map((prompt, i) => (
+                      <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-huttle-primary/30 transition-all">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded">Prompt {i + 1}</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="text-xs bg-huttle-primary/10 text-huttle-primary px-2 py-0.5 rounded font-medium">{idea.type}</span>
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{idea.platform}</span>
+                        <p className="text-sm text-gray-800 leading-relaxed mb-3">{prompt}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button onClick={() => handleCopy(prompt, `vb-prompt-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
+                            {copiedIndex === `vb-prompt-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
+                          </button>
+                          <button onClick={() => handleAddToLibrary(prompt, 'visual-prompt', { input: visualPrompt }, `vb-prompt-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
+                            {savedIndex === `vb-prompt-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save</span></>}
+                          </button>
                         </div>
-                        <p className="text-xs md:text-sm text-gray-600 mb-2">{idea.description}</p>
-                        <p className="text-xs text-gray-500 italic">"{idea.style}"</p>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Results — Manual Shoot Guide */}
+              {visualBrainstormResult?.type === 'shoot-guide' && visualBrainstormResult.guide && (
+                <div className="pt-4 border-t border-gray-100">
+                  <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-huttle-primary flex-shrink-0" />
+                    Your creative brief for shooting "{visualPrompt}"
+                  </p>
+                  <div className="space-y-3">
+                    {/* Shot List */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-huttle-primary/10 flex items-center justify-center text-huttle-primary text-xs font-bold">1</span>
+                        Shot List
+                      </h5>
+                      <ul className="space-y-1.5">
+                        {(visualBrainstormResult.guide.shotList || []).map((shot, i) => (
+                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
+                            {shot}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Lighting */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-amber-600 text-xs font-bold">2</span>
+                        Lighting
+                      </h5>
+                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.lighting}</p>
+                    </div>
+
+                    {/* Composition */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-purple-100 flex items-center justify-center text-purple-600 text-xs font-bold">3</span>
+                        Composition
+                      </h5>
+                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.composition}</p>
+                    </div>
+
+                    {/* Props & Styling */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-pink-100 flex items-center justify-center text-pink-600 text-xs font-bold">4</span>
+                        Props & Styling
+                      </h5>
+                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.propsAndStyling}</p>
+                    </div>
+
+                    {/* Mood & Color Palette */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-green-100 flex items-center justify-center text-green-600 text-xs font-bold">5</span>
+                        Mood & Color Palette
+                      </h5>
+                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.moodAndPalette}</p>
+                    </div>
+
+                    {/* Platform Tips */}
+                    <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">6</span>
+                        Platform Tips
+                      </h5>
+                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.platformTips}</p>
+                    </div>
+
+                    {/* Copy / Save actions */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <button
+                        onClick={() => {
+                          const guide = visualBrainstormResult.guide;
+                          const text = `SHOOT GUIDE: ${visualPrompt}\n\nSHOT LIST:\n${(guide.shotList || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nLIGHTING:\n${guide.lighting}\n\nCOMPOSITION:\n${guide.composition}\n\nPROPS & STYLING:\n${guide.propsAndStyling}\n\nMOOD & COLOR PALETTE:\n${guide.moodAndPalette}\n\nPLATFORM TIPS:\n${guide.platformTips}`;
+                          handleCopy(text, 'full-guide');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded-lg text-xs font-medium transition-all"
+                      >
+                        {copiedIndex === 'full-guide' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Copied!</span></> : <><Copy className="w-3.5 h-3.5 text-gray-600" /><span>Copy Full Guide</span></>}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const guide = visualBrainstormResult.guide;
+                          const text = `SHOOT GUIDE: ${visualPrompt}\n\nSHOT LIST:\n${(guide.shotList || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nLIGHTING:\n${guide.lighting}\n\nCOMPOSITION:\n${guide.composition}\n\nPROPS & STYLING:\n${guide.propsAndStyling}\n\nMOOD & COLOR PALETTE:\n${guide.moodAndPalette}\n\nPLATFORM TIPS:\n${guide.platformTips}`;
+                          handleAddToLibrary(text, 'shoot-guide', { input: visualPrompt }, 'full-guide-save');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded-lg text-xs font-medium transition-all"
+                      >
+                        {savedIndex === 'full-guide-save' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save to Library</span></>}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1258,26 +1444,6 @@ export default function AITools() {
           </div>
         )}
       </div>
-
-      {/* Usage Tracker */}
-      {aiGensLimit !== Infinity && (
-        <div className="mt-6 card p-4 md:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs md:text-sm font-semibold text-gray-700">AI Generations Used</span>
-            <span className="text-xs md:text-sm font-bold text-gray-900">{aiGensUsed} / {aiGensLimit}</span>
-          </div>
-          <div className="bg-gray-100 rounded-full h-2 md:h-2.5 overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 rounded-full ${
-                aiGensUsed >= aiGensLimit * 0.9 
-                  ? 'bg-huttle-gradient' 
-                  : 'bg-gradient-to-r from-huttle-primary to-cyan-400'
-              }`} 
-              style={{ width: `${Math.min((aiGensUsed / aiGensLimit) * 100, 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* How We Predict Modal */}
       <HowWePredictModal isOpen={showHowWePredictModal} onClose={() => setShowHowWePredictModal(false)} />
