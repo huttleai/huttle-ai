@@ -61,6 +61,8 @@ const staggerItem = {
   }
 };
 
+const FOUNDING_SPOTS_LEFT = 41;
+
 // ============================================
 // HERO BACKGROUND WITH PARTICLE NETWORK
 // ============================================
@@ -826,8 +828,6 @@ const FAQSectionComponent = () => {
 // ============================================
 
 const PricingSection = ({ onOpenFoundersModal }) => {
-  const foundingSpotsLeft = 41;
-
   return (
     <section id="pricing" className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
       <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/10 blur-[150px] rounded-full pointer-events-none" />
@@ -892,7 +892,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               
               <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
                 <Users size={14} className="text-amber-400 flex-shrink-0" />
-                <span className="text-xs font-bold text-amber-400">Only {foundingSpotsLeft} of 100 spots remaining</span>
+                <span className="text-xs font-bold text-amber-400">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</span>
               </div>
 
               <ul className="space-y-2.5 mb-6">
@@ -1353,7 +1353,7 @@ export default function LandingPage() {
       <div className="fixed top-0 left-0 right-0 z-[55] h-9 bg-[#0F172A] flex items-center justify-center overflow-hidden">
         <div className="announcement-shimmer absolute inset-0 pointer-events-none" />
         <p className="relative z-10 text-xs md:text-sm text-white font-medium tracking-wide">
-          <span className="mr-1">🔥</span> Only <span className="font-bold text-amber-400">{foundingSpotsLeft}</span> of 100 Founding Member spots remaining — <span className="font-bold text-cyan-400">Lock in $199/yr forever</span>
+          <span className="mr-1">🔥</span> Only <span className="font-bold text-amber-400">{FOUNDING_SPOTS_LEFT}</span> of 100 Founding Member spots remaining — <span className="font-bold text-cyan-400">Lock in $199/yr forever</span>
         </p>
       </div>
 
