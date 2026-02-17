@@ -78,6 +78,7 @@ async function setupRoutes() {
   // Use relative paths from project root
   // n8n-generator route
   app.all('/api/ai/n8n-generator', await loadHandler('api/ai/n8n-generator.js'));
+  app.all('/api/ai/trend-deep-dive', await loadHandler('api/ai/trend-deep-dive.js'));
   
   // Other AI routes
   app.all('/api/ai/grok', await loadHandler('api/ai/grok.js'));

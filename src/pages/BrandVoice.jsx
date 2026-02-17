@@ -2,6 +2,7 @@ import { useContext, useState, useEffect, useMemo } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 import { Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile, PenTool, Heart, Search, Info, Eye, TrendingUp, Calendar, MessageSquare, Lightbulb, Clock, AlertCircle, HelpCircle, Rocket, Target, Zap, Users } from 'lucide-react';
+import { normalizeEnumValue } from '../utils/formatEnumLabel';
 // AIVoicePreview removed per requirements
 
 // Profile types
@@ -88,27 +89,43 @@ const EMOTIONAL_TRIGGERS = [
   { value: 'understood', label: 'Understood', icon: Heart }
 ];
 
+function normalizeSingleSelect(value, options) {
+  if (!value) return '';
+  const normalized = normalizeEnumValue(value);
+  return options.some((option) => option.value === normalized) ? normalized : '';
+}
+
+function normalizeMultiSelect(values, options) {
+  if (!Array.isArray(values)) return [];
+  const validValues = new Set(options.map((option) => option.value));
+  return values
+    .map((value) => normalizeEnumValue(value))
+    .filter((value) => validValues.has(value));
+}
+
 export default function BrandVoice() {
   const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
   const { addToast } = useToast();
-  
-  const [formData, setFormData] = useState({
-    firstName: brandData?.firstName || '',
-    profileType: brandData?.profileType || 'brand',
-    creatorArchetype: brandData?.creatorArchetype || '',
-    brandName: brandData?.brandName || '',
-    socialHandle: brandData?.socialHandle || '',
-    niche: brandData?.niche || '',
-    industry: brandData?.industry || '',
-    targetAudience: brandData?.targetAudience || '',
-    brandVoice: brandData?.brandVoice || '',
-    platforms: brandData?.platforms || [],
-    goals: brandData?.goals || [],
+
+  const toFormData = (source = {}) => ({
+    firstName: source.firstName || '',
+    profileType: source.profileType || 'brand',
+    creatorArchetype: normalizeSingleSelect(source.creatorArchetype, CREATOR_ARCHETYPES),
+    brandName: source.brandName || '',
+    socialHandle: source.socialHandle || '',
+    niche: source.niche || '',
+    industry: source.industry || '',
+    targetAudience: source.targetAudience || '',
+    brandVoice: source.brandVoice || '',
+    platforms: source.platforms || [],
+    goals: source.goals || [],
     // Viral content strategy fields
-    contentStrengths: brandData?.contentStrengths || [],
-    biggestChallenge: brandData?.biggestChallenge || '',
-    emotionalTriggers: brandData?.emotionalTriggers || []
+    contentStrengths: normalizeMultiSelect(source.contentStrengths, CONTENT_STRENGTHS),
+    biggestChallenge: normalizeSingleSelect(source.biggestChallenge, CONTENT_CHALLENGES),
+    emotionalTriggers: normalizeMultiSelect(source.emotionalTriggers, EMOTIONAL_TRIGGERS)
   });
+
+  const [formData, setFormData] = useState(toFormData(brandData));
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -116,45 +133,13 @@ export default function BrandVoice() {
   // Sync form data when brandData changes (e.g., after loading)
   useEffect(() => {
     if (brandData) {
-      setFormData({
-        firstName: brandData.firstName || '',
-        profileType: brandData.profileType || 'brand',
-        creatorArchetype: brandData.creatorArchetype || '',
-        brandName: brandData.brandName || '',
-        socialHandle: brandData.socialHandle || '',
-        niche: brandData.niche || '',
-        industry: brandData.industry || '',
-        targetAudience: brandData.targetAudience || '',
-        brandVoice: brandData.brandVoice || '',
-        platforms: brandData.platforms || [],
-        goals: brandData.goals || [],
-        // Viral content strategy fields
-        contentStrengths: brandData.contentStrengths || [],
-        biggestChallenge: brandData.biggestChallenge || '',
-        emotionalTriggers: brandData.emotionalTriggers || []
-      });
+      setFormData(toFormData(brandData));
     }
   }, [brandData]);
 
   // Track unsaved changes
   useEffect(() => {
-    const hasChanges = JSON.stringify(formData) !== JSON.stringify({
-      firstName: brandData?.firstName || '',
-      profileType: brandData?.profileType || 'brand',
-      creatorArchetype: brandData?.creatorArchetype || '',
-      brandName: brandData?.brandName || '',
-      socialHandle: brandData?.socialHandle || '',
-      niche: brandData?.niche || '',
-      industry: brandData?.industry || '',
-      targetAudience: brandData?.targetAudience || '',
-      brandVoice: brandData?.brandVoice || '',
-      platforms: brandData?.platforms || [],
-      goals: brandData?.goals || [],
-      // Viral content strategy fields
-      contentStrengths: brandData?.contentStrengths || [],
-      biggestChallenge: brandData?.biggestChallenge || '',
-      emotionalTriggers: brandData?.emotionalTriggers || []
-    });
+    const hasChanges = JSON.stringify(formData) !== JSON.stringify(toFormData(brandData));
     setHasUnsavedChanges(hasChanges);
   }, [formData, brandData]);
 

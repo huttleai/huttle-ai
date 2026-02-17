@@ -5,7 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import { BrandContext } from '../context/BrandContext';
 import { generate12HourTimeOptions } from '../utils/timeFormatter';
-import { generateCaption, generateHashtags, generateVisualIdeas, generateCaptionVariations } from '../services/grokAPI';
+import { generateVisualIdeas, generateCaptionVariations } from '../services/grokAPI';
 // Feature-flagged: Voice to Post and Engagement Predictor removed from UI (Issues 8 & 9)
 // import EngagementPredictor from './EngagementPredictor';
 // import VoiceInput from './VoiceInput';
@@ -21,14 +21,13 @@ const isPastDateTime = (dateStr, timeStr) => {
   return scheduledDateTime < now;
 };
 
-export default function CreatePostModal({ isOpen, onClose, preselectedDate = null, postToEdit = null }) {
+export default function CreatePostModal({ isOpen, onClose, preselectedDate = null, postToEdit = null, draftContent = null }) {
   const { schedulePost, updateScheduledPost } = useContent();
   const { showToast } = useToast();
   const { addNotification } = useNotifications();
   const { brandData } = useContext(BrandContext);
   const { platforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const navigate = useNavigate();
-  const [useAI, setUseAI] = useState(false);
   const [postData, setPostData] = useState({
     title: '',
     platforms: [],
@@ -81,14 +80,15 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         media: postToEdit.media || sourcePost.media || []
       });
     } else if (!postToEdit && isOpen) {
+      const normalizedDraftPlatforms = Array.isArray(draftContent?.platforms) ? draftContent.platforms : [];
       // Reset form when creating new post
       setPostData({
-        title: '',
-        platforms: [],
+        title: draftContent?.title || '',
+        platforms: normalizedDraftPlatforms,
         contentType: '',
         scheduledDate: preselectedDate || '',
         scheduledTime: '',
-        caption: '',
+        caption: draftContent?.caption || '',
         hashtags: '',
         keywords: '',
         imagePrompt: '',
@@ -96,14 +96,15 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         media: []
       });
     }
-  }, [postToEdit, isOpen, preselectedDate]);
-  const [isGenerating, setIsGenerating] = useState(false);
+  }, [postToEdit, isOpen, preselectedDate, draftContent]);
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
   const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
   const [captionVariations, setCaptionVariations] = useState([]);
   const [showVariations, setShowVariations] = useState(false);
   const [pastDateError, setPastDateError] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [smartSuggestions, setSmartSuggestions] = useState([]);
 
   // Check for past date whenever date or time changes
   useEffect(() => {
@@ -113,6 +114,12 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       setPastDateError(false);
     }
   }, [postData.scheduledDate, postData.scheduledTime]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1);
+    }
+  }, [isOpen, postToEdit]);
 
   if (!isOpen) return null;
 
@@ -125,158 +132,28 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     { name: 'Carousel', icon: Image }
   ];
 
-  // Platform-aware optimal posting times
-  const PLATFORM_OPTIMAL = {
-    Instagram: [
-      { time: '11:00', label: 'Best Time', optimal: true },
-      { time: '13:00', label: 'Optimized', optimal: true },
-      { time: '19:00', label: 'Best Time', optimal: true },
-    ],
-    TikTok: [
-      { time: '19:00', label: 'Best Time', optimal: true },
-      { time: '21:00', label: 'Optimized', optimal: true },
-      { time: '12:00', label: 'Lunch Break', optimal: true },
-    ],
-    X: [
-      { time: '09:00', label: 'Best Time', optimal: true },
-      { time: '12:00', label: 'Optimized', optimal: true },
-      { time: '17:00', label: 'End of Work', optimal: true },
-    ],
-    Facebook: [
-      { time: '13:00', label: 'Best Time', optimal: true },
-      { time: '11:00', label: 'Optimized', optimal: true },
-      { time: '15:00', label: 'Mid-Afternoon', optimal: true },
-    ],
-    YouTube: [
-      { time: '14:00', label: 'Best Time', optimal: true },
-      { time: '16:00', label: 'Optimized', optimal: true },
-      { time: '12:00', label: 'Noon', optimal: true },
-    ],
-  };
+  const selectedSmartSuggestion = smartSuggestions.find(
+    (suggestion) => suggestion.time === postData.scheduledTime && suggestion.date === postData.scheduledDate
+  );
 
-  const selectedPlatform = postData.platforms?.[0] || '';
-  const optimalTimes = PLATFORM_OPTIMAL[selectedPlatform] || [
-    { time: '09:00', label: 'Best Time', optimal: true },
-    { time: '12:00', label: 'Optimized', optimal: true },
-    { time: '18:00', label: 'Best Time', optimal: true },
-    { time: '20:00', label: 'Optimized', optimal: true }
-  ];
-  
   const timeOptions = generate12HourTimeOptions();
+  const smartSuggestionsForDate = postData.scheduledDate
+    ? smartSuggestions.filter((suggestion) => suggestion.date === postData.scheduledDate)
+    : [];
+
+  const handleScheduledDateChange = (dateValue) => {
+    setPostData((prev) => ({
+      ...prev,
+      scheduledDate: dateValue,
+      scheduledTime: prev.scheduledDate === dateValue ? prev.scheduledTime : '',
+    }));
+  };
 
   const handlePlatformToggle = (platform) => {
     setPostData(prev => ({
       ...prev,
       platforms: [platform] // Only allow one platform selection
     }));
-  };
-
-  const handleAIGenerate = async () => {
-    if (!postData.title) {
-      showToast('Please enter a post title first', 'error');
-      return;
-    }
-    
-    setIsGenerating(true);
-    
-    try {
-      // Generate caption with brand context
-      const platform = postData.platforms.length > 0 ? postData.platforms[0] : 'instagram';
-      const niche = brandData?.niche || '';
-      const audience = brandData?.targetAudience || '';
-      
-      console.log('Generating AI content for:', postData.title, 'platform:', platform, 'niche:', niche);
-      
-      // Run all three API calls in parallel for speed
-      const [captionResult, hashtagResult, visualResult] = await Promise.allSettled([
-        generateCaption({ topic: postData.title, platform, length: 'medium' }, brandData),
-        generateHashtags(postData.title, brandData, platform),
-        generateVisualIdeas(postData.title, brandData, platform)
-      ]);
-
-      // Parse visual ideas for image and video prompts
-      let imagePrompt = '';
-      let videoPrompt = '';
-      
-      if (visualResult.status === 'fulfilled' && visualResult.value?.success && visualResult.value?.ideas) {
-        const ideas = visualResult.value.ideas;
-        const ideaSections = ideas.split(/\d+\./);
-        if (ideaSections.length > 1) {
-          imagePrompt = ideaSections[1]?.trim().substring(0, 500) || '';
-        }
-        if (ideaSections.length > 2) {
-          videoPrompt = ideaSections[2]?.trim().substring(0, 500) || '';
-        }
-      }
-
-      // Parse caption - handle numbered list format
-      let captionText = '';
-      const captionData = captionResult.status === 'fulfilled' ? captionResult.value : null;
-      if (captionData?.success && captionData?.caption) {
-        // If it's a numbered list, take the first caption
-        const captions = captionData.caption.split(/\d+\./).filter(c => c.trim());
-        captionText = captions.length > 0 ? captions[0].trim() : captionData.caption.trim();
-        // Remove leading/trailing quotes or asterisks from parsed caption
-        captionText = captionText.replace(/^["*]+|["*]+$/g, '').trim();
-      } else {
-        console.warn('Caption generation failed or returned empty:', captionData);
-      }
-
-      // Parse hashtags - extract just the hashtag tags if in detailed format
-      let hashtagsText = '';
-      let keywordsFromHashtags = '';
-      const hashtagData = hashtagResult.status === 'fulfilled' ? hashtagResult.value : null;
-      if (hashtagData?.success && hashtagData?.hashtags) {
-        if (hashtagData.hashtagData) {
-          hashtagsText = hashtagData.hashtagData.map(h => h.tag).join(' ');
-          // Derive keywords from hashtag data (strip # prefix)
-          keywordsFromHashtags = hashtagData.hashtagData
-            .slice(0, 5)
-            .map(h => h.tag.replace(/^#/, ''))
-            .join(', ');
-        } else {
-          const hashtagMatches = hashtagData.hashtags.match(/#\w+/g);
-          hashtagsText = hashtagMatches ? hashtagMatches.slice(0, 10).join(' ') : hashtagData.hashtags.split('\n')[0];
-          // Derive keywords from extracted hashtags
-          if (hashtagMatches) {
-            keywordsFromHashtags = hashtagMatches.slice(0, 5).map(h => h.replace(/^#/, '')).join(', ');
-          }
-        }
-      }
-
-      // Build smart keywords from hashtags + niche context (not just splitting the title)
-      const keywords = keywordsFromHashtags
-        || [postData.title, niche, audience].filter(Boolean).join(', ').substring(0, 100);
-
-      // Update post data with AI-generated content
-      setPostData(prev => ({
-        ...prev,
-        caption: captionText || prev.caption,
-        hashtags: hashtagsText || prev.hashtags,
-        keywords,
-        imagePrompt: imagePrompt || `Create a vibrant, eye-catching image for a ${niche || 'social media'} post about "${prev.title}". Modern design, professional quality, engaging composition.`,
-        videoPrompt: videoPrompt || `Short-form video about "${prev.title}" for ${platform}. 15-30 seconds, dynamic transitions, upbeat energy.`
-      }));
-
-      showToast('AI content generated with your brand voice!', 'success');
-    } catch (error) {
-      console.error('AI generation error:', error);
-      
-      const niche = brandData?.niche || 'your niche';
-      // Brand-aware fallback instead of hardcoded fitness content
-      setPostData(prev => ({
-        ...prev,
-        caption: prev.caption || `Here's what you need to know about ${postData.title}.\n\nWe put this together to help you get real results. Save this for later and share it with someone who needs it.\n\nWhat questions do you have? Drop them below! 👇`,
-        hashtags: prev.hashtags || `#${postData.title.replace(/\s+/g, '').toLowerCase()} #${niche.replace(/\s+/g, '').toLowerCase()} #trending #viral #contentcreator`,
-        keywords: `${postData.title}, ${niche}`,
-        imagePrompt: prev.imagePrompt || `Create an engaging image for a ${niche} post about "${prev.title}". Clean, professional, scroll-stopping.`,
-        videoPrompt: prev.videoPrompt || `Short-form video about "${prev.title}". 15-30 seconds, dynamic transitions, compelling hook.`
-      }));
-      
-      showToast('Generated content with fallback data. AI service may be temporarily unavailable.', 'info');
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   const handleSuggestImagePrompt = async () => {
@@ -444,6 +321,30 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
     }));
   };
 
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!postData.title.trim()) {
+        showToast('Add a post title to continue', 'error');
+        return;
+      }
+      if (postData.platforms.length === 0) {
+        showToast('Choose a platform to continue', 'error');
+        return;
+      }
+    }
+
+    if (currentStep === 2 && !postData.caption.trim()) {
+      showToast('Add a caption before scheduling', 'warning');
+      return;
+    }
+
+    setCurrentStep((prev) => Math.min(prev + 1, 3));
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
   const handleCreatePost = async () => {
     // Validate required fields
     if (!postData.title) {
@@ -519,8 +420,6 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       videoPrompt: '',
       media: []
     });
-    setUseAI(false);
-    setIsGenerating(false);
     setIsGeneratingImagePrompt(false);
     setIsGeneratingVideoPrompt(false);
     onClose();
@@ -538,20 +437,56 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         </div>
 
         <div className="p-6 space-y-6">
-          {/* AI Assist - Single Action Button */}
-          <div className="bg-gradient-to-r from-huttle-primary/5 to-huttle-primary-light/5 rounded-xl border border-huttle-primary/15 p-3">
-            <button
-              onClick={handleAIGenerate}
-              disabled={isGenerating || !postData.title}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              <Sparkles className="w-4 h-4" />
-              {isGenerating ? 'Generating with Brand Voice...' : 'Auto-Fill All with AI'}
-            </button>
-            <p className="text-xs text-gray-500 text-center mt-2">Enter a title first, then let AI fill caption, hashtags, and media concepts using your brand voice</p>
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            {[
+              { id: 1, label: 'Goal & Format' },
+              { id: 2, label: 'Caption & Media' },
+              { id: 3, label: 'Schedule' },
+            ].map((step, index) => (
+              <div key={step.id} className="flex items-center flex-1">
+                <button
+                  type="button"
+                  onClick={() => index < currentStep - 1 && setCurrentStep(step.id)}
+                  className={`flex items-center gap-2 text-sm font-medium ${
+                    currentStep >= step.id ? 'text-gray-900' : 'text-gray-400'
+                  }`}
+                >
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                    currentStep >= step.id ? 'bg-huttle-primary text-white' : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {step.id}
+                  </span>
+                  <span className="hidden sm:inline">{step.label}</span>
+                </button>
+                {index < 2 && (
+                  <div className={`mx-2 h-0.5 flex-1 ${currentStep > step.id ? 'bg-huttle-primary' : 'bg-gray-200'}`} />
+                )}
+              </div>
+            ))}
           </div>
 
+          {/* AI Power Tools Hint */}
+          {currentStep === 2 && (
+            <div className="rounded-xl border border-huttle-primary/20 bg-huttle-primary/5 p-3 text-center">
+              <p className="text-xs text-gray-600">
+                Need a stronger draft?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate('/dashboard/ai-tools');
+                  }}
+                  className="font-semibold text-huttle-primary hover:text-huttle-primary-dark"
+                >
+                  Try our AI Power Tools
+                </button>
+                .
+              </p>
+            </div>
+          )}
+
           {/* SECTION 1: Basic Info */}
+          {currentStep === 1 && (
           <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
@@ -632,32 +567,10 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               </div>
             </div>
           </div>
-
-          {/* Smart Time Suggestions */}
-          {postData.platforms.length > 0 && (
-            <SmartTimeSuggestion
-              platforms={postData.platforms}
-              contentType={postData.contentType}
-              currentTime={postData.scheduledTime}
-              currentDate={postData.scheduledDate}
-              onSelectTime={(time) => {
-                if (time) {
-                  setPostData(prev => ({ ...prev, scheduledTime: time }));
-                }
-              }}
-              onSelectDate={(date) => {
-                if (date) {
-                  setPostData(prev => ({ ...prev, scheduledDate: date }));
-                  // Scroll to scheduling fields so user sees the change
-                  setTimeout(() => {
-                    document.querySelector('[data-section="scheduling"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 100);
-                }
-              }}
-            />
           )}
 
           {/* Scheduling */}
+          {currentStep === 3 && (
           <div className="space-y-3" data-section="scheduling">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center">
@@ -675,18 +588,37 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 <input
                   type="date"
                   value={postData.scheduledDate}
-                  onChange={(e) => setPostData({ ...postData, scheduledDate: e.target.value })}
+                  onChange={(e) => handleScheduledDateChange(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
                   className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none ${
                     pastDateError ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   }`}
                 />
               </div>
+            </div>
+
+            {/* Smart Time Suggestions (shown only after date is selected) */}
+            {postData.platforms.length > 0 && (
+              <SmartTimeSuggestion
+                platforms={postData.platforms}
+                contentType={postData.contentType}
+                currentTime={postData.scheduledTime}
+                currentDate={postData.scheduledDate}
+                onSelectTime={(time) => {
+                  if (time) {
+                    setPostData((prev) => ({ ...prev, scheduledTime: time }));
+                  }
+                }}
+                onSuggestionsChange={setSmartSuggestions}
+              />
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Clock className="w-4 h-4 inline mr-2" />
                   Scheduled Time
-                  {postData.scheduledTime && postData.scheduledTime.trim() !== '' && !pastDateError && (
+                  {selectedSmartSuggestion && !pastDateError && (
                     <span className="ml-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded animate-fadeIn">
                       ✓ Auto-filled from suggestion
                     </span>
@@ -695,16 +627,17 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 <select
                   value={postData.scheduledTime}
                   onChange={(e) => setPostData({ ...postData, scheduledTime: e.target.value })}
+                  disabled={!postData.scheduledDate}
                   className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none ${
                     pastDateError ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                  }`}
+                  } ${!postData.scheduledDate ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                 >
-                  <option value="">Select time...</option>
-                  {optimalTimes.map((time) => {
-                    const option = timeOptions.find(t => t.value === time.time);
+                  <option value="">{postData.scheduledDate ? 'Select time...' : 'Select a date first'}</option>
+                  {smartSuggestionsForDate.map((suggestion) => {
+                    const option = timeOptions.find(t => t.value === suggestion.time);
                     return (
-                      <option key={time.time} value={time.time}>
-                        {option?.label} {time.optimal && `⭐ ${time.label}`}
+                      <option key={suggestion.id} value={suggestion.time}>
+                        {option?.label || suggestion.time} ⭐ {suggestion.label} ({suggestion.dayName})
                       </option>
                     );
                   })}
@@ -715,8 +648,22 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                     </option>
                   ))}
                 </select>
+                {!postData.scheduledDate && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Pick a date to unlock smart suggestions and time selection.
+                  </p>
+                )}
+                {postData.scheduledDate && smartSuggestionsForDate.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    No smart recommendations for this date yet. You can still choose any custom time.
+                  </p>
+                )}
               </div>
             </div>
+
+            <p className="text-xs text-gray-500">
+              Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+            </p>
             
             {/* Past Date Warning */}
             {pastDateError && (
@@ -728,8 +675,10 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               </div>
             )}
           </div>
+          )}
 
           {/* Media Upload */}
+          {currentStep === 2 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               <Upload className="w-4 h-4 inline mr-2" />
@@ -784,8 +733,10 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               </div>
             )}
           </div>
+          )}
 
           {/* SECTION 2: Content & Keywords */}
+          {currentStep === 2 && (
           <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
@@ -884,11 +835,13 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
               />
             </div>
-          </div> {/* End Content & Keywords section */}
+          </div>
+          )}
 
           {/* Engagement Predictor removed (Issue 9) — feature-flagged for future re-enable */}
 
           {/* SECTION 3: Media Concepts */}
+          {currentStep === 2 && (
           <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
@@ -947,6 +900,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
               />
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -957,13 +911,29 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           >
             Cancel
           </button>
-          <button
-            onClick={handleCreatePost}
-            disabled={isGenerating}
-            className="px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {postToEdit ? 'Update Post' : 'Schedule Post'}
-          </button>
+          {currentStep > 1 && (
+            <button
+              onClick={handlePreviousStep}
+              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Back
+            </button>
+          )}
+          {currentStep < 3 ? (
+            <button
+              onClick={handleNextStep}
+              className="px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              onClick={handleCreatePost}
+              className="px-6 py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors font-medium shadow-md"
+            >
+              {postToEdit ? 'Update Post' : 'Schedule Post'}
+            </button>
+          )}
         </div>
       </div>
     </div>

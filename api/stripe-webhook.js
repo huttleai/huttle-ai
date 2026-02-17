@@ -15,11 +15,12 @@
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { logError, logInfo, logWarn } from './_utils/observability.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Log warnings for missing config (helps with debugging in Vercel logs)
@@ -37,8 +38,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const endpointSecret = STRIPE_WEBHOOK_SECRET;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
-const processedEventIds = new Set();
-const MAX_PROCESSED_EVENTS = 500;
 
 // Mailchimp configuration (optional)
 const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
@@ -62,20 +61,18 @@ async function getRawBody(req) {
 }
 
 // Map Stripe price IDs to plan tiers
-// Note: Server-side code should use non-VITE_ prefixed env vars
-// We check both for backwards compatibility during migration
 function getPlanFromPriceId(priceId) {
   if (!priceId) return 'free';
   
   const priceMap = {
     // Essentials tier
-    [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
-    [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
+    [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
+    [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
     // Pro tier
-    [process.env.STRIPE_PRICE_PRO_MONTHLY || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]: 'pro',
-    [process.env.STRIPE_PRICE_PRO_ANNUAL || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
+    [process.env.STRIPE_PRICE_PRO_MONTHLY]: 'pro',
+    [process.env.STRIPE_PRICE_PRO_ANNUAL]: 'pro',
     // Founder tier
-    [process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
+    [process.env.STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
   };
   
   // Remove undefined keys that might have been added
@@ -137,19 +134,46 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
   }
 }
 
-function hasProcessedEvent(eventId) {
-  return !!eventId && processedEventIds.has(eventId);
+async function hasProcessedEvent(eventId) {
+  if (!eventId || !supabase) return false;
+
+  const { data, error } = await supabase
+    .from('stripe_webhook_events')
+    .select('event_id')
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    logWarn('stripe_webhook.idempotency_check_failed', { eventId, error: error.message });
+    return false;
+  }
+
+  return Boolean(data?.event_id);
 }
 
-function markEventProcessed(eventId) {
-  if (!eventId) return;
-  processedEventIds.add(eventId);
-  if (processedEventIds.size > MAX_PROCESSED_EVENTS) {
-    const oldestEventId = processedEventIds.values().next().value;
-    if (oldestEventId) {
-      processedEventIds.delete(oldestEventId);
-    }
+async function markEventProcessed(eventId, eventType) {
+  if (!eventId || !supabase) return false;
+
+  const { error } = await supabase
+    .from('stripe_webhook_events')
+    .upsert(
+      {
+        event_id: eventId,
+        event_type: eventType || 'unknown',
+        processed_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'event_id',
+        ignoreDuplicates: true,
+      }
+    );
+
+  if (error) {
+    logError('stripe_webhook.idempotency_mark_failed', { eventId, error: error.message });
+    return false;
   }
+
+  return true;
 }
 
 export default async function handler(req, res) {
@@ -184,10 +208,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Webhook Error: ${err.message}` });
     }
 
-    console.log('[stripe-webhook] Received event:', event.type, event.id);
+    logInfo('stripe_webhook.received', { eventType: event.type, eventId: event.id });
 
-    if (hasProcessedEvent(event.id)) {
-      console.log('[stripe-webhook] Duplicate event ignored:', event.id);
+    if (await hasProcessedEvent(event.id)) {
+      logInfo('stripe_webhook.duplicate_ignored', { eventId: event.id });
       return res.status(200).json({ received: true, duplicate: true });
     }
 
@@ -361,7 +385,11 @@ export default async function handler(req, res) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
-    markEventProcessed(event.id);
+    const marked = await markEventProcessed(event.id, event.type);
+    if (!marked) {
+      return res.status(500).json({ error: 'Failed to persist webhook idempotency state.' });
+    }
+
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('Webhook Error:', error);

@@ -11,6 +11,11 @@
       "schedule": "0 0 */14 * *"
     }
   ],
+  "functions": {
+    "api/ai/trend-deep-dive.js": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

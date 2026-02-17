@@ -274,7 +274,7 @@ export default function FoundersPage() {
           >
             <Users className="w-4 h-4 text-[#01bad2]" />
             <span className="text-sm font-medium text-slate-600">
-              <span className="text-[#01bad2] font-bold">47 spots</span> remaining
+              <span className="text-[#01bad2] font-bold">41 spots</span> remaining
             </span>
           </motion.div>
         </div>

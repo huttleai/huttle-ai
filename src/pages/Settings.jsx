@@ -1,10 +1,11 @@
 import { useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink, Smartphone, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Tooltip from '../components/Tooltip';
 import { AuthContext } from '../context/AuthContext';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
+import { createPortalSession } from '../services/stripeAPI';
 
 /**
  * Settings Page
@@ -16,6 +17,7 @@ import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 export default function Settings() {
   const { addToast } = useToast();
   const { user } = useContext(AuthContext);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const { 
     preferredPlatforms, 
     allPlatforms, 
@@ -33,6 +35,30 @@ export default function Settings() {
     // Save settings to localStorage (platforms are auto-saved via the hook)
     localStorage.setItem('userSettings', JSON.stringify(settings));
     addToast('Settings saved successfully!', 'success');
+  };
+
+  const handleManageBilling = async () => {
+    if (!user?.id) {
+      addToast('Please sign in to manage billing.', 'warning');
+      return;
+    }
+
+    setIsOpeningPortal(true);
+    try {
+      const result = await createPortalSession();
+      if (result?.demo) {
+        addToast('Billing portal is temporarily unavailable. Please try again shortly.', 'info');
+        return;
+      }
+      if (!result?.success) {
+        addToast(result?.error || 'Could not open billing portal. Please try again.', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to open billing portal:', error);
+      addToast('Could not open billing portal. Please try again.', 'error');
+    } finally {
+      setIsOpeningPortal(false);
+    }
   };
 
   // Transform allPlatforms to the format expected by the UI
@@ -99,6 +125,49 @@ export default function Settings() {
         </Link>
       </div>
 
+      {/* Billing & Subscription */}
+      <div className="card p-5 md:p-6 mb-6 md:mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard className="w-5 h-5 text-huttle-primary" />
+              <h3 className="text-lg font-semibold text-gray-900">Billing & Subscription</h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              Update payment methods, view invoices, or cancel anytime through the Stripe billing portal.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleManageBilling}
+              disabled={isOpeningPortal}
+              className="btn-primary"
+            >
+              {isOpeningPortal ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Opening...
+                </>
+              ) : (
+                <>
+                  Manage Billing
+                  <ExternalLink className="w-4 h-4" />
+                </>
+              )}
+            </button>
+            <Link
+              to="/dashboard/subscription"
+              className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              View Plans
+            </Link>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-gray-500">
+          No support ticket is needed for cancellation. Billing is fully self-serve.
+        </p>
+      </div>
+
       {/* Preferred Platforms */}
       <div className="card p-5 md:p-6 mb-6 md:mb-8">
         <div className="flex items-center justify-between mb-6">
@@ -160,7 +229,7 @@ export default function Settings() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-1">How Publishing Works</h4>
               <p className="text-sm text-gray-700">
-                When you click "Publish Now" on a post, Huttle AI opens the native app on your phone (or the website on desktop) with your content ready to paste. No account connection required!
+                When you click "Ready to Post" on a post, Huttle AI lets you copy your content and opens the native app on your phone (or the website on desktop) so you can paste and publish natively. No account connection required!
               </p>
             </div>
           </div>

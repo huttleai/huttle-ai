@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -67,6 +67,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'sonar',
+        web_search_options: {
+          search_context_size: 'low'
+        },
         messages: [
           {
             role: 'system',

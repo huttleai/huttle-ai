@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Clock, Sparkles, TrendingUp, ChevronDown, ChevronUp, Check } from 'lucide-react';
 
 /**
@@ -85,18 +85,42 @@ export default function SmartTimeSuggestion({
   currentDate = '',
   onSelectTime,
   onSelectDate,
+  onSuggestionsChange,
   compact = false
 }) {
   const [isExpanded, setIsExpanded] = useState(!compact);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
 
+  const getLocalDateParts = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return null;
+    return { year, month, day };
+  };
+
   // Get suggestions for selected platforms
   const getSuggestions = () => {
-    if (platforms.length === 0) return [];
+    if (platforms.length === 0 || !currentDate) return [];
 
     const suggestions = [];
-    const today = new Date();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const localDateParts = getLocalDateParts(currentDate);
+    if (!localDateParts) return [];
+
+    const selectedDate = new Date(localDateParts.year, localDateParts.month - 1, localDateParts.day);
+    const selectedDayName = dayNames[selectedDate.getDay()];
+
+    // Day-level adjustment so recommendation windows vary by date.
+    const dayShiftMap = {
+      Sunday: 2,
+      Monday: 1,
+      Tuesday: 0,
+      Wednesday: 0,
+      Thursday: 0,
+      Friday: 1,
+      Saturday: 2,
+    };
+    const dayHourShift = dayShiftMap[selectedDayName] ?? 0;
 
     platforms.forEach(platform => {
       const platformData = PLATFORM_BEST_TIMES[platform];
@@ -104,41 +128,29 @@ export default function SmartTimeSuggestion({
 
       // Get content type adjustment
       const adjustment = CONTENT_TYPE_ADJUSTMENTS[contentType] || { timeShift: 0, dayPreference: [] };
+      const isPlatformBestDay = platformData.bestDays.includes(selectedDayName);
+      const isContentPreferredDay = adjustment.dayPreference.includes(selectedDayName);
+      const scoreShift = (isPlatformBestDay ? 8 : -8) + (isContentPreferredDay ? 4 : 0);
 
-      // Find best times for this platform
-      platformData.bestTimes.slice(0, 2).forEach(timeSlot => {
+      // Find best times for this platform and shift by date context.
+      platformData.bestTimes.slice(0, 3).forEach(timeSlot => {
         // Apply content type time shift
         const [hours, minutes] = timeSlot.time.split(':').map(Number);
-        const adjustedHours = Math.max(0, Math.min(23, hours + adjustment.timeShift));
+        const adjustedHours = Math.max(0, Math.min(23, hours + adjustment.timeShift + dayHourShift));
         const adjustedTime = `${String(adjustedHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-
-        // Find next best day — start from tomorrow (i=1) so suggestions are for future days
-        let bestDate = new Date(today);
-        bestDate.setDate(today.getDate() + 1); // Default to tomorrow
-        for (let i = 1; i <= 7; i++) {
-          const checkDate = new Date(today);
-          checkDate.setDate(today.getDate() + i);
-          const dayName = dayNames[checkDate.getDay()];
-          
-          if (platformData.bestDays.includes(dayName)) {
-            bestDate = checkDate;
-            break;
-          }
-        }
-
-        // Format date using local components (NOT toISOString which converts to UTC and can shift the day)
-        const dateStr = `${bestDate.getFullYear()}-${String(bestDate.getMonth() + 1).padStart(2, '0')}-${String(bestDate.getDate()).padStart(2, '0')}`;
-        const dayName = dayNames[bestDate.getDay()];
 
         suggestions.push({
           platform,
           time: adjustedTime,
-          date: dateStr,
-          dayName,
+          date: currentDate,
+          dayName: selectedDayName,
           label: timeSlot.label,
-          score: timeSlot.score - (adjustment.timeShift !== 0 ? 5 : 0),
+          score: Math.max(
+            55,
+            Math.min(99, timeSlot.score + scoreShift - (adjustment.timeShift !== 0 ? 3 : 0))
+          ),
           tip: platformData.tip,
-          id: `${platform}-${adjustedTime}-${dateStr}`
+          id: `${platform}-${adjustedTime}-${currentDate}`
         });
       });
     });
@@ -147,15 +159,21 @@ export default function SmartTimeSuggestion({
     return suggestions
       .sort((a, b) => b.score - a.score)
       .filter((s, i, arr) => arr.findIndex(x => x.time === s.time && x.date === s.date) === i)
-      .slice(0, 4);
+      .slice(0, 6);
   };
 
-  const suggestions = getSuggestions();
+  const suggestions = useMemo(() => getSuggestions(), [platforms, contentType, currentDate]);
+
+  useEffect(() => {
+    if (onSuggestionsChange) {
+      onSuggestionsChange(suggestions);
+    }
+  }, [onSuggestionsChange, suggestions]);
 
   // Update selected suggestion based on currentTime
   useEffect(() => {
-    if (currentTime && suggestions.length > 0) {
-      const matchingSuggestion = suggestions.find(s => s.time === currentTime);
+      if (currentTime && suggestions.length > 0) {
+      const matchingSuggestion = suggestions.find(s => s.time === currentTime && s.date === currentDate);
       if (matchingSuggestion) {
         setSelectedSuggestion(matchingSuggestion.id);
       } else {
@@ -165,6 +183,8 @@ export default function SmartTimeSuggestion({
           setSelectedSuggestion(todaySuggestion.id);
         }
       }
+    } else {
+      setSelectedSuggestion(null);
     }
   }, [currentTime, currentDate, suggestions]);
 
@@ -224,7 +244,20 @@ export default function SmartTimeSuggestion({
       {/* Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-3 animate-slideDown">
+          {!currentDate && (
+            <div className="rounded-lg border border-dashed border-huttle-300 bg-white/70 p-3 text-xs text-gray-600">
+              Select a date first to see smart time suggestions for that day.
+            </div>
+          )}
+
+          {currentDate && suggestions.length === 0 && (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-3 text-xs text-gray-600">
+              No smart suggestions are available for this date yet. You can still choose any custom time below.
+            </div>
+          )}
+
           {/* Suggestions Grid */}
+          {currentDate && suggestions.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {suggestions.map((suggestion) => (
               <button
@@ -262,9 +295,10 @@ export default function SmartTimeSuggestion({
               </button>
             ))}
           </div>
+          )}
 
           {/* Tip */}
-          {suggestions.length > 0 && suggestions[0].tip && (
+          {currentDate && suggestions.length > 0 && suggestions[0].tip && (
             <div className="flex items-start gap-2 p-2 bg-white rounded-lg border border-huttle-100">
               <Sparkles className="w-4 h-4 text-huttle-primary mt-0.5 flex-shrink-0" />
               <p className="text-xs text-gray-600">
@@ -277,6 +311,7 @@ export default function SmartTimeSuggestion({
           <div className="text-xs text-gray-500 text-center">
             Based on industry research for {platforms.join(', ')}
             {contentType && ` • ${contentType}`}
+            {currentDate && ` • ${formatDate(currentDate)}`}
           </div>
         </div>
       )}

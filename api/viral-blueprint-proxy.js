@@ -5,19 +5,60 @@
  * This avoids CORS issues by making the request server-side.
  * 
  * Environment Variables Required:
- * - VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
+ * - N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 // SECURITY: No hardcoded fallback - must be configured via environment variable
-const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK || process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
+const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK;
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube']);
+const POST_TYPE_MAP = {
+  reel: 'Video',
+  short: 'Video',
+  tiktok: 'Video',
+  video: 'Video',
+  carousel: 'Carousel',
+  story: 'Story',
+  thread: 'Thread',
+  post: 'Post',
+  'image post': 'Post',
+  image: 'Post',
+};
+
+function hasUsefulBlueprintContent(payload) {
+  if (!payload) return false;
+  if (typeof payload === 'string') return payload.trim().length > 0;
+  if (Array.isArray(payload)) return payload.length > 0;
+  if (typeof payload !== 'object') return false;
+
+  const meaningfulKeys = [
+    'blueprint',
+    'directors_cut',
+    'directorsCut',
+    'slide_breakdown',
+    'tweet_breakdown',
+    'frame_breakdown',
+    'caption_structure',
+    'hooks',
+    'content_script',
+    'seo_keywords',
+    'suggested_hashtags',
+  ];
+
+  if (meaningfulKeys.some((key) => payload[key])) return true;
+
+  return ['data', 'result', 'output', 'response', 'payload'].some((key) =>
+    hasUsefulBlueprintContent(payload[key])
+  );
+}
 
 /**
  * Main handler function
@@ -63,9 +104,14 @@ export default async function handler(req, res) {
     if (!platform || !topic) {
       return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
     }
+    if (!ALLOWED_PLATFORMS.has(platform)) {
+      return res.status(400).json({ error: 'Unsupported platform value', requestId });
+    }
+
+    const normalizedPostType = POST_TYPE_MAP[String(postType || 'post').toLowerCase()] || 'Post';
     const sanitizedPayload = {
       platform,
-      postType: postType || 'video',
+      postType: normalizedPostType,
       topic: String(topic).substring(0, 500),
       objective: objective || 'viral',
       targetAudience: targetAudience ? String(targetAudience).substring(0, 200) : '',
@@ -97,11 +143,26 @@ export default async function handler(req, res) {
     }
 
     // Parse and return the response
-    const data = await response.json().catch(() => ({}));
+    const rawResponse = await response.text().catch(() => '');
+    const data = rawResponse ? (() => {
+      try { return JSON.parse(rawResponse); } catch { return null; }
+    })() : {};
+
+    if (!hasUsefulBlueprintContent(data || rawResponse)) {
+      return res.status(502).json({
+        error: 'n8n response missing blueprint content. Expected blueprint/script/seo fields.',
+        requestId
+      });
+    }
+
     console.log('[viral-blueprint-proxy] Successfully received response from n8n', { requestId });
-    console.log('[viral-blueprint-proxy] Response keys:', Object.keys(data), { requestId });
+    console.log('[viral-blueprint-proxy] Response keys:', Object.keys(data || {}), { requestId });
     
-    return res.status(200).json({ ...data, requestId });
+    if (data && typeof data === 'object') {
+      return res.status(200).json({ ...data, requestId });
+    }
+
+    return res.status(200).json({ content: rawResponse, requestId });
 
   } catch (error) {
     console.error('[viral-blueprint-proxy] Error:', {

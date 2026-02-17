@@ -25,7 +25,14 @@
  * Analytics tracking disabled for now - will be re-enabled later.
  */
 
+import { API_TIMEOUTS } from '../config/apiConfig';
+import { retryFetch } from '../utils/retryFetch';
+
 const N8N_PROXY_URL = '/api/ai/n8n-generator';
+
+function pickFirstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null);
+}
 
 /**
  * Track AI analytics for performance monitoring
@@ -136,12 +143,17 @@ export async function generateWithN8n(payload) {
     });
     
     // Make request to n8n via serverless proxy
-    const response = await fetch(N8N_PROXY_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(60000) // 60 second timeout
-    });
+    const response = await retryFetch(
+      N8N_PROXY_URL,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.STANDARD,
+      }
+    );
     
     console.log('📥 [Frontend] Received response. Status:', response.status, 'OK:', response.ok);
 
@@ -173,10 +185,34 @@ export async function generateWithN8n(payload) {
 
     console.log('✅ [Frontend] Response OK. Parsing JSON...');
     const result = await response.json();
+    const normalizedContent = pickFirstDefined(
+      result.content,
+      result.remixed,
+      result.output,
+      result.data?.content,
+      result.data?.output,
+      result.result?.content,
+      result.result,
+    );
+    const normalizedHashtags = pickFirstDefined(
+      result.hashtags,
+      result.data?.hashtags,
+      result.result?.hashtags,
+      '',
+    );
+
+    if (normalizedContent === undefined || normalizedContent === null || normalizedContent === '') {
+      return {
+        success: false,
+        error: 'Workflow response did not include generated content.',
+        errorType: 'INVALID_RESPONSE',
+      };
+    }
+
     console.log('✅ [Frontend] Result parsed:', {
-      hasContent: !!result.content,
-      contentLength: result.content?.length || 0,
-      hasHashtags: !!result.hashtags,
+      hasContent: !!normalizedContent,
+      contentLength: typeof normalizedContent === 'string' ? normalizedContent.length : 0,
+      hasHashtags: !!normalizedHashtags,
       hasMetadata: !!result.metadata
     });
     
@@ -189,16 +225,16 @@ export async function generateWithN8n(payload) {
       success: true,
       model: result.metadata?.model || 'unknown',
       metadata: {
-        hasHashtags: !!result.hashtags,
-        contentLength: result.content?.length || 0
+        hasHashtags: !!normalizedHashtags,
+        contentLength: typeof normalizedContent === 'string' ? normalizedContent.length : 0
       }
     });
 
     console.log('✅ [Frontend] Returning success result');
     return {
       success: true,
-      content: result.content || '',
-      hashtags: result.hashtags || '',
+      content: normalizedContent,
+      hashtags: normalizedHashtags,
       metadata: result.metadata || {}
     };
 
@@ -254,11 +290,17 @@ export async function generateWithN8n(payload) {
 export async function checkN8nHealth() {
   try {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${N8N_PROXY_URL}/health`, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(5000)
-    });
+    const response = await retryFetch(
+      `${N8N_PROXY_URL}/health`,
+      {
+        method: 'GET',
+        headers,
+      },
+      {
+        timeoutMs: API_TIMEOUTS.FAST,
+        maxRetries: 0,
+      }
+    );
     return response.ok;
   } catch (error) {
     console.warn('N8n health check failed:', error);

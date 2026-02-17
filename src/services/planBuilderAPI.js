@@ -23,6 +23,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 // N8N Webhook URL for Plan Builder (via serverless proxy to avoid CORS)
 const N8N_PLAN_BUILDER_WEBHOOK_URL = '/api/plan-builder-proxy';
 
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================================
 // NEW: Direct Supabase Job Creation (Fire-and-Forget Architecture)
 // ============================================================================
@@ -162,6 +170,16 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
       if (response.ok) {
         const responseText = await response.text().catch(() => '');
+        const parsedResponse = responseText ? safeJsonParse(responseText) : null;
+
+        if (parsedResponse && parsedResponse.success === false) {
+          console.error('[PlanBuilder] Proxy returned success=false:', parsedResponse);
+          return {
+            success: false,
+            error: parsedResponse.error || 'Webhook proxy rejected the request',
+          };
+        }
+
         console.log(`[PlanBuilder] n8n webhook triggered successfully for job: ${jobId}`);
         console.log(`[PlanBuilder] Response:`, responseText.substring(0, 200));
         return { success: true };

@@ -12,6 +12,7 @@ import {
   getSignedUrl,
 } from '../config/supabase';
 import { mockScheduledPosts } from '../data/mockData';
+import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 
 export const ContentContext = createContext();
 
@@ -86,15 +87,8 @@ export function ContentProvider({ children }) {
 
     if (!user?.id) {
       // Try loading from localStorage if no user
-      const localPosts = localStorage.getItem('scheduledPosts');
-      if (localPosts) {
-        try {
-          const posts = JSON.parse(localPosts);
-          setScheduledPosts(posts || []);
-        } catch (e) {
-          console.error('Error parsing localStorage posts:', e);
-        }
-      }
+      const posts = safeReadJson(localStorage, 'scheduledPosts', []);
+      setScheduledPosts(Array.isArray(posts) ? posts : []);
       setLoading(false);
       return;
     }
@@ -130,24 +124,15 @@ export function ContentProvider({ children }) {
         setScheduledPosts(transformed);
         
         // Also save to localStorage as backup
-        localStorage.setItem('scheduledPosts', JSON.stringify(transformed));
+        safeWriteJson(localStorage, 'scheduledPosts', transformed);
       } else {
         // Supabase failed - try localStorage fallback
         console.warn('Supabase query failed, trying localStorage fallback:', result.error);
-        const localPosts = localStorage.getItem('scheduledPosts');
-        if (localPosts) {
-          try {
-            const posts = JSON.parse(localPosts);
-            setScheduledPosts(posts || []);
-            if (!isDevUser) {
-              addToast('Using offline data. Some features may be limited.', 'warning');
-            }
-          } catch (e) {
-            console.error('Error parsing localStorage posts:', e);
-            setScheduledPosts([]);
-            if (!isDevUser) {
-              addToast('Failed to load scheduled posts', 'error');
-            }
+        const posts = safeReadJson(localStorage, 'scheduledPosts', []);
+        if (Array.isArray(posts) && posts.length > 0) {
+          setScheduledPosts(posts);
+          if (!isDevUser) {
+            addToast('Using offline data. Some features may be limited.', 'warning');
           }
         } else {
           setScheduledPosts([]);
@@ -163,16 +148,11 @@ export function ContentProvider({ children }) {
     } catch (error) {
       console.error('Error loading posts:', error);
       // Try localStorage fallback
-      const localPosts = localStorage.getItem('scheduledPosts');
-      if (localPosts) {
-        try {
-          const posts = JSON.parse(localPosts);
-          setScheduledPosts(posts || []);
-          if (!isDevUser) {
-            addToast('Using offline data. Some features may be limited.', 'warning');
-          }
-        } catch (e) {
-          setScheduledPosts([]);
+      const posts = safeReadJson(localStorage, 'scheduledPosts', []);
+      if (Array.isArray(posts) && posts.length > 0) {
+        setScheduledPosts(posts);
+        if (!isDevUser) {
+          addToast('Using offline data. Some features may be limited.', 'warning');
         }
       } else {
         setScheduledPosts([]);
@@ -193,19 +173,13 @@ export function ContentProvider({ children }) {
     const migrationKey = `migrated_posts_${user.id}`;
     if (localStorage.getItem(migrationKey)) return; // Already migrated
 
-    const localPosts = localStorage.getItem('scheduledPosts');
-    if (!localPosts) {
+    const posts = safeReadJson(localStorage, 'scheduledPosts', []);
+    if (!Array.isArray(posts) || posts.length === 0) {
       localStorage.setItem(migrationKey, 'true');
       return;
     }
 
     try {
-      const posts = JSON.parse(localPosts);
-      if (posts.length === 0) {
-        localStorage.setItem(migrationKey, 'true');
-        return;
-      }
-
       setSyncing(true);
       addToast(`Migrating ${posts.length} posts to cloud...`, 'info');
 
@@ -242,9 +216,12 @@ export function ContentProvider({ children }) {
     
     // Fire-and-forget — don't block post creation
     saveContentLibraryItem(user.id, {
-      title: fileName || 'Uploaded Media',
-      content_type: fileType === 'video' ? 'video' : 'image',
-      file_url: storagePath,
+      name: fileName || 'Uploaded Media',
+      type: fileType === 'video' ? 'video' : 'image',
+      storage_path: storagePath,
+      url: null,
+      size_bytes: sizeBytes || 0,
+      description: 'Auto-saved from post upload',
       source: 'post_upload',
       metadata: {
         ...metadata,
@@ -553,30 +530,30 @@ export function ContentProvider({ children }) {
       ...content,
       savedAt: new Date().toISOString(),
     };
-    setSavedContent((prev) => [newContent, ...prev]);
-    localStorage.setItem('savedContent', JSON.stringify([newContent, ...savedContent]));
+    setSavedContent((prev) => {
+      const updated = [newContent, ...prev].slice(0, 300);
+      safeWriteJson(localStorage, 'savedContent', updated, { maxBytes: 2_500_000 });
+      return updated;
+    });
     return newContent.id;
   };
 
   // Load saved content from localStorage
   const loadSavedContent = () => {
-    const saved = localStorage.getItem('savedContent');
-    if (saved) {
-      setSavedContent(JSON.parse(saved));
-    }
+    const saved = safeReadJson(localStorage, 'savedContent', []);
+    setSavedContent(Array.isArray(saved) ? saved : []);
   };
 
   // Set draft content for cross-page editing
   const setDraft = (content) => {
     setDraftContent(content);
-    sessionStorage.setItem('draftContent', JSON.stringify(content));
+    safeWriteJson(sessionStorage, 'draftContent', content, { maxBytes: 500_000 });
   };
 
   // Get draft content
   const getDraft = () => {
     if (draftContent) return draftContent;
-    const sessionDraft = sessionStorage.getItem('draftContent');
-    return sessionDraft ? JSON.parse(sessionDraft) : null;
+    return safeReadJson(sessionStorage, 'draftContent', null);
   };
 
   // Clear draft
@@ -589,7 +566,7 @@ export function ContentProvider({ children }) {
   const deleteSavedContent = (id) => {
     const updated = savedContent.filter((content) => content.id !== id);
     setSavedContent(updated);
-    localStorage.setItem('savedContent', JSON.stringify(updated));
+    safeWriteJson(localStorage, 'savedContent', updated, { maxBytes: 2_500_000 });
   };
 
   // Get content by ID
@@ -605,7 +582,7 @@ export function ContentProvider({ children }) {
         : content
     );
     setSavedContent(updated);
-    localStorage.setItem('savedContent', JSON.stringify(updated));
+    safeWriteJson(localStorage, 'savedContent', updated, { maxBytes: 2_500_000 });
   };
 
   return (

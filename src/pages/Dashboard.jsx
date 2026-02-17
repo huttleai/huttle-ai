@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useRef, useMemo } from 'react';
+import { useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useContent } from '../context/ContentContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Target,
   Bell,
-  BarChart3,
   Sparkles,
   AlertCircle,
   Plus,
@@ -23,7 +22,8 @@ import {
   Activity,
   ArrowUpRight,
   Copy,
-  Check
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import CreatePostModal from '../components/CreatePostModal';
 import FloatingActionButton from '../components/FloatingActionButton';
@@ -32,28 +32,27 @@ import MiniCalendar from '../components/MiniCalendar';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
-import { socialUpdates } from '../data/socialUpdates';
-import { getMockTrendingTopics, mockTrendingTopics } from '../data/mockData';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import confetti from 'canvas-confetti';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
-import { formatDisplayName, getPersonalizedGreeting, isCreatorProfile } from '../utils/brandContextBuilder';
+import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getPlatformIcon } from '../components/SocialIcons';
-
-// TODO: N8N_WORKFLOW - Import workflow services when ready
-// These will be used to fetch real-time data from n8n workflows
-import { getTrendingNow, getHashtagsOfDay } from '../services/n8nWorkflowAPI';
-import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
+import { supabase } from '../config/supabase';
+import {
+  getDashboardCache,
+  generateDashboardData,
+  deleteDashboardCache,
+  trackDashboardGenerationUsage,
+} from '../services/dashboardCacheService';
 
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
   const { scheduledPosts, deleteScheduledPost } = useContent();
   const navigate = useNavigate();
-  const { brandProfile } = useBrand();
+  const { brandProfile, loading: isBrandProfileLoading } = useBrand();
   const { showToast } = useToast();
   const { 
     addInfo, 
-    addPanelUpdate, 
     addAIUsageWarning, 
     addSocialUpdate,
     addScheduledPostReminder,
@@ -65,9 +64,13 @@ export default function Dashboard() {
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [timeGreeting, setTimeGreeting] = useState('');
   const [hoveredStat, setHoveredStat] = useState(null);
-  const [hoveredTrend, setHoveredTrend] = useState(null);
   const [copiedHashtag, setCopiedHashtag] = useState(null);
-  const [copiedTopic, setCopiedTopic] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardError, setDashboardError] = useState('');
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
+  const [dashboardAlerts, setDashboardAlerts] = useState([]);
+  const [isAlertsLoading, setIsAlertsLoading] = useState(false);
   
   // Copy hashtag to clipboard
   const copyHashtag = async (hashtag) => {
@@ -83,23 +86,6 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to copy hashtag:', err);
       showToast('Failed to copy hashtag', 'error');
-    }
-  };
-  
-  // Copy topic to clipboard
-  const copyTopic = async (topic) => {
-    try {
-      await navigator.clipboard.writeText(topic);
-      setCopiedTopic(topic);
-      showToast('Topic copied to clipboard!', 'success');
-      
-      // Reset copied state after 2 seconds
-      setTimeout(() => {
-        setCopiedTopic(null);
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy topic:', err);
-      showToast('Failed to copy topic', 'error');
     }
   };
   
@@ -154,24 +140,32 @@ export default function Dashboard() {
     brandProfile, 
     user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator'
   );
-  
-  // ==========================================================================
-  // AI Insights - STAYS IN-CODE (uses Grok API)
-  // This feature does NOT move to n8n workflow.
-  // It uses the Grok API directly for smart recommendations.
-  // See: src/services/grokAPI.js
-  // ==========================================================================
-  const aiInsights = [
-    { title: 'Pattern Detected', description: 'Posts with questions get 25% more engagement', icon: Sparkles, color: 'text-huttle-primary', bg: 'bg-white' },
-    { title: 'Best Time Found', description: 'Tuesday 7 PM EST drives highest engagement', icon: Clock, color: 'text-huttle-primary', bg: 'bg-white' },
-    { title: 'Content Gap Found', description: 'Add more video content - 60% higher engagement', icon: BarChart3, color: 'text-huttle-primary', bg: 'bg-white' },
-  ];
+
+  const getPrimaryContextValue = (value) => {
+    if (Array.isArray(value)) return value.find(Boolean)?.toString().trim() || '';
+    if (typeof value !== 'string') return '';
+    return value
+      .split(',')
+      .map((part) => part.trim())
+      .find(Boolean) || '';
+  };
+
+  const normalizedNiche = getPrimaryContextValue(brandProfile?.niche);
+  const normalizedIndustry = getPrimaryContextValue(brandProfile?.industry);
+  const hasProfilePersonalization = hasProfileContext(brandProfile);
+
+  const dashboardTrendingTopics = useMemo(
+    () => (Array.isArray(dashboardData?.trending_topics) ? dashboardData.trending_topics : []),
+    [dashboardData]
+  );
+  const dashboardHashtags = useMemo(
+    () => (Array.isArray(dashboardData?.hashtags_of_day) ? dashboardData.hashtags_of_day : []),
+    [dashboardData]
+  );
+  const dashboardInsight = dashboardData?.ai_insight || null;
   
   // Track previous values for detecting updates
   const prevPanelDataRef = useRef({
-    trendingTopics: null,
-    keywords: null,
-    aiInsights: null,
     scheduledPostsCount: 0,
     lastSocialUpdateCheck: null,
   });
@@ -252,22 +246,29 @@ export default function Dashboard() {
 
   // Check for new social updates
   useEffect(() => {
+    if (!dashboardAlerts.length) return;
+
     const lastCheck = localStorage.getItem('lastSocialUpdateCheck');
     const now = Date.now();
     const checkInterval = 14 * 24 * 60 * 60 * 1000;
     
     if (!lastCheck || (now - parseInt(lastCheck, 10)) > checkInterval) {
-      const mostRecent = socialUpdates[0];
+      const mostRecent = dashboardAlerts[0];
       if (mostRecent) {
         const lastNotified = localStorage.getItem('lastNotifiedSocialUpdate');
-        if (lastNotified !== mostRecent.id) {
-          addSocialUpdate(mostRecent.platform, mostRecent.title, mostRecent.impact);
-          localStorage.setItem('lastNotifiedSocialUpdate', mostRecent.id);
+        const mostRecentId = String(mostRecent.id || '');
+        if (lastNotified !== mostRecentId) {
+          addSocialUpdate(
+            mostRecent.platform || 'Platform',
+            mostRecent.update_title || 'New social platform update',
+            mostRecent.impact_level || 'medium'
+          );
+          localStorage.setItem('lastNotifiedSocialUpdate', mostRecentId);
         }
       }
       localStorage.setItem('lastSocialUpdateCheck', now.toString());
     }
-  }, [addSocialUpdate]);
+  }, [addSocialUpdate, dashboardAlerts]);
 
   // Sort posts by date
   const sortedPosts = [...(scheduledPosts || [])].sort((a, b) => {
@@ -343,143 +344,158 @@ export default function Dashboard() {
     return platforms.size;
   }, [scheduledPosts]);
 
-  // ==========================================================================
-  // TODO: N8N_WORKFLOW - Trending Topics
-  // This section will be replaced with n8n workflow data when available.
-  // Workflow: WORKFLOW_NAMES.DASHBOARD_TRENDING
-  // 
-  // When implementing:
-  // 1. Call getTrendingNow({ niche, industry, platforms }) on component mount
-  // 2. If workflow returns success, use workflow data
-  // 3. If workflow returns useFallback: true, use mock data below
-  // 4. Add loading state while fetching
-  // 
-  // Expected workflow response format:
-  // { success: true, topics: [{ topic, engagement, growth, platforms }] }
-  // ==========================================================================
-  const hasNicheConfigured = !!(brandProfile?.niche || brandProfile?.industry);
+  const hasNicheConfigured = Boolean(normalizedNiche || normalizedIndustry);
+  
+  const incrementLocalAIGenerationUsage = useCallback(() => {
+    setAiGensUsed((prev) => {
+      const next = prev + 1;
+      localStorage.setItem('aiGensUsed', next.toString());
+      return next;
+    });
+  }, []);
 
-  const trendingTopics = useMemo(() => {
-    // TODO: N8N_WORKFLOW - Replace with workflow data when available
-    // Current implementation: Mock data fallback based on user's niche
-    const niche = brandProfile?.niche || '';
-    const industry = brandProfile?.industry || '';
-    const nicheTopics = getMockTrendingTopics(niche, industry);
-    
-    // Use niche-specific topics if available, otherwise general trends
-    const topics = nicheTopics.length > 0 ? nicheTopics : mockTrendingTopics;
-    
-    return topics.map(trend => ({
-      topic: trend.topic,
-      engagement: trend.volume,
-      growth: trend.growth,
-      platforms: trend.platforms
-    }));
-  }, [brandProfile?.niche, brandProfile?.industry]);
+  useEffect(() => {
+    let isActive = true;
 
-  // ==========================================================================
-  // TODO: N8N_WORKFLOW - Hashtags of the Day
-  // This section will be replaced with n8n workflow data when available.
-  // Workflow: WORKFLOW_NAMES.DASHBOARD_HASHTAGS
-  // 
-  // When implementing:
-  // 1. Call getHashtagsOfDay({ niche, industry, limit: 4 }) on component mount
-  // 2. If workflow returns success, use workflow data
-  // 3. If workflow returns useFallback: true, use industry-based hashtags below
-  // 4. Add loading state while fetching
-  // 
-  // Expected workflow response format:
-  // { success: true, hashtags: [{ tag: '#hashtag', score: '95%' }] }
-  // ==========================================================================
-  const keywords = useMemo(() => {
-    // Only show hashtags if user has completed their profile setup
-    const industry = brandProfile?.industry?.toLowerCase() || '';
-    const niche = brandProfile?.niche?.toLowerCase() || '';
-    
-    // If user hasn't set up their profile, return empty array
-    if (!industry && !niche) {
-      return [];
-    }
-    
-    const hashtagsByIndustry = {
-      'medical spa': [
-        { tag: '#medspa', score: '95%' },
-        { tag: '#botox', score: '89%' },
-        { tag: '#skincareroutine', score: '85%' },
-        { tag: '#glowup', score: '82%' },
-      ],
-      'beauty': [
-        { tag: '#beauty', score: '95%' },
-        { tag: '#makeup', score: '91%' },
-        { tag: '#skincare', score: '87%' },
-        { tag: '#beautytips', score: '84%' },
-      ],
-      'tech': [
-        { tag: '#technology', score: '94%' },
-        { tag: '#ai', score: '92%' },
-        { tag: '#innovation', score: '88%' },
-        { tag: '#technews', score: '85%' },
-      ],
-      'fitness': [
-        { tag: '#fitness', score: '95%' },
-        { tag: '#workout', score: '91%' },
-        { tag: '#fitnessmotivation', score: '87%' },
-        { tag: '#gym', score: '84%' },
-      ],
-      'food': [
-        { tag: '#foodie', score: '95%' },
-        { tag: '#cooking', score: '91%' },
-        { tag: '#recipe', score: '87%' },
-        { tag: '#homemade', score: '84%' },
-      ],
-      'travel': [
-        { tag: '#travel', score: '95%' },
-        { tag: '#wanderlust', score: '91%' },
-        { tag: '#adventure', score: '87%' },
-        { tag: '#explore', score: '84%' },
-      ],
-      'fashion': [
-        { tag: '#fashion', score: '95%' },
-        { tag: '#style', score: '91%' },
-        { tag: '#ootd', score: '87%' },
-        { tag: '#fashionista', score: '84%' },
-      ],
-      'business': [
-        { tag: '#business', score: '95%' },
-        { tag: '#entrepreneur', score: '91%' },
-        { tag: '#success', score: '87%' },
-        { tag: '#startup', score: '84%' },
-      ],
-      'lifestyle': [
-        { tag: '#lifestyle', score: '95%' },
-        { tag: '#dailylife', score: '91%' },
-        { tag: '#motivation', score: '87%' },
-        { tag: '#inspiration', score: '84%' },
-      ],
-      'education': [
-        { tag: '#education', score: '95%' },
-        { tag: '#learning', score: '91%' },
-        { tag: '#knowledge', score: '87%' },
-        { tag: '#study', score: '84%' },
-      ],
-      'entertainment': [
-        { tag: '#entertainment', score: '95%' },
-        { tag: '#gaming', score: '91%' },
-        { tag: '#fun', score: '87%' },
-        { tag: '#viral', score: '84%' },
-      ],
-      'art': [
-        { tag: '#art', score: '95%' },
-        { tag: '#artist', score: '91%' },
-        { tag: '#creative', score: '87%' },
-        { tag: '#artwork', score: '84%' },
-      ]
+    const loadDailyDashboard = async () => {
+      if (!user?.id || isBrandProfileLoading) return;
+
+      setDashboardError('');
+
+      const cacheResult = await getDashboardCache(user.id);
+      if (!isActive) return;
+
+      if (cacheResult.success && cacheResult.data) {
+        setDashboardData(cacheResult.data);
+        return;
+      }
+
+      setIsDashboardLoading(true);
+      const generatedResult = await generateDashboardData(user.id, brandProfile);
+
+      if (!isActive) return;
+
+      if (generatedResult.success) {
+        setDashboardData(generatedResult.data);
+        if (!generatedResult.isFallback) {
+          const usageTracked = await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
+          if (usageTracked) {
+            incrementLocalAIGenerationUsage();
+          }
+        }
+      } else {
+        setDashboardError('Unable to load your daily briefing right now. Please try again.');
+      }
+
+      setIsDashboardLoading(false);
     };
-    
-    const industryHashtags = hashtagsByIndustry[industry] || hashtagsByIndustry[niche] || [];
-    
-    return industryHashtags.slice(0, 4);
-  }, [brandProfile?.industry, brandProfile?.niche]);
+
+    loadDailyDashboard();
+
+    return () => {
+      isActive = false;
+    };
+  }, [brandProfile, incrementLocalAIGenerationUsage, isBrandProfileLoading, user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardAlerts = async () => {
+      if (!user?.id) return;
+
+      setIsAlertsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('social_updates')
+          .select('id, platform, update_title, update_summary, impact_level')
+          .order('fetched_at', { ascending: false })
+          .limit(2);
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error('[Dashboard] Failed to load social alerts:', error);
+          setDashboardAlerts([]);
+          return;
+        }
+
+        setDashboardAlerts(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('[Dashboard] Unexpected social alerts error:', error);
+        setDashboardAlerts([]);
+      } finally {
+        if (isMounted) setIsAlertsLoading(false);
+      }
+    };
+
+    loadDashboardAlerts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const handleRefreshDashboard = useCallback(async () => {
+    if (!user?.id) return;
+
+    setIsDashboardRefreshing(true);
+    setDashboardError('');
+    setIsDashboardLoading(true);
+
+    const deleteResult = await deleteDashboardCache(user.id);
+    if (!deleteResult.success) {
+      setDashboardError('We could not refresh your daily briefing. Please try again.');
+      setIsDashboardLoading(false);
+      setIsDashboardRefreshing(false);
+      return;
+    }
+
+    const generatedResult = await generateDashboardData(user.id, brandProfile);
+    if (generatedResult.success) {
+      setDashboardData(generatedResult.data);
+      if (!generatedResult.isFallback) {
+        const usageTracked = await trackDashboardGenerationUsage(user.id, 'dashboard_manual_refresh');
+        if (usageTracked) {
+          incrementLocalAIGenerationUsage();
+        }
+      }
+      showToast(
+        generatedResult.isFallback
+          ? 'Dashboard refreshed with latest available data.'
+          : 'Dashboard refreshed with new intelligence.',
+        generatedResult.isFallback ? 'info' : 'success'
+      );
+    } else {
+      setDashboardError('We could not refresh your daily briefing. Please try again.');
+    }
+
+    setIsDashboardLoading(false);
+    setIsDashboardRefreshing(false);
+  }, [brandProfile, incrementLocalAIGenerationUsage, showToast, user?.id]);
+
+  const getMomentumStyles = (momentum) => {
+    const value = (momentum || '').toLowerCase();
+    if (value === 'rising') return { indicator: '↑', textClass: 'text-emerald-600', bgClass: 'bg-emerald-50' };
+    if (value === 'declining') return { indicator: '↓', textClass: 'text-red-600', bgClass: 'bg-red-50' };
+    return { indicator: '•', textClass: 'text-amber-600', bgClass: 'bg-amber-50' };
+  };
+
+  const getReachStyles = (reach) => {
+    const value = (reach || '').toLowerCase();
+    if (value === 'high') return { dotClass: 'bg-emerald-500', sizeClass: 'text-sm px-3.5 py-1.5' };
+    if (value === 'niche') return { dotClass: 'bg-gray-400', sizeClass: 'text-xs px-2.5 py-1' };
+    return { dotClass: 'bg-amber-500', sizeClass: 'text-sm px-3 py-1.5' };
+  };
+
+  const getInsightCategoryStyles = (category) => {
+    const normalized = (category || '').toLowerCase();
+    if (normalized === 'timing') return 'bg-amber-100 text-amber-700';
+    if (normalized === 'audience') return 'bg-blue-100 text-blue-700';
+    if (normalized === 'platform') return 'bg-purple-100 text-purple-700';
+    if (normalized === 'content type') return 'bg-emerald-100 text-emerald-700';
+    return 'bg-huttle-100 text-huttle-primary-dark';
+  };
 
   // Monitor panel updates
   useEffect(() => {
@@ -512,7 +528,10 @@ export default function Dashboard() {
 
   // Welcome notification
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
+    if (!user?.id) return;
+
+    const welcomeKey = `hasSeenWelcome:${user.id}`;
+    const hasSeenWelcome = localStorage.getItem(welcomeKey);
     if (!hasSeenWelcome) {
       const timer = setTimeout(() => {
         addInfo(
@@ -521,12 +540,12 @@ export default function Dashboard() {
           () => setIsCreatePostOpen(true),
           'Create Post'
         );
-        localStorage.setItem('hasSeenWelcome', 'true');
+        localStorage.setItem(welcomeKey, 'true');
       }, 2000);
       
       return () => clearTimeout(timer);
     }
-  }, [addInfo]);
+  }, [addInfo, user?.id]);
 
   const handleDeletePost = (postId) => {
     if (window.confirm('Are you sure you want to delete this scheduled post?')) {
@@ -534,17 +553,6 @@ export default function Dashboard() {
       showToast('Post deleted successfully', 'success');
     }
   };
-
-  // Build display name using the greeting logic (already handles creator vs brand)
-  const displayName = personalizedGreeting.name !== 'there' 
-    ? personalizedGreeting.name
-    : formatDisplayName(
-        user?.user_metadata?.name 
-        || user?.user_metadata?.full_name 
-        || user?.name 
-        || user?.email?.split('@')[0] 
-        || ''
-      ) || 'there';
 
   // Stats configuration - clean monochrome style
   const stats = [
@@ -813,21 +821,32 @@ export default function Dashboard() {
           {/* Trending Now */}
           <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm">
             <div className="p-5">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-huttle-primary" />
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-huttle-primary" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-gray-900">Trending Now</h2>
+                    <p className="text-xs text-gray-500">
+                      {hasNicheConfigured
+                        ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
+                        : 'General trends across platforms'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-bold text-gray-900">Trending Now</h2>
-                  <p className="text-xs text-gray-500">
-                    {hasNicheConfigured
-                      ? `Hot topics in ${brandProfile?.niche || brandProfile?.industry}`
-                      : 'General trends across platforms'}
-                  </p>
-                </div>
+                <button
+                  onClick={handleRefreshDashboard}
+                  disabled={isDashboardRefreshing}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Refresh daily briefing"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isDashboardRefreshing ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
               </div>
-              
-              {(!brandProfile?.industry && !brandProfile?.niche) && (
+
+              {!hasProfilePersonalization && (
                 <div className="bg-huttle-50/50 border border-huttle-100 rounded-xl p-4 mb-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
@@ -842,104 +861,63 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-              
-              <div className="space-y-1">
-                {trendingTopics.slice(0, 5).map((item, i) => {
-                  const isCopied = copiedTopic === item.topic;
-                  return (
-                    <HoverPreview
-                      key={i}
-                      preview={
-                        <div className="space-y-3">
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-1">{item.topic}</h4>
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                              <span>{item.engagement}</span>
-                              <span className="text-green-600 font-semibold">{item.growth}</span>
-                            </div>
-                          </div>
-                          <div className="border-t border-gray-200 pt-3">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Trending on:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {item.platforms?.map((platform, idx) => {
-                                const platformIcon = getPlatformIcon(platform, 'w-3.5 h-3.5 text-gray-700');
-                                return (
-                                  <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
-                                    {platformIcon}
-                                    <span className="text-xs font-medium text-gray-700">{platform}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                              This topic is gaining traction on these platforms. Consider creating content tailored to each platform's audience.
-                            </p>
-                          </div>
-                        </div>
-                      }
+
+              <div className="space-y-2">
+                {isDashboardLoading && (
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4].map((item) => (
+                      <div key={item} className="animate-pulse p-3 border border-gray-100 rounded-xl">
+                        <div className="h-4 w-2/3 bg-gray-200 rounded mb-2" />
+                        <div className="h-3 w-full bg-gray-100 rounded mb-1" />
+                        <div className="h-3 w-5/6 bg-gray-100 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!isDashboardLoading && dashboardError && (
+                  <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+                    <p className="text-sm text-red-700 mb-3">{dashboardError}</p>
+                    <button
+                      onClick={handleRefreshDashboard}
+                      className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
                     >
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyTopic(item.topic);
-                        }}
-                        onMouseEnter={() => setHoveredTrend(i)}
-                        onMouseLeave={() => setHoveredTrend(null)}
-                        className={`w-full group flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 text-left ${
-                          hoveredTrend === i ? 'bg-gray-50' : ''
-                        }`}
-                      >
-                        <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-all duration-200 ${
-                          i < 3 
-                            ? 'bg-huttle-50 text-huttle-primary' 
-                            : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {i + 1}
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                {!isDashboardLoading && !dashboardError && dashboardTrendingTopics.map((trend, index) => {
+                  const momentumStyles = getMomentumStyles(trend.momentum);
+                  return (
+                    <div
+                      key={`${trend.topic}-${index}`}
+                      className="rounded-xl border border-gray-100 p-3 hover:border-gray-200 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-sm text-gray-900">{trend.topic}</p>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
+                          <span>{momentumStyles.indicator}</span>
+                          <span className="capitalize">{trend.momentum}</span>
                         </span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate transition-colors ${
-                            hoveredTrend === i ? 'text-gray-900' : 'text-gray-700'
-                          }`}>
-                            {item.topic}
-                          </p>
-                          <p className="text-[10px] text-gray-400">{item.engagement}</p>
-                        </div>
-                        <div className="flex-shrink-0">
-                          {isCopied ? (
-                            <Check className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <Copy className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          )}
-                        </div>
-                      </button>
-                    </HoverPreview>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">{trend.context}</p>
+                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                        {getPlatformIcon(trend.relevant_platform, 'w-3.5 h-3.5 text-gray-700')}
+                        <span className="text-[11px] text-gray-700 font-medium">{trend.relevant_platform || 'Multi-platform'}</span>
+                      </div>
+                    </div>
                   );
                 })}
+
+                {!isDashboardLoading && !dashboardError && dashboardTrendingTopics.length === 0 && (
+                  <div className="p-3 text-xs text-gray-500 rounded-xl border border-gray-100">
+                    No trend intelligence is available yet. Try refreshing.
+                  </div>
+                )}
               </div>
 
-              {/* Trending Keywords (no hashtags) - only show if user has profile set up */}
-              {keywords.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Trending Keywords</p>
-                    <span className="text-[10px] text-gray-400">{keywords.length} keywords</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.map((keyword, idx) => {
-                      const cleanKeyword = keyword.tag?.replace(/^#/, '') || keyword.tag;
-                      return (
-                        <span 
-                          key={idx}
-                          className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-700"
-                        >
-                          {cleanKeyword}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              
               <Link 
                 to="/dashboard/trend-lab" 
                 className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-sm"
@@ -959,25 +937,27 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h2 className="font-bold text-gray-900">AI Insights</h2>
-                  <p className="text-xs text-gray-500">Smart recommendations</p>
+                  <p className="text-xs text-gray-500">Daily niche intelligence</p>
                 </div>
               </div>
-              
-              <div className="space-y-3">
-                {aiInsights.map((insight, i) => (
-                  <div key={i} className="group p-3 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0`}>
-                        <insight.icon className="w-4 h-4 text-huttle-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-sm text-gray-900">{insight.title}</h4>
-                        <p className="text-xs text-gray-600 mt-0.5">{insight.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+
+              {isDashboardLoading ? (
+                <div className="animate-pulse rounded-xl border border-gray-100 p-4">
+                  <div className="h-4 w-3/4 bg-gray-200 rounded mb-3" />
+                  <div className="h-3 w-full bg-gray-100 rounded mb-2" />
+                  <div className="h-3 w-5/6 bg-gray-100 rounded" />
+                </div>
+              ) : dashboardInsight ? (
+                <div className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4">
+                  <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(dashboardInsight.category)}`}>
+                    {dashboardInsight.category}
+                  </span>
+                  <h4 className="font-bold text-gray-900 mb-2 pr-20">{dashboardInsight.headline}</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">{dashboardInsight.detail}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">No daily insight available yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -998,7 +978,31 @@ export default function Dashboard() {
               </div>
             </div>
             
-            {keywords.length === 0 ? (
+            {isDashboardLoading ? (
+              <div className="text-center py-6">
+                <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                  <Target className="w-5 h-5 text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-900 mb-1">Generating hashtags...</p>
+                <div className="flex flex-wrap justify-center gap-2 mt-3 animate-pulse">
+                  <div className="h-7 w-20 bg-gray-100 rounded-full" />
+                  <div className="h-7 w-24 bg-gray-100 rounded-full" />
+                  <div className="h-7 w-16 bg-gray-100 rounded-full" />
+                  <div className="h-7 w-28 bg-gray-100 rounded-full" />
+                </div>
+              </div>
+            ) : dashboardError ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+                <p className="text-sm text-red-700 mb-3">{dashboardError}</p>
+                <button
+                  onClick={handleRefreshDashboard}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Try Again
+                </button>
+              </div>
+            ) : dashboardHashtags.length === 0 && !hasProfilePersonalization ? (
               <div className="text-center py-6">
                 <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
                   <Target className="w-5 h-5 text-gray-400" />
@@ -1012,28 +1016,36 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  {keywords.map((keyword, i) => {
-                    const isCopied = copiedHashtag === keyword.tag;
-                    return (
-                      <div 
-                        key={i} 
-                        onClick={() => copyHashtag(keyword.tag)}
-                        className="group flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2 flex-1">
-                          <span className="font-medium text-gray-700 text-sm group-hover:text-gray-900">{keyword.tag}</span>
-                          {isCopied ? (
-                            <Check className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          )}
+                {dashboardHashtags.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-2">No hashtag recommendations right now. Check back in a moment.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3">Tap a hashtag to copy it.</p>
+                    <div className="flex flex-wrap gap-2">
+                    {dashboardHashtags.map((keyword, i) => {
+                      const isCopied = copiedHashtag === keyword.hashtag;
+                      const reachStyles = getReachStyles(keyword.estimated_reach);
+                      return (
+                        <div
+                          key={i}
+                          onClick={() => copyHashtag(keyword.hashtag)}
+                          className={`group inline-flex items-center gap-2 border border-gray-200 rounded-full bg-white hover:bg-gray-50 transition-all cursor-pointer ${reachStyles.sizeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${reachStyles.dotClass}`} />
+                          <span className="font-medium text-gray-700 group-hover:text-gray-900">{keyword.hashtag}</span>
+                          <span className="text-[10px] text-gray-500">{keyword.relevance}</span>
+                          <span className="text-[10px] font-semibold uppercase text-gray-500">{keyword.estimated_reach}</span>
+                            {isCopied ? (
+                              <Check className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
                         </div>
-                        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">{keyword.score}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1053,22 +1065,52 @@ export default function Dashboard() {
             </div>
             
             <div className="space-y-3">
-              {[
-                { type: 'high', title: 'Sustainability Trends', desc: 'Growing interest in eco-friendly practices', action: 'Create Post', typeColor: 'bg-huttle-50 text-huttle-primary' },
-                { type: 'medium', title: 'Engagement Spike', desc: 'Reels getting 40% more views', action: 'Post More', typeColor: 'bg-gray-100 text-gray-600' },
-              ].map((alert, i) => (
-                <div key={i} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer">
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-semibold text-sm text-gray-900">{alert.title}</h4>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-bold ${alert.typeColor}`}>{alert.type}</span>
-                  </div>
-                  <p className="text-xs text-gray-600 mb-3">{alert.desc}</p>
-                  <button onClick={() => setIsCreatePostOpen(true)} className="text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark flex items-center gap-1 group">
-                    {alert.action}
-                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                  </button>
+              {isAlertsLoading && (
+                <div className="space-y-2">
+                  {[1, 2].map((item) => (
+                    <div key={item} className="animate-pulse p-4 border border-gray-100 rounded-xl">
+                      <div className="h-4 w-1/2 bg-gray-200 rounded mb-2" />
+                      <div className="h-3 w-full bg-gray-100 rounded mb-1" />
+                      <div className="h-3 w-3/4 bg-gray-100 rounded" />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {!isAlertsLoading && dashboardAlerts.length === 0 && (
+                <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+                  <p className="text-xs text-gray-600 mb-2">
+                    No alerts yet. We will surface important platform updates here.
+                  </p>
+                  <Link to="/dashboard/social-updates" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark">
+                    Open Social Updates
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              )}
+
+              {!isAlertsLoading && dashboardAlerts.map((alert) => {
+                const impact = String(alert.impact_level || 'medium').toLowerCase();
+                const typeColor = impact === 'high'
+                  ? 'bg-red-100 text-red-700'
+                  : impact === 'low'
+                    ? 'bg-gray-100 text-gray-600'
+                    : 'bg-amber-100 text-amber-700';
+
+                return (
+                  <div key={alert.id} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
+                    <div className="flex items-start justify-between mb-2 gap-2">
+                      <h4 className="font-semibold text-sm text-gray-900">{alert.update_title || 'Platform update'}</h4>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-bold ${typeColor}`}>{impact}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-3">{alert.update_summary || 'A new social platform update is available.'}</p>
+                    <Link to="/dashboard/social-updates" className="text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark flex items-center gap-1 group">
+                      View Update
+                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

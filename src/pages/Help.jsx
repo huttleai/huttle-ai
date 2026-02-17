@@ -42,7 +42,7 @@ export default function Help() {
     },
     {
       question: 'How do I publish to social media?',
-      answer: 'Huttle AI supports publishing via deep links. When you create a post, you can use the Publish button to open the post content directly on your chosen platform (Instagram, TikTok, YouTube, Facebook, or X). This lets you review and publish natively on each platform.'
+      answer: 'Huttle AI uses a Copy & Open flow for posting. Click "Ready to Post" on any scheduled post, copy the full text (or caption/hashtags only), open your platform (Instagram, TikTok, YouTube, Facebook, or X), then paste and publish natively.'
     },
     {
       question: 'How does the Trend Lab work?',

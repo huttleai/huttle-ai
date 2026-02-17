@@ -401,6 +401,32 @@ export function buildBriefBrandContext(brandData) {
 }
 
 /**
+ * Determines whether brand profile has enough context for personalization.
+ * @param {Object} brandData
+ * @returns {boolean}
+ */
+export function hasProfileContext(brandData) {
+  if (!brandData) return false;
+
+  const textSignals = [
+    brandData.brandName,
+    brandData.niche,
+    brandData.industry,
+    brandData.targetAudience,
+    brandData.brandVoice,
+  ].some((value) => typeof value === 'string' && value.trim().length > 0);
+
+  const arraySignals = [
+    brandData.platforms,
+    brandData.goals,
+    brandData.contentStrengths,
+    brandData.emotionalTriggers,
+  ].some((value) => Array.isArray(value) && value.length > 0);
+
+  return textSignals || arraySignals;
+}
+
+/**
  * Gets personalized greeting — always uses first name
  * - Uses firstName from brand profile, or fallback from user metadata
  * - Fallback if no name → "Hey there!" with profile completion nudge
@@ -416,13 +442,14 @@ export function getPersonalizedGreeting(brandData, fallbackName = 'there') {
   const rawName = brandData?.firstName || fallbackName;
   const firstName = formatDisplayName(rawName).split(' ')[0].replace('@', '');
   const hasName = !!(brandData?.firstName || (fallbackName && fallbackName !== 'there'));
+  const hasContext = hasProfileContext(brandData);
 
   return {
     message: hasName ? `Hey ${firstName}! Ready to create?` : 'Hey there! Ready to create?',
     shortMessage: hasName ? `Hey ${firstName}!` : 'Hey there!',
     name: hasName ? firstName : 'there',
     isCreator,
-    needsProfile: !hasName,
+    needsProfile: !hasContext,
   };
 }
 

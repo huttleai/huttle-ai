@@ -123,11 +123,13 @@ export default function SmartCalendar() {
   const [showPostActions, setShowPostActions] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
+  const [composerDraft, setComposerDraft] = useState(null);
   const [statusFilter, setStatusFilter] = useState(() => {
     const saved = localStorage.getItem('smartCalendarStatusFilter');
     return saved || 'all';
   });
   const calendarRef = useRef(null);
+  const hasConsumedDraftRef = useRef(false);
 
   // Check if navigating from Dashboard with a specific date
   useEffect(() => {
@@ -149,7 +151,7 @@ export default function SmartCalendar() {
   }, [statusFilter]);
 
   const { user } = useContext(AuthContext);
-  const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing, getMediaUrl } = useContent();
+  const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing, getMediaUrl, getDraft, clearDraft } = useContent();
   const { addToast } = useToast();
   const { addInfo } = useNotifications();
   const { userTier, TIERS } = useSubscription();
@@ -157,6 +159,40 @@ export default function SmartCalendar() {
 
   // Enable post reminders
   usePostReminders();
+
+  // Auto-open composer with AI Tools draft when available.
+  useEffect(() => {
+    if (hasConsumedDraftRef.current) return;
+    hasConsumedDraftRef.current = true;
+
+    const draft = getDraft?.();
+    if (!draft || draft.source !== 'ai-tools') return;
+
+    const normalizedPlatforms = (draft.platforms || [])
+      .map((platform) => {
+        const platformName = String(platform || '').toLowerCase();
+        if (platformName === 'instagram') return 'Instagram';
+        if (platformName === 'facebook') return 'Facebook';
+        if (platformName === 'tiktok') return 'TikTok';
+        if (platformName === 'x' || platformName === 'twitter') return 'X';
+        if (platformName === 'youtube') return 'YouTube';
+        return platform;
+      })
+      .filter(Boolean);
+
+    setComposerDraft({
+      title: draft.title || 'AI Draft',
+      caption: draft.caption || draft.content || '',
+      platforms: normalizedPlatforms,
+      source: draft.source,
+      tool: draft.tool,
+    });
+    setPostToEdit(null);
+    setQuickAddDate(null);
+    setIsCreatePostOpen(true);
+    clearDraft?.();
+    addToast('Draft loaded into Create Post.', 'success');
+  }, [addToast, clearDraft, getDraft]);
 
   // Transform scheduledPosts to match calendar format
   const allPosts = useMemo(() => {
@@ -632,7 +668,7 @@ export default function SmartCalendar() {
               <button
                 onClick={(e) => { e.stopPropagation(); handleOpenPublishModal(post); }}
                 className="p-1 hover:bg-gray-50 rounded transition-colors"
-                title="Publish"
+                title="Ready to Post"
               >
                 <Upload className="w-3.5 h-3.5 text-huttle-primary" />
               </button>
@@ -1113,7 +1149,7 @@ export default function SmartCalendar() {
                                 className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
                               >
                                 <Upload className="w-4 h-4" />
-                                Publish
+                                Ready to Post
                               </button>
                               
                               {post.status && post.status !== 'posted' && post.status !== 'cancelled' && (
@@ -1257,9 +1293,11 @@ export default function SmartCalendar() {
           setIsCreatePostOpen(false);
           setQuickAddDate(null);
           setPostToEdit(null);
+          setComposerDraft(null);
         }}
         preselectedDate={quickAddDate}
         postToEdit={postToEdit}
+        draftContent={composerDraft}
       />
 
       {/* Publish Modal */}

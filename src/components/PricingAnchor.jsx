@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Crown, Clock, ArrowRight, Check, Sparkles, ShieldCheck } from 'lucide-react';
+import { Crown, ArrowRight, Check, Sparkles, ShieldCheck } from 'lucide-react';
 
 /**
  * PricingAnchor - A price anchoring comparison component
@@ -35,10 +35,9 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
           {/* Card 1: Public Launch (The Anchor - Deliberately Unappealing) */}
           <div className="flex-1 max-w-md">
             <div className="relative h-full rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-200 p-5 md:p-8 opacity-75">
-              {/* Coming Soon Badge */}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-200 text-slate-500 text-[10px] md:text-xs font-medium mb-4 md:mb-6">
-                <Clock size={12} />
-                Coming Soon
+              {/* Standard Pricing Badge */}
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-[10px] md:text-xs font-medium mb-4 md:mb-6">
+                Standard Pricing
               </div>
 
               {/* Title */}

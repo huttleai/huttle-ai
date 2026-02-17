@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { Search, TrendingUp, Target, Copy, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, Lightbulb, Users, BookOpen, PenLine } from 'lucide-react';
+import { Search, TrendingUp, Target, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, PenLine } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
-import MarkdownRenderer from './MarkdownRenderer';
 import { scanTrendingTopics } from '../services/perplexityAPI';
 import { getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { useToast } from '../context/ToastContext';
@@ -13,168 +12,52 @@ import { getToastDisclaimer } from './AIDisclaimer';
 import { saveContentLibraryItem, supabase } from '../config/supabase';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from './AIUsageMeter';
+import { getPlatformIcon } from './SocialIcons';
 
-/**
- * Parse raw analysis text into structured sections for clean display.
- * Handles markdown headings, double-newline-separated blocks, and common header patterns.
- */
-function parseAnalysisSections(analysis) {
-  if (!analysis) return [];
-
-  const sections = [];
-  const sectionMap = {
-    // Overview / Trend Landscape
-    overview: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
-    summary: { title: 'Overview', icon: 'sparkles', color: 'huttle-primary' },
-    'trend landscape': { title: 'Trend Landscape', icon: 'sparkles', color: 'huttle-primary' },
-    'trend overview': { title: 'Trend Overview', icon: 'sparkles', color: 'huttle-primary' },
-    // Key Insights / Content Gap
-    'key insights': { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
-    insights: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
-    takeaways: { title: 'Key Insights', icon: 'lightbulb', color: 'amber-500' },
-    'content gap': { title: 'Content Gap Analysis', icon: 'lightbulb', color: 'amber-500' },
-    'gap analysis': { title: 'Content Gap Analysis', icon: 'lightbulb', color: 'amber-500' },
-    // Content Opportunities / Ideas
-    'content opportunities': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
-    'content ideas': { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
-    'actionable content': { title: 'Content Ideas', icon: 'target', color: 'green-600' },
-    opportunities: { title: 'Content Opportunities', icon: 'target', color: 'green-600' },
-    // Competitor Intelligence
-    'competitor': { title: 'Competitor Intelligence', icon: 'users', color: 'blue-600' },
-    'competitor intelligence': { title: 'Competitor Intelligence', icon: 'users', color: 'blue-600' },
-    'competitor moves': { title: 'Competitor Moves', icon: 'users', color: 'blue-600' },
-    // Audience
-    'audience angle': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
-    audience: { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
-    'who cares': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
-    'target audience': { title: 'Audience Angle', icon: 'users', color: 'blue-600' },
-    // Timing / Recommended Actions
-    'timing': { title: 'Timing Intelligence', icon: 'clock', color: 'orange-500' },
-    'timing intelligence': { title: 'Timing Intelligence', icon: 'clock', color: 'orange-500' },
-    'recommended actions': { title: 'Recommended Actions', icon: 'target', color: 'green-600' },
-    // Viral / Formats
-    'viral content': { title: 'Viral Content Examples', icon: 'flame', color: 'red-500' },
-    'trending formats': { title: 'Trending Formats & Sounds', icon: 'music', color: 'purple-500' },
-    // Confidence
-    'confidence': { title: 'Confidence Assessment', icon: 'shield', color: 'gray-600' },
-    'confidence assessment': { title: 'Confidence Assessment', icon: 'shield', color: 'gray-600' },
-  };
-
-  // Try splitting by markdown headers (## or ###)
-  const headerRegex = /(?:^|\n)#{2,3}\s+(.+)/g;
-  const matches = [...analysis.matchAll(headerRegex)];
-
-  if (matches.length >= 2) {
-    matches.forEach((match, idx) => {
-      const headerText = match[1].replace(/\*+/g, '').trim().toLowerCase();
-      const startIdx = match.index + match[0].length;
-      const endIdx = idx < matches.length - 1 ? matches[idx + 1].index : analysis.length;
-      const content = analysis.substring(startIdx, endIdx).trim();
-
-      // Find matching section type
-      let sectionMeta = null;
-      for (const [key, meta] of Object.entries(sectionMap)) {
-        if (headerText.includes(key)) {
-          sectionMeta = meta;
-          break;
-        }
-      }
-
-      sections.push({
-        title: sectionMeta?.title || match[1].replace(/\*+/g, '').trim(),
-        icon: sectionMeta?.icon || 'book',
-        color: sectionMeta?.color || 'gray-600',
-        content,
-      });
-    });
-  }
-
-  // Fallback: if no structured sections found, split into one overview block
-  if (sections.length === 0) {
-    sections.push({
-      title: 'Trend Analysis',
-      icon: 'sparkles',
-      color: 'huttle-primary',
-      content: analysis.trim(),
-    });
-  }
-
-  return sections;
+function getDeepDiveLoadingMessage(seconds) {
+  if (seconds < 8) return 'Researching real-time trend data...';
+  if (seconds < 18) return 'Analyzing platform activity...';
+  if (seconds < 28) return 'Compiling intelligence report...';
+  return 'Finalizing deep analysis...';
 }
 
-/**
- * Map section color keys to full Tailwind classes (JIT-safe)
- */
-const SECTION_COLOR_MAP = {
-  'huttle-primary': 'text-huttle-primary',
-  'amber-500': 'text-amber-500',
-  'green-600': 'text-green-600',
-  'blue-600': 'text-blue-600',
-  'gray-600': 'text-gray-600',
-};
+function DeepDiveLoadingState({ secondsElapsed }) {
+  const steps = [
+    'Research',
+    'Platforms',
+    'Report',
+    'Finalize'
+  ];
+  const activeStepIndex = secondsElapsed < 8 ? 0 : secondsElapsed < 18 ? 1 : secondsElapsed < 28 ? 2 : 3;
+  const progressPercent = Math.min(95, 20 + (activeStepIndex * 20) + (secondsElapsed % 10));
 
-const SECTION_BG_MAP = {
-  'huttle-primary': 'bg-huttle-50',
-  'amber-500': 'bg-amber-50',
-  'green-600': 'bg-green-50',
-  'blue-600': 'bg-blue-50',
-  'gray-600': 'bg-gray-50',
-};
-
-/**
- * Render a section icon by name
- */
-function SectionIcon({ name, colorKey }) {
-  const colorClass = SECTION_COLOR_MAP[colorKey] || 'text-gray-600';
-  const cls = `w-4.5 h-4.5 ${colorClass}`;
-  switch (name) {
-    case 'lightbulb': return <Lightbulb className={cls} />;
-    case 'target': return <Target className={cls} />;
-    case 'users': return <Users className={cls} />;
-    case 'book': return <BookOpen className={cls} />;
-    case 'sparkles':
-    default: return <Sparkles className={cls} />;
-  }
-}
-
-/**
- * Loading skeleton for Deep Dive results
- */
-function DeepDiveSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse">
-      {/* Header skeleton */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 rounded-2xl border border-huttle-100 bg-white/90 p-5">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-huttle-50 flex items-center justify-center">
+          <Loader2 className="w-5 h-5 text-huttle-primary animate-spin" />
+        </div>
         <div>
-          <div className="h-6 w-64 bg-gray-200 rounded-lg mb-2" />
-          <div className="h-4 w-40 bg-gray-100 rounded" />
+          <p className="font-semibold text-gray-900">{getDeepDiveLoadingMessage(secondsElapsed)}</p>
+          <p className="text-xs text-gray-500">This can take 15-30 seconds for deeper real-time analysis.</p>
         </div>
       </div>
-      {/* Section skeletons */}
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-            <div className="h-5 w-40 bg-gray-200 rounded" />
-          </div>
-          <div className="p-5 space-y-3">
-            <div className="h-4 w-full bg-gray-100 rounded" />
-            <div className="h-4 w-5/6 bg-gray-100 rounded" />
-            <div className="h-4 w-4/6 bg-gray-100 rounded" />
-          </div>
+
+      <div className="space-y-2">
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 transition-all duration-700 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
-      ))}
-      {/* Ideas skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
-            <div className="h-5 w-24 bg-gray-200 rounded-lg mb-3" />
-            <div className="space-y-2">
-              <div className="h-4 w-full bg-gray-100 rounded" />
-              <div className="h-4 w-5/6 bg-gray-100 rounded" />
-              <div className="h-4 w-3/6 bg-gray-100 rounded" />
+        <div className="grid grid-cols-4 gap-2">
+          {steps.map((label, index) => (
+            <div key={label} className="flex flex-col items-center gap-1">
+              <div className={`w-2.5 h-2.5 rounded-full ${index <= activeStepIndex ? 'bg-huttle-primary animate-pulse' : 'bg-gray-200'}`} />
+              <span className={`text-[10px] ${index <= activeStepIndex ? 'text-huttle-primary font-semibold' : 'text-gray-400'}`}>{label}</span>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -199,13 +82,13 @@ export default function TrendDiscoveryHub() {
   const [deepDiveTopic, setDeepDiveTopic] = useState('');
   const [deepDiveResults, setDeepDiveResults] = useState(null);
   const [isLoadingDeepDive, setIsLoadingDeepDive] = useState(false);
-  const [copiedIdea, setCopiedIdea] = useState(null);
   const [savedTrendIndex, setSavedTrendIndex] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [hoveredTrend, setHoveredTrend] = useState(null);
   const [scanError, setScanError] = useState(null);
   const [deepDiveError, setDeepDiveError] = useState(null);
+  const [deepDiveLoadingSeconds, setDeepDiveLoadingSeconds] = useState(0);
+  const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
   
   const canAccessDeepDive = userTier !== TIERS.FREE;
 
@@ -225,134 +108,103 @@ export default function TrendDiscoveryHub() {
     }
   }, [isScanning]);
 
-  const parseTrendResults = (trendText) => {
-    if (!trendText) return [];
-    
-    const trends = [];
-    
-    // Pre-clean: strip markdown table syntax and artifacts
-    const cleanedText = trendText
-      .replace(/\|[-–—]+\|/g, '') // Remove table divider rows like |---|---|
-      .replace(/^\|.*\|$/gm, '')  // Remove full table rows
-      .replace(/^#{1,4}\s+/gm, '') // Remove markdown headers ### 
-      .replace(/\*\*/g, '')        // Remove bold markers
-      .replace(/\*([^*]+)\*/g, '$1') // Remove italic markers
-      .trim();
-    
-    const lines = cleanedText.split('\n').filter(line => line.trim());
-    
-    let currentTrend = null;
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      
-      // Skip lines that are just markdown artifacts or too short
-      if (trimmed.length < 5) continue;
-      if (/^[-|=_*#>]+$/.test(trimmed)) continue;
-      if (/^\|/.test(trimmed)) continue; // Skip any remaining table rows
-      
-      // Try to match numbered list format: "1. Trend Name | Platforms: X | Description"
-      const pipeMatch = trimmed.match(/^(?:\d+[\.\)]\s*)(.*?)\s*\|\s*(?:Platforms?:?\s*)(.*?)\s*\|\s*(.*)/i);
-      if (pipeMatch) {
-        if (currentTrend) trends.push(currentTrend);
-        
-        const name = pipeMatch[1].trim();
-        const platformStr = pipeMatch[2].trim();
-        const description = pipeMatch[3].trim();
-        
-        const platformMatches = platformStr.match(/(?:Instagram|TikTok|YouTube|X|Twitter|Facebook)/gi) || [];
-        const platforms = platformMatches.length > 0
-          ? [...new Set(platformMatches.map(p => p === 'Twitter' ? 'X' : p))]
-          : ['Multi-platform'];
-        
-        const baseScore = 95 - (trends.length * 5);
-        currentTrend = {
-          name: name.substring(0, 60),
-          score: Math.max(baseScore, 60),
-          velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
-          platforms,
-          description
-        };
-        continue;
-      }
-      
-      // Try numbered/bulleted list: "1. Trend Name" or "- Trend Name" or "• Trend Name"
-      const listMatch = trimmed.match(/^(?:\d+[\.\)]\s*|[-•]\s+)(.+)/);
-      if (listMatch) {
-        const rawName = listMatch[1].trim();
-        
-        // Validate: reject names that are mostly special characters or too short
-        const alphaCount = (rawName.match(/[a-zA-Z]/g) || []).length;
-        if (alphaCount < 3) continue;
-        
-        // Split on colon or dash to separate name from description
-        const colonIdx = rawName.indexOf(':');
-        const dashIdx = rawName.indexOf(' - ');
-        const splitIdx = colonIdx > 0 ? colonIdx : dashIdx > 0 ? dashIdx : -1;
-        
-        const name = splitIdx > 0 ? rawName.substring(0, splitIdx).trim() : rawName;
-        const desc = splitIdx > 0 ? rawName.substring(splitIdx + (colonIdx > 0 ? 1 : 3)).trim() : '';
-        
-        if (name.length > 3) {
-          if (currentTrend) trends.push(currentTrend);
-          
-          const platformMatches = trimmed.match(/(?:Instagram|TikTok|YouTube|X|Twitter|Facebook)/gi) || [];
-          const platforms = platformMatches.length > 0
-            ? [...new Set(platformMatches.map(p => p === 'Twitter' ? 'X' : p))]
-            : ['Multi-platform'];
-          
-          const baseScore = 95 - (trends.length * 5);
-          currentTrend = {
-            name: name.substring(0, 60),
-            score: Math.max(baseScore, 60),
-            velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
-            platforms,
-            description: desc
-          };
-        }
-      } else if (currentTrend && trimmed) {
-        // Continuation line - append to current trend description
-        currentTrend.description += (currentTrend.description ? ' ' : '') + trimmed;
-      }
+  useEffect(() => {
+    if (!isLoadingDeepDive) {
+      setDeepDiveLoadingSeconds(0);
+      return undefined;
     }
-    
-    if (currentTrend) {
-      trends.push(currentTrend);
+
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      setDeepDiveLoadingSeconds(elapsedSeconds);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isLoadingDeepDive]);
+
+  const getCategoryStyles = (category) => {
+    const normalized = (category || '').toLowerCase();
+    if (normalized === 'viral moment') return 'bg-pink-100 text-pink-700 border-pink-200';
+    if (normalized === 'platform update') return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (normalized === 'cultural wave') return 'bg-purple-100 text-purple-700 border-purple-200';
+    if (normalized === 'news-driven') return 'bg-red-100 text-red-700 border-red-200';
+    if (normalized === 'seasonal') return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  };
+
+  const getMomentumMeta = (momentum) => {
+    const normalized = (momentum || '').toLowerCase();
+    if (normalized === 'rising') {
+      return { symbol: '↑', className: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
     }
-    
-    // Final validation: remove any trends with garbage names
-    const validTrends = trends.filter(t => {
-      const alphaRatio = (t.name.match(/[a-zA-Z]/g) || []).length / t.name.length;
-      return alphaRatio > 0.5 && t.name.length > 3;
+    if (normalized === 'declining') {
+      return { symbol: '↓', className: 'text-red-600 bg-red-50 border-red-200' };
+    }
+    return { symbol: '•', className: 'text-amber-600 bg-amber-50 border-amber-200' };
+  };
+
+  const getDeepDiveStatusStyles = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'rising') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (normalized === 'peaking') return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (normalized === 'declining') return 'bg-red-100 text-red-700 border-red-200';
+    if (normalized === 'emerging') return 'bg-blue-100 text-blue-700 border-blue-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getDeepDiveVelocityStyles = (velocity) => {
+    const normalized = String(velocity || '').toLowerCase();
+    if (normalized === 'explosive') return 'bg-red-100 text-red-700 border-red-200';
+    if (normalized === 'steady') return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (normalized === 'slow burn') return 'bg-gray-100 text-gray-700 border-gray-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getConfidenceStyles = (level) => {
+    const normalized = String(level || '').toLowerCase();
+    if (normalized === 'high') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (normalized === 'medium') return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (normalized === 'low') return 'bg-red-100 text-red-700 border-red-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getMoodStyles = (mood) => {
+    const normalized = String(mood || '').toLowerCase();
+    if (normalized === 'positive') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (normalized === 'negative') return 'bg-red-100 text-red-700 border-red-200';
+    if (normalized === 'mixed') return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (normalized === 'polarized') return 'bg-purple-100 text-purple-700 border-purple-200';
+    if (normalized === 'curious') return 'bg-blue-100 text-blue-700 border-blue-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getTimingWindowStyles = (window) => {
+    const normalized = String(window || '').toLowerCase();
+    if (normalized === 'act now') return 'bg-red-100 text-red-700 border-red-200 animate-pulse';
+    if (normalized === 'this week') return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (normalized === 'monitor') return 'bg-gray-100 text-gray-700 border-gray-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getActivityDots = (level) => {
+    const normalized = String(level || '').toLowerCase();
+    if (normalized === 'high') return { filled: 3, className: 'bg-emerald-500' };
+    if (normalized === 'medium') return { filled: 2, className: 'bg-amber-500' };
+    return { filled: 1, className: 'bg-gray-500' };
+  };
+
+  const formatProcessedAt = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
     });
-    
-    if (validTrends.length === 0) {
-      // Last resort: try to extract any meaningful sentences from the text
-      const sentences = trendText.split(/[.\n]/).filter(s => {
-        const cleaned = s.replace(/[^a-zA-Z\s]/g, '').trim();
-        return cleaned.length > 15;
-      });
-      
-      if (sentences.length > 0) {
-        return sentences.slice(0, 5).map((sentence, i) => ({
-          name: sentence.trim().substring(0, 60),
-          score: Math.max(90 - (i * 6), 60),
-          velocity: `+${Math.floor(40 + Math.random() * 60)}%`,
-          platforms: ['Multi-platform'],
-          description: ''
-        }));
-      }
-      
-      return [{
-        name: 'Trending in ' + (brandData?.niche || 'your niche'),
-        score: 85,
-        velocity: '+45%',
-        platforms: ['Multi-platform'],
-        description: trendText.substring(0, 200)
-      }];
-    }
-    
-    return validTrends.slice(0, 10);
   };
 
   const handleQuickScan = async () => {
@@ -374,24 +226,22 @@ export default function TrendDiscoveryHub() {
 
       const result = await scanTrendingTopics(brandData, 'all');
       
-      if (result.success) {
-        const parsedTrends = parseTrendResults(result.trends);
+      if (result.success && result.scan) {
         setScanResults({
-          trends: parsedTrends,
-          timestamp: new Date().toLocaleString(),
-          niche: brandData.niche,
+          ...result.scan,
           citations: result.citations || []
         });
         setScanError(null);
-        showToast(`Scan complete! Found ${parsedTrends.length} trending topics. ${getToastDisclaimer('forecast')}`, 'success');
+        showToast(`Scan complete! Found ${result.scan.trends.length} active trends. ${getToastDisclaimer('forecast')}`, 'success');
       } else {
-        setScanError('Failed to scan trends. Please try again.');
-        showToast('Failed to scan trends. Please try again.', 'error');
+        const errorMessage = result.error || 'Trend scan returned unexpected results. Please try again.';
+        setScanError(errorMessage);
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Quick Scan error:', error);
-      setScanError('Failed to scan trends. Please try again.');
-      showToast('Error scanning trends', 'error');
+      setScanError('Trend scan returned unexpected results. Please try again.');
+      showToast('Trend scan returned unexpected results. Please try again.', 'error');
     } finally {
       setIsScanning(false);
     }
@@ -415,10 +265,10 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
+    setDeepDiveError(null);
+    setDeepDiveResults(null);
     setIsLoadingDeepDive(true);
     try {
-      // Track this usage
-      await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
       // Fetch user profile for personalized context
       let userProfile = null;
       if (user?.id) {
@@ -441,101 +291,87 @@ export default function TrendDiscoveryHub() {
         }
       });
 
-      if (result.success) {
-        // Transform n8n workflow response to match existing UI format
-        const ideas = result.contentIdeas || [];
-        
-        // Build the raw content from analysis and ideas for "Copy All" functionality
-        let rawContent = result.analysis || '';
-        if (ideas.length > 0) {
-          rawContent += '\n\nContent Ideas:\n';
-          ideas.forEach((idea, index) => {
-            const ideaText = typeof idea === 'string' ? idea : idea.content || '';
-            rawContent += `\n${index + 1}. ${ideaText}`;
-          });
-        }
-
+      if (result.success && result.report) {
+        await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
         setDeepDiveResults({
-          topic: deepDiveTopic,
-          analysis: result.analysis || '',
-          ideas: ideas.map((idea, index) => ({
-            id: index + 1,
-            content: typeof idea === 'string' ? idea : idea.content || '',
-            platform: typeof idea === 'object' ? idea.platform : extractPlatform(idea),
-          })),
+          topic: deepDiveTopic.trim(),
+          report: result.report,
           competitorInsights: result.competitorInsights || [],
           citations: result.citations || [],
-          rawContent: rawContent,
-          timestamp: new Date().toLocaleString(),
-          source: 'n8n'
+          metadata: result.metadata || {},
+          raw: {
+            success: true,
+            report: result.report,
+            citations: result.citations || [],
+            metadata: result.metadata || {},
+          },
         });
+        setIsSourcesExpanded(false);
         setDeepDiveError(null);
-        showToast(`Deep Dive complete! Found ${ideas.length} content ideas. ${getToastDisclaimer('forecast')}`, 'ai');
+        showToast(`Deep Dive report ready. ${getToastDisclaimer('forecast')}`, 'ai');
       } else {
-        // If workflow is not configured or failed
-        const errorMessage = result.reason || 'Failed to complete deep dive analysis';
-        console.error('[TrendDiscoveryHub] Deep Dive failed:', errorMessage);
-        
-        // Show detailed error message to help with debugging
-        const userMessage = errorMessage.includes('not configured')
-          ? 'Deep Dive workflow not configured. Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable. Check console for details.'
-          : errorMessage.includes('timeout')
-          ? 'Workflow timed out. The analysis is taking longer than expected. Please try again or check your n8n workflow.'
-          : errorMessage.includes('404')
-          ? 'Workflow endpoint not found. Please verify the webhook URL is correct and the workflow is activated in n8n.'
-          : errorMessage.includes('500')
-          ? 'Workflow server error. Please check your n8n workflow logs for details.'
-          : `Deep Dive failed: ${errorMessage}. Check console for details.`;
-        
-        setDeepDiveError(userMessage);
-        showToast(userMessage, 'error');
+        const errorMessage = result?.reason || 'Deep Dive encountered a server issue. Please try again in a moment.';
+        setDeepDiveError(errorMessage);
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Deep Dive error:', error);
-      
-      // Check if this is a timeout error
-      if (error.name === 'AbortError' || error.name === 'TimeoutError' || 
-          (error.message && error.message.toLowerCase().includes('timeout'))) {
-        setDeepDiveError('The analysis is taking longer than expected. Please try again.');
-        showToast('The analysis is taking longer than expected. Please try again.', 'warning');
-      } else {
-        setDeepDiveError('Error analyzing trends. Please try again.');
-        showToast('Error analyzing trends', 'error');
-      }
+      const errorMessage = 'Deep Dive encountered a server issue. Please try again in a moment.';
+      setDeepDiveError(errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setIsLoadingDeepDive(false);
     }
-  };
-
-  const extractPlatform = (text) => {
-    const platforms = ['Instagram', 'TikTok', 'YouTube', 'X', 'Twitter', 'Facebook'];
-    for (const platform of platforms) {
-      if (text.toLowerCase().includes(platform.toLowerCase())) {
-        return platform === 'Twitter' ? 'X' : platform;
-      }
-    }
-    return 'Multi-platform';
-  };
-
-  const handleCopyIdea = (idea, index) => {
-    navigator.clipboard.writeText(idea);
-    setCopiedIdea(index);
-    showToast(`Idea copied! ${getToastDisclaimer('general')}`, 'success');
-    setTimeout(() => setCopiedIdea(null), 2000);
   };
 
   const handleDeepDiveFromTrend = (trendName) => {
     // Pre-fill the deep dive topic and switch to deep dive mode
     setDeepDiveTopic(trendName);
     setActiveMode('deepDive');
-    showToast('Switched to Deep Dive — hit Analyze to explore this trend', 'success');
+    showToast('Switched to Deep Dive — generate a report for this trend', 'success');
   };
 
   const handleCreatePostFromTrend = (trendName) => {
-    // Navigate to Smart Calendar with trend context for post creation
-    sessionStorage.setItem('createPostContent', trendName.substring(0, 200));
-    showToast('Opening post creator...', 'success');
-    navigate('/dashboard/smart-calendar');
+    const topic = trendName.substring(0, 200);
+    showToast('Opening AI Power Tools...', 'success');
+    navigate(`/dashboard/ai-tools?tool=caption&topic=${encodeURIComponent(topic)}`);
+  };
+
+  const handleSaveDeepDiveReport = async () => {
+    if (!user?.id || !deepDiveResults?.report) {
+      showToast('No report found to save.', 'warning');
+      return;
+    }
+
+    try {
+      const reportPayload = {
+        topic: deepDiveResults.topic,
+        report: deepDiveResults.report,
+        citations: deepDiveResults.citations || [],
+        metadata: deepDiveResults.metadata || {},
+        savedAt: new Date().toISOString()
+      };
+
+      const itemData = {
+        name: `Deep Dive Report - ${deepDiveResults.topic.substring(0, 40)}${deepDiveResults.topic.length > 40 ? '...' : ''}`,
+        type: 'text',
+        content: JSON.stringify(reportPayload, null, 2),
+        size_bytes: 0,
+        description: 'Structured trend intelligence report from Trend Lab Deep Dive'
+      };
+
+      const result = await saveContentLibraryItem(user.id, itemData);
+      if (result.success) {
+        setSavedTrendIndex('deep-report');
+        setTimeout(() => setSavedTrendIndex(null), 2000);
+        showToast('Report saved to Content Library!', 'success');
+      } else {
+        showToast('Failed to save report. Please try again.', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving Deep Dive report:', error);
+      showToast('Failed to save report. Please try again.', 'error');
+    }
   };
 
   const handleAddToLibrary = async (content, type = 'trend', itemIndex = null) => {
@@ -571,13 +407,6 @@ export default function TrendDiscoveryHub() {
       console.error('Error adding to library:', error);
       showToast('Error adding to library', 'error');
     }
-  };
-
-  // Score color based on value
-  const getScoreColor = (score) => {
-    if (score >= 85) return 'from-emerald-400 to-emerald-600';
-    if (score >= 70) return 'from-amber-400 to-orange-500';
-    return 'from-gray-400 to-gray-500';
   };
 
   return (
@@ -768,9 +597,7 @@ export default function TrendDiscoveryHub() {
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                         <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Live Results</span>
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Last updated: {scanResults.timestamp}
-                      </p>
+                      <p className="text-sm text-gray-600 mt-1">{scanResults.scan_summary}</p>
                     </div>
                     <button
                       onClick={handleQuickScan}
@@ -783,127 +610,89 @@ export default function TrendDiscoveryHub() {
 
                   {/* Trend Cards */}
                   <div className="space-y-3">
-                    {scanResults.trends.map((trend, i) => (
-                      <div 
-                        key={i}
-                        className={`group relative overflow-hidden rounded-2xl transition-all duration-500 cursor-pointer ${
-                          hoveredTrend === i 
-                            ? 'bg-gradient-to-r from-huttle-50 to-cyan-50 shadow-xl shadow-huttle-500/10 scale-[1.01]' 
-                            : 'bg-white hover:bg-gray-50'
-                        }`}
-                        style={{ 
-                          border: hoveredTrend === i 
-                            ? '1px solid rgba(1, 186, 210, 0.3)' 
-                            : '1px solid rgba(0,0,0,0.05)',
-                          animationDelay: `${i * 100}ms`
-                        }}
-                        onMouseEnter={() => setHoveredTrend(i)}
-                        onMouseLeave={() => setHoveredTrend(null)}
-                      >
-                        {/* Rank Badge - Fixed Position */}
-                        <div className={`absolute top-4 left-4 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                          i === 0 
-                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30' 
-                            : i === 1 
-                              ? 'bg-gradient-to-br from-gray-300 to-gray-400 text-white'
-                              : i === 2 
-                                ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white'
-                                : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {i + 1}
-                        </div>
-
-                        {/* Content */}
-                        <div className="pl-20 pr-4 py-4">
-                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                            {/* Trend Info */}
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-gray-900 text-lg mb-2 truncate group-hover:text-huttle-primary transition-colors">
-                                {trend.name}
-                              </h4>
-                              
-                              {/* Stats Row */}
-                              <div className="flex flex-wrap items-center gap-3">
-                                {/* Velocity */}
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-lg">
-                                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span className="text-sm font-bold text-emerald-700">{trend.velocity}</span>
-                                </div>
-                                
-                                {/* Score */}
-                                <div className="flex items-center gap-2">
-                                  <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div 
-                                      className={`h-full bg-gradient-to-r ${getScoreColor(trend.score)} rounded-full transition-all duration-700`}
-                                      style={{ width: `${trend.score}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs font-semibold text-gray-600">{trend.score}%</span>
-                                </div>
-                                
-                                {/* Platforms */}
-                                <div className="hidden sm:flex items-center gap-1.5">
-                                  {trend.platforms.slice(0, 2).map((platform, idx) => (
-                                    <span 
-                                      key={idx}
-                                      className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium"
-                                    >
-                                      {platform}
-                                    </span>
-                                  ))}
-                                  {trend.platforms.length > 2 && (
-                                    <span className="text-xs text-gray-400">+{trend.platforms.length - 2}</span>
-                                  )}
+                    {scanResults.trends.map((trend, index) => {
+                      const momentumMeta = getMomentumMeta(trend.momentum);
+                      const trendTextForLibrary = `${trend.topic}. Why trending: ${trend.why_trending}. Relevance: ${trend.relevance_to_niche}`;
+                      return (
+                        <div
+                          key={`${trend.topic}-${index}`}
+                          className="bg-white rounded-2xl border border-gray-200 p-4 md:p-5 hover:border-huttle-primary/30 hover:shadow-lg hover:shadow-huttle-500/10 transition-all"
+                        >
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex-1 min-w-[220px]">
+                                <h4 className="text-lg font-bold text-gray-900">{trend.topic}</h4>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${getCategoryStyles(trend.category)}`}>
+                                    {trend.category}
+                                  </span>
+                                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${momentumMeta.className}`}>
+                                    {momentumMeta.symbol} {trend.momentum}
+                                  </span>
+                                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                                    {trend.estimated_lifespan}
+                                  </span>
+                                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-huttle-50 text-huttle-primary border border-huttle-100">
+                                    {trend.opportunity_window}
+                                  </span>
                                 </div>
                               </div>
-                            </div>
-                            
-                            {/* Action Buttons */}
-                            <div className="flex items-center gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddToLibrary(trend.name + (trend.description ? ': ' + trend.description : ''), 'trend', `trend-${i}`);
-                                }}
+                                onClick={() => handleAddToLibrary(trendTextForLibrary, 'trend', `trend-${index}`)}
                                 className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 text-gray-600 rounded-lg text-xs font-medium transition-all"
                                 title="Save to Library"
                               >
-                                {savedTrendIndex === `trend-${i}` ? (
+                                {savedTrendIndex === `trend-${index}` ? (
                                   <Check className="w-3.5 h-3.5 text-green-600" />
                                 ) : (
                                   <FolderPlus className="w-3.5 h-3.5" />
                                 )}
                               </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Why trending:</span> {trend.why_trending}</p>
+                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Niche relevance:</span> {trend.relevance_to_niche}</p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(trend.platforms_active || []).map((platform, platformIndex) => (
+                                <span
+                                  key={`${platform}-${platformIndex}`}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700"
+                                >
+                                  {getPlatformIcon(platform, 'w-3.5 h-3.5 text-gray-700')}
+                                  {platform}
+                                </span>
+                              ))}
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-2 pt-1">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeepDiveFromTrend(trend.name);
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-lg text-xs font-medium transition-all hover:bg-huttle-50"
+                                onClick={() => handleDeepDiveFromTrend(trend.topic)}
+                                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-lg text-xs font-semibold transition-all hover:bg-huttle-50"
                               >
                                 <Target className="w-3.5 h-3.5 text-huttle-primary" />
                                 <span>Deep Dive</span>
                               </button>
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCreatePostFromTrend(trend.name + (trend.description ? ': ' + trend.description : ''));
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:bg-huttle-primary-dark hover:shadow-md"
+                                onClick={() => handleCreatePostFromTrend(trend.topic)}
+                                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-huttle-primary text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:bg-huttle-primary-dark hover:shadow-md"
                               >
                                 <PenLine className="w-3.5 h-3.5" />
-                                <span>Create Post</span>
+                                <span>Create Content</span>
                               </button>
                             </div>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        {/* Hover Highlight Line */}
-                        <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 transition-all duration-300 ${
-                          hoveredTrend === i ? 'opacity-100' : 'opacity-0'
-                        }`} />
-                      </div>
-                    ))}
+                  <div className="pt-2 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">
+                      Last updated: {scanResults.last_updated ? new Date(scanResults.last_updated).toLocaleString() : new Date().toLocaleString()}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1028,12 +817,12 @@ export default function TrendDiscoveryHub() {
                         {isLoadingDeepDive ? (
                           <>
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Analyzing...</span>
+                            <span>Generating...</span>
                           </>
                         ) : (
                           <>
                             <Sparkles className="w-5 h-5" />
-                            <span>Analyze</span>
+                            <span>Generate Report</span>
                           </>
                         )}
                       </button>
@@ -1058,200 +847,247 @@ export default function TrendDiscoveryHub() {
                     </div>
                   )}
 
-                  {/* Loading Skeleton */}
-                  {isLoadingDeepDive && <DeepDiveSkeleton />}
+                  {/* Loading State */}
+                  {isLoadingDeepDive && <DeepDiveLoadingState secondsElapsed={deepDiveLoadingSeconds} />}
 
                   {/* Results */}
-                  {deepDiveResults && !isLoadingDeepDive && (
-                    <div className="space-y-4 animate-fadeIn">
-                      {/* Results Header */}
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-lg">
-                            Deep Dive: "{deepDiveResults.topic}"
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            Generated: {deepDiveResults.timestamp}
-                            {deepDiveResults.source === 'n8n' && (
-                              <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                                AI Workflow
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setDeepDiveTopic('');
-                            setDeepDiveResults(null);
-                          }}
-                          className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-                        >
-                          Clear
-                        </button>
-                      </div>
+                  {deepDiveResults && !isLoadingDeepDive && (() => {
+                    const report = deepDiveResults.report || {};
+                    const metadata = deepDiveResults.metadata || {};
+                    const sectionsParsed = metadata.sections_parsed || {};
+                    const activeTrends = Array.isArray(report.active_trends) ? report.active_trends : [];
+                    const platformActivity = Array.isArray(report.platform_activity) ? report.platform_activity : [];
+                    const citations = Array.isArray(deepDiveResults.citations) ? deepDiveResults.citations : [];
+                    const generatedAt = formatProcessedAt(metadata.processed_at);
+                    const showTrendsSection = (sectionsParsed.trend_count ?? activeTrends.length) > 0 && activeTrends.length > 0;
+                    const showPlatformSection = (sectionsParsed.platform_count ?? platformActivity.length) > 0 && platformActivity.length > 0;
+                    const showCompetitorSection = Boolean(sectionsParsed.has_competitors) && Boolean(report.competitor_landscape);
 
-                      {/* Structured Analysis Sections */}
-                      {deepDiveResults.analysis && (() => {
-                        const analysisSections = parseAnalysisSections(deepDiveResults.analysis);
-                        return (
-                          <div className="space-y-3">
-                            {analysisSections.map((section, idx) => (
-                              <div key={idx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                                <div className={`px-5 py-3.5 border-b border-gray-100 flex items-center gap-2.5 ${SECTION_BG_MAP[section.color] || 'bg-gray-50'}`}>
-                                  <SectionIcon name={section.icon} colorKey={section.color} />
-                                  <h4 className="font-semibold text-gray-900 text-sm">{section.title}</h4>
-                                </div>
-                                <div className="p-5 text-sm text-gray-700 leading-relaxed">
-                                  <MarkdownRenderer content={section.content} />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Content Ideas */}
-                      {deepDiveResults.ideas.length > 0 && (
-                        <>
-                          <h4 className="font-semibold text-gray-900 flex items-center gap-2 pt-2">
-                            <Target className="w-4 h-4 text-huttle-primary" />
-                            Content Ideas
-                            <span className="text-xs bg-huttle-100 text-huttle-primary px-2 py-0.5 rounded-full font-medium">
-                              {deepDiveResults.ideas.length}
-                            </span>
-                          </h4>
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        {deepDiveResults.ideas.slice(0, 6).map((idea) => (
-                          <div
-                            key={idea.id}
-                            className="group relative overflow-hidden bg-gradient-to-br from-huttle-50 to-cyan-50 rounded-xl p-4 border border-huttle-100 hover:border-huttle-300 hover:shadow-lg hover:shadow-huttle-500/10 transition-all"
-                          >
-                            <div className="flex items-start justify-between mb-2.5">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white text-xs font-bold rounded-md">
-                                <Sparkles className="w-3 h-3" />
-                                #{idea.id}
-                              </span>
-                              {idea.platform && (
-                                <span className="px-2 py-0.5 bg-white text-gray-600 text-xs font-medium rounded-md shadow-sm">
-                                  {idea.platform}
+                    return (
+                      <div className="space-y-5 animate-fadeIn">
+                        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-2">
+                              <h3 className="text-xl font-bold text-gray-900">{deepDiveResults.topic}</h3>
+                              {report.overview && (
+                                <p className="text-sm leading-relaxed text-gray-600">{report.overview}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {report.confidence?.level && (
+                                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getConfidenceStyles(report.confidence.level)}`}>
+                                  Confidence: {report.confidence.level}
+                                </span>
+                              )}
+                              {generatedAt && (
+                                <span className="text-xs text-gray-500">
+                                  Generated {generatedAt}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                              {idea.content}
-                            </p>
-                            <div className="flex gap-2 mt-3 pt-3 border-t border-huttle-100/50">
-                              <button
-                                onClick={() => handleCopyIdea(idea.content, `deep-${idea.id}`)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                              >
-                                {copiedIdea === `deep-${idea.id}` ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-emerald-500" />
-                                    <span>Copied!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3 h-3" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleAddToLibrary(idea.content, 'idea', `idea-${idea.id}`)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-huttle-primary border border-huttle-primary/30 rounded-lg text-xs font-medium hover:bg-huttle-primary/5 transition-colors"
-                              >
-                                {savedTrendIndex === `idea-${idea.id}` ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-green-600" />
-                                    <span className="text-green-600">Saved!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <FolderPlus className="w-3 h-3" />
-                                    <span>Save</span>
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleCreatePostFromTrend(idea.content)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary text-white rounded-lg text-xs font-medium hover:bg-huttle-primary-dark hover:shadow-md transition-all"
-                              >
-                                <PenLine className="w-3 h-3" />
-                                <span>Use in Post</span>
-                              </button>
+                          </div>
+                        </div>
+
+                        {showTrendsSection && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold text-gray-900">Active Trends</h4>
+                              <span className="rounded-full bg-huttle-100 px-2 py-0.5 text-xs font-semibold text-huttle-primary">
+                                {activeTrends.length}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              {activeTrends.map((trend, index) => (
+                                <div key={`${trend?.name || 'trend'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <h5 className="font-semibold text-gray-900">{trend?.name || 'Trend'}</h5>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveStatusStyles(trend?.status)}`}>
+                                        {trend?.status || 'Unknown'}
+                                      </span>
+                                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveVelocityStyles(trend?.velocity)}`}>
+                                        {trend?.velocity || 'Unclear'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {trend?.primary_platform && (
+                                    <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-700">
+                                      {getPlatformIcon(trend.primary_platform, 'w-3.5 h-3.5 text-gray-700')}
+                                      <span>{trend.primary_platform}</span>
+                                    </div>
+                                  )}
+                                  {trend?.evidence && (
+                                    <div className="mb-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                      {trend.evidence}
+                                    </div>
+                                  )}
+                                  {trend?.why_it_matters && (
+                                    <p className="text-sm text-gray-700">{trend.why_it_matters}</p>
+                                  )}
+                                  <button
+                                    onClick={() => handleCreatePostFromTrend(trend?.name || deepDiveResults.topic)}
+                                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-huttle-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
+                                  >
+                                    <PenLine className="h-3.5 w-3.5" />
+                                    Create Content
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* Copy All */}
-                      <button
-                        onClick={() => handleCopyIdea(deepDiveResults.rawContent, 'all-deep')}
-                        className="w-full flex items-center justify-center gap-2 py-3.5 bg-white border-2 border-dashed border-gray-200 rounded-xl text-gray-600 font-medium hover:border-huttle-primary hover:bg-huttle-50/50 transition-colors text-sm"
-                      >
-                        {copiedIdea === 'all-deep' ? (
-                          <>
-                            <Check className="w-4 h-4 text-emerald-500" />
-                            <span className="text-emerald-600">All Content Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy All Content</span>
-                          </>
                         )}
-                      </button>
-                        </>
-                      )}
 
-                      {/* Competitor Insights */}
-                      {deepDiveResults.competitorInsights && deepDiveResults.competitorInsights.length > 0 && (
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                          <div className="px-5 py-3.5 bg-blue-50/50 border-b border-blue-100 flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-blue-600" />
-                            <h4 className="font-semibold text-gray-900 text-sm">Competitor Insights</h4>
-                          </div>
-                          <div className="p-5">
-                            <ul className="space-y-2.5">
-                              {deepDiveResults.competitorInsights.map((insight, idx) => (
-                                <li key={idx} className="flex items-start gap-2.5 text-sm text-gray-700">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
-                                  <span>{insight}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Citations / Sources */}
-                      {deepDiveResults.citations && deepDiveResults.citations.length > 0 && (
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                          <div className="px-5 py-3.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
-                            <ExternalLink className="w-4 h-4 text-gray-500" />
-                            <h4 className="font-semibold text-gray-900 text-sm">Sources</h4>
-                          </div>
-                          <div className="p-5">
-                            <div className="flex flex-wrap gap-2">
-                              {deepDiveResults.citations.map((citation, idx) => (
-                                <a
-                                  key={idx}
-                                  href={citation}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-huttle-primary hover:bg-huttle-50 hover:border-huttle-200 transition-colors"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                  Source {idx + 1}
-                                </a>
-                              ))}
+                        {showPlatformSection && (
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-gray-900">Platform Breakdown</h4>
+                            <div className="space-y-2">
+                              {platformActivity.map((platform, index) => {
+                                const dots = getActivityDots(platform?.activity_level);
+                                const happeningText = platform?.["what's_happening"] || platform?.whats_happening || platform?.what_s_happening || '';
+                                return (
+                                  <div key={`${platform?.name || 'platform'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          {getPlatformIcon(platform?.name || '', 'w-4 h-4 text-gray-700')}
+                                          <span className="font-semibold text-gray-900">{platform?.name || 'Platform'}</span>
+                                        </div>
+                                        {happeningText && (
+                                          <p className="text-sm text-gray-700">{happeningText}</p>
+                                        )}
+                                      </div>
+                                      <div className="space-y-2 md:text-right">
+                                        <div className="flex items-center gap-1 md:justify-end">
+                                          {[0, 1, 2].map((dotIndex) => (
+                                            <span
+                                              key={dotIndex}
+                                              className={`h-2.5 w-2.5 rounded-full ${dotIndex < dots.filled ? dots.className : 'bg-gray-200'}`}
+                                            />
+                                          ))}
+                                          <span className="ml-1 text-xs font-medium text-gray-600">{platform?.activity_level || 'Low'}</span>
+                                        </div>
+                                        {platform?.top_format && (
+                                          <span className="inline-flex rounded-full border border-huttle-200 bg-huttle-50 px-2 py-0.5 text-xs font-medium text-huttle-primary">
+                                            {platform.top_format}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
+                        )}
+
+                        {showCompetitorSection && (
+                          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                            <h4 className="mb-2 font-semibold text-gray-900">Competitor Activity</h4>
+                            <p className="text-sm leading-relaxed text-gray-700">{report.competitor_landscape}</p>
+                          </div>
+                        )}
+
+                        {report.audience_sentiment && (
+                          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                            <h4 className="mb-2 font-semibold text-gray-900">Audience Sentiment</h4>
+                            {report.audience_sentiment.overall_mood && (
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getMoodStyles(report.audience_sentiment.overall_mood)}`}>
+                                {report.audience_sentiment.overall_mood}
+                              </span>
+                            )}
+                            {report.audience_sentiment.detail && (
+                              <p className="mt-2 text-sm text-gray-700">{report.audience_sentiment.detail}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {report.timing_window && (
+                          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                            <h4 className="mb-2 font-semibold text-gray-900">Timing Window</h4>
+                            {report.timing_window.action_window && (
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getTimingWindowStyles(report.timing_window.action_window)}`}>
+                                {report.timing_window.action_window}
+                              </span>
+                            )}
+                            {report.timing_window.reasoning && (
+                              <p className="mt-2 text-sm text-gray-700">{report.timing_window.reasoning}</p>
+                            )}
+                            {report.timing_window.lifespan && (
+                              <p className="mt-1 text-sm text-gray-500">Estimated lifespan: {report.timing_window.lifespan}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {citations.length > 0 && (
+                          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                            <button
+                              onClick={() => setIsSourcesExpanded((prev) => !prev)}
+                              className="flex w-full items-center justify-between text-left"
+                            >
+                              <span className="font-semibold text-gray-900">Sources</span>
+                              <span className="text-xs font-medium text-huttle-primary">
+                                {isSourcesExpanded ? 'Hide' : 'Show'} ({citations.length})
+                              </span>
+                            </button>
+                            {isSourcesExpanded && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {citations.map((citation, idx) => (
+                                  <a
+                                    key={`${citation}-${idx}`}
+                                    href={citation}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-huttle-primary transition-colors hover:border-huttle-200 hover:bg-huttle-50"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Source {idx + 1}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-3">
+                          <button
+                            onClick={() => handleCreatePostFromTrend(deepDiveResults.topic)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-huttle-primary px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
+                          >
+                            <PenLine className="h-4 w-4" />
+                            Create Content From This
+                          </button>
+                          <button
+                            onClick={handleSaveDeepDiveReport}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                          >
+                            {savedTrendIndex === 'deep-report' ? (
+                              <>
+                                <Check className="h-4 w-4 text-emerald-600" />
+                                Saved
+                              </>
+                            ) : (
+                              <>
+                                <FolderPlus className="h-4 w-4 text-huttle-primary" />
+                                Save Report
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeepDiveTopic('');
+                              setDeepDiveResults(null);
+                              setDeepDiveError(null);
+                              setIsSourcesExpanded(false);
+                            }}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            New Deep Dive
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Empty State */}
                   {!deepDiveResults && !isLoadingDeepDive && !deepDiveError && (

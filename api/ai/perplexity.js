@@ -10,39 +10,19 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
+import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
+import { logError, logInfo } from '../_utils/observability.js';
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || process.env.VITE_PERPLEXITY_API_KEY;
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-// Rate limiting: Simple in-memory store (use Redis in production for multi-instance)
-const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user (more restrictive for Perplexity)
-
-function checkRateLimit(userId) {
-  const now = Date.now();
-  const userKey = userId || 'anonymous';
-  const userData = rateLimitStore.get(userKey) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
-  
-  if (now > userData.resetAt) {
-    userData.count = 0;
-    userData.resetAt = now + RATE_LIMIT_WINDOW;
-  }
-  
-  userData.count++;
-  rateLimitStore.set(userKey, userData);
-  
-  return {
-    allowed: userData.count <= RATE_LIMIT_MAX_REQUESTS,
-    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - userData.count),
-    resetAt: userData.resetAt
-  };
-}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -58,7 +38,7 @@ export default async function handler(req, res) {
   try {
     // Verify Perplexity API key is configured
     if (!PERPLEXITY_API_KEY) {
-      console.error('PERPLEXITY_API_KEY not configured');
+      logError('perplexity.missing_api_key');
       return res.status(500).json({ error: 'AI service not configured' });
     }
 
@@ -84,11 +64,17 @@ export default async function handler(req, res) {
     }
 
     // Check rate limit
-    const rateLimit = checkRateLimit(userId);
+    const rateLimit = await checkPersistentRateLimit({
+      userKey: userId,
+      route: 'perplexity',
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowSeconds: RATE_LIMIT_WINDOW / 1000,
+    });
     res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
     res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
     
     if (!rateLimit.allowed) {
+      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
       return res.status(429).json({ 
         error: 'Rate limit exceeded. Please wait before making more requests.',
         retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
@@ -96,15 +82,14 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.2, model } = req.body;
+    const { messages, temperature = 0.2 } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    // SECURITY: Whitelist allowed models to prevent abuse
-    const ALLOWED_MODELS = ['sonar', 'sonar-pro', 'sonar-reasoning'];
-    const safeModel = ALLOWED_MODELS.includes(model) ? model : 'sonar';
+    // Enforce fastest in-app Perplexity model for cost/performance consistency.
+    const safeModel = 'sonar';
 
     // Validate temperature range
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.2, 0), 2);
@@ -125,12 +110,15 @@ export default async function handler(req, res) {
         model: safeModel,
         messages,
         temperature: safeTemperature,
+        web_search_options: {
+          search_context_size: 'low'
+        }
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Perplexity API error:', response.status, errorText);
+      logError('perplexity.upstream_error', { status: response.status, errorText });
       return res.status(response.status).json({ 
         error: 'AI service error. Please try again.' 
       });
@@ -146,7 +134,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Perplexity proxy error:', error);
+    logError('perplexity.proxy_error', { error: error.message });
     return res.status(500).json({ 
       error: 'An unexpected error occurred. Please try again.' 
     });

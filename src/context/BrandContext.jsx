@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../config/supabase';
 import { AuthContext } from './AuthContext';
-import { formatEnumLabel, formatEnumArray } from '../utils/formatEnumLabel';
+import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/formatEnumLabel';
 
 export const BrandContext = createContext();
 
@@ -44,6 +44,12 @@ export function BrandProvider({ children }) {
   const [loading, setLoading] = useState(true);
   // Track if we need to force reload (e.g., after onboarding completes)
   const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const normalizeOptionalEnum = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    const normalized = normalizeEnumValue(value);
+    return normalized || value.trim();
+  };
 
   // Load brand data from Supabase user_profile table
   useEffect(() => {
@@ -92,7 +98,7 @@ export function BrandProvider({ children }) {
           const mappedData = {
             firstName: data.first_name || '',
             profileType: data.profile_type || 'brand',
-            creatorArchetype: data.creator_archetype ? formatEnumLabel(data.creator_archetype) : '',
+            creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
@@ -104,8 +110,8 @@ export function BrandProvider({ children }) {
             goals: data.content_goals || [],
             // Viral content strategy fields
             contentStrengths: data.content_strengths || [],
-            biggestChallenge: data.biggest_challenge ? formatEnumLabel(data.biggest_challenge) : '',
-            hookStylePreference: data.hook_style_preference ? formatEnumLabel(data.hook_style_preference) : '',
+            biggestChallenge: data.biggest_challenge ? normalizeOptionalEnum(data.biggest_challenge) : '',
+            hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
           };
           setBrandData(mappedData);
@@ -148,7 +154,7 @@ export function BrandProvider({ children }) {
           user_id: user.id,
           first_name: updated.firstName || null,
           profile_type: updated.profileType || 'brand',
-          creator_archetype: updated.creatorArchetype || null,
+          creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
           industry: updated.industry || null,
           niche: updated.niche,
@@ -158,8 +164,8 @@ export function BrandProvider({ children }) {
           content_goals: updated.goals,
           // Viral content strategy fields
           content_strengths: updated.contentStrengths || [],
-          biggest_challenge: updated.biggestChallenge || null,
-          hook_style_preference: updated.hookStylePreference || null,
+          biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
+          hook_style_preference: normalizeOptionalEnum(updated.hookStylePreference) || null,
           emotional_triggers: updated.emotionalTriggers || [],
           updated_at: new Date().toISOString(),
         };

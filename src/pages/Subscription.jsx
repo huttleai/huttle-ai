@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, FlaskConical, ShieldCheck, Award, Lock, Users, CalendarCheck } from 'lucide-react';
+import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, ShieldCheck, Award, Lock, Users, CalendarCheck } from 'lucide-react';
 import Badge from '../components/Badge';
 import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -19,6 +19,7 @@ export default function Subscription() {
   
   // Check if in demo mode
   const demoMode = isDemoMode() || contextDemoMode;
+  const showDemoControls = import.meta.env.DEV && demoMode;
 
   useEffect(() => {
     const fetchSubscriptionInfo = async () => {
@@ -86,7 +87,7 @@ export default function Subscription() {
         'Viral Blueprint',
         'Content Remix Studio',
         'Trend Lab',
-        'Huttle Agent (Coming Soon)',
+        'Huttle Agent',
         'Priority Email Support'
       ],
       gradient: 'from-purple-500 to-pink-500',
@@ -115,7 +116,7 @@ export default function Subscription() {
           const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO, 'founder': TIERS.FOUNDER };
           setDemoTier(tierMap[planId] || TIERS.PRO);
         }
-        addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+        addToast(`${planId.charAt(0).toUpperCase() + planId.slice(1)} plan selected.`, 'success');
         setLoading(null);
         return;
       }
@@ -156,7 +157,7 @@ export default function Subscription() {
       
       // Handle demo mode response
       if (result.demo) {
-        addToast('Demo: Billing portal would open here in production.', 'info');
+        addToast('Billing portal is temporarily unavailable. Please try again shortly.', 'info');
         return;
       }
       
@@ -246,7 +247,7 @@ export default function Subscription() {
             const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
             setDemoTier(tierMap[planId] || TIERS.FREE);
           }
-          addToast(`Demo: Changed to ${planId.charAt(0).toUpperCase() + planId.slice(1)}! 🎉`, 'success');
+          addToast(`${planId.charAt(0).toUpperCase() + planId.slice(1)} plan selected.`, 'success');
           setLoading(null);
           return;
         }
@@ -327,17 +328,14 @@ export default function Subscription() {
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="max-w-7xl mx-auto">
         {/* Demo Mode Banner */}
-        {demoMode && (
+        {showDemoControls && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <FlaskConical className="w-5 h-5 text-amber-600" />
-            </div>
             <div className="flex-1">
-              <p className="font-semibold text-amber-800">Demo Mode Active</p>
-              <p className="text-sm text-amber-700">Stripe is not configured. Upgrades are simulated for testing.</p>
+              <p className="font-semibold text-amber-800">Developer Mode Controls</p>
+              <p className="text-sm text-amber-700">Tier selector is visible in development only.</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-amber-600 font-medium">Test as:</span>
+              <span className="text-xs text-amber-600 font-medium">Preview tier:</span>
               <select
                 value={userTier}
                 onChange={(e) => setDemoTier && setDemoTier(e.target.value)}

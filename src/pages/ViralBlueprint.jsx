@@ -11,6 +11,7 @@ import {
   Lock, 
   Check, 
   ChevronRight,
+  ChevronDown,
   Lightbulb,
   Copy,
   RefreshCw,
@@ -47,35 +48,14 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 
-import { generateViralBlueprint } from '../services/n8nWorkflowAPI';
-import { WORKFLOW_NAMES } from '../utils/workflowConstants';
-
 // N8N Webhook URL for Viral Blueprint generation (via serverless proxy to avoid CORS)
 const N8N_WEBHOOK_URL = '/api/viral-blueprint-proxy';
 
 /**
  * Viral Blueprint Page
- * 
- * TODO: N8N_WORKFLOW - This feature will move to n8n workflow
- * Workflow: WORKFLOW_NAMES.VIRAL_BLUEPRINT
- * 
- * Current implementation uses:
- * - Mock blueprint generator (generateMockBlueprint function below)
- * 
- * Future implementation will:
- * 1. Check if workflow is configured via isWorkflowConfigured()
- * 2. If configured, call generateViralBlueprint() from n8nWorkflowAPI.js
- * 3. If not configured, fall back to mock generator
- * 
- * Expected workflow response format:
- * {
- *   success: true,
- *   blueprint: { isVideoContent, directorsCut, seoStrategy, audioVibe, viralScore },
- *   directorsCut: [{ step, title, script/text, visual/visualSuggestion }],
- *   seoStrategy: { visualKeywords, spokenHooks, captionKeywords },
- *   audioVibe: { mood, bpm, suggestion } | null,
- *   viralScore: number
- * }
+ *
+ * Uses the server proxy to generate structured blueprint output.
+ * Falls back to local mock generation if the upstream service is unavailable.
  */
 
 /**
@@ -691,6 +671,10 @@ export default function ViralBlueprint() {
   const [generatedBlueprint, setGeneratedBlueprint] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
+  const [expandedBlueprintSteps, setExpandedBlueprintSteps] = useState({});
+  const [showAllHooks, setShowAllHooks] = useState(false);
+  const [showAllVisualKeywords, setShowAllVisualKeywords] = useState(false);
+  const [showAllCaptionKeywords, setShowAllCaptionKeywords] = useState(false);
   const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
   
   // View state - Start with input form
@@ -779,7 +763,7 @@ export default function ViralBlueprint() {
     await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
 
     try {
-      // Map UI post types to backend master formats (5 formats)
+      // Normalize UI post types to a strict master contract
       const formatMapping = {
         'Reel': 'Video',
         'Short': 'Video',
@@ -791,6 +775,8 @@ export default function ViralBlueprint() {
         'Carousel': 'Carousel',
         'Story': 'Story'
       };
+      const requestedFormat = formatMapping[selectedPostType] || 'Post';
+      const platformAliases = selectedPlatform === 'X' ? ['X', 'Twitter'] : [selectedPlatform];
 
       // Always try the Vercel proxy first (it forwards to n8n webhook server-side).
       // The proxy handles "not configured" with a clear error response.
@@ -801,13 +787,19 @@ export default function ViralBlueprint() {
       const payload = {
         topic: topic.trim(),
         platform: selectedPlatform,                                    // e.g., 'Instagram', 'YouTube'
-        postType: formatMapping[selectedPostType] || 'Post',           // Maps to 5 master formats
+        platformAliases,                                               // helps n8n templates using alternate naming
+        postType: requestedFormat,                                     // Maps to 5 master formats
+        requestedPostType: selectedPostType,
         objective: objective,                                          // 'views', 'conversion', or 'trust'
         targetAudience: targetAudience.trim(),                         // e.g., 'SaaS Founders'
         voiceContext: {
           brandVoice: brandProfile?.brandVoice || 'Authentic and Authoritative',
           identity: brandProfile?.profileType === 'creator' ? 'Creator' : 'Business'
-        }
+        },
+        constraints: {
+          expectedFormat: requestedFormat,
+          expectedPlatform: selectedPlatform,
+        },
       };
 
       console.log('[N8N] ====== WEBHOOK REQUEST DEBUG ======');
@@ -882,7 +874,7 @@ export default function ViralBlueprint() {
       try {
         const rawText = await response.text();
         console.log('[N8N] Raw response:', rawText.substring(0, 500));
-        responseData = JSON.parse(rawText);
+        responseData = rawText ? JSON.parse(rawText) : {};
         console.log('[N8N] Parsed response structure:', Object.keys(responseData));
       } catch (parseError) {
         console.error('[N8N] JSON Parse Error:', parseError);
@@ -896,28 +888,72 @@ export default function ViralBlueprint() {
       console.log('[N8N] Full response structure:', JSON.stringify(responseData, null, 2).substring(0, 1000));
       console.log('[N8N] ====================================');
 
-      // Pass the full responseData to adapter - it will handle extraction internally
-      // The adapter checks for nested blueprint format: { blueprint: { ... } }
-      // or flat format: { hooks, content_script, ... }
-      const adaptedBlueprint = adaptBlueprintResponse(responseData);
+      // Try multiple candidate payload layers so nested useful content doesn't fail hard.
+      const responseCandidates = [
+        responseData,
+        responseData?.data,
+        responseData?.result,
+        responseData?.output,
+        responseData?.payload,
+        responseData?.blueprint,
+      ].filter((candidate) => candidate && typeof candidate === 'object');
+
+      let adaptedBlueprint = null;
+      for (const candidate of responseCandidates) {
+        const normalized = adaptBlueprintResponse(candidate);
+        if (normalized?.directorsCut?.length > 0) {
+          adaptedBlueprint = normalized;
+          break;
+        }
+      }
+
+      // Last-resort fallback if proxy returned text content
+      if ((!adaptedBlueprint || adaptedBlueprint.directorsCut.length === 0) && typeof responseData?.content === 'string') {
+        adaptedBlueprint = {
+          isVideoContent: false,
+          directorsCut: [{
+            step: 1,
+            title: 'Content Blueprint',
+            text: responseData.content,
+            script: responseData.content,
+            visualSuggestion: '',
+            visual: '',
+          }],
+          seoStrategy: { visualKeywords: [], spokenHooks: [], captionKeywords: [] },
+          audioVibe: null,
+          viralScore: 85,
+          hooks: [],
+        };
+      }
 
       console.log('[N8N] Adapted blueprint:', {
-        isVideoContent: adaptedBlueprint.isVideoContent,
-        directorsCutLength: adaptedBlueprint.directorsCut?.length,
-        viralScore: adaptedBlueprint.viralScore,
-        hasAudioVibe: !!adaptedBlueprint.audioVibe,
-        seoKeywordsCount: adaptedBlueprint.seoStrategy?.visualKeywords?.length
+        isVideoContent: adaptedBlueprint?.isVideoContent,
+        directorsCutLength: adaptedBlueprint?.directorsCut?.length,
+        viralScore: adaptedBlueprint?.viralScore,
+        hasAudioVibe: !!adaptedBlueprint?.audioVibe,
+        seoKeywordsCount: adaptedBlueprint?.seoStrategy?.visualKeywords?.length
       });
 
       // Validate that the adapter produced usable content
-      if (!adaptedBlueprint.directorsCut || adaptedBlueprint.directorsCut.length === 0) {
+      if (!adaptedBlueprint?.directorsCut || adaptedBlueprint.directorsCut.length === 0) {
         console.error('[N8N] Adapter produced empty directorsCut. Raw response:', JSON.stringify(responseData).substring(0, 1000));
         throw new Error('INVALID_BLUEPRINT_STRUCTURE');
       }
 
+      const expectsVideo = isVideoContent(selectedPostType);
+      const resolvedIsVideo = typeof adaptedBlueprint.isVideoContent === 'boolean'
+        ? adaptedBlueprint.isVideoContent
+        : expectsVideo;
+      if (resolvedIsVideo !== expectsVideo) {
+        showToast(
+          `Received a ${resolvedIsVideo ? 'video' : 'text'} blueprint while you requested ${selectedPostType}. Content was normalized and may need quick edits.`,
+          'warning'
+        );
+      }
+
       // Set state with adapted blueprint, falling back to UI-based video detection
       setGeneratedBlueprint({
-        isVideoContent: adaptedBlueprint.isVideoContent || isVideoContent(selectedPostType),
+        isVideoContent: resolvedIsVideo,
         directorsCut: adaptedBlueprint.directorsCut || [],
         seoStrategy: adaptedBlueprint.seoStrategy || {
           visualKeywords: [],
@@ -925,10 +961,14 @@ export default function ViralBlueprint() {
           captionKeywords: []
         },
         audioVibe: adaptedBlueprint.audioVibe || null,
-        viralScore: (adaptedBlueprint.viralScore && adaptedBlueprint.viralScore > 0) ? adaptedBlueprint.viralScore : 85,
+        viralScore: (Number(adaptedBlueprint.viralScore) > 0) ? Number(adaptedBlueprint.viralScore) : 85,
         // Preserve hooks array for dedicated UI display
         hooks: adaptedBlueprint.hooks || []
       });
+      setExpandedBlueprintSteps({ 0: true });
+      setShowAllHooks(false);
+      setShowAllVisualKeywords(false);
+      setShowAllCaptionKeywords(false);
 
       console.log('[N8N] Blueprint successfully adapted and mapped to state');
 
@@ -952,22 +992,22 @@ export default function ViralBlueprint() {
       });
 
       // Determine specific error message based on error type
-      let errorMessage = 'Blueprint generation failed. Please try again.';
+      let errorMessage = 'We could not generate your blueprint right now. Please try again.';
       
       if (error.message === 'REQUEST_TIMEOUT') {
-        errorMessage = 'The request timed out after 120 seconds. Your n8n workflow may be taking longer than expected. Please try again.';
+        errorMessage = 'This request is taking longer than expected. Please try again in a moment.';
         console.error('[N8N] TIMEOUT: Workflow exceeded 120s limit');
       } else if (error.message === 'INVALID_JSON') {
-        errorMessage = 'Received invalid response from n8n. Please check your workflow output format.';
+        errorMessage = 'We received an unexpected response. Please try again.';
         console.error('[N8N] PARSE ERROR: n8n returned non-JSON response');
       } else if (error.message === 'INVALID_BLUEPRINT_STRUCTURE') {
-        errorMessage = 'The blueprint data structure is invalid. Please check your n8n workflow output.';
+        errorMessage = 'We could not process the generated blueprint. Please try again.';
         console.error('[N8N] STRUCTURE ERROR: Blueprint data is missing or malformed');
       } else if (error.message?.startsWith('HTTP_ERROR')) {
-        errorMessage = `Connection error: ${error.message.replace('HTTP_ERROR: ', '')}`;
+        errorMessage = 'The generation service is temporarily unavailable. Please try again.';
         console.error('[N8N] HTTP ERROR: n8n returned error status');
       } else if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
-        errorMessage = 'Unable to connect to n8n. Please check CORS settings and verify the webhook URL is correct.';
+        errorMessage = 'We could not connect to the generation service. Please try again.';
         console.error('[N8N] CORS/NETWORK ERROR: Cannot reach n8n webhook');
       }
 
@@ -978,6 +1018,10 @@ export default function ViralBlueprint() {
         console.log('[Viral Blueprint] Falling back to mock generator after error');
         const fallbackBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
         setGeneratedBlueprint(fallbackBlueprint);
+        setExpandedBlueprintSteps({ 0: true });
+        setShowAllHooks(false);
+        setShowAllVisualKeywords(false);
+        setShowAllCaptionKeywords(false);
         setCurrentView('results');
         showToast('Generated with fallback template. Results may be less tailored.', 'info');
       }
@@ -995,6 +1039,18 @@ export default function ViralBlueprint() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const toggleBlueprintStep = (stepIndex) => {
+    setExpandedBlueprintSteps((prev) => ({
+      ...prev,
+      [stepIndex]: !prev[stepIndex],
+    }));
+  };
+
+  const getVisibleItems = (items, showAll, compactLimit = 8) => {
+    if (!Array.isArray(items)) return [];
+    return showAll ? items : items.slice(0, compactLimit);
+  };
+
   // Reset form and switch back to input view
   const handleReset = () => {
     setSelectedPlatform(null);
@@ -1003,6 +1059,10 @@ export default function ViralBlueprint() {
     setTopic('');
     setTargetAudience('');
     setGeneratedBlueprint(null);
+    setExpandedBlueprintSteps({});
+    setShowAllHooks(false);
+    setShowAllVisualKeywords(false);
+    setShowAllCaptionKeywords(false);
     setCurrentView('input');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1418,7 +1478,10 @@ export default function ViralBlueprint() {
             </div>
 
             {/* Hooks Section - Display hooks as a styled list */}
-            {generatedBlueprint.hooks && generatedBlueprint.hooks.length > 0 && (
+            {generatedBlueprint.hooks && generatedBlueprint.hooks.length > 0 && (() => {
+              const visibleHooks = getVisibleItems(generatedBlueprint.hooks, showAllHooks, 3);
+              const hiddenHookCount = Math.max(generatedBlueprint.hooks.length - visibleHooks.length, 0);
+              return (
               <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-gradient-to-br from-amber-50/60 to-orange-50/40 border border-amber-200/60 shadow-elevated p-6 md:p-8">
                 {/* Glassmorphism gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/20 pointer-events-none" />
@@ -1453,7 +1516,7 @@ export default function ViralBlueprint() {
                   </div>
 
                   <div className="space-y-3">
-                    {generatedBlueprint.hooks.map((hook, index) => (
+                    {visibleHooks.map((hook, index) => (
                       <div 
                         key={index}
                         className="group flex items-start gap-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-amber-100/60 hover:border-amber-200 hover:shadow-md transition-all cursor-pointer"
@@ -1475,9 +1538,29 @@ export default function ViralBlueprint() {
                       </div>
                     ))}
                   </div>
+
+                  {hiddenHookCount > 0 && (
+                    <button
+                      onClick={() => setShowAllHooks(true)}
+                      className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+                    >
+                      <span>Show {hiddenHookCount} more hooks</span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {showAllHooks && generatedBlueprint.hooks.length > 3 && (
+                    <button
+                      onClick={() => setShowAllHooks(false)}
+                      className="mt-4 ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      <span>Show fewer</span>
+                      <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Section A: Director's Cut / Content Blueprint */}
             <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-elevated p-6 md:p-8">
@@ -1505,19 +1588,31 @@ export default function ViralBlueprint() {
 
                 <div className="space-y-6">
                   {generatedBlueprint.directorsCut.map((item, index) => (
-                    <div 
-                      key={index} 
+                    (() => {
+                      const isStepExpanded = expandedBlueprintSteps[index] ?? index === 0;
+                      return (
+                    <div
+                      key={index}
                       className="relative backdrop-blur-md bg-white/80 rounded-2xl border border-white/80 overflow-hidden hover:shadow-xl transition-all duration-300 group animate-slideUp"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
                       {/* Step Header */}
-                      <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50/80 to-white/60 border-b border-gray-100/50 backdrop-blur-sm">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 text-white flex items-center justify-center font-bold text-sm shadow-lg">
-                          {item.step}
+                      <button
+                        type="button"
+                        onClick={() => toggleBlueprintStep(index)}
+                        className="w-full flex items-center justify-between gap-4 p-4 bg-gradient-to-r from-gray-50/80 to-white/60 border-b border-gray-100/50 backdrop-blur-sm text-left"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 text-white flex items-center justify-center font-bold text-sm shadow-lg">
+                            {item.step}
+                          </div>
+                          <h3 className="font-bold text-gray-900">{item.title}</h3>
                         </div>
-                        <h3 className="font-bold text-gray-900">{item.title}</h3>
-                      </div>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isStepExpanded ? 'rotate-180' : ''}`} />
+                      </button>
 
+                      {isStepExpanded && (
+                        <>
                       {/* Full Width Premium Script Renderer */}
                       <div className="p-6">
                         <div className="flex items-center gap-2 mb-4">
@@ -1554,7 +1649,11 @@ export default function ViralBlueprint() {
                           </div>
                         </div>
                       )}
+                        </>
+                      )}
                     </div>
+                      );
+                    })()
                   ))}
                 </div>
               </div>
@@ -1591,17 +1690,43 @@ export default function ViralBlueprint() {
                       <h3 className="font-bold text-gray-900 text-sm">📈 Trending Keywords</h3>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 leading-relaxed">Trending search terms to boost discoverability</p>
-                    <div className="flex flex-wrap gap-2">
-                      {generatedBlueprint.seoStrategy.visualKeywords.map((keyword, index) => (
-                        <span 
-                          key={index}
-                          className="px-4 py-2 bg-gradient-to-br from-green-50/90 to-emerald-100/70 backdrop-blur-sm border border-green-300/60 rounded-full text-xs font-semibold text-green-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
-                          onClick={() => handleCopy(keyword, `keyword-${index}`)}
-                        >
-                          {keyword}
-                        </span>
-                      ))}
-                    </div>
+                    {(() => {
+                      const visibleVisualKeywords = getVisibleItems(generatedBlueprint.seoStrategy.visualKeywords, showAllVisualKeywords, 10);
+                      const hiddenVisualKeywordCount = Math.max(generatedBlueprint.seoStrategy.visualKeywords.length - visibleVisualKeywords.length, 0);
+                      return (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {visibleVisualKeywords.map((keyword, index) => (
+                              <span
+                                key={index}
+                                className="px-4 py-2 bg-gradient-to-br from-green-50/90 to-emerald-100/70 backdrop-blur-sm border border-green-300/60 rounded-full text-xs font-semibold text-green-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
+                                onClick={() => handleCopy(keyword, `keyword-${index}`)}
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                          {hiddenVisualKeywordCount > 0 && (
+                            <button
+                              onClick={() => setShowAllVisualKeywords(true)}
+                              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:text-green-800 transition-colors"
+                            >
+                              <span>Show {hiddenVisualKeywordCount} more keywords</span>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {showAllVisualKeywords && generatedBlueprint.seoStrategy.visualKeywords.length > 10 && (
+                            <button
+                              onClick={() => setShowAllVisualKeywords(false)}
+                              className="mt-3 ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition-colors"
+                            >
+                              <span>Show fewer</span>
+                              <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1615,17 +1740,43 @@ export default function ViralBlueprint() {
                       <h3 className="font-bold text-gray-900 text-sm">Hashtags</h3>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 leading-relaxed">Caption & description tags</p>
-                    <div className="flex flex-wrap gap-2">
-                      {generatedBlueprint.seoStrategy.captionKeywords.map((keyword, index) => (
-                        <span 
-                          key={index}
-                          className="px-4 py-2 bg-gradient-to-br from-purple-50/90 to-purple-100/70 backdrop-blur-sm border border-purple-200/60 rounded-full text-xs font-semibold text-purple-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
-                          onClick={() => handleCopy(keyword, `caption-${index}`)}
-                        >
-                          {keyword}
-                        </span>
-                      ))}
-                    </div>
+                    {(() => {
+                      const visibleCaptionKeywords = getVisibleItems(generatedBlueprint.seoStrategy.captionKeywords, showAllCaptionKeywords, 12);
+                      const hiddenCaptionKeywordCount = Math.max(generatedBlueprint.seoStrategy.captionKeywords.length - visibleCaptionKeywords.length, 0);
+                      return (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {visibleCaptionKeywords.map((keyword, index) => (
+                              <span
+                                key={index}
+                                className="px-4 py-2 bg-gradient-to-br from-purple-50/90 to-purple-100/70 backdrop-blur-sm border border-purple-200/60 rounded-full text-xs font-semibold text-purple-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
+                                onClick={() => handleCopy(keyword, `caption-${index}`)}
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                          {hiddenCaptionKeywordCount > 0 && (
+                            <button
+                              onClick={() => setShowAllCaptionKeywords(true)}
+                              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-800 transition-colors"
+                            >
+                              <span>Show {hiddenCaptionKeywordCount} more tags</span>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {showAllCaptionKeywords && generatedBlueprint.seoStrategy.captionKeywords.length > 12 && (
+                            <button
+                              onClick={() => setShowAllCaptionKeywords(false)}
+                              className="mt-3 ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition-colors"
+                            >
+                              <span>Show fewer</span>
+                              <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                     <button 
                       onClick={() => handleCopy(generatedBlueprint.seoStrategy.captionKeywords.join(' '), 'all-captions')}
                       className="mt-5 w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"

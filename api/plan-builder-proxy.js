@@ -5,7 +5,7 @@
  * This avoids CORS issues by making the request server-side.
  * 
  * Environment Variables Required:
- * - VITE_N8N_PLAN_BUILDER_WEBHOOK: n8n webhook endpoint for plan builder
+ * - N8N_PLAN_BUILDER_WEBHOOK: n8n webhook endpoint for plan builder
  * 
  * Expected Request Payload:
  * {
@@ -21,10 +21,10 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 // SECURITY: No hardcoded fallback - must be configured via environment variable
-const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK || process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
+const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK;
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
@@ -34,6 +34,14 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 function isValidUUID(str) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
+}
+
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -96,6 +104,13 @@ export default async function handler(req, res) {
     });
   }
 
+  if (!Array.isArray(platformFocus) || platformFocus.length === 0) {
+    return res.status(400).json({
+      error: 'Missing required field: platformFocus (array with at least one platform)',
+      requestId
+    });
+  }
+
   try {
     console.log('[plan-builder-proxy] Forwarding job:', job_id, { requestId });
 
@@ -103,8 +118,8 @@ export default async function handler(req, res) {
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
-      timePeriod: String(timePeriod || '7'),
-      platformFocus: Array.isArray(platformFocus) ? platformFocus : [],
+      timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
+      platformFocus,
       brandVoice: brandVoice || ''
     };
 
@@ -132,8 +147,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // Parse and return the response
-    await response.text();
+    // Parse response payload when available so malformed workflow responses surface clearly.
+    const rawResponse = await response.text().catch(() => '');
+    const parsedResponse = rawResponse ? safeJsonParse(rawResponse) : null;
+
+    if (parsedResponse && parsedResponse.success === false) {
+      return res.status(502).json({
+        error: parsedResponse.error || 'n8n rejected the request',
+        requestId
+      });
+    }
+
     console.log('[plan-builder-proxy] Webhook triggered successfully for job:', job_id, { requestId });
     
     // Return success (n8n will update job via Supabase)

@@ -826,7 +826,7 @@ const FAQSectionComponent = () => {
 // ============================================
 
 const PricingSection = ({ onOpenFoundersModal }) => {
-  const foundingSpotsLeft = 47;
+  const foundingSpotsLeft = 41;
 
   return (
     <section id="pricing" className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
@@ -876,7 +876,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl md:text-5xl font-black text-white">
-                    $<NumberTicker value={199} startValue={199} duration={0.8} triggerOnView={true} />
+                    $<NumberTicker value={199} startValue={357} duration={0.8} triggerOnView={true} />
                   </span>
                   <span className="text-sm md:text-base text-slate-400">/year</span>
                 </div>
@@ -1053,7 +1053,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
             Join the creators who already have their content strategy handled.
           </p>
           <p className="text-xs md:text-sm text-amber-400 font-medium mb-6 md:mb-10">
-            Only 47 founding member spots remaining. After February 28, the price goes up.
+            Only 41 founding member spots remaining. After February 28, the price goes up.
           </p>
           
           <BorderBeamButton 
@@ -1353,7 +1353,7 @@ export default function LandingPage() {
       <div className="fixed top-0 left-0 right-0 z-[55] h-9 bg-[#0F172A] flex items-center justify-center overflow-hidden">
         <div className="announcement-shimmer absolute inset-0 pointer-events-none" />
         <p className="relative z-10 text-xs md:text-sm text-white font-medium tracking-wide">
-          <span className="mr-1">🔥</span> Only <span className="font-bold text-amber-400">47</span> of 100 Founding Member spots remaining — <span className="font-bold text-cyan-400">Lock in $199/yr forever</span>
+          <span className="mr-1">🔥</span> Only <span className="font-bold text-amber-400">{foundingSpotsLeft}</span> of 100 Founding Member spots remaining — <span className="font-bold text-cyan-400">Lock in $199/yr forever</span>
         </p>
       </div>
 

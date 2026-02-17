@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { FolderOpen, Upload, Search, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus, Play, Sparkles, ArrowUpRight, CloudUpload, Copy } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -49,6 +49,7 @@ export default function ContentLibrary() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState(null);
+  const isUploadSubmittingRef = useRef(false);
   const safeProjects = projects || [];
   const safeContentItems = contentItems || [];
 
@@ -159,14 +160,6 @@ export default function ContentLibrary() {
         }));
 
         setContentItems(transformedItems);
-
-        transformedItems.forEach(item => {
-          if (item.type !== 'text' && item.storage_path) {
-            getFileUrl(item).catch(err => {
-              console.error('Error pre-generating signed URL:', err);
-            });
-          }
-        });
 
         updateProjectCounts(transformedItems);
       } else {
@@ -517,6 +510,11 @@ export default function ContentLibrary() {
       return;
     }
 
+    if (isUploadSubmittingRef.current || uploading) {
+      return;
+    }
+
+    isUploadSubmittingRef.current = true;
     setUploading(true);
     setUploadProgress('Preparing...');
 
@@ -568,6 +566,7 @@ export default function ContentLibrary() {
     } finally {
       setUploading(false);
       setUploadProgress('');
+      isUploadSubmittingRef.current = false;
     }
   };
 
@@ -591,14 +590,10 @@ export default function ContentLibrary() {
     let compressionResult = null;
 
     if (uploadType === 'image') {
-      addToast('Compressing image...', 'info');
+      setUploadProgress('Compressing image...');
       const compression = await compressImage(file, userTier);
       processedFile = compression.compressedFile;
       compressionResult = compression;
-
-      if (compression.savingsMB > 0) {
-        addToast(`Compressed: saved ${compression.savingsMB.toFixed(1)}MB (${compression.savingsPercent}% smaller)!`, 'success');
-      }
     }
 
     const storageCheck = await checkStorageLimit(user.id, processedFile.size, userTier);
@@ -607,7 +602,7 @@ export default function ContentLibrary() {
       return;
     }
 
-    addToast('Uploading file...', 'info');
+    setUploadProgress('Uploading file...');
 
     const uploadResult = await uploadFileToStorage(user.id, processedFile, uploadType);
     if (!uploadResult.success) {

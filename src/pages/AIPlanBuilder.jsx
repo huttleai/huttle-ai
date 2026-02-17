@@ -5,7 +5,7 @@ import { useContent } from '../context/ContentContext';
 import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
-import { createJobDirectly, triggerN8nWebhook, subscribeToJob } from '../services/planBuilderAPI';
+import { createJobDirectly, triggerN8nWebhook } from '../services/planBuilderAPI';
 import { supabase } from '../config/supabase';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
 import { usePreferredPlatforms, ALL_PLATFORMS } from '../hooks/usePreferredPlatforms';
@@ -30,6 +30,51 @@ const PLATFORM_OPTIMAL_TIMES = {
   'YouTube': '15:00',   // 3 PM - Afternoon watch time
   'Facebook': '13:00',  // 1 PM - Post-lunch browsing
 };
+
+function normalizePlanResultShape(result) {
+  if (!result || typeof result !== 'object') {
+    return { isValid: false, error: 'No plan data was returned from the workflow.' };
+  }
+
+  const platforms = Array.isArray(result.platforms)
+    ? result.platforms.filter(Boolean)
+    : [];
+  const contentMix = result.contentMix && typeof result.contentMix === 'object'
+    ? result.contentMix
+    : null;
+  const rawSchedule = Array.isArray(result.schedule) ? result.schedule : [];
+
+  const schedule = rawSchedule
+    .map((dayItem, index) => ({
+      day: Number(dayItem?.day) || index + 1,
+      posts: Array.isArray(dayItem?.posts) ? dayItem.posts : [],
+    }))
+    .filter((dayItem) => dayItem.posts.length > 0);
+
+  if (platforms.length === 0) {
+    return { isValid: false, error: 'Generated plan is missing platform details.' };
+  }
+
+  if (!contentMix || Number.isNaN(Number(contentMix?.educational ?? 0))) {
+    return { isValid: false, error: 'Generated plan is missing content mix details.' };
+  }
+
+  if (schedule.length === 0) {
+    return { isValid: false, error: 'Generated plan is missing a valid posting schedule.' };
+  }
+
+  const totalPosts = schedule.reduce((sum, dayItem) => sum + dayItem.posts.length, 0);
+  return {
+    isValid: true,
+    plan: {
+      ...result,
+      platforms,
+      contentMix,
+      schedule,
+      totalPosts: result.totalPosts || totalPosts,
+    },
+  };
+}
 
 /**
  * AI Plan Builder Page
@@ -98,10 +143,16 @@ export default function AIPlanBuilder() {
       progressIntervalRef.current = null;
     }
     
+    const validation = normalizePlanResultShape(result);
+    if (!validation.isValid) {
+      handleJobFailed(validation.error);
+      return;
+    }
+
     // Apply time optimization to the schedule
     const optimizedResult = {
-      ...result,
-      schedule: applyTimeOptimization(result.schedule)
+      ...validation.plan,
+      schedule: applyTimeOptimization(validation.plan.schedule)
     };
     
     setProgress(100);
@@ -182,9 +233,15 @@ export default function AIPlanBuilder() {
       }
     }, 60000);
 
+    // Absolute timeout so UI never gets stuck indefinitely.
+    const hardTimeoutId = setTimeout(() => {
+      handleJobFailed('Plan generation timed out. Please try again.');
+    }, 180000);
+
     return () => {
       supabase.removeChannel(channel);
       clearTimeout(timeoutId);
+      clearTimeout(hardTimeoutId);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
@@ -216,6 +273,10 @@ export default function AIPlanBuilder() {
     await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
     // Reset state
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
     setIsGenerating(true);
     setProgress(0);
     setGeneratedPlan(null);
@@ -300,6 +361,7 @@ export default function AIPlanBuilder() {
         
         showToast('Plan generation service unavailable. Please try again later.', 'error');
         setIsGenerating(false);
+        setProgress(0);
         setCurrentJobId(null);
         return;
       }

@@ -178,15 +178,40 @@ export default function ContentRemix() {
   const parseRemixOutput = (rawContent) => {
     if (!rawContent) return [];
 
-    // Guard: ensure rawContent is a string (n8n may return objects)
+    // Handle object response variants first (e.g., { Instagram: "...", TikTok: "..." }).
+    if (typeof rawContent === 'object' && rawContent !== null) {
+      const platformKeys = ['Instagram', 'TikTok', 'X', 'Twitter', 'Facebook', 'YouTube'];
+      const platformSections = platformKeys
+        .filter((key) => rawContent[key])
+        .map((key) => {
+          const platformName = key === 'Twitter' ? 'X' : key;
+          return {
+            platform: platformName,
+            variations: splitIntoVariations(ensureString(rawContent[key])),
+          };
+        })
+        .filter((section) =>
+          selectedPlatforms.some((selected) => selected.toLowerCase() === section.platform.toLowerCase())
+        );
+
+      if (platformSections.length > 0) return platformSections;
+
+      rawContent = ensureString(
+        rawContent.content
+        || rawContent.output
+        || rawContent.result
+        || rawContent.data
+        || rawContent
+      );
+    }
+
     if (typeof rawContent !== 'string') {
-      console.warn('[ContentRemix] parseRemixOutput received non-string:', typeof rawContent);
       rawContent = ensureString(rawContent);
     }
 
     const sections = [];
     // Match ### Platform or **Platform** headers
-    const platformRegex = /(?:###\s*|(?:\*\*))?(Instagram|TikTok|X|Twitter|Facebook|YouTube)(?:\*\*)?[:\s]*/gi;
+    const platformRegex = /(?:^|\n)\s*(?:#{1,4}\s*|\*\*|platform\s*[:\-]\s*)?(Instagram|TikTok|X|Twitter|Facebook|YouTube)(?:\*\*)?\s*[:\-]?\s*/gi;
     const matches = [...rawContent.matchAll(platformRegex)];
 
     if (matches.length > 0) {
@@ -217,6 +242,19 @@ export default function ContentRemix() {
     }
 
     return sections;
+  };
+
+  const getRemixErrorMessage = (errorType) => {
+    if (errorType === 'TIMEOUT') {
+      return 'AI generation took too long. Try shorter input and remix again.';
+    }
+    if (errorType === 'NETWORK') {
+      return 'Connection issue while remixing. Please retry.';
+    }
+    if (errorType === 'INVALID_RESPONSE') {
+      return 'The workflow returned an incomplete remix result. Please retry.';
+    }
+    return 'Failed to remix content. Please try again.';
   };
 
   /**
@@ -290,12 +328,7 @@ export default function ContentRemix() {
       }
 
       // Both failed
-      let errorMessage = 'Failed to remix content. Please try again.';
-      if (result.errorType === 'TIMEOUT') {
-        errorMessage = 'AI generation took too long. Please try with shorter content.';
-      } else if (result.errorType === 'NETWORK') {
-        errorMessage = 'Connection failed. Please check your internet.';
-      }
+      const errorMessage = getRemixErrorMessage(result.errorType);
       setRemixError(errorMessage);
       showToast(errorMessage, 'error');
     } catch (error) {
@@ -314,8 +347,9 @@ export default function ContentRemix() {
       } catch (grokError) {
         console.error('Grok fallback also failed:', grokError);
       }
-      setRemixError('Error remixing content. Please try again.');
-      showToast('Error remixing content. Please try again.', 'error');
+      const finalError = getRemixErrorMessage('UNKNOWN');
+      setRemixError(finalError);
+      showToast(finalError, 'error');
     } finally {
       setIsLoading(false);
     }

@@ -50,7 +50,10 @@ async function callPerplexityAPI(messages, temperature = 0.2) {
     body: JSON.stringify({
       messages,
       temperature,
-      model: 'sonar'
+      model: 'sonar',
+      web_search_options: {
+        search_context_size: 'low'
+      }
     })
   });
 
@@ -62,6 +65,88 @@ async function callPerplexityAPI(messages, temperature = 0.2) {
   return response.json();
 }
 
+function parseJsonFromText(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  const tryParse = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const trimmed = text.trim();
+  const direct = tryParse(trimmed);
+  if (direct) return direct;
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    const fenced = tryParse(fencedMatch[1].trim());
+    if (fenced) return fenced;
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return tryParse(trimmed.slice(firstBrace, lastBrace + 1));
+  }
+
+  return null;
+}
+
+function normalizeQuickScanData(scanData) {
+  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.trends)) {
+    return null;
+  }
+
+  const allowedCategories = new Set([
+    'Industry Shift',
+    'Viral Moment',
+    'Cultural Wave',
+    'Platform Update',
+    'Seasonal',
+    'News-Driven'
+  ]);
+  const allowedMomentum = new Set(['rising', 'peaking', 'declining']);
+  const allowedLifespan = new Set(['hours', 'days', '1-2 weeks', 'ongoing']);
+  const allowedWindow = new Set(['Act now', 'Plan this week', 'Monitor']);
+
+  const trends = scanData.trends
+    .map((trend) => ({
+      topic: String(trend?.topic || '').trim(),
+      category: String(trend?.category || '').trim(),
+      why_trending: String(trend?.why_trending || '').trim(),
+      relevance_to_niche: String(trend?.relevance_to_niche || '').trim(),
+      momentum: String(trend?.momentum || '').toLowerCase(),
+      platforms_active: Array.isArray(trend?.platforms_active)
+        ? trend.platforms_active.map((platform) => String(platform || '').trim()).filter(Boolean)
+        : [],
+      estimated_lifespan: String(trend?.estimated_lifespan || '').trim(),
+      opportunity_window: String(trend?.opportunity_window || '').trim(),
+    }))
+    .filter((trend) => trend.topic && trend.why_trending && trend.relevance_to_niche)
+    .slice(0, 5)
+    .map((trend) => ({
+      ...trend,
+      category: allowedCategories.has(trend.category) ? trend.category : 'Industry Shift',
+      momentum: allowedMomentum.has(trend.momentum) ? trend.momentum : 'rising',
+      estimated_lifespan: allowedLifespan.has(trend.estimated_lifespan) ? trend.estimated_lifespan : 'days',
+      opportunity_window: allowedWindow.has(trend.opportunity_window) ? trend.opportunity_window : 'Monitor',
+      platforms_active: trend.platforms_active.length > 0 ? trend.platforms_active : ['Multi-platform'],
+    }));
+
+  if (trends.length === 0) {
+    return null;
+  }
+
+  return {
+    trends,
+    scan_summary: String(scanData.scan_summary || '').trim() || 'Live trend scan complete.',
+    last_updated: String(scanData.last_updated || '').trim() || new Date().toISOString(),
+  };
+}
+
 /**
  * Scan trending topics in a niche
  * @param {Object} brandData - Brand data from BrandContext
@@ -70,41 +155,66 @@ async function callPerplexityAPI(messages, temperature = 0.2) {
  */
 export async function scanTrendingTopics(brandData, platform = 'all') {
   try {
-    const niche = getNiche(brandData);
-    const audience = getTargetAudience(brandData);
-    const brandContext = buildBrandContext(brandData);
-
-    const platformFilter = platform !== 'all' ? `on ${platform}` : 'across TikTok, Instagram, X (Twitter), YouTube, and Facebook';
+    const niche = getNiche(brandData, 'general creator');
+    const audience = getTargetAudience(brandData, 'general audience');
+    const platformList = Array.isArray(brandData?.platforms) && brandData.platforms.length > 0
+      ? brandData.platforms.join(', ')
+      : (platform !== 'all' ? platform : 'Instagram, TikTok, X, YouTube, Facebook');
 
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media trend intelligence analyst. You track REAL viral content, trending audio, creator activity, and engagement patterns across TikTok, Instagram, X, YouTube, and Facebook.\n\nReturn trends as a numbered list. Each trend MUST follow this exact format on a single line:\n\nNUMBER. TREND_NAME | Platforms: PLATFORM1, PLATFORM2 | DESCRIPTION\n\nDo NOT use markdown tables, headers (###), or any other formatting. Only the numbered list.\n\nIMPORTANT: Every trend must be a REAL social media trend from the last 7 days — not generic industry news. Include specific details like trending sounds, content formats, viral post examples, or creator names when possible. Focus on what content creators are actually posting and what is getting engagement.'
+        content: 'You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.'
       },
       {
         role: 'user',
-        content: `What are the top 10 VIRAL social media trends in the ${niche} niche ${platformFilter} right now (last 7 days)?
+        content: `You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.
 
-Target Audience: ${audience}
+The user operates in this niche/industry: ${niche}
+Their target audience is: ${audience}
+Their preferred platforms are: ${platformList}
 
-Brand Context:
-${brandContext}
+Scan for the top 5 trends currently relevant to their niche. For each trend, return ONLY this JSON structure:
 
-For each trend, include ALL of the following in the description:
-- What the trend actually is (specific format, challenge, sound, or content style)
-- Why it's going viral (what's driving engagement)
-- A specific content angle or hook a ${niche} creator could use
-- Mention any specific creators, sounds, or viral posts if relevant
+{
+  "trends": [
+    {
+      "topic": "Trend name in 3-6 words",
+      "category": "Industry Shift" | "Viral Moment" | "Cultural Wave" | "Platform Update" | "Seasonal" | "News-Driven",
+      "why_trending": "One clear sentence explaining why this is trending right now.",
+      "relevance_to_niche": "One sentence on how this specifically connects to the user's niche.",
+      "momentum": "rising" | "peaking" | "declining",
+      "platforms_active": ["Instagram", "TikTok", etc.],
+      "estimated_lifespan": "hours" | "days" | "1-2 weeks" | "ongoing",
+      "opportunity_window": "Act now" | "Plan this week" | "Monitor"
+    }
+  ],
+  "scan_summary": "One sentence overview of the current trend landscape for this niche.",
+  "last_updated": "current timestamp"
+}
 
-Focus on ACTIONABLE social media trends: trending sounds, content formats, viral hooks, challenge formats, editing styles, or conversation topics that are getting high engagement. Do NOT include generic business news, industry reports, or marketing tips.
-
-Return ONLY the numbered list, no commentary or intro text.`
+RULES:
+- Return ONLY valid JSON, no markdown, no preamble, no explanation outside the JSON.
+- Never include content ideas, posting suggestions, caption examples, or creative direction.
+- Every trend must be currently active — do not include historical or evergreen topics.
+- "why_trending" must reference a specific recent trigger (event, viral post, news, algorithm change).
+- Keep all text concise. No run-on sentences. Maximum 20 words per field.`
       }
     ], 0.2);
 
+    const parsed = parseJsonFromText(data.content || '');
+    const normalized = normalizeQuickScanData(parsed);
+
+    if (!normalized) {
+      return {
+        success: false,
+        error: 'Trend scan returned unexpected results. Please try again.',
+      };
+    }
+
     return {
       success: true,
-      trends: data.content || '',
+      scan: normalized,
       citations: data.citations || [],
       usage: data.usage
     };

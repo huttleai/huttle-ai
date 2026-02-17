@@ -357,9 +357,10 @@ export function AuthProvider({ children }) {
     
     console.log('✅ [Auth] completeOnboarding called with:', profileData);
     
-    // Signal to GuidedTour that onboarding just completed — tour should trigger
-    // This must be set BEFORE the state updates that cause the Dashboard to mount
-    localStorage.setItem('show_guided_tour', 'pending');
+    // Signal to GuidedTour that onboarding just completed — tour should trigger.
+    // Use a user-scoped key so the tour only appears once per account.
+    const tourSignalKey = user?.id ? `show_guided_tour:${user.id}` : 'show_guided_tour';
+    localStorage.setItem(tourSignalKey, 'pending');
     
     // First refresh the profile from database to get the complete data
     await checkUserProfile(user.id);

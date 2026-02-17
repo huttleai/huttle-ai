@@ -655,11 +655,15 @@ export async function saveContentLibraryItem(userId, itemData) {
  */
 export async function getContentLibraryItems(userId, filters = {}) {
   try {
+    const safeLimit = Number(filters.limit) > 0 ? Number(filters.limit) : 100;
+    const safeOffset = Number(filters.offset) >= 0 ? Number(filters.offset) : 0;
+
     let query = supabase
       .from(TABLES.CONTENT_LIBRARY)
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(safeOffset, safeOffset + safeLimit - 1);
 
     if (filters.type && filters.type !== 'all') {
       query = query.eq('type', filters.type);
@@ -667,10 +671,6 @@ export async function getContentLibraryItems(userId, filters = {}) {
 
     if (filters.project && filters.project !== 'all') {
       query = query.eq('project_id', filters.project);
-    }
-
-    if (filters.limit) {
-      query = query.limit(filters.limit);
     }
 
     const { data, error } = await query;

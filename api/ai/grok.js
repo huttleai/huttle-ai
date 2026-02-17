@@ -10,39 +10,19 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
+import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
+import { logError, logInfo } from '../_utils/observability.js';
 
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-// Rate limiting: Simple in-memory store (use Redis in production for multi-instance)
-const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per user
-
-function checkRateLimit(userId) {
-  const now = Date.now();
-  const userKey = userId || 'anonymous';
-  const userData = rateLimitStore.get(userKey) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
-  
-  if (now > userData.resetAt) {
-    userData.count = 0;
-    userData.resetAt = now + RATE_LIMIT_WINDOW;
-  }
-  
-  userData.count++;
-  rateLimitStore.set(userKey, userData);
-  
-  return {
-    allowed: userData.count <= RATE_LIMIT_MAX_REQUESTS,
-    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - userData.count),
-    resetAt: userData.resetAt
-  };
-}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -58,7 +38,7 @@ export default async function handler(req, res) {
   try {
     // Verify Grok API key is configured
     if (!GROK_API_KEY) {
-      console.error('GROK_API_KEY not configured');
+      logError('grok.missing_api_key');
       return res.status(500).json({ error: 'AI service not configured' });
     }
 
@@ -84,11 +64,17 @@ export default async function handler(req, res) {
     }
 
     // Check rate limit
-    const rateLimit = checkRateLimit(userId);
+    const rateLimit = await checkPersistentRateLimit({
+      userKey: userId,
+      route: 'grok',
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowSeconds: RATE_LIMIT_WINDOW / 1000,
+    });
     res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
     res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
     
     if (!rateLimit.allowed) {
+      logInfo('grok.rate_limited', { userId, remaining: rateLimit.remaining });
       return res.status(429).json({ 
         error: 'Rate limit exceeded. Please wait before making more requests.',
         retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
@@ -130,7 +116,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Grok API error:', response.status, errorText);
+      logError('grok.upstream_error', { status: response.status, errorText });
       return res.status(response.status).json({ 
         error: 'AI service error. Please try again.' 
       });
@@ -145,7 +131,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Grok proxy error:', error);
+    logError('grok.proxy_error', { error: error.message });
     return res.status(500).json({ 
       error: 'An unexpected error occurred. Please try again.' 
     });

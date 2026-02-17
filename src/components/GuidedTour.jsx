@@ -3,6 +3,12 @@ import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 
+const TOUR_SIGNAL_KEY = 'show_guided_tour';
+
+function getScopedKey(baseKey, userId) {
+  return userId ? `${baseKey}:${userId}` : baseKey;
+}
+
 export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour' }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isActive, setIsActive] = useState(false);
@@ -23,18 +29,24 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
     
     const checkTourStatus = async () => {
       if (!user) return;
+
+      const scopedStorageKey = getScopedKey(storageKey, user.id);
+      const tourSignalKey = getScopedKey(TOUR_SIGNAL_KEY, user.id);
       
       // Check if tour was already completed (localStorage = fast check)
-      const localCompleted = localStorage.getItem(storageKey);
+      const localCompleted = localStorage.getItem(scopedStorageKey);
       if (localCompleted) return;
       
       // Check if onboarding JUST completed — this is the primary trigger for first-time users.
       // The 'show_guided_tour' flag is set by completeOnboarding in AuthContext
       // right before the transition from OnboardingQuiz to Dashboard.
-      const onboardingJustCompleted = localStorage.getItem('show_guided_tour');
-      if (onboardingJustCompleted === 'pending') {
-        // Clear the flag and show tour after a short delay for UI to settle
-        localStorage.setItem('show_guided_tour', 'shown');
+      const onboardingJustCompleted = localStorage.getItem(tourSignalKey);
+      if (onboardingJustCompleted === 'pending' || onboardingJustCompleted === 'shown') {
+        // Mark "shown" so refreshes during first session can still render the tour
+        // until the user completes or skips it.
+        if (onboardingJustCompleted === 'pending') {
+          localStorage.setItem(tourSignalKey, 'shown');
+        }
         showTour(1500);
         return;
       }
@@ -54,23 +66,33 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
           } else if (error.code !== 'PGRST116') {
             console.error('Error checking tour status:', error);
           }
-          
-          // Show tour if localStorage doesn't have it marked
-          showTour(2000);
+
+          // Do not auto-show tour on DB errors for returning users.
+          // Tour trigger should remain deterministic via onboarding signal.
           return;
         }
         
         // Only show tour if user has NOT seen it yet
         const dbCompleted = data?.has_seen_tour;
         
-        if (!dbCompleted) {
+        if (dbCompleted) {
+          localStorage.setItem(scopedStorageKey, 'true');
+          return;
+        }
+
+        // Safety net: if the onboarding signal is missing, still allow very new users
+        // to see the tour once.
+        const createdAt = user?.created_at ? new Date(user.created_at) : null;
+        const isNewUser = createdAt
+          ? (Date.now() - createdAt.getTime()) < 24 * 60 * 60 * 1000
+          : false;
+
+        if (isNewUser) {
           showTour(2000);
         }
       } catch (error) {
         // Silently fall back to localStorage-only behavior
-        if (!localCompleted) {
-          showTour(2000);
-        }
+        console.error('Error in GuidedTour status check:', error);
       }
     };
     
@@ -100,10 +122,13 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
   };
 
   const markTourComplete = async () => {
+    const scopedStorageKey = getScopedKey(storageKey, user?.id);
+    const tourSignalKey = getScopedKey(TOUR_SIGNAL_KEY, user?.id);
+
     // Mark tour as complete in localStorage (fallback)
-    localStorage.setItem(storageKey, 'true');
+    localStorage.setItem(scopedStorageKey, 'true');
     // Clean up the onboarding signal flag
-    localStorage.removeItem('show_guided_tour');
+    localStorage.removeItem(tourSignalKey);
     
     // Also mark in Supabase for persistence across devices
     if (user) {

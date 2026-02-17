@@ -19,10 +19,27 @@ import {
   generateVisualIdeas,
   generateVisualBrainstorm 
 } from '../services/grokAPI';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { saveContentLibraryItem } from '../config/supabase';
+
+function uniqueNonEmpty(items) {
+  return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
+}
+
+function buildCaptionFallbacks(topic, platformLabel, tone) {
+  const normalizedTopic = topic?.trim() || 'this idea';
+  const platform = platformLabel || 'social media';
+  const toneLabel = tone || 'engaging';
+
+  return uniqueNonEmpty([
+    `${normalizedTopic}: the version most people overlook. Save this and test it on ${platform}.`,
+    `Quick ${toneLabel} take on ${normalizedTopic} -> what worked, what did not, and what to do next.`,
+    `If you're working on ${normalizedTopic}, start here: one action today beats ten ideas tomorrow.`,
+    `${normalizedTopic} can feel overwhelming. Break it into one clear step and share your result below.`,
+  ]);
+}
 
 export default function AITools() {
   const { addToast: showToast } = useToast();
@@ -31,6 +48,7 @@ export default function AITools() {
   const { userTier, getFeatureLimit } = useSubscription();
   const { saveGeneratedContent, setDraft } = useContent();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTool, setActiveTool] = useState('caption');
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [savedIndex, setSavedIndex] = useState(null);
@@ -147,6 +165,32 @@ export default function AITools() {
     { id: 'visual-brainstorm', name: 'Visuals', icon: ImageIcon, description: 'Visual concept ideas' },
   ];
 
+  useEffect(() => {
+    const topicParam = searchParams.get('topic');
+    const toolParam = searchParams.get('tool');
+    const validTools = new Set(['caption', 'hashtags', 'hooks', 'cta', 'scorer', 'visual-brainstorm']);
+
+    let didPrefill = false;
+
+    if (toolParam && validTools.has(toolParam)) {
+      setActiveTool(toolParam);
+      didPrefill = true;
+    }
+
+    if (topicParam) {
+      setActiveTool('caption');
+      setCaptionInput(topicParam);
+      didPrefill = true;
+    }
+
+    if (didPrefill) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('tool');
+      nextParams.delete('topic');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   // Caption Generator Handler
   const handleGenerateCaptions = async () => {
     if (!captionInput.trim()) {
@@ -169,46 +213,32 @@ export default function AITools() {
       const result = await generateCaption(contentData, brandData);
 
       if (result.success && result.caption) {
-        // Parse numbered captions from response
-        const captions = result.caption.split(/\d+\./).filter(c => c.trim()).slice(0, 4);
-        
-        if (captions.length > 0) {
-          setGeneratedCaptions(captions);
+        const parsedCaptions = uniqueNonEmpty(
+          result.caption
+            .split(/\n{2,}|\d+\.\s+/)
+            .map((part) => part.replace(/^[-*]\s*/, '').replace(/^["']|["']$/g, '').trim())
+        );
+        const fallbackCaptions = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
+        const finalCaptions = uniqueNonEmpty([...parsedCaptions, ...fallbackCaptions]).slice(0, 4);
+
+        if (finalCaptions.length > 0) {
+          setGeneratedCaptions(finalCaptions);
           incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
-        } else if (result.caption.trim()) {
-          setGeneratedCaptions([result.caption.trim()]);
-          incrementAIUsage();
-          showToast(`Caption generated! ${getToastDisclaimer('general')}`, 'success');
         } else {
-          setGeneratedCaptions([
-            `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
-            `Ready to learn about ${captionInput}? 💡 Here's everything you need to know to get started today!`,
-            `${captionInput} has never been easier! ✨ Try these simple strategies and see real results.`,
-            `Unlock the power of ${captionInput}! 🚀 Share this with someone who needs to see it.`
-          ]);
+          setGeneratedCaptions(fallbackCaptions);
           showToast(`Using fallback captions. ${getToastDisclaimer('general')}`, 'info');
         }
       } else {
         // Handle error with user-friendly messages
         const errorMessage = result.error || 'API error - using fallback captions';
         
-        setGeneratedCaptions([
-          `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
-          `Ready to learn about ${captionInput}? 💡 Here's everything you need to know to get started today!`,
-          `${captionInput} has never been easier! ✨ Try these simple strategies and see real results.`,
-          `Unlock the power of ${captionInput}! 🚀 Share this with someone who needs to see it.`
-        ]);
+        setGeneratedCaptions(buildCaptionFallbacks(captionInput, captionPlatform, captionTone));
         showToast(errorMessage, 'warning');
       }
     } catch (error) {
       console.error('Caption generation error:', error);
-      setGeneratedCaptions([
-        `Discover the amazing benefits of ${captionInput}! 🌟 Transform your routine with these proven tips.`,
-        `Ready to learn about ${captionInput}? 💡 Here's everything you need to know to get started today!`,
-        `${captionInput} has never been easier! ✨ Try these simple strategies and see real results.`,
-        `Unlock the power of ${captionInput}! 🚀 Share this with someone who needs to see it.`
-      ]);
+      setGeneratedCaptions(buildCaptionFallbacks(captionInput, captionPlatform, captionTone));
       showToast('Error generating captions. Using fallbacks.', 'error');
     } finally {
       setIsLoadingCaptions(false);
@@ -564,11 +594,27 @@ export default function AITools() {
   };
 
   const handleScheduleContent = (content, itemIndex = null) => {
-    setDraft({ content, source: 'ai-tools', tool: activeTool, timestamp: new Date().toISOString() });
+    const contentAsText = typeof content === 'string' ? content : JSON.stringify(content);
+    const draftTitle =
+      captionInput
+      || hashtagInput
+      || hookInput
+      || ctaPromoting
+      || visualPrompt
+      || 'AI Draft';
+
+    setDraft({
+      source: 'ai-tools',
+      tool: activeTool,
+      title: draftTitle,
+      caption: contentAsText,
+      platforms: [captionPlatform || hashtagPlatform || hookPlatform || ctaPlatform || visualPlatform || 'instagram'],
+      timestamp: new Date().toISOString()
+    });
     setScheduledIndex(itemIndex);
     setTimeout(() => setScheduledIndex(null), 2000);
-    showToast('Navigating to calendar...', 'info');
-    setTimeout(() => navigate('/dashboard/calendar'), 500);
+    showToast('Opening post composer with your draft...', 'info');
+    setTimeout(() => navigate('/dashboard/calendar'), 300);
   };
 
   return (

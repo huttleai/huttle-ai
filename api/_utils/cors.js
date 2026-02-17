@@ -5,17 +5,20 @@
  * Prevents cross-origin attacks from malicious websites
  */
 
-// Allowed origins - add your production domains here
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+// Allowed origins - production-safe list with localhost only in development
 const ALLOWED_ORIGINS = [
+  process.env.APP_URL,
   process.env.VITE_APP_URL,
   process.env.NEXT_PUBLIC_APP_URL,
   'https://huttleai.com',
   'https://www.huttleai.com',
   'https://huttle-ai.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-].filter(Boolean); // Remove undefined values
+  ...(isDevelopment
+    ? ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173']
+    : []),
+].filter(Boolean);
 
 /**
  * Set secure CORS headers on the response

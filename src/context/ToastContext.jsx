@@ -9,10 +9,23 @@ export function useToast() {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const TOAST_DEDUPE_WINDOW_MS = 1500;
 
   const addToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
+    const createdAt = Date.now();
+    const id = `${createdAt}-${Math.random().toString(36).slice(2, 8)}`;
+
+    setToasts((prev) => {
+      const isDuplicate = prev.some(
+        (toast) =>
+          toast.message === message &&
+          toast.type === type &&
+          createdAt - (toast.createdAt || 0) < TOAST_DEDUPE_WINDOW_MS
+      );
+
+      if (isDuplicate) return prev;
+      return [...prev, { id, message, type, createdAt }];
+    });
     
     // Auto remove after 4 seconds
     setTimeout(() => {

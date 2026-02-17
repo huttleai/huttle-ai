@@ -25,10 +25,13 @@
 import { supabase } from '../config/supabase';
 import { 
   WORKFLOW_NAMES, 
-  WORKFLOW_WEBHOOKS, 
   isWorkflowConfigured,
   getWorkflowUrl 
 } from '../utils/workflowConstants';
+import { API_TIMEOUTS } from '../config/apiConfig';
+import { retryFetch } from '../utils/retryFetch';
+
+const TREND_DEEP_DIVE_PROXY_URL = '/api/ai/trend-deep-dive';
 
 // ============================================================================
 // AUTH & HEADERS
@@ -113,18 +116,23 @@ export async function getTrendingNow({ niche, industry, platforms = [] }) {
     
     console.log('[N8N_WORKFLOW] Calling dashboard trending webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        niche,
-        industry,
-        platforms,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(30000) // 30 second timeout
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          niche,
+          industry,
+          platforms,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.FAST,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -190,18 +198,23 @@ export async function getHashtagsOfDay({ niche, industry, limit = 4 }) {
     
     console.log('[N8N_WORKFLOW] Calling dashboard hashtags webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        niche,
-        industry,
-        limit,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          niche,
+          industry,
+          limit,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.FAST,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -278,21 +291,26 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
     
     console.log('[N8N_WORKFLOW] Calling AI Plan Builder webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        goal,
-        period,
-        platforms,
-        niche,
-        brandVoice,
-        brandProfile,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(60000) // 60 second timeout for complex generation
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          goal,
+          period,
+          platforms,
+          niche,
+          brandVoice,
+          brandProfile,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.STANDARD,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -344,137 +362,70 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
  */
 export async function getTrendDeepDive({ trend, niche, platforms = [], brandData }) {
   console.log('[N8N_WORKFLOW] getTrendDeepDive called', { trend, niche, platforms });
-  
-  // Check if workflow is configured
-  const isConfigured = isWorkflowConfigured(WORKFLOW_NAMES.TREND_DEEP_DIVE);
-  const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.TREND_DEEP_DIVE);
-  
-  console.log('[N8N_WORKFLOW] Workflow configuration check:', {
-    workflowName: WORKFLOW_NAMES.TREND_DEEP_DIVE,
-    isConfigured,
-    webhookUrl: webhookUrl || 'NOT SET',
-    envVar: 'VITE_N8N_TREND_DEEP_DIVE_WEBHOOK'
-  });
-  
-  if (!isConfigured || !webhookUrl) {
-    console.warn('[N8N_WORKFLOW] Trend Deep Dive workflow not configured');
-    console.warn('[N8N_WORKFLOW] Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable');
-    return {
-      success: false,
-      useFallback: false,
-      reason: 'Workflow not configured. Please set VITE_N8N_TREND_DEEP_DIVE_WEBHOOK environment variable.'
-    };
-  }
-  
+
   try {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
-    
-    const requestBody = {
-      userId,
-      trend,
-      topic: trend, // Duplicate as 'topic' for workflow compatibility
-      trendTopic: trend, // Another alias in case workflow uses this key
-      niche,
-      platforms,
-      brandData,
-      timestamp: new Date().toISOString()
-    };
-    
-    console.log('[N8N_WORKFLOW] Calling Trend Deep Dive webhook:', {
-      url: webhookUrl,
-      method: 'POST',
-      hasAuth: !!headers.Authorization,
-      userId,
-      requestBody
-    });
-    
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(120000) // 120 second timeout (2 minutes)
-    });
-    
-    console.log('[N8N_WORKFLOW] Response status:', response.status, response.statusText);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[N8N_WORKFLOW] Workflow error response:', errorText);
-      throw new Error(`Workflow returned status ${response.status}: ${errorText.substring(0, 200)}`);
-    }
-    
-    const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Trend Deep Dive response received:', {
-      hasAnalysis: !!data.analysis,
-      analysisLength: data.analysis?.length || 0,
-      contentIdeasCount: data.contentIdeas?.length || 0,
-      competitorInsightsCount: data.competitorInsights?.length || 0,
-      citationsCount: data.citations?.length || 0,
-      dataKeys: Object.keys(data)
-    });
-    
-    // Validate that the response actually contains analysis and isn't an error/clarification
-    const analysisText = data.analysis || data.output || data.report || '';
-    const failurePhrases = [
-      'cannot provide',
-      'lacks a specified',
-      'need you to clarify',
-      'please specify',
-      'empty string',
-      'what is the specific trend',
-      'which trend do you want'
-    ];
-    
-    const isFailedResponse = failurePhrases.some(phrase => 
-      analysisText.toLowerCase().includes(phrase)
+    const response = await retryFetch(
+      TREND_DEEP_DIVE_PROXY_URL,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          trend,
+          topic: trend,
+          niche,
+          platforms,
+          brandData,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: 55000,
+        maxRetries: 1,
+      }
     );
-    
-    if (isFailedResponse) {
-      console.warn('[N8N_WORKFLOW] Deep Dive response indicates the workflow did not receive the trend topic correctly');
-      console.warn('[N8N_WORKFLOW] Trend sent:', trend, '| Full payload:', JSON.stringify(requestBody));
+
+    if (!response.ok) {
       return {
         success: false,
-        reason: `The workflow did not process the topic "${trend}" correctly. The n8n workflow template may need to reference the "trend" or "topic" field from the request body. Please check the workflow configuration.`,
-        analysis: analysisText,
-        source: 'n8n'
+        errorType: 'server_error',
+        reason: 'Deep Dive encountered a server issue. Please try again in a moment.'
       };
     }
-    
+
+    const data = await response.json();
+    const payload = (data?.data && typeof data.data === 'object') ? data.data : data;
+
+    if (!payload?.success || !payload?.report || typeof payload.report !== 'object') {
+      return {
+        success: false,
+        errorType: 'incomplete_report',
+        reason: 'We couldn\'t generate a complete report for this topic. Try rephrasing or narrowing your search.'
+      };
+    }
+
     return {
       success: true,
-      analysis: analysisText,
-      contentIdeas: data.contentIdeas || data.ideas || [],
-      competitorInsights: data.competitorInsights || data.insights || [],
-      citations: data.citations || data.sources || [],
-      source: 'n8n',
-      metadata: data.metadata || {}
+      report: payload.report,
+      citations: Array.isArray(payload.citations) ? payload.citations : [],
+      metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}
     };
-    
   } catch (error) {
-    console.error('[N8N_WORKFLOW] getTrendDeepDive error:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    
-    // Provide more specific error messages
-    let errorReason = error.message;
-    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      errorReason = 'Workflow request timed out after 2 minutes. The workflow may be taking too long or not responding.';
-    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      errorReason = 'Network error. Please check if the n8n workflow URL is correct and accessible.';
-    } else if (error.message.includes('404')) {
-      errorReason = 'Workflow endpoint not found (404). Please verify the webhook URL is correct.';
-    } else if (error.message.includes('500')) {
-      errorReason = 'Workflow server error (500). Please check your n8n workflow logs.';
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        errorType: 'timeout',
+        reason: 'This analysis is taking longer than expected. Try a more specific topic.'
+      };
     }
-    
+
+    console.error('[N8N_WORKFLOW] getTrendDeepDive unexpected error:', error);
     return {
       success: false,
-      useFallback: false,
-      reason: errorReason
+      errorType: 'network_error',
+      reason: 'Deep Dive encountered a server issue. Please try again in a moment.'
     };
   }
 }
@@ -514,18 +465,23 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
     
     console.log('[N8N_WORKFLOW] Calling Trend Forecaster webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        niche,
-        timeframe,
-        brandData,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(45000)
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          niche,
+          timeframe,
+          brandData,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.STANDARD,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -598,20 +554,25 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
     
     console.log('[N8N_WORKFLOW] Calling Viral Blueprint webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        platform,
-        postType,
-        topic,
-        voiceContext,
-        brandProfile,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(60000) // 60 second timeout for complex generation
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          platform,
+          postType,
+          topic,
+          voiceContext,
+          brandProfile,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.STANDARD,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -681,17 +642,22 @@ export async function getSocialUpdates({ limit = 12, platforms = [] } = {}) {
     
     console.log('[N8N_WORKFLOW] Calling Social Updates webhook:', webhookUrl);
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        userId,
-        limit,
-        platforms,
-        timestamp: new Date().toISOString()
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
+    const response = await retryFetch(
+      webhookUrl,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          limit,
+          platforms,
+          timestamp: new Date().toISOString()
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.FAST,
+      }
+    );
     
     if (!response.ok) {
       throw new Error(`Workflow returned status ${response.status}`);
@@ -734,10 +700,16 @@ export async function checkWorkflowHealth(workflowName) {
   
   try {
     const webhookUrl = getWorkflowUrl(workflowName);
-    const response = await fetch(`${webhookUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000)
-    });
+    const response = await retryFetch(
+      `${webhookUrl}/health`,
+      {
+        method: 'GET',
+      },
+      {
+        timeoutMs: API_TIMEOUTS.FAST,
+        maxRetries: 0,
+      }
+    );
     return response.ok;
   } catch (error) {
     console.warn(`[N8N_WORKFLOW] Health check failed for ${workflowName}:`, error);

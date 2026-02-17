@@ -70,6 +70,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [downloadingMedia, setDownloadingMedia] = useState(false);
+  const [copiedContentType, setCopiedContentType] = useState(null);
 
   const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -92,6 +93,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
       setCompletedSteps({});
       setPublishing(false);
       setDownloadingMedia(false);
+      setCopiedContentType(null);
     }
   }, [isOpen, postPlatformKey]);
 
@@ -126,13 +128,19 @@ export default function PublishModal({ isOpen, onClose, post }) {
     setCompletedSteps(prev => ({ ...prev, [step]: true }));
   };
 
-  // Step 1: Copy caption + hashtags
-  const handleCopyCaption = async () => {
+  // Step 1: Copy content snippets
+  const handleCopyContent = async (content, contentTypeLabel) => {
+    if (!content || !content.trim()) {
+      addToast(`No ${contentTypeLabel.toLowerCase()} available to copy.`, 'info');
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(fullText);
+      await navigator.clipboard.writeText(content);
       markStep('copy');
-      addToast('Caption and hashtags copied!', 'success');
-    } catch (error) {
+      setCopiedContentType(contentTypeLabel);
+      addToast(`${contentTypeLabel} copied!`, 'success');
+    } catch {
       addToast('Failed to copy. Please select and copy manually.', 'error');
     }
   };
@@ -204,7 +212,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
     addToast(`Opening ${config.name}...`, 'success');
   };
 
-  // Step 4: Mark as published
+  // Step 4: Mark as posted
   const handleMarkPublished = async () => {
     setPublishing(true);
     
@@ -222,7 +230,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
 
     setPublished(true);
     setPublishing(false);
-    addToast('Post marked as published!', 'success');
+    addToast('Post marked as posted!', 'success');
 
     setTimeout(() => {
       onClose();
@@ -235,11 +243,11 @@ export default function PublishModal({ isOpen, onClose, post }) {
   const steps = [
     {
       id: 'copy',
-      label: 'Copy caption & hashtags',
-      description: 'Copies everything to your clipboard',
+      label: 'Copy content',
+      description: 'Copy full post, caption only, or hashtags only',
       icon: Clipboard,
-      action: handleCopyCaption,
-      actionLabel: completedSteps.copy ? 'Copied!' : 'Copy',
+      action: () => handleCopyContent(fullText, 'Full post'),
+      actionLabel: completedSteps.copy ? 'Copied!' : 'Copy Full',
       completed: !!completedSteps.copy,
       required: true
     },
@@ -260,13 +268,13 @@ export default function PublishModal({ isOpen, onClose, post }) {
       description: isMobile ? 'Opens the app on your phone' : 'Opens the website in a new tab',
       icon: ExternalLink,
       action: handleOpenPlatform,
-      actionLabel: completedSteps.open ? 'Opened!' : 'Open',
+      actionLabel: completedSteps.open ? 'Opened!' : 'Copy & Open',
       completed: !!completedSteps.open,
       required: true
     },
     {
       id: 'paste',
-      label: 'Paste & publish',
+      label: 'Paste & post',
       description: selectedConfig?.instructions || 'Paste your caption and upload media',
       icon: ArrowRight,
       action: null, // No button — this is a manual step
@@ -282,8 +290,8 @@ export default function PublishModal({ isOpen, onClose, post }) {
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Publish Post</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Follow the steps below to publish</p>
+            <h2 className="text-lg font-bold text-gray-900">Ready to Post</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Copy your content, open the platform, then confirm</p>
           </div>
           <button
             onClick={onClose}
@@ -299,9 +307,9 @@ export default function PublishModal({ isOpen, onClose, post }) {
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8 text-green-600" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Published!</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Marked as Posted!</h3>
             <p className="text-sm text-gray-600">
-              Your post has been marked as published on {selectedConfig?.name}.
+              Your post has been marked as posted on {selectedConfig?.name}.
             </p>
           </div>
         ) : (
@@ -332,7 +340,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
             {/* Platform Selection */}
             {!selectedPlatform ? (
               <div className="px-5 pb-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Where are you publishing?</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Where are you posting?</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {Object.entries(filteredPlatformConfigs).map(([key, config]) => {
                     const Icon = config.icon;
@@ -368,6 +376,45 @@ export default function PublishModal({ isOpen, onClose, post }) {
                   >
                     Change
                   </button>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Copy options</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <button
+                      onClick={() => handleCopyContent(fullText, 'Full post')}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                        copiedContentType === 'Full post'
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Full Post
+                    </button>
+                    <button
+                      onClick={() => handleCopyContent(post.caption || '', 'Caption')}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                        copiedContentType === 'Caption'
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Caption
+                    </button>
+                    <button
+                      onClick={() => handleCopyContent(post.hashtags || '', 'Hashtags')}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                        copiedContentType === 'Hashtags'
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Hashtags
+                    </button>
+                  </div>
                 </div>
 
                 {/* Steps */}
@@ -430,7 +477,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
                   })}
                 </div>
 
-                {/* Mark as Published button */}
+                {/* Mark as Posted button */}
                 <div className="mt-5 flex gap-3">
                   <button
                     onClick={onClose}
@@ -452,7 +499,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Mark as Published</span>
+                        <span>Mark as Posted</span>
                       </>
                     )}
                   </button>
@@ -460,7 +507,7 @@ export default function PublishModal({ isOpen, onClose, post }) {
 
                 {!allStepsDone && (
                   <p className="text-center text-xs text-gray-400 mt-2">
-                    Complete the Copy and Open steps to mark as published
+                    Complete the Copy and Open steps to mark as posted
                   </p>
                 )}
               </div>

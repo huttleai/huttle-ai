@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
+import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 
 const NotificationContext = createContext();
 
@@ -14,21 +15,16 @@ export function NotificationProvider({ children }) {
 
   // Load notifications from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('huttleNotifications');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setNotifications(parsed);
-        setUnreadCount(parsed.filter(n => !n.read).length);
-      } catch (e) {
-        console.error('Error loading notifications:', e);
-      }
+    const parsed = safeReadJson(localStorage, 'huttleNotifications', []);
+    if (Array.isArray(parsed)) {
+      setNotifications(parsed);
+      setUnreadCount(parsed.filter(n => !n.read).length);
     }
   }, []);
 
   // Save notifications to localStorage
   useEffect(() => {
-    localStorage.setItem('huttleNotifications', JSON.stringify(notifications));
+    safeWriteJson(localStorage, 'huttleNotifications', notifications, { maxBytes: 1_500_000 });
     setUnreadCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 

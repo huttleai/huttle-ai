@@ -139,6 +139,12 @@ const WORD_OVERRIDES = {
   'by': 'by',
 };
 
+// Reverse mappings to normalize human-readable labels back to enum keys
+const REVERSE_EXACT_MAPPINGS = Object.entries(EXACT_MAPPINGS).reduce((acc, [key, label]) => {
+  acc[label.toLowerCase()] = key;
+  return acc;
+}, {});
+
 export function formatEnumLabel(value) {
   if (!value || typeof value !== 'string') return value || '';
   
@@ -216,6 +222,79 @@ export function formatEnumArray(values) {
   }
   
   return String(values);
+}
+
+/**
+ * Normalize a human-readable value or enum-like value to snake_case enum key.
+ * Example:
+ * - "Staying Consistent" -> "consistency"
+ * - "The Educator" -> "educator"
+ * - "grow_followers" -> "grow_followers"
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizeEnumValue(value) {
+  if (!value || typeof value !== 'string') return '';
+
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const lower = trimmed.toLowerCase();
+
+  // Handle known labels (human readable -> enum key)
+  if (REVERSE_EXACT_MAPPINGS[lower]) {
+    return REVERSE_EXACT_MAPPINGS[lower];
+  }
+
+  // If it already looks like a normalized enum key, keep it
+  if (/^[a-z0-9_]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Normalize free-form labels into snake_case
+  return trimmed
+    .replace(/['"]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Normalize an array/string of enum-like values to comma-separated keys.
+ * @param {Array|string} values
+ * @returns {string}
+ */
+export function normalizeEnumArray(values) {
+  if (!values) return '';
+
+  if (Array.isArray(values)) {
+    return values.map(normalizeEnumValue).filter(Boolean).join(', ');
+  }
+
+  if (typeof values === 'string') {
+    if (values.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(values);
+        if (Array.isArray(parsed)) {
+          return parsed.map(normalizeEnumValue).filter(Boolean).join(', ');
+        }
+      } catch (e) {
+        // Ignore and treat as a plain string below
+      }
+    }
+
+    return values
+      .split(',')
+      .map(v => normalizeEnumValue(v))
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  return normalizeEnumValue(String(values));
 }
 
 export default formatEnumLabel;
