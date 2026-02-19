@@ -264,8 +264,9 @@ export default function BrandVoice() {
     namePlaceholder: isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa',
     nicheLabel: isCreator ? 'Content Focus' : 'Niche',
     nichePlaceholder: isCreator ? 'e.g., Lifestyle, Fitness, Comedy' : 'e.g., Medical Spa, Fitness, Beauty',
-    industryLabel: isCreator ? 'Category' : 'Industry',
-    industryPlaceholder: isCreator ? 'e.g., Entertainment, Health & Wellness' : 'e.g., Healthcare, Wellness, Fashion',
+    industryLabel: isCreator ? 'Category' : 'Sub-niche',
+    industryPlaceholder: isCreator ? 'e.g., Entertainment, Health & Wellness' : 'e.g., Anti-aging treatments, Personal training, Organic skincare',
+    industryHelper: isCreator ? 'Optional broader category' : 'Optional — narrow down your niche further',
     audienceLabel: isCreator ? 'Your Community' : 'Target Audience',
     audiencePlaceholder: isCreator ? 'e.g., Young adults who love authentic lifestyle content' : 'e.g., Women aged 25-45 interested in anti-aging treatments',
     voiceLabel: isCreator ? 'Your Vibe & Style' : 'Brand Voice & Tone',
@@ -499,12 +500,15 @@ export default function BrandVoice() {
               />
             </div>
 
-            {/* Industry / Category */}
+            {/* Sub-niche / Category */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
                 {labels.industryLabel}
-                {isCreator && <span className="text-gray-400 font-normal ml-1 normal-case">(Optional)</span>}
+                <span className="text-gray-400 font-normal ml-1 normal-case text-xs">(Optional)</span>
               </label>
+              {labels.industryHelper && (
+                <p className="text-xs text-gray-400 mb-2">{labels.industryHelper}</p>
+              )}
               <input
                 type="text"
                 value={formData.industry}

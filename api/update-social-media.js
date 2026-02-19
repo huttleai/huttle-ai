@@ -1,14 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+const PERPLEXITY_API_KEY =
+  process.env.PERPLEXITY_API_KEY ||
+  process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Important: Use service_role key, not anon key
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Validate required credentials
 if (!PERPLEXITY_API_KEY) {
-  console.error('❌ PERPLEXITY_API_KEY is not configured');
+  console.error('❌ PERPLEXITY_API_KEY / VITE_PERPLEXITY_API_KEY is not configured');
 }
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('❌ Supabase credentials are not configured');
@@ -68,19 +70,38 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'sonar',
         web_search_options: {
-          search_context_size: 'low'
+          search_context_size: 'medium'
         },
         messages: [
           {
             role: 'system',
-            content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
+            content: `You are a social media platform updates expert for content creators. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array.
+
+Each update must be a JSON object with these EXACT fields:
+- platform: string (one of: Facebook, Instagram, TikTok, X, YouTube)
+- date: string in format "Month YYYY"
+- title: string (concise headline, max 10 words)
+- description: string (2–3 sentence factual summary of the update)
+- impact: string ("high", "medium", or "low")
+- update_type: string (one of: "algorithm change", "new feature", "policy update", "monetization", "analytics", "creator tools", "general")
+- action_required: boolean (true only if content creators MUST take action or risk account/content impact)
+- what_it_means: string (1–2 sentences explaining what this means practically for a content creator — conversational tone, e.g. "Your Reels now get more reach if you post before 9am...")
+- keyTakeaways: array of strings (2–4 bullet points)
+- actionItems: array of strings (1–3 specific actions creators should take)
+- affectedUsers: string
+- timeline: string
+- link: string (URL to official announcement or credible source; use "#" if not available)
+
+QUALITY GATE: Only include updates that are genuinely significant for content creators. Do NOT include minor UI tweaks, vague "platform is testing" notes with no outcome, or updates where there is truly nothing new to report. If a platform has no meaningful update in the period, omit it entirely — do NOT fabricate filler content.
+
+ONLY include updates from: Facebook, Instagram, TikTok, X (Twitter), and YouTube. DO NOT include LinkedIn, Threads, Snapchat, or any other platforms.`
           },
           {
             role: 'user',
-            content: `Provide the latest social media platform updates from the past 12 months (from ${currentMonth} ${currentYear} going back to 12 months ago). ONLY include updates from these platforms: Facebook, Instagram, TikTok, X (Twitter), and YouTube. EXCLUDE LinkedIn, Threads and Snapchat completely. Return ONLY a valid JSON array, starting with [ and ending with ]. Each update object must have: platform (must be one of: Facebook, Instagram, TikTok, X, YouTube), date (format "Month YYYY"), title, description, impact ("high"/"medium"/"low"), keyTakeaways (array), actionItems (array), affectedUsers, timeline, link. Sort by date descending (most recent first).`
+            content: `Find the most significant social media platform updates from the past 90 days (as of ${currentMonth} ${currentYear}). Focus on changes that directly affect content creators, influencers, and social media managers. ONLY include updates from: Facebook, Instagram, TikTok, X (Twitter), and YouTube. EXCLUDE all other platforms. Return ONLY a valid JSON array. Sort by impact descending (high first), then by date descending.`
           }
         ],
-        temperature: 0.2,
+        temperature: 0.1,
       })
     });
 
@@ -119,22 +140,25 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to parse JSON from Perplexity response' });
     }
 
+    // Expiry durations by impact level
+    const EXPIRY_DAYS = { high: 21, medium: 10, low: 5 };
+
     // Filter to only allowed platforms and transform for database
     const filteredUpdates = updates
       .filter(update => {
         const platform = update.platform || '';
-        return ALLOWED_PLATFORMS.some(allowed => 
+        return ALLOWED_PLATFORMS.some(allowed =>
           platform.toLowerCase() === allowed.toLowerCase()
         ) && platform.toLowerCase() !== 'threads' && platform.toLowerCase() !== 'snapchat';
       })
       .map(update => {
         // Parse date "Month YYYY" to "YYYY-MM" format
         const dateStr = update.date || '';
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                            'July', 'August', 'September', 'October', 'November', 'December'];
         const parts = dateStr.split(' ');
         let dateMonth = null;
-        
+
         if (parts.length === 2) {
           const monthName = parts[0];
           const year = parts[1];
@@ -143,24 +167,35 @@ export default async function handler(req, res) {
             dateMonth = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
           }
         }
-        
+
         // Normalize platform name
         let platform = update.platform || '';
-        if (platform.toLowerCase() === 'twitter') {
-          platform = 'X';
-        }
-        
+        if (platform.toLowerCase() === 'twitter') platform = 'X';
+
+        const impactLevel = (update.impact || 'medium').toLowerCase();
+        const expiryDays = EXPIRY_DAYS[impactLevel] ?? 10;
+        const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
+        const sourceUrl = (update.link && update.link !== '#') ? update.link : null;
+
         return {
           platform,
-          date_month: dateMonth || new Date().toISOString().slice(0, 7), // Fallback to current month
+          date_month: dateMonth || new Date().toISOString().slice(0, 7),
           title: update.title || 'Platform Update',
           description: update.description || '',
-          link: update.link || '#',
-          impact: (update.impact || 'medium').toLowerCase(),
+          link: sourceUrl || '#',
+          impact: impactLevel,
           key_takeaways: Array.isArray(update.keyTakeaways) ? update.keyTakeaways : [],
           action_items: Array.isArray(update.actionItems) ? update.actionItems : [],
           affected_users: update.affectedUsers || '',
-          timeline: update.timeline || ''
+          timeline: update.timeline || '',
+          // Enriched fields
+          update_type: update.update_type || 'general',
+          action_required: Boolean(update.action_required),
+          what_it_means: update.what_it_means || '',
+          source_url: sourceUrl,
+          expires_at: expiresAt,
+          fetched_at: new Date().toISOString(),
+          published_date: dateMonth ? `${dateMonth}-01` : null
         };
       });
 

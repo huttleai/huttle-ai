@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.N8N_TREND_DEEP_DIVE_WEBHOOK;
+const N8N_WEBHOOK_URL =
+  process.env.N8N_TREND_DEEP_DIVE_WEBHOOK ||
+  process.env.VITE_N8N_TREND_DEEP_DIVE_WEBHOOK;
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -54,27 +54,7 @@ export default function useNotificationGenerator() {
 
     const shown = getShownKeys();
 
-    // 1. Welcome message for new users
-    if (!shown.has('welcome')) {
-      const createdAt = user.created_at ? new Date(user.created_at) : null;
-      const daysSinceCreation = createdAt
-        ? (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
-        : 999;
-
-      if (daysSinceCreation < 3) {
-        addNotification({
-          type: 'info',
-          title: 'Welcome to Huttle AI!',
-          message: 'Start by setting up your Brand Voice to unlock personalized AI content.',
-          action: () => { window.location.href = '/dashboard/brand-voice'; },
-          actionLabel: 'Set Up Brand Voice',
-          persistent: true,
-        });
-        markShown('welcome');
-      }
-    }
-
-    // 2. Onboarding nudges — Brand Voice incomplete
+    // 1. Onboarding nudges — Brand Voice incomplete
     if (!shown.has('onboard_brandvoice') && brandData) {
       const hasName = !!(brandData.firstName || brandData.brandName);
       const hasNiche = !!brandData.niche;
@@ -93,7 +73,7 @@ export default function useNotificationGenerator() {
       }
     }
 
-    // 3. Onboarding nudge — No platforms selected
+    // 2. Onboarding nudge — No platforms selected
     if (!shown.has('onboard_platforms') && brandData) {
       const platforms = brandData.platforms || [];
       if (platforms.length === 0) {

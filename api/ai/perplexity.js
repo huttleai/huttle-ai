@@ -13,7 +13,9 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+const PERPLEXITY_API_KEY =
+  process.env.PERPLEXITY_API_KEY ||
+  process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 // Initialize Supabase for auth verification
@@ -36,10 +38,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Verify Perplexity API key is configured
+    // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
     if (!PERPLEXITY_API_KEY) {
-      logError('perplexity.missing_api_key');
-      return res.status(500).json({ error: 'AI service not configured' });
+      logError('perplexity.missing_api_key_using_grok_fallback');
+      const grokKey = process.env.GROK_API_KEY || process.env.VITE_GROK_API_KEY || process.env.XAI_API_KEY;
+      if (!grokKey) {
+        return res.status(500).json({ error: 'AI service not configured' });
+      }
+      const { messages: fallbackMessages, temperature: fallbackTemp = 0.2 } = req.body;
+      if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
+        return res.status(400).json({ error: 'Messages array is required' });
+      }
+      const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
+        body: JSON.stringify({ model: 'grok-3-fast', messages: fallbackMessages, temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2) })
+      });
+      if (!grokRes.ok) {
+        return res.status(502).json({ error: 'AI service error. Please try again.' });
+      }
+      const grokData = await grokRes.json();
+      return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
     }
 
     // Authenticate user

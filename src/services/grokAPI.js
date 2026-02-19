@@ -370,8 +370,8 @@ Platform hook examples: ${hookGuidelines.examples.join(', ')}
 Platform tip: ${hookGuidelines.tip}
 
 Hook theme: ${theme}
-Niche: ${niche}
-Target audience: ${audience}
+Niche: ${niche.toLowerCase()}
+Target audience: ${audience.toLowerCase()}
 
 Each hook must:
 - Match the ${brandVoice} brand voice
@@ -558,8 +558,8 @@ Platform CTA style: ${ctaGuidelines.style}
 Platform CTA examples: ${ctaGuidelines.examples.join(', ')}
 Platform tip: ${ctaGuidelines.tip}
 
-Niche: ${niche}
-Target audience: ${audience}
+Niche: ${niche.toLowerCase()}
+Target audience: ${audience.toLowerCase()}
 
 Each CTA must:
 - Match the ${brandVoice} brand voice
@@ -644,8 +644,8 @@ Recommended hashtag count: ${hashtagGuidelines.count}
 Hashtag style for this platform: ${hashtagGuidelines.style}
 Platform tip: ${hashtagGuidelines.tip}
 
-Niche: ${niche}
-Target audience: ${audience}
+Niche: ${niche.toLowerCase()}
+Target audience: ${audience.toLowerCase()}
 
 Requirements:
 - Optimize for ${platformData?.name || 'social media'} algorithm and discovery

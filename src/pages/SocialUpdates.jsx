@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ExternalLink, Info, Newspaper } from 'lucide-react';
+import { AlertTriangle, BookmarkCheck, ExternalLink, Info, Newspaper, SlidersHorizontal, Zap } from 'lucide-react';
 import { getPlatformIcon } from '../components/SocialIcons';
 import { supabase } from '../config/supabase';
 
@@ -10,10 +10,29 @@ const PLATFORM_FILTERS = [
   'X',
   'YouTube',
   'Facebook',
-  'LinkedIn',
-  'Pinterest',
-  'Threads',
 ];
+
+const IMPACT_FILTERS = ['All', 'High', 'Medium', 'Low'];
+const SORT_OPTIONS = [
+  { value: 'recent', label: 'Most Recent' },
+  { value: 'impact', label: 'Highest Impact' },
+];
+
+const READ_STORAGE_KEY = 'huttleSocialUpdatesRead';
+
+function getReadIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(READ_STORAGE_KEY) || '[]'));
+  } catch { return new Set(); }
+}
+
+function markRead(id) {
+  const ids = getReadIds();
+  ids.add(id);
+  localStorage.setItem(READ_STORAGE_KEY, JSON.stringify([...ids]));
+}
+
+const IMPACT_ORDER = { high: 0, medium: 1, low: 2 };
 
 function normalizePlatformName(platform) {
   const value = String(platform || '').trim();
@@ -134,6 +153,10 @@ export default function SocialUpdates() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('All');
+  const [selectedImpact, setSelectedImpact] = useState('All');
+  const [sortOrder, setSortOrder] = useState('recent');
+  const [readIds, setReadIds] = useState(() => getReadIds());
+  const [expandedId, setExpandedId] = useState(null);
 
   const loadSocialUpdates = useCallback(async () => {
     setIsLoading(true);
@@ -168,14 +191,46 @@ export default function SocialUpdates() {
   }, [loadSocialUpdates]);
 
   const filteredUpdates = useMemo(() => {
-    if (selectedPlatform === 'All') return updates;
+    const now = new Date();
 
-    return updates.filter((update) => normalizePlatformName(update.platform) === selectedPlatform);
-  }, [updates, selectedPlatform]);
+    let result = updates.filter((update) => {
+      // Respect expiration
+      if (update.expires_at && new Date(update.expires_at) < now) return false;
+      // Platform filter
+      if (selectedPlatform !== 'All' && normalizePlatformName(update.platform) !== selectedPlatform) return false;
+      // Impact filter (support both column naming conventions)
+      if (selectedImpact !== 'All') {
+        const imp = String(update.impact_level || update.impact || '').toLowerCase();
+        if (imp !== selectedImpact.toLowerCase()) return false;
+      }
+      return true;
+    });
+
+    // High Impact updates always bubble to top (pinned), then sort the rest
+    result.sort((a, b) => {
+      const aImp = String(a.impact_level || a.impact || '').toLowerCase();
+      const bImp = String(b.impact_level || b.impact || '').toLowerCase();
+      const aHigh = aImp === 'high';
+      const bHigh = bImp === 'high';
+      if (aHigh && !bHigh) return -1;
+      if (!aHigh && bHigh) return 1;
+
+      if (sortOrder === 'impact') {
+        const aOrder = IMPACT_ORDER[aImp] ?? 2;
+        const bOrder = IMPACT_ORDER[bImp] ?? 2;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+      }
+
+      // Default: most recent first
+      return new Date(b.fetched_at || 0) - new Date(a.fetched_at || 0);
+    });
+
+    return result;
+  }, [updates, selectedPlatform, selectedImpact, sortOrder]);
 
   const latestFetchedAt = useMemo(() => {
     if (updates.length === 0) return '';
-    return updates[0]?.fetched_at || '';
+    return updates[0]?.fetched_at || updates[0]?.created_at || '';
   }, [updates]);
 
   return (
@@ -193,21 +248,62 @@ export default function SocialUpdates() {
         </p>
       </div>
 
-      <div className="mb-6 overflow-x-auto">
-        <div className="flex min-w-max items-center gap-2 pb-1">
-          {PLATFORM_FILTERS.map((platform) => (
-            <button
-              key={platform}
-              onClick={() => setSelectedPlatform(platform)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                selectedPlatform === platform
-                  ? 'border-huttle-primary bg-huttle-primary text-white'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
-              }`}
-            >
-              {platform}
-            </button>
-          ))}
+      {/* Filter bar */}
+      <div className="mb-5 space-y-3">
+        {/* Platform filters */}
+        <div className="overflow-x-auto">
+          <div className="flex min-w-max items-center gap-2 pb-1">
+            {PLATFORM_FILTERS.map((platform) => (
+              <button
+                key={platform}
+                onClick={() => setSelectedPlatform(platform)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  selectedPlatform === platform
+                    ? 'border-huttle-primary bg-huttle-primary text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                }`}
+              >
+                {platform}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Impact + sort row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-500 font-medium">Impact:</span>
+            {IMPACT_FILTERS.map((level) => (
+              <button
+                key={level}
+                onClick={() => setSelectedImpact(level)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  selectedImpact === level
+                    ? 'border-huttle-primary bg-huttle-primary text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-xs text-gray-500 font-medium">Sort:</span>
+            {SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setSortOrder(opt.value)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  sortOrder === opt.value
+                    ? 'border-huttle-primary bg-huttle-primary text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -259,48 +355,96 @@ export default function SocialUpdates() {
         <div className="space-y-3">
           {filteredUpdates.map((update) => {
             const platformName = normalizePlatformName(update.platform);
+            // Support both new enriched column names and legacy column names
             const typeLabel = String(update.update_type || 'Update').trim() || 'Update';
-            const impact = getImpactMeta(update.impact_level);
-            const summary = String(update.update_summary || '').trim();
-            const sourceUrl = String(update.source_url || '').trim();
+            const impactValue = update.impact_level || update.impact || 'low';
+            const impact = getImpactMeta(impactValue);
+            const summary = String(update.update_summary || update.description || '').trim();
+            const sourceUrl = String(update.source_url || update.link || '').trim();
+            const titleText = String(update.update_title || update.title || 'Platform update').trim();
+            const publishedDate = update.published_date || update.date_month || '';
+            const isUnread = !readIds.has(update.id);
+            const isActionRequired = Boolean(update.action_required);
+            const whatItMeans = String(update.what_it_means || '').trim();
+            const isExpanded = expandedId === update.id;
 
             return (
-              <article key={update.id} className="rounded-xl border border-gray-200 bg-white p-4 md:p-5">
-                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-gray-50">
-                      {getPlatformIcon(platformName, 'h-4 w-4 text-gray-700') || <Newspaper className="h-4 w-4 text-gray-500" />}
+              <article
+                key={update.id}
+                className={`rounded-xl border bg-white transition-all ${
+                  isUnread ? 'border-huttle-200' : 'border-gray-200'
+                }`}
+              >
+                <div
+                  className="p-4 md:p-5 cursor-pointer"
+                  onClick={() => {
+                    setExpandedId(isExpanded ? null : update.id);
+                    if (isUnread) {
+                      markRead(update.id);
+                      setReadIds(getReadIds());
+                    }
+                  }}
+                >
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {isUnread && (
+                        <span className="w-2 h-2 rounded-full bg-huttle-primary flex-shrink-0" />
+                      )}
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-gray-50">
+                        {getPlatformIcon(platformName, 'h-4 w-4 text-gray-700') || <Newspaper className="h-4 w-4 text-gray-500" />}
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{platformName}</span>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900">{platformName}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isActionRequired && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700">
+                          <Zap className="h-3 w-3" />
+                          Action Required
+                        </span>
+                      )}
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getUpdateTypeStyles(typeLabel)}`}>
+                        {typeLabel}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${impact.badgeClass}`}>
+                        <span className={`h-2 w-2 rounded-full ${impact.dotClass}`} />
+                        {impact.label}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getUpdateTypeStyles(typeLabel)}`}>
-                      {typeLabel}
-                    </span>
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${impact.badgeClass}`}>
-                      <span className={`h-2 w-2 rounded-full ${impact.dotClass}`} />
-                      {impact.label}
-                    </span>
+
+                  <h2 className="text-base font-bold text-gray-900 md:text-lg">{titleText}</h2>
+                  {summary && <p className="mt-2 text-sm leading-relaxed text-gray-700">{summary}</p>}
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                    <span>{getRelativePublishedDate(publishedDate)}</span>
+                    {sourceUrl ? (
+                      <a
+                        href={sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 font-semibold text-huttle-primary hover:text-huttle-primary-dark"
+                      >
+                        Source
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 italic">No source available</span>
+                    )}
                   </div>
                 </div>
 
-                <h2 className="text-base font-bold text-gray-900 md:text-lg">{update.update_title || 'Platform update'}</h2>
-                {summary && <p className="mt-2 text-sm leading-relaxed text-gray-700">{summary}</p>}
-
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                  <span>{getRelativePublishedDate(update.published_date)}</span>
-                  {sourceUrl && (
-                    <a
-                      href={sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-semibold text-huttle-primary hover:text-huttle-primary-dark"
-                    >
-                      Source
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  )}
-                </div>
+                {isExpanded && whatItMeans && (
+                  <div className="border-t border-gray-100 px-4 py-3 bg-huttle-50/40 rounded-b-xl">
+                    <div className="flex items-start gap-2">
+                      <BookmarkCheck className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[11px] font-bold text-huttle-primary uppercase tracking-wide mb-1">What this means for you</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">{whatItMeans}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}

@@ -11,8 +11,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
-// SECURITY: No hardcoded fallback - must be configured via environment variable
-const N8N_WEBHOOK_URL = process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK;
+const N8N_WEBHOOK_URL =
+  process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK ||
+  process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;

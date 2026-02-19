@@ -52,7 +52,8 @@ export default function Dashboard() {
   const { brandProfile, loading: isBrandProfileLoading } = useBrand();
   const { showToast } = useToast();
   const { 
-    addInfo, 
+    addInfo,
+    addNotification,
     addAIUsageWarning, 
     addSocialUpdate,
     addScheduledPostReminder,
@@ -162,7 +163,17 @@ export default function Dashboard() {
     () => (Array.isArray(dashboardData?.hashtags_of_day) ? dashboardData.hashtags_of_day : []),
     [dashboardData]
   );
-  const dashboardInsight = dashboardData?.ai_insight || null;
+  const dashboardInsights = useMemo(
+    () => {
+      const arr = Array.isArray(dashboardData?.ai_insights) ? dashboardData.ai_insights : [];
+      if (arr.length > 0) return arr;
+      return dashboardData?.ai_insight ? [dashboardData.ai_insight] : [];
+    },
+    [dashboardData]
+  );
+  const dashboardInsight = dashboardInsights[0] || null;
+  const [insightIndex, setInsightIndex] = useState(0);
+  const [expandedTrend, setExpandedTrend] = useState(null);
   
   // Track previous values for detecting updates
   const prevPanelDataRef = useRef({
@@ -497,27 +508,38 @@ export default function Dashboard() {
     return 'bg-huttle-100 text-huttle-primary-dark';
   };
 
-  // Monitor panel updates
+  // Monitor panel updates — only fire when count genuinely increases (not on initial load)
+  const isFirstPanelCheckRef = useRef(true);
   useEffect(() => {
     const checkPanelUpdates = () => {
       const prev = prevPanelDataRef.current;
       const scheduledPostsCount = scheduledPosts?.length || 0;
-      
+
       if (prev.scheduledPostsCount !== scheduledPostsCount) {
-        if (scheduledPostsCount > prev.scheduledPostsCount) {
+        if (scheduledPostsCount > prev.scheduledPostsCount && !isFirstPanelCheckRef.current) {
           const sorted = [...(scheduledPosts || [])].sort((a, b) => {
-            const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
-            const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
+            const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime}`);
+            const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime}`);
             return dateA - dateB;
           });
           const nextPost = sorted[0];
           if (nextPost) {
-            const nextPostTime = `${nextPost.scheduledDate} at ${nextPost.scheduledTime}`;
+            const dt = new Date(`${nextPost.scheduledDate}T${nextPost.scheduledTime}`);
+            const nextPostTime = isNaN(dt.getTime())
+              ? `${nextPost.scheduledDate} at ${nextPost.scheduledTime}`
+              : dt.toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                });
             addScheduledPostReminder(scheduledPostsCount, nextPostTime);
           }
         }
         prev.scheduledPostsCount = scheduledPostsCount;
       }
+      isFirstPanelCheckRef.current = false;
     };
 
     checkPanelUpdates();
@@ -526,26 +548,32 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [scheduledPosts, addScheduledPostReminder]);
 
-  // Welcome notification
+  // Welcome notification — only for brand-new users with zero existing posts
   useEffect(() => {
     if (!user?.id) return;
 
     const welcomeKey = `hasSeenWelcome:${user.id}`;
     const hasSeenWelcome = localStorage.getItem(welcomeKey);
-    if (!hasSeenWelcome) {
+    const hasExistingPosts = (sortedPosts?.length || 0) > 0;
+    if (!hasSeenWelcome && !hasExistingPosts) {
       const timer = setTimeout(() => {
-        addInfo(
-          'Welcome to Huttle AI!',
-          'Your AI-powered social media assistant is ready. Create your first post to get started!',
-          () => setIsCreatePostOpen(true),
-          'Create Post'
-        );
+        addNotification({
+          type: 'info',
+          title: 'Welcome to Huttle AI!',
+          message: 'Your AI-powered social media assistant is ready. Create your first post to get started!',
+          dismissKey: `welcome_${user.id}`,
+          action: () => setIsCreatePostOpen(true),
+          actionLabel: 'Create Post',
+          persistent: false,
+        });
         localStorage.setItem(welcomeKey, 'true');
       }, 2000);
       
       return () => clearTimeout(timer);
+    } else if (!hasSeenWelcome && hasExistingPosts) {
+      localStorage.setItem(welcomeKey, 'true');
     }
-  }, [addInfo, user?.id]);
+  }, [addNotification, user?.id, sortedPosts?.length]);
 
   const handleDeletePost = (postId) => {
     if (window.confirm('Are you sure you want to delete this scheduled post?')) {
@@ -833,6 +861,17 @@ export default function Dashboard() {
                         ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
                         : 'General trends across platforms'}
                     </p>
+                    {dashboardData?.created_at && (
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        Updated {(() => {
+                          const secs = Math.floor((Date.now() - new Date(dashboardData.created_at).getTime()) / 1000);
+                          if (secs < 60) return 'just now';
+                          if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+                          if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+                          return `${Math.floor(secs / 86400)}d ago`;
+                        })()}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
@@ -890,23 +929,46 @@ export default function Dashboard() {
 
                 {!isDashboardLoading && !dashboardError && dashboardTrendingTopics.map((trend, index) => {
                   const momentumStyles = getMomentumStyles(trend.momentum);
+                  const expandKey = `trend-${index}`;
+                  const isExpanded = expandedTrend === expandKey;
                   return (
                     <div
                       key={`${trend.topic}-${index}`}
-                      className="rounded-xl border border-gray-100 p-3 hover:border-gray-200 hover:shadow-sm transition-all"
+                      className="rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer"
+                      onClick={() => setExpandedTrend(isExpanded ? null : expandKey)}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-sm text-gray-900">{trend.topic}</p>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
-                          <span>{momentumStyles.indicator}</span>
-                          <span className="capitalize">{trend.momentum}</span>
-                        </span>
+                      <div className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-sm text-gray-900">{trend.topic}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
+                              <span>{momentumStyles.indicator}</span>
+                              <span className="capitalize">{trend.momentum}</span>
+                            </span>
+                            <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">{trend.context}</p>
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                          {getPlatformIcon(trend.relevant_platform, 'w-3.5 h-3.5 text-gray-700')}
+                          <span className="text-[11px] text-gray-700 font-medium">{trend.relevant_platform || 'Multi-platform'}</span>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-600 mt-1">{trend.context}</p>
-                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
-                        {getPlatformIcon(trend.relevant_platform, 'w-3.5 h-3.5 text-gray-700')}
-                        <span className="text-[11px] text-gray-700 font-medium">{trend.relevant_platform || 'Multi-platform'}</span>
-                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-gray-100 px-3 pb-3 pt-2 bg-gray-50/50 rounded-b-xl animate-fadeIn">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              sessionStorage.setItem('remixContent', trend.topic);
+                              navigate('/dashboard/content-remix');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            Create post about this
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -947,14 +1009,32 @@ export default function Dashboard() {
                   <div className="h-3 w-full bg-gray-100 rounded mb-2" />
                   <div className="h-3 w-5/6 bg-gray-100 rounded" />
                 </div>
-              ) : dashboardInsight ? (
-                <div className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4">
-                  <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(dashboardInsight.category)}`}>
-                    {dashboardInsight.category}
-                  </span>
-                  <h4 className="font-bold text-gray-900 mb-2 pr-20">{dashboardInsight.headline}</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed">{dashboardInsight.detail}</p>
-                </div>
+              ) : dashboardInsights.length > 0 ? (
+                <>
+                  <div className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4">
+                    <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(dashboardInsights[insightIndex]?.category)}`}>
+                      {dashboardInsights[insightIndex]?.category}
+                    </span>
+                    <h4 className="font-bold text-gray-900 mb-2 pr-20">{dashboardInsights[insightIndex]?.headline}</h4>
+                    <p className="text-sm text-gray-700 leading-relaxed">{dashboardInsights[insightIndex]?.detail}</p>
+                  </div>
+                  {dashboardInsights.length > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      {dashboardInsights.map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setInsightIndex(i)}
+                          className={`rounded-full transition-all ${
+                            i === insightIndex
+                              ? 'w-5 h-1.5 bg-huttle-primary'
+                              : 'w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400'
+                          }`}
+                          aria-label={`Insight ${i + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-xs text-gray-500">No daily insight available yet.</p>
               )}

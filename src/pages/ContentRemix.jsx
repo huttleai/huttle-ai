@@ -104,10 +104,10 @@ export default function ContentRemix() {
   const [remixError, setRemixError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  // Initialize selected platforms from Brand Voice
+  // Initialize selected platforms from Brand Voice (extract names from platform objects)
   useEffect(() => {
     if (brandVoicePlatforms.length > 0 && selectedPlatforms.length === 0) {
-      setSelectedPlatforms([...brandVoicePlatforms]);
+      setSelectedPlatforms(brandVoicePlatforms.map(p => (typeof p === 'object' && p !== null ? p.name : p)));
     }
   }, [brandVoicePlatforms]);
 
@@ -590,11 +590,12 @@ export default function ContentRemix() {
             ) : (
               <div className="flex flex-wrap gap-3">
                 {brandVoicePlatforms.map((platform) => {
-                  const isSelected = selectedPlatforms.includes(platform);
+                  const platformName = typeof platform === 'object' && platform !== null ? platform.name : String(platform);
+                  const isSelected = selectedPlatforms.includes(platformName);
                   return (
                     <button
-                      key={platform}
-                      onClick={() => togglePlatform(platform)}
+                      key={platformName}
+                      onClick={() => togglePlatform(platformName)}
                       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                         isSelected
                           ? 'border-huttle-primary bg-huttle-primary/5 text-huttle-primary ring-1 ring-huttle-primary/30'
@@ -602,7 +603,7 @@ export default function ContentRemix() {
                       }`}
                     >
                       {isSelected && <Check className="w-4 h-4" />}
-                      {platform}
+                      {platformName}
                     </button>
                   );
                 })}
@@ -616,7 +617,7 @@ export default function ContentRemix() {
                 <div className="space-y-1 text-xs text-gray-500">
                   <p><span className="text-gray-400">Content:</span> {remixInput.substring(0, 80)}...</p>
                   <p><span className="text-gray-400">Goal:</span> {REMIX_GOALS.find(g => g.id === remixGoal)?.label}</p>
-                  <p><span className="text-gray-400">Platforms:</span> {selectedPlatforms.join(', ')}</p>
+                  <p><span className="text-gray-400">Platforms:</span> {selectedPlatforms.map(p => (typeof p === 'object' && p !== null ? p.name : p)).join(', ')}</p>
                 </div>
               </div>
             )}

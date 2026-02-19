@@ -159,19 +159,29 @@ export function usePreferredPlatforms() {
     activePlatformIds.includes(platform.id)
   );
 
-  // Toggle a platform preference
+  // Toggle a platform preference.
+  // When Brand Voice has platforms configured, update Brand Voice directly
+  // so Settings changes are actually reflected app-wide.
   const togglePlatform = useCallback((platformName) => {
+    if (hasPlatformsConfigured && brandContext?.updateBrandData) {
+      const currentBrandPlatforms = brandContext.brandData?.platforms || [];
+      const newPlatforms = currentBrandPlatforms.includes(platformName)
+        ? currentBrandPlatforms.filter(p => p !== platformName)
+        : [...currentBrandPlatforms, platformName];
+      brandContext.updateBrandData({ platforms: newPlatforms });
+      return;
+    }
+
     setPreferredPlatforms(prev => {
       const newPlatforms = prev.includes(platformName)
         ? prev.filter(p => p !== platformName)
         : [...prev, platformName];
       
-      // Save to localStorage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newPlatforms));
       
       return newPlatforms;
     });
-  }, []);
+  }, [hasPlatformsConfigured, brandContext]);
 
   // Check if a platform is preferred
   const isPlatformPreferred = useCallback((platformName) => {

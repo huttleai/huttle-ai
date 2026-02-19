@@ -111,7 +111,7 @@ export default function TrendLab() {
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
     
-    const totalCards = 2; // Trend Forecaster, Trend Alerts
+    const totalCards = 1; // Trend Forecaster
     
     if (isLeftSwipe && currentCardIndex < totalCards - 1) {
       setCurrentCardIndex(prev => prev + 1);
@@ -167,7 +167,7 @@ export default function TrendLab() {
       >
         {/* Mobile swipe indicator */}
         <div className="md:hidden flex justify-center gap-2 mb-4">
-          {[0, 1].map((index) => (
+          {[0].map((index) => (
             <div
               key={index}
               className={`h-2 rounded-full transition-all ${
@@ -326,33 +326,6 @@ export default function TrendLab() {
           </div>
         </div>
 
-        {/* Personalized Trend Alerts */}
-        <div
-          className="trend-card bg-gradient-to-br from-huttle-50 to-huttle-100 rounded-xl border border-huttle-200 p-6 hover:shadow-lg transition-all cursor-pointer group"
-          onClick={() => {
-            setActiveFeature('alerts');
-            showToast('Setting up personalized trend alerts...', 'info');
-            setTimeout(() => {
-              showToast(`Alerts activated for ${brandData?.niche || 'your niche'}! You'll be notified of trending topics daily.`, 'success');
-            }, 1500);
-          }}
-        >
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-huttle-200 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-              <Bell className="w-6 h-6 text-huttle-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold mb-2 text-gray-900">Personalized Trend Alerts</h3>
-              <p className="text-sm text-gray-700 mb-4">
-                Get real-time notifications when trends spike in your niche. Never miss an opportunity.
-              </p>
-              <div className="flex items-center text-huttle-primary text-sm font-medium">
-                <span>Set Up Alerts</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Quick Tips Section */}

@@ -33,11 +33,20 @@ export function NotificationProvider({ children }) {
    * @param {Object} notification - { type, title, message, action, actionLabel, persistent }
    */
   const addNotification = (notification) => {
-    // Deduplicate: skip if a notification with the same title already exists and is unread
+    // Deduplicate: skip if same title exists unread OR has been permanently dismissed
     const isDuplicate = notifications.some(
       n => n.title === notification.title && !n.read
     );
     if (isDuplicate) return null;
+
+    // Check permanent dismissal registry
+    const dismissKey = notification.dismissKey || notification.title;
+    if (dismissKey) {
+      try {
+        const dismissed = new Set(JSON.parse(localStorage.getItem('huttleDismissed') || '[]'));
+        if (dismissed.has(dismissKey)) return null;
+      } catch { /* ignore */ }
+    }
 
     const newNotification = {
       id: Date.now() + Math.random(),
@@ -224,10 +233,12 @@ export function NotificationProvider({ children }) {
    * Add a scheduled post reminder
    */
   const addScheduledPostReminder = (postCount, nextPostTime) => {
+    const title = `${postCount} Post${postCount !== 1 ? 's' : ''} Scheduled`;
     return addNotification({
       type: 'reminder',
-      title: `📅 ${postCount} Post${postCount !== 1 ? 's' : ''} Scheduled`,
+      title,
       message: `Next post: ${nextPostTime}`,
+      dismissKey: `scheduled_count_${postCount}`,
       action: () => {
         window.location.href = '/calendar';
       },
@@ -265,7 +276,17 @@ export function NotificationProvider({ children }) {
   };
 
   const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target?.dismissKey) {
+        try {
+          const dismissed = new Set(JSON.parse(localStorage.getItem('huttleDismissed') || '[]'));
+          dismissed.add(target.dismissKey);
+          localStorage.setItem('huttleDismissed', JSON.stringify([...dismissed]));
+        } catch { /* ignore */ }
+      }
+      return prev.filter(n => n.id !== id);
+    });
   };
 
   const clearAll = () => {

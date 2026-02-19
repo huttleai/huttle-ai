@@ -114,27 +114,40 @@ function normalizeDashboardData(data) {
         return {
           hashtag: hashtagValue.startsWith('#') ? hashtagValue : `#${hashtagValue.replace(/^#*/, '')}`,
           relevance: String(item?.relevance || item?.reason || 'Recommended for your audience').trim(),
-          estimated_reach: String(item?.estimated_reach || item?.reach || 'medium').toLowerCase()
+          estimated_reach: String(item?.estimated_reach || item?.reach || 'medium').toLowerCase(),
+          type: String(item?.type || 'niche').toLowerCase()
         };
       })
       .filter((item) => item.hashtag.length > 1 && item.relevance)
-      .slice(0, 6)
+      .slice(0, 10)
     : [];
 
+  // Support both legacy single ai_insight and new ai_insights array
+  const rawInsightsArray = resolvedData.ai_insights ?? resolvedData.aiInsights ?? null;
   const rawInsight = resolvedData.ai_insight ?? resolvedData.aiInsight ?? null;
-  const insight = rawInsight && typeof rawInsight === 'object'
-    ? {
-      headline: String(rawInsight.headline || '').trim(),
-      detail: String(rawInsight.detail || '').trim(),
-      category: String(rawInsight.category || '').trim()
+
+  const normalizeInsight = (rawInsight) => {
+    if (!rawInsight) return null;
+    if (typeof rawInsight === 'object') {
+      return {
+        headline: String(rawInsight.headline || '').trim(),
+        detail: String(rawInsight.detail || '').trim(),
+        category: String(rawInsight.category || '').trim()
+      };
     }
-    : typeof rawInsight === 'string'
-      ? {
-        headline: 'Today\'s insight',
-        detail: rawInsight.trim(),
-        category: 'Strategy'
-      }
-    : null;
+    if (typeof rawInsight === 'string') {
+      return { headline: 'Today\'s insight', detail: rawInsight.trim(), category: 'Strategy' };
+    }
+    return null;
+  };
+
+  const insights = Array.isArray(rawInsightsArray) && rawInsightsArray.length > 0
+    ? rawInsightsArray.map(normalizeInsight).filter(Boolean).slice(0, 3)
+    : rawInsight
+      ? [normalizeInsight(rawInsight)].filter(Boolean)
+      : [];
+
+  const insight = insights[0] || null;
 
   const hasAnyData = Boolean(
     trendingTopics.length > 0 ||
@@ -154,7 +167,12 @@ function normalizeDashboardData(data) {
     })),
     hashtags_of_day: hashtagsOfDay.map((item) => ({
       ...item,
-      estimated_reach: allowedReach.has(item.estimated_reach) ? item.estimated_reach : 'medium'
+      estimated_reach: allowedReach.has(item.estimated_reach) ? item.estimated_reach : 'medium',
+      type: item.type === 'trending' ? 'trending' : 'niche'
+    })),
+    ai_insights: insights.map(i => ({
+      ...i,
+      category: allowedInsightCategories.has(i.category) ? i.category : 'Strategy'
     })),
     ai_insight: insight
       ? {
@@ -185,25 +203,37 @@ function buildFallbackDashboardData(brandProfile) {
       }
     ],
     hashtags_of_day: [
+      { hashtag: '#contentstrategy', relevance: `popular with ${audience.toLowerCase()}`, estimated_reach: 'high', type: 'niche' },
+      { hashtag: '#creatorgrowth', relevance: 'high-intent creator community', estimated_reach: 'medium', type: 'niche' },
+      { hashtag: '#nichecontent', relevance: `drives discovery for ${niche.toLowerCase()}`, estimated_reach: 'niche', type: 'niche' },
+      { hashtag: '#contentcreator', relevance: 'broad reach across your audience', estimated_reach: 'high', type: 'niche' },
+      { hashtag: '#digitalmarketing', relevance: 'strong engagement from marketers', estimated_reach: 'high', type: 'niche' },
+      { hashtag: '#socialmediatips', relevance: 'consistent discovery traffic', estimated_reach: 'high', type: 'niche' },
+      { hashtag: '#personalbranding', relevance: `aligns with ${niche.toLowerCase()} positioning`, estimated_reach: 'medium', type: 'niche' },
+      { hashtag: '#growthhacking', relevance: 'high-intent growth audience', estimated_reach: 'medium', type: 'niche' },
+      { hashtag: '#viral', relevance: 'broadly trending across all platforms', estimated_reach: 'high', type: 'trending' },
+      { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending' }
+    ],
+    ai_insights: [
       {
-        hashtag: '#contentstrategy',
-        relevance: `Popular with ${audience}`,
-        estimated_reach: 'high'
+        headline: 'Post in the first hour of your peak window',
+        detail: `Early engagement signals boost algorithmic reach for ${audience.toLowerCase()} content. Post when your audience is most active and respond to every comment in the first 30 minutes.`,
+        category: 'Timing'
       },
       {
-        hashtag: '#creatorgrowth',
-        relevance: 'High intent creator audience',
-        estimated_reach: 'medium'
+        headline: 'Short-form video outperforms static this week',
+        detail: `In the ${niche.toLowerCase()} space, carousel and video formats are generating 2x saves compared to image posts. Lead with a bold hook in the first 3 seconds.`,
+        category: 'Content Type'
       },
       {
-        hashtag: '#socialmediatips',
-        relevance: 'Consistent discovery traffic',
-        estimated_reach: 'high'
+        headline: `${audience} responds to problem-first framing`,
+        detail: `Start your post with the exact pain point your ${audience.toLowerCase()} faces before offering the solution. Posts using this structure are seeing higher comment rates than educational-only content.`,
+        category: 'Audience'
       }
     ],
     ai_insight: {
       headline: 'Consistency beats complexity',
-      detail: `Publish one clear, niche-specific post today for ${audience}. Focus on one problem and one takeaway.`,
+      detail: `Publish one clear, niche-specific post today for ${audience.toLowerCase()}. Focus on one problem and one takeaway.`,
       category: 'Strategy'
     }
   };
@@ -217,8 +247,8 @@ function buildDailyBriefingPrompt(brandProfile) {
 
   return `You are a daily content intelligence briefing system for a social media professional.
 
-User's niche: ${niche}
-User's target audience: ${targetAudience}
+User's niche: ${niche.toLowerCase()}
+User's target audience: ${targetAudience.toLowerCase()}
 User's platforms: ${platforms}
 Today's date: ${todayFormatted}
 
@@ -236,22 +266,27 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
   "hashtags_of_day": [
     {
       "hashtag": "#example",
-      "relevance": "Why this hashtag is hot today (max 10 words)",
-      "estimated_reach": "high" | "medium" | "niche"
+      "relevance": "Why this hashtag matters (max 10 words, lowercase when mid-sentence)",
+      "estimated_reach": "high" | "medium" | "niche",
+      "type": "niche" | "trending"
     }
   ],
-  "ai_insight": {
-    "headline": "One punchy insight headline (max 10 words)",
-    "detail": "2-3 sentence actionable insight specific to their niche today.",
-    "category": "Strategy" | "Timing" | "Audience" | "Platform" | "Content Type"
-  }
+  "ai_insights": [
+    {
+      "headline": "One punchy insight headline (max 10 words)",
+      "detail": "2-3 sentence actionable insight specific to their niche today.",
+      "category": "Timing" | "Content Type" | "Audience" | "Platform" | "Strategy"
+    }
+  ]
 }
 
 RULES:
 - Return ONLY valid JSON, no markdown, no preamble, no backticks.
 - trending_topics: exactly 4 topics. All must be current today.
-- hashtags_of_day: exactly 6 hashtags. Mix of popular and niche. Always include the # symbol.
-- ai_insight: must be specific to their niche and actionable TODAY, not generic advice like "post consistently" or "engage with your audience."
+- hashtags_of_day: exactly 10 hashtags. 8 must be niche-specific (type: "niche") and 2 must be broadly trending across social media (type: "trending"). Always include the # symbol.
+- ai_insights: exactly 3 insight objects. One must be category "Timing" (best time to post today), one must be category "Content Type" (what format is working in their niche right now), one must be category "Audience" (what their audience is responding to this week).
+- Each ai_insight must be specific to their niche and actionable TODAY. No generic advice.
+- relevance text should be lowercase when it appears mid-sentence (e.g., "popular with ${targetAudience.toLowerCase()}" not "Popular with ${targetAudience}").
 - Never include content ideas or captions - intelligence only.
 - Maximum 15 words per sentence in any field.`;
 }
@@ -266,7 +301,7 @@ export async function getDashboardCache(userId) {
   try {
     const { data, error } = await supabase
       .from(DASHBOARD_CACHE_TABLE)
-      .select('generated_date, trending_topics, hashtags_of_day, ai_insight')
+      .select('generated_date, trending_topics, hashtags_of_day, ai_insights, ai_insight')
       .eq('user_id', userId)
       .eq('generated_date', generatedDate)
       .maybeSingle();
@@ -283,6 +318,7 @@ export async function getDashboardCache(userId) {
     const cachedData = {
       trending_topics: Array.isArray(data.trending_topics) ? data.trending_topics : [],
       hashtags_of_day: Array.isArray(data.hashtags_of_day) ? data.hashtags_of_day : [],
+      ai_insights: Array.isArray(data.ai_insights) ? data.ai_insights : [],
       ai_insight: data.ai_insight || null
     };
 
@@ -357,6 +393,7 @@ export async function generateDashboardData(userId, brandProfile) {
         generated_date: generatedDate,
         trending_topics: finalData.trending_topics,
         hashtags_of_day: finalData.hashtags_of_day,
+        ai_insights: finalData.ai_insights || [],
         ai_insight: finalData.ai_insight,
         created_at: new Date().toISOString()
       }, {

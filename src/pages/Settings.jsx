@@ -19,11 +19,17 @@ export default function Settings() {
   const { user } = useContext(AuthContext);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const { 
-    preferredPlatforms, 
+    preferredPlatforms,
+    preferredPlatformIds,
     allPlatforms, 
     togglePlatform, 
-    isPlatformPreferred 
+    isPlatformPreferred,
+    hasPlatformsConfigured
   } = usePreferredPlatforms();
+
+  const activePlatformCount = hasPlatformsConfigured
+    ? preferredPlatformIds.length
+    : preferredPlatforms.length;
 
   const [settings, setSettings] = useState({
     // General Settings
@@ -183,7 +189,7 @@ export default function Settings() {
             </div>
           </div>
           <span className="text-xs bg-huttle-100 text-huttle-primary px-3 py-1 rounded-full font-semibold">
-            {preferredPlatforms.length} Selected
+            {activePlatformCount} Selected
           </span>
         </div>
 
