@@ -135,16 +135,8 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     brandVoice: formData.brandVoice || ''
   };
 
-  console.log('[PlanBuilder] ====== WEBHOOK REQUEST DEBUG ======');
-  console.log('[PlanBuilder] Using proxy endpoint:', N8N_PLAN_BUILDER_WEBHOOK_URL);
-  console.log('[PlanBuilder] Job ID:', jobId);
-  console.log('[PlanBuilder] Payload:', JSON.stringify(payload, null, 2));
-  console.log('[PlanBuilder] ====================================');
-
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      console.log(`[PlanBuilder] Attempt ${attempt + 1} of ${retries + 1} - Triggering webhook...`);
-      
       // Include auth headers for the proxy endpoint
       const requestHeaders = { 
         'Content-Type': 'application/json',
@@ -166,8 +158,6 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
         mode: 'cors'
       });
 
-      console.log(`[PlanBuilder] Response status: ${response.status} ${response.statusText}`);
-
       if (response.ok) {
         const responseText = await response.text().catch(() => '');
         const parsedResponse = responseText ? safeJsonParse(responseText) : null;
@@ -180,8 +170,6 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
           };
         }
 
-        console.log(`[PlanBuilder] n8n webhook triggered successfully for job: ${jobId}`);
-        console.log(`[PlanBuilder] Response:`, responseText.substring(0, 200));
         return { success: true };
       }
 
@@ -193,7 +181,7 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
       // If it's a client error (4xx), don't retry
       if (response.status >= 400 && response.status < 500) {
         console.error(`[PlanBuilder] Client error (${response.status}), stopping retries`);
-        return { success: false, error: `Webhook returned ${response.status}: ${errorText.substring(0, 100)}` };
+        return { success: false, error: 'Unable to generate your plan right now. Please try again.' };
       }
     } catch (err) {
       console.error(`[PlanBuilder] ====== FETCH ERROR (Attempt ${attempt + 1}) ======`);
@@ -213,14 +201,13 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
       if (attempt < retries) {
         // Exponential backoff: 1s, 2s, 4s...
         const delay = 1000 * Math.pow(2, attempt);
-        console.log(`[PlanBuilder] Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
   console.error(`[PlanBuilder] n8n webhook failed after ${retries + 1} attempts`);
-  return { success: false, error: 'Failed to trigger n8n webhook after retries' };
+  return { success: false, error: 'Plan generation service is temporarily unavailable. Please try again in a moment.' };
 }
 
 // ============================================================================

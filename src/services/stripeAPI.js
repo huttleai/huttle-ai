@@ -169,7 +169,6 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     
     // Demo mode: Simulate successful checkout without Stripe
     if (!priceId || isDemoMode()) {
-      console.log('🎭 Demo Mode: Simulating checkout for', planId);
       return simulateDemoCheckout(planId);
     }
 
@@ -244,7 +243,6 @@ export async function createPortalSession() {
   try {
     // Demo mode: Show message instead of opening portal
     if (isDemoMode()) {
-      console.log('🎭 Demo Mode: Billing portal not available');
       return {
         success: true,
         demo: true,

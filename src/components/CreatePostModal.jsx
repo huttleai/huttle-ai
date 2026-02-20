@@ -1,14 +1,13 @@
 import { useState, useContext, useEffect } from 'react';
-import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Loader2, AlertTriangle, ArrowRight, FolderOpen, Search, Check } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import { BrandContext } from '../context/BrandContext';
+import { AuthContext } from '../context/AuthContext';
 import { generate12HourTimeOptions } from '../utils/timeFormatter';
-import { generateVisualIdeas, generateCaptionVariations } from '../services/grokAPI';
-// Feature-flagged: Voice to Post and Engagement Predictor removed from UI (Issues 8 & 9)
-// import EngagementPredictor from './EngagementPredictor';
-// import VoiceInput from './VoiceInput';
+import { generateCaptionVariations } from '../services/grokAPI';
+import { getContentLibraryItems, getSignedUrl } from '../config/supabase';
 import SmartTimeSuggestion from './SmartTimeSuggestion';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 import { useNavigate } from 'react-router-dom';
@@ -81,7 +80,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       });
     } else if (!postToEdit && isOpen) {
       const normalizedDraftPlatforms = Array.isArray(draftContent?.platforms) ? draftContent.platforms : [];
-      // Reset form when creating new post
+      const normalizedDraftMedia = Array.isArray(draftContent?.media) ? draftContent.media : [];
       setPostData({
         title: draftContent?.title || '',
         platforms: normalizedDraftPlatforms,
@@ -93,18 +92,21 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
         keywords: '',
         imagePrompt: '',
         videoPrompt: '',
-        media: []
+        media: normalizedDraftMedia,
       });
     }
   }, [postToEdit, isOpen, preselectedDate, draftContent]);
-  const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
-  const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
+  const { user } = useContext(AuthContext);
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
   const [captionVariations, setCaptionVariations] = useState([]);
   const [showVariations, setShowVariations] = useState(false);
   const [pastDateError, setPastDateError] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [smartSuggestions, setSmartSuggestions] = useState([]);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [libraryItems, setLibraryItems] = useState([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState('');
 
   // Check for past date whenever date or time changes
   useEffect(() => {
@@ -154,103 +156,6 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       ...prev,
       platforms: [platform] // Only allow one platform selection
     }));
-  };
-
-  const handleSuggestImagePrompt = async () => {
-    if (!postData.title) {
-      showToast('Please enter a post title first', 'error');
-      return;
-    }
-    
-    setIsGeneratingImagePrompt(true);
-    
-    try {
-      const topicContext = [
-        postData.title,
-        postData.caption ? postData.caption.substring(0, 200) : '',
-        brandData?.niche ? `Niche: ${brandData.niche}` : '',
-      ].filter(Boolean).join('. ');
-
-      const platform = postData.platforms?.[0]?.toLowerCase() || 'instagram';
-
-      const result = await generateVisualIdeas(
-        topicContext,
-        brandData,
-        platform,
-        'image'
-      );
-
-      if (result.success && result.ideas) {
-        const ideas = result.ideas.split(/\d+\./);
-        const firstIdea = ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
-        
-        setPostData(prev => ({
-          ...prev,
-          imagePrompt: firstIdea
-        }));
-        showToast('Image concept generated with your brand style!', 'success');
-      } else {
-        setPostData(prev => ({
-          ...prev,
-          imagePrompt: `Create a vibrant, eye-catching image for "${prev.title || 'your content'}". Modern design, professional quality, engaging composition that aligns with your brand identity.`
-        }));
-        showToast('Image concept generated!', 'success');
-      }
-    } catch (error) {
-      console.error('Image prompt generation error:', error);
-      showToast('Failed to generate image concept', 'error');
-    } finally {
-      setIsGeneratingImagePrompt(false);
-    }
-  };
-
-  const handleSuggestVideoPrompt = async () => {
-    if (!postData.title) {
-      showToast('Please enter a post title first', 'error');
-      return;
-    }
-    
-    setIsGeneratingVideoPrompt(true);
-    
-    try {
-      const topicContext = [
-        postData.title,
-        postData.caption ? postData.caption.substring(0, 200) : '',
-        brandData?.niche ? `Niche: ${brandData.niche}` : '',
-        postData.platforms?.length > 0 ? `Platforms: ${postData.platforms.join(', ')}` : '',
-      ].filter(Boolean).join('. ');
-
-      const platform = postData.platforms?.[0]?.toLowerCase() || 'instagram';
-
-      const result = await generateVisualIdeas(
-        topicContext,
-        brandData,
-        platform,
-        'video'
-      );
-
-      if (result.success && result.ideas) {
-        const ideas = result.ideas.split(/\d+\./);
-        const firstIdea = ideas[1]?.trim().substring(0, 500) || result.ideas.substring(0, 500);
-        
-        setPostData(prev => ({
-          ...prev,
-          videoPrompt: firstIdea
-        }));
-        showToast('Video concept generated with your brand style!', 'success');
-      } else {
-        setPostData(prev => ({
-          ...prev,
-          videoPrompt: `Short-form video about "${prev.title || 'your content'}". 15-30 seconds, dynamic transitions, upbeat music. Perfect for ${prev.platforms?.length > 0 ? prev.platforms.join(', ') : 'social media'}.`
-        }));
-        showToast('Video concept generated!', 'success');
-      }
-    } catch (error) {
-      console.error('Video prompt generation error:', error);
-      showToast('Failed to generate video concept', 'error');
-    } finally {
-      setIsGeneratingVideoPrompt(false);
-    }
   };
 
   // Voice to Post handler removed (Issue 8) — kept for future re-enable
@@ -319,6 +224,60 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       ...prev,
       media: prev.media.filter((_, i) => i !== index)
     }));
+  };
+
+  const handleOpenLibraryPicker = async () => {
+    setShowLibraryPicker(true);
+    setLibrarySearch('');
+    if (libraryItems.length > 0) return;
+    setLibraryLoading(true);
+    try {
+      const result = await getContentLibraryItems(user?.id, { limit: 50 });
+      if (result.success) {
+        const items = await Promise.all(
+          (result.data || [])
+            .filter(item => item.type === 'image' || item.type === 'video')
+            .map(async (item) => {
+              let displayUrl = item.url;
+              if (!displayUrl && item.storage_path) {
+                const signedResult = await getSignedUrl(item.storage_path);
+                if (signedResult.success) displayUrl = signedResult.signedUrl;
+              }
+              return {
+                id: item.id,
+                name: item.name,
+                type: item.type,
+                url: displayUrl || '',
+                date: new Date(item.created_at).toLocaleDateString(),
+              };
+            })
+        );
+        setLibraryItems(items);
+      }
+    } catch (err) {
+      console.error('Failed to load library items:', err);
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
+  const handleSelectLibraryItem = (item) => {
+    const alreadyAdded = postData.media.some(m => m.libraryItemId === item.id);
+    if (alreadyAdded) {
+      showToast('This item is already attached', 'info');
+      return;
+    }
+    setPostData(prev => ({
+      ...prev,
+      media: [...prev.media, {
+        name: item.name,
+        type: item.type,
+        url: item.url,
+        libraryItemId: item.id,
+      }],
+    }));
+    setShowLibraryPicker(false);
+    showToast('Media added from library', 'success');
   };
 
   const handleNextStep = () => {
@@ -396,7 +355,7 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           type: 'success',
           title: 'Post scheduled',
           message: `"${postData.title || 'Untitled'}" scheduled for ${platformList} on ${dateStr}${timeStr ? ' at ' + timeStr : ''}.`,
-          action: () => { window.location.href = '/dashboard/calendar'; },
+          actionUrl: '/dashboard/calendar',
           actionLabel: 'View Calendar',
           persistent: true,
         });
@@ -420,8 +379,6 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
       videoPrompt: '',
       media: []
     });
-    setIsGeneratingImagePrompt(false);
-    setIsGeneratingVideoPrompt(false);
     onClose();
   };
 
@@ -681,31 +638,38 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           </div>
           )}
 
-          {/* Media Upload */}
+          {/* Media Upload + Library */}
           {currentStep === 2 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               <Upload className="w-4 h-4 inline mr-2" />
-              Upload Media (Images/Videos)
+              Add Media (Images/Videos)
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-huttle-primary transition-all cursor-pointer bg-gray-50">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={handleMediaUpload}
-                className="hidden"
-                id="media-upload"
-              />
-              <label htmlFor="media-upload" className="cursor-pointer">
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 mb-1">
-                  Drag and drop or <span className="text-huttle-primary font-medium">browse</span>
-                </p>
-                <p className="text-xs text-gray-500">
-                  Upload images or videos for your post
-                </p>
-              </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-huttle-primary transition-all cursor-pointer bg-gray-50">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleMediaUpload}
+                  className="hidden"
+                  id="media-upload"
+                />
+                <label htmlFor="media-upload" className="cursor-pointer">
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600 font-medium">Upload File</p>
+                  <p className="text-xs text-gray-400 mt-1">Images or videos</p>
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenLibraryPicker}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-huttle-primary transition-all cursor-pointer bg-gray-50"
+              >
+                <FolderOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 font-medium">From Library</p>
+                <p className="text-xs text-gray-400 mt-1">Your saved content</p>
+              </button>
             </div>
             {postData.media.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -843,68 +807,6 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           )}
 
           {/* Engagement Predictor removed (Issue 9) — feature-flagged for future re-enable */}
-
-          {/* SECTION 3: Media Concepts */}
-          {currentStep === 2 && (
-          <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
-                <Image className="w-4 h-4 text-pink-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900">Media Concepts</h3>
-            </div>
-            
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  <Image className="w-4 h-4 inline mr-2" />
-                  Image Prompt/Suggestions
-                </label>
-                <button
-                  type="button"
-                  onClick={handleSuggestImagePrompt}
-                  disabled={isGeneratingImagePrompt || !postData.title}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  {isGeneratingImagePrompt ? 'Generating...' : 'AI Suggest'}
-                </button>
-              </div>
-              <textarea
-                value={postData.imagePrompt}
-                onChange={(e) => setPostData({ ...postData, imagePrompt: e.target.value })}
-                placeholder="Describe the image concept or let AI suggest..."
-                rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  <Video className="w-4 h-4 inline mr-2" />
-                  Video Prompt/Suggestions
-                </label>
-                <button
-                  type="button"
-                  onClick={handleSuggestVideoPrompt}
-                  disabled={isGeneratingVideoPrompt || !postData.title}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  {isGeneratingVideoPrompt ? 'Generating...' : 'AI Suggest'}
-                </button>
-              </div>
-              <textarea
-                value={postData.videoPrompt}
-                onChange={(e) => setPostData({ ...postData, videoPrompt: e.target.value })}
-                placeholder="Describe the video concept or let AI suggest..."
-                rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none bg-white"
-              />
-            </div>
-          </div>
-          )}
         </div>
 
         {/* Footer */}
@@ -940,6 +842,83 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
           )}
         </div>
       </div>
+
+      {/* Library Picker Modal */}
+      {showLibraryPicker && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Choose from Library</h3>
+              <button onClick={() => setShowLibraryPicker(false)} className="p-3 hover:bg-gray-100 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-3 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search your library..."
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {libraryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-huttle-primary" />
+                  <span className="ml-2 text-gray-500 text-sm">Loading library...</span>
+                </div>
+              ) : libraryItems.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <FolderOpen className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No media items in your library yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {libraryItems
+                    .filter(item => !librarySearch || item.name?.toLowerCase().includes(librarySearch.toLowerCase()))
+                    .map((item) => {
+                      const isAttached = postData.media.some(m => m.libraryItemId === item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => !isAttached && handleSelectLibraryItem(item)}
+                          className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
+                            isAttached
+                              ? 'border-huttle-primary ring-2 ring-huttle-primary/20 opacity-60 cursor-default'
+                              : 'border-transparent hover:border-huttle-primary hover:shadow-md cursor-pointer'
+                          }`}
+                        >
+                          {item.type === 'image' ? (
+                            <img src={item.url} alt={item.name} className="w-full h-24 object-cover" />
+                          ) : (
+                            <div className="w-full h-24 bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
+                              <Video className="w-6 h-6 text-purple-500" />
+                            </div>
+                          )}
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                            <p className="text-white text-xs truncate font-medium">{item.name}</p>
+                          </div>
+                          {isAttached && (
+                            <div className="absolute top-1 right-1 bg-huttle-primary text-white rounded-full p-1">
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

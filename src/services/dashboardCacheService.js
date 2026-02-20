@@ -99,8 +99,10 @@ function normalizeDashboardData(data) {
       .map((item) => ({
         topic: String(item?.topic || item?.name || item || '').trim(),
         context: String(item?.context || item?.why_now || item?.reason || '').trim(),
+        description: String(item?.description || '').trim(),
         momentum: String(item?.momentum || item?.trend || 'rising').toLowerCase(),
-        relevant_platform: String(item?.relevant_platform || item?.platform || '').trim()
+        relevant_platform: String(item?.relevant_platform || item?.platform || '').trim(),
+        content_angles: Array.isArray(item?.content_angles) ? item.content_angles.map(a => String(a).trim()).filter(Boolean) : []
       }))
       .filter((item) => item.topic && item.context)
       .slice(0, 4)
@@ -119,7 +121,7 @@ function normalizeDashboardData(data) {
         };
       })
       .filter((item) => item.hashtag.length > 1 && item.relevance)
-      .slice(0, 10)
+      .slice(0, 8)
     : [];
 
   // Support both legacy single ai_insight and new ai_insights array
@@ -209,9 +211,7 @@ function buildFallbackDashboardData(brandProfile) {
       { hashtag: '#contentcreator', relevance: 'broad reach across your audience', estimated_reach: 'high', type: 'niche' },
       { hashtag: '#digitalmarketing', relevance: 'strong engagement from marketers', estimated_reach: 'high', type: 'niche' },
       { hashtag: '#socialmediatips', relevance: 'consistent discovery traffic', estimated_reach: 'high', type: 'niche' },
-      { hashtag: '#personalbranding', relevance: `aligns with ${niche.toLowerCase()} positioning`, estimated_reach: 'medium', type: 'niche' },
-      { hashtag: '#growthhacking', relevance: 'high-intent growth audience', estimated_reach: 'medium', type: 'niche' },
-      { hashtag: '#viral', relevance: 'broadly trending across all platforms', estimated_reach: 'high', type: 'trending' },
+      { hashtag: '#fyp', relevance: 'universally trending on TikTok', estimated_reach: 'high', type: 'trending' },
       { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending' }
     ],
     ai_insights: [
@@ -259,8 +259,10 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
     {
       "topic": "Trend name (3-5 words)",
       "context": "Why it matters today (one sentence, max 15 words)",
+      "description": "1-2 sentence explanation of why this topic is trending right now",
       "momentum": "rising" | "peaking" | "declining",
-      "relevant_platform": "Primary platform where this is active"
+      "relevant_platform": "Primary platform where this is active",
+      "content_angles": ["Specific content idea 1", "Specific content idea 2", "Specific content idea 3"]
     }
   ],
   "hashtags_of_day": [
@@ -282,8 +284,8 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
 
 RULES:
 - Return ONLY valid JSON, no markdown, no preamble, no backticks.
-- trending_topics: exactly 4 topics. All must be current today.
-- hashtags_of_day: exactly 10 hashtags. 8 must be niche-specific (type: "niche") and 2 must be broadly trending across social media (type: "trending"). Always include the # symbol.
+- trending_topics: exactly 4 topics. All must be current as of ${todayFormatted}. Each must include a "description" (1-2 sentences on why it is trending) and "content_angles" (array of 2-3 specific, actionable content ideas).
+- hashtags_of_day: exactly 8 hashtags. 5-6 must be niche-specific based on the user's brand profile (type: "niche") and 2-3 must be universally trending hashtags like #fyp, #trending, etc. (type: "trending"). Always include the # symbol.
 - ai_insights: exactly 3 insight objects. One must be category "Timing" (best time to post today), one must be category "Content Type" (what format is working in their niche right now), one must be category "Audience" (what their audience is responding to this week).
 - Each ai_insight must be specific to their niche and actionable TODAY. No generic advice.
 - relevance text should be lowercase when it appears mid-sentence (e.g., "popular with ${targetAudience.toLowerCase()}" not "Popular with ${targetAudience}").

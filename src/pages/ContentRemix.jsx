@@ -252,7 +252,7 @@ export default function ContentRemix() {
       return 'Connection issue while remixing. Please retry.';
     }
     if (errorType === 'INVALID_RESPONSE') {
-      return 'The workflow returned an incomplete remix result. Please retry.';
+      return 'The remix result was incomplete. Please retry.';
     }
     return 'Failed to remix content. Please try again.';
   };

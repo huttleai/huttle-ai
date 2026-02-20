@@ -69,7 +69,6 @@ export function isN8nConfigured() {
  */
 export async function sendTrendAlert(userId, trendData) {
   if (!N8N_WEBHOOK_URL) {
-    console.log('[n8n] Webhook not configured, skipping trend alert');
     return { success: false, error: 'n8n webhook not configured' };
   }
 
@@ -107,7 +106,6 @@ export async function sendTrendAlert(userId, trendData) {
  */
 export async function sendBurnoutWarning(userId, burnoutData) {
   if (!N8N_WEBHOOK_URL) {
-    console.log('[n8n] Webhook not configured, skipping burnout warning');
     return { success: false, error: 'n8n webhook not configured' };
   }
 
@@ -145,7 +143,6 @@ export async function sendBurnoutWarning(userId, burnoutData) {
  */
 export async function scheduleTrendMonitoring(userId, settings) {
   if (!N8N_WEBHOOK_URL) {
-    console.log('[n8n] Webhook not configured, skipping schedule monitoring');
     return { success: false, error: 'n8n webhook not configured' };
   }
 
@@ -188,7 +185,6 @@ export async function scheduleTrendMonitoring(userId, settings) {
  */
 export async function sendContentGapReminder(userId, gapData) {
   if (!N8N_WEBHOOK_URL) {
-    console.log('[n8n] Webhook not configured, skipping content gap reminder');
     return { success: false, error: 'n8n webhook not configured' };
   }
 
@@ -226,7 +222,6 @@ export async function sendContentGapReminder(userId, gapData) {
  */
 export async function triggerWorkflow(workflowId, payload) {
   if (!N8N_WEBHOOK_URL) {
-    console.log('[n8n] Webhook not configured, skipping workflow trigger');
     return { success: false, error: 'n8n webhook not configured' };
   }
 

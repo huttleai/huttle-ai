@@ -20,8 +20,6 @@ export function AuthProvider({ children }) {
   // Memoized checkUserProfile to prevent recreation on every render
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
   const checkUserProfile = useCallback(async (userId) => {
-    console.log('🔍 [Auth] Checking user profile for:', userId);
-    
     // Create a timeout promise to prevent hanging queries
     const QUERY_TIMEOUT_MS = 10000; // 10 seconds
     const timeoutPromise = new Promise((_, reject) => {
@@ -63,18 +61,13 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      console.log('📋 [Auth] Profile data:', data);
-      console.log('📋 [Auth] quiz_completed_at:', data?.quiz_completed_at);
-
       if (data && data.quiz_completed_at) {
         // User has completed onboarding
-        console.log('✅ [Auth] User has completed onboarding');
         setUserProfile(data);
         setNeedsOnboarding(false);
       } else {
         // User exists but hasn't completed quiz, OR no profile exists
         // Either way, they need onboarding
-        console.log('⚠️ [Auth] User NEEDS onboarding - quiz_completed_at is null or profile missing');
         setUserProfile(data || null);
         setNeedsOnboarding(true);
       }
@@ -106,8 +99,6 @@ export function AuthProvider({ children }) {
     const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
 
     const initializeSession = async () => {
-      console.log('🚀 [Auth] Initializing session...');
-      
       try {
         // If skip auth is enabled (DEV mode only with explicit env var), create a mock user
         if (skipAuth) {
@@ -145,8 +136,7 @@ export function AuthProvider({ children }) {
         clearTimeout(timeoutId);
 
         const session = data?.session;
-        console.log('🔐 [Auth] Session found:', !!session, session?.user?.email);
-        
+
         if (!isMounted) return;
 
         if (session?.user) {
@@ -170,7 +160,6 @@ export function AuthProvider({ children }) {
         }
       } finally {
         if (isMounted && !skipAuth) {
-          console.log('✅ [Auth] Setting loading to false');
           setLoading(false);
         }
         // Mark initial load as complete so onAuthStateChange can set loading for subsequent events
@@ -183,11 +172,8 @@ export function AuthProvider({ children }) {
     // Listen for auth changes (handles Resend magic links, email confirmations, etc.)
     // Skip auth listener if in dev mode with VITE_SKIP_AUTH
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 [Auth] Auth state changed:', event, session?.user?.email);
-      
       // If skip auth is enabled, ignore auth state changes to maintain mock user
       if (skipAuth) {
-        console.log('🔄 [Auth] Ignoring auth state change in skip auth mode');
         return;
       }
       
@@ -197,7 +183,6 @@ export function AuthProvider({ children }) {
         // TOKEN_REFRESHED events should NOT reset state or re-check profile
         // This prevents users from being kicked to onboarding when switching tabs
         if (event === 'TOKEN_REFRESHED') {
-          console.log('🔄 [Auth] Token refreshed - keeping existing state');
           if (session?.user) {
             setUser(session.user);
           }
@@ -214,12 +199,9 @@ export function AuthProvider({ children }) {
             
             // Only re-check profile if this is a NEW user or we haven't checked yet
             if (!alreadyChecked || !isSameUser) {
-              console.log('🔄 [Auth] Re-checking profile. Same user:', isSameUser, 'Already checked:', alreadyChecked);
               setProfileChecked(false);
               profileCheckedRef.current = false;
               await checkUserProfile(session.user.id);
-            } else {
-              console.log('🔄 [Auth] Skipping profile re-check - same user and already verified');
             }
           }
         } else if (event === 'SIGNED_OUT') {
@@ -354,9 +336,7 @@ export function AuthProvider({ children }) {
 
   const completeOnboarding = async (profileData) => {
     if (!user) return { success: false, error: 'Not authenticated' };
-    
-    console.log('✅ [Auth] completeOnboarding called with:', profileData);
-    
+
     // Signal to GuidedTour that onboarding just completed — tour should trigger.
     // Use a user-scoped key so the tour only appears once per account.
     const tourSignalKey = user?.id ? `show_guided_tour:${user.id}` : 'show_guided_tour';
@@ -368,9 +348,7 @@ export function AuthProvider({ children }) {
     // The checkUserProfile will set needsOnboarding to false if quiz_completed_at is set
     // But we also set it explicitly here for immediate UI update
     setNeedsOnboarding(false);
-    
-    console.log('✅ [Auth] Onboarding marked as complete');
-    
+
     return { success: true };
   };
 

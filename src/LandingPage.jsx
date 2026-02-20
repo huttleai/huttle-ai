@@ -1108,7 +1108,8 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
   const privacyContent = (
     <>
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Privacy Policy</h2>
-      <p className="text-sm text-slate-500 italic mb-6">Last updated: January 11, 2026</p>
+      <p className="text-sm text-slate-500 italic mb-2">Last updated: February 2026</p>
+      <Link to="/privacy" className="text-xs text-huttle-primary hover:underline mb-6 inline-block" onClick={onClose}>View full page &rarr;</Link>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">1. Introduction</h3>
@@ -1190,7 +1191,8 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
   const termsContent = (
     <>
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Terms of Service</h2>
-      <p className="text-sm text-slate-500 italic mb-6">Last updated: January 11, 2026</p>
+      <p className="text-sm text-slate-500 italic mb-2">Last updated: February 2026</p>
+      <Link to="/terms" className="text-xs text-huttle-primary hover:underline mb-6 inline-block" onClick={onClose}>View full page &rarr;</Link>
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">1. Acceptance of Terms</h3>
@@ -1707,7 +1709,7 @@ export default function LandingPage() {
           
           <div className="flex-1 text-center">
             <p className="text-sm text-slate-500">
-              © 2026 Huttle AI · <button onClick={() => setIsPrivacyModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</button> · <button onClick={() => setIsTermsModalOpen(true)} className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</button>
+              © 2026 Huttle AI · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link>
             </p>
           </div>
           

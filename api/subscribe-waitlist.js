@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
-    console.log('❌ Method not allowed:', req.method);
+    console.warn('Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -57,8 +57,6 @@ export default async function handler(req, res) {
         details: 'Mailchimp waitlist is not configured' 
       });
     }
-    
-    console.log('[subscribe-waitlist] Processing signup');
 
     // Prepare Mailchimp API request
     const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_AUDIENCE_ID}/members`;
@@ -106,7 +104,6 @@ export default async function handler(req, res) {
     }
 
     // Success!
-    console.log('[subscribe-waitlist] Signup successful');
     return res.status(200).json({ 
       success: true,
       message: 'Successfully joined the waitlist!',

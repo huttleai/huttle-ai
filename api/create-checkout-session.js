@@ -27,9 +27,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
-  // SECURITY: Removed verbose header/body logging that could expose auth tokens in Vercel logs
-  console.log('[create-checkout-session] Handler started, method:', req.method);
-  
   // Set secure CORS headers
   setCorsHeaders(req, res);
 
@@ -37,7 +34,7 @@ export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
-    console.log('❌ Method not allowed:', req.method);
+    console.warn('Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -160,8 +157,6 @@ export default async function handler(req, res) {
         error: 'Payment service error. Please try again or contact support.',
       });
     }
-
-    console.log('[create-checkout-session] Session created:', session.id);
     
     return res.status(200).json({
       sessionId: session.id,

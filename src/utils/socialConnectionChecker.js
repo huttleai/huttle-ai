@@ -130,5 +130,4 @@ export const checkSocialConnections = async (userId = null) => {
  */
 export const setSocialConnection = (platform, isConnected) => {
   // No-op - deep linking doesn't require connections
-  console.log(`[Info] setSocialConnection called for ${platform}. Deep linking doesn't require OAuth connections.`);
 };

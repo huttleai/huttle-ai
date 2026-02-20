@@ -113,8 +113,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('[plan-builder-proxy] Forwarding job:', job_id, { requestId });
-
     // Build the complete payload for n8n
     const n8nPayload = {
       job_id,
@@ -136,8 +134,6 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(30000), // 30 seconds
     });
 
-    console.log('[plan-builder-proxy] n8n response status:', response.status, response.statusText, { requestId });
-
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
       console.error('[plan-builder-proxy] n8n error response:', errorText, { requestId });
@@ -158,8 +154,6 @@ export default async function handler(req, res) {
         requestId
       });
     }
-
-    console.log('[plan-builder-proxy] Webhook triggered successfully for job:', job_id, { requestId });
     
     // Return success (n8n will update job via Supabase)
     return res.status(200).json({ 

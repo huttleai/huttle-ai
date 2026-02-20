@@ -131,8 +131,6 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(120000), // 120 seconds
     });
 
-    console.log('[viral-blueprint-proxy] n8n response status:', response.status, response.statusText, { requestId });
-
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
       console.error('[viral-blueprint-proxy] n8n error response:', errorText, { requestId });
@@ -155,9 +153,6 @@ export default async function handler(req, res) {
         requestId
       });
     }
-
-    console.log('[viral-blueprint-proxy] Successfully received response from n8n', { requestId });
-    console.log('[viral-blueprint-proxy] Response keys:', Object.keys(data || {}), { requestId });
     
     if (data && typeof data === 'object') {
       return res.status(200).json({ ...data, requestId });

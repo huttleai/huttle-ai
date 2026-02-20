@@ -88,7 +88,7 @@ function getPlanFromPriceId(priceId) {
 async function addToFoundersClub(email, firstName = '', lastName = '') {
   // Skip if Mailchimp is not configured
   if (!MAILCHIMP_FOUNDERS_API_KEY || !MAILCHIMP_FOUNDERS_AUDIENCE_ID) {
-    console.log('⚠️ Mailchimp Founders Club not configured, skipping...');
+    console.warn('Mailchimp Founders Club not configured, skipping...');
     return { success: false, skipped: true };
   }
 
@@ -119,14 +119,12 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
     if (!response.ok) {
       // Member already exists is not an error
       if (data.title === 'Member Exists') {
-        console.log(`✅ Founders Club: ${email} already in list`);
         return { success: true, alreadyExists: true };
       }
       console.error('Mailchimp error:', data);
       return { success: false, error: data.detail };
     }
 
-    console.log(`🎉 Added to Founders Club: ${email}`);
     return { success: true };
   } catch (error) {
     console.error('Error adding to Founders Club:', error);

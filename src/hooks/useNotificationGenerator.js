@@ -56,16 +56,16 @@ export default function useNotificationGenerator() {
 
     // 1. Onboarding nudges — Brand Voice incomplete
     if (!shown.has('onboard_brandvoice') && brandData) {
-      const hasName = !!(brandData.firstName || brandData.brandName);
-      const hasNiche = !!brandData.niche;
-      const hasVoice = !!brandData.brandVoice;
+      const hasNiche = !!brandData.niche?.trim();
+      const hasAudience = !!brandData.targetAudience?.trim();
+      const hasTone = !!(brandData.brandVoice?.trim() || brandData.tone?.trim());
 
-      if (!hasName || !hasNiche || !hasVoice) {
+      if (!hasNiche || !hasAudience || !hasTone) {
         addNotification({
           type: 'info',
           title: 'Complete your Brand Voice',
           message: 'Personalize your AI content by finishing your Brand Voice setup — add your niche, audience, and tone.',
-          action: () => { window.location.href = '/dashboard/brand-voice'; },
+          actionUrl: '/dashboard/brand-voice',
           actionLabel: 'Complete Now',
           persistent: true,
         });
@@ -81,7 +81,7 @@ export default function useNotificationGenerator() {
           type: 'info',
           title: 'Select your platforms',
           message: 'Choose your preferred social media platforms in Brand Voice settings for tailored content.',
-          action: () => { window.location.href = '/dashboard/brand-voice'; },
+          actionUrl: '/dashboard/brand-voice',
           actionLabel: 'Select Platforms',
           persistent: true,
         });

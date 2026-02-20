@@ -194,11 +194,8 @@ export default function SocialUpdates() {
     const now = new Date();
 
     let result = updates.filter((update) => {
-      // Respect expiration
       if (update.expires_at && new Date(update.expires_at) < now) return false;
-      // Platform filter
       if (selectedPlatform !== 'All' && normalizePlatformName(update.platform) !== selectedPlatform) return false;
-      // Impact filter (support both column naming conventions)
       if (selectedImpact !== 'All') {
         const imp = String(update.impact_level || update.impact || '').toLowerCase();
         if (imp !== selectedImpact.toLowerCase()) return false;
@@ -206,7 +203,17 @@ export default function SocialUpdates() {
       return true;
     });
 
-    // High Impact updates always bubble to top (pinned), then sort the rest
+    // Deduplicate by title + platform (keep the most recent by fetched_at)
+    const seen = new Map();
+    result.forEach((update) => {
+      const key = `${String(update.update_title || update.title || '').trim().toLowerCase()}::${normalizePlatformName(update.platform)}`;
+      const existing = seen.get(key);
+      if (!existing || new Date(update.fetched_at || 0) > new Date(existing.fetched_at || 0)) {
+        seen.set(key, update);
+      }
+    });
+    result = [...seen.values()];
+
     result.sort((a, b) => {
       const aImp = String(a.impact_level || a.impact || '').toLowerCase();
       const bImp = String(b.impact_level || b.impact || '').toLowerCase();
@@ -221,8 +228,9 @@ export default function SocialUpdates() {
         if (aOrder !== bOrder) return aOrder - bOrder;
       }
 
-      // Default: most recent first
-      return new Date(b.fetched_at || 0) - new Date(a.fetched_at || 0);
+      const aDate = parsePublishedDate(a.published_date || a.date_month) || new Date(a.fetched_at || 0);
+      const bDate = parsePublishedDate(b.published_date || b.date_month) || new Date(b.fetched_at || 0);
+      return bDate - aDate;
     });
 
     return result;
@@ -360,7 +368,9 @@ export default function SocialUpdates() {
             const impactValue = update.impact_level || update.impact || 'low';
             const impact = getImpactMeta(impactValue);
             const summary = String(update.update_summary || update.description || '').trim();
-            const sourceUrl = String(update.source_url || update.link || '').trim();
+            const rawSourceUrl = String(update.source_url || update.link || '').trim();
+            const isValidSource = rawSourceUrl.startsWith('http') && !rawSourceUrl.includes(window.location.hostname);
+            const sourceUrl = isValidSource ? rawSourceUrl : '';
             const titleText = String(update.update_title || update.title || 'Platform update').trim();
             const publishedDate = update.published_date || update.date_month || '';
             const isUnread = !readIds.has(update.id);

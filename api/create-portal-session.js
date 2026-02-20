@@ -82,7 +82,6 @@ export default async function handler(req, res) {
     // This handles Founders Club members who paid via one-time checkout
     // but whose customer ID wasn't saved to the profile during webhook processing
     if (!stripeCustomerId && user.email) {
-      console.log('⚠️ No stripe_customer_id in profile, searching Stripe by email:', user.email);
       try {
         const customers = await stripe.customers.list({
           email: user.email,
@@ -91,7 +90,6 @@ export default async function handler(req, res) {
 
         if (customers.data.length > 0) {
           stripeCustomerId = customers.data[0].id;
-          console.log('✅ Found Stripe customer by email:', stripeCustomerId);
 
           // Backfill the stripe_customer_id in the profile for future lookups
           await supabase

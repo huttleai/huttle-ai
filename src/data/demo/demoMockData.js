@@ -1,10 +1,7 @@
+// DEMO MODE ONLY — this file is never loaded in production
 /**
  * Demo Mode Mock Data Service
- * 
- * Provides realistic fitness-themed mock data for marketing demos
- * when VITE_DEMO_MODE=true or when API calls fail.
- * 
- * All mock data is fitness-themed for Iron Peak Fitness demo instance.
+ * Only active when VITE_DEMO_MODE=true.
  */
 
 // Check if demo mode is enabled

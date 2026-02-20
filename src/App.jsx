@@ -4,6 +4,8 @@ import LandingPage from './LandingPage';
 import DashboardManager from './dashboard/Dashboard';
 import PaymentSuccess from './pages/PaymentSuccess';
 import FoundersPage from './pages/FoundersPage';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 
 /**
@@ -40,6 +42,10 @@ function App() {
         
         {/* Founders Club Landing Page */}
         <Route path="/founders" element={<FoundersPage />} />
+        
+        {/* Legal Pages (public, no auth) */}
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         
         {/* Payment Success Page */}
         <Route path="/payment-success" element={<PaymentSuccess />} />

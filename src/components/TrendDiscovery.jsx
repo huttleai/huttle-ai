@@ -158,8 +158,8 @@ export default function TrendDiscovery() {
         setResults(result);
         showToast('Research complete! AI-generated insights are ready.', 'ai');
       } else if (result.useFallback) {
-        setError(`Research workflow not available: ${result.reason}`);
-        showToast('Research service is not configured. Please check your settings.', 'warning');
+        setError('Trend research is temporarily unavailable. Please try again in a moment.');
+        showToast('Research service is temporarily unavailable. Please try again.', 'warning');
       } else {
         setError('Failed to complete research. Please try again.');
         showToast('Research failed. Please try again.', 'error');

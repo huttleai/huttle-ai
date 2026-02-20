@@ -1,4 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 
@@ -74,9 +75,7 @@ export function NotificationProvider({ children }) {
       message: minutesUntil === 0 
         ? `Your post is ready to publish on ${post.platforms?.join(', ')}!` 
         : `Your post is scheduled in ${minutesUntil} minutes for ${post.platforms?.join(', ')}`,
-      action: () => {
-        window.location.href = '/calendar';
-      },
+      actionUrl: '/dashboard/calendar',
       actionLabel: 'View Post',
       persistent: true,
       postId: post.id,
@@ -91,9 +90,7 @@ export function NotificationProvider({ children }) {
       type: 'warning',
       title: `${platform} not connected`,
       message: `Connect your ${platform} account to post directly from Huttle AI`,
-      action: () => {
-        window.location.href = '/settings';
-      },
+      actionUrl: '/dashboard/settings',
       actionLabel: 'Connect Now',
       persistent: true,
     });
@@ -107,9 +104,7 @@ export function NotificationProvider({ children }) {
       type: 'error',
       title: 'Post incomplete',
       message: `Missing: ${missingFields.join(', ')}`,
-      action: () => {
-        window.location.href = `/calendar`;
-      },
+      actionUrl: '/dashboard/calendar',
       actionLabel: 'Fix Now',
       persistent: true,
     });
@@ -149,9 +144,7 @@ export function NotificationProvider({ children }) {
       type: 'info',
       title: `${panelName} Updated`,
       message: description,
-      action: () => {
-        window.location.href = '/';
-      },
+      actionUrl: '/dashboard',
       actionLabel: 'View Dashboard',
       persistent: false,
     });
@@ -183,9 +176,7 @@ export function NotificationProvider({ children }) {
       type: severity,
       title,
       message,
-      action: () => {
-        window.location.href = '/subscription';
-      },
+      actionUrl: '/dashboard/subscription',
       actionLabel: percentage >= 75 ? 'Upgrade Now' : 'View Plans',
       persistent: percentage >= 75,
     });
@@ -205,9 +196,7 @@ export function NotificationProvider({ children }) {
       type: impactColors[impact] || 'info',
       title: `New ${platform} Update`,
       message: title,
-      action: () => {
-        window.location.href = '/social-updates';
-      },
+      actionUrl: '/dashboard/social-updates',
       actionLabel: 'View Update',
       persistent: impact === 'high',
     });
@@ -221,9 +210,7 @@ export function NotificationProvider({ children }) {
       type: 'success',
       title: `📈 Engagement Spike on ${platform}`,
       message: `${postTitle} is performing ${percentage}% better than average!`,
-      action: () => {
-        window.location.href = '/';
-      },
+      actionUrl: '/dashboard',
       actionLabel: 'View Analytics',
       persistent: false,
     });
@@ -239,9 +226,7 @@ export function NotificationProvider({ children }) {
       title,
       message: `Next post: ${nextPostTime}`,
       dismissKey: `scheduled_count_${postCount}`,
-      action: () => {
-        window.location.href = '/calendar';
-      },
+      actionUrl: '/dashboard/calendar',
       actionLabel: 'View Calendar',
       persistent: false,
     });
@@ -255,9 +240,7 @@ export function NotificationProvider({ children }) {
       type: 'info',
       title: `💡 Insight: ${insight}`,
       message: description,
-      action: () => {
-        window.location.href = '/';
-      },
+      actionUrl: '/dashboard',
       actionLabel: 'View Details',
       persistent: false,
     });
@@ -338,6 +321,7 @@ function NotificationPanel() {
     removeNotification,
     clearAll,
   } = useNotifications();
+  const navigate = useNavigate();
 
   // Auto-mark all as read when the panel is opened
   useEffect(() => {
@@ -459,11 +443,15 @@ function NotificationPanel() {
                         <span className="text-xs text-gray-500">
                           {getTimeAgo(notification.timestamp)}
                         </span>
-                        {notification.action && (
+                        {(notification.action || notification.actionUrl) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              notification.action();
+                              if (typeof notification.action === 'function') {
+                                notification.action();
+                              } else if (notification.actionUrl) {
+                                navigate(notification.actionUrl);
+                              }
                               setShowNotificationPanel(false);
                             }}
                             className="text-xs font-medium text-huttle-primary hover:underline flex items-center gap-1"

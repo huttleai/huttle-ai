@@ -14,6 +14,31 @@ import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from './AIUsageMeter';
 import { getPlatformIcon } from './SocialIcons';
 
+const EMPTY_VALUES = new Set([
+  'unknown', 'unclear', 'monitor', 'n/a', 'none', 'low',
+  'limited data available', 'limited data available.',
+  'not available', 'no data', 'no data available',
+]);
+
+function isSectionEmpty(value) {
+  if (value == null) return true;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    if (EMPTY_VALUES.has(trimmed.toLowerCase())) return true;
+    if (trimmed.length < 20 && !trimmed.includes(' ')) return true;
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return Object.values(value).every(isSectionEmpty);
+  }
+  return false;
+}
+
+function stripCitations(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(/\[\d+\]/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 function getDeepDiveLoadingMessage(seconds) {
   if (seconds < 8) return 'Researching real-time trend data...';
   if (seconds < 18) return 'Analyzing platform activity...';
@@ -50,7 +75,7 @@ function DeepDiveLoadingState({ secondsElapsed }) {
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {steps.map((label, index) => (
             <div key={label} className="flex flex-col items-center gap-1">
               <div className={`w-2.5 h-2.5 rounded-full ${index <= activeStepIndex ? 'bg-huttle-primary animate-pulse' : 'bg-gray-200'}`} />
@@ -870,7 +895,7 @@ export default function TrendDiscoveryHub() {
                             <div className="space-y-2">
                               <h3 className="text-xl font-bold text-gray-900">{deepDiveResults.topic}</h3>
                               {report.overview && (
-                                <p className="text-sm leading-relaxed text-gray-600">{report.overview}</p>
+                                <p className="text-sm leading-relaxed text-gray-600">{stripCitations(report.overview)}</p>
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -902,12 +927,16 @@ export default function TrendDiscoveryHub() {
                                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                     <h5 className="font-semibold text-gray-900">{trend?.name || 'Trend'}</h5>
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveStatusStyles(trend?.status)}`}>
-                                        {trend?.status || 'Unknown'}
-                                      </span>
-                                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveVelocityStyles(trend?.velocity)}`}>
-                                        {trend?.velocity || 'Unclear'}
-                                      </span>
+                                      {!isSectionEmpty(trend?.status) && (
+                                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveStatusStyles(trend?.status)}`}>
+                                          {trend.status}
+                                        </span>
+                                      )}
+                                      {!isSectionEmpty(trend?.velocity) && (
+                                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveVelocityStyles(trend?.velocity)}`}>
+                                          {trend.velocity}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   {trend?.primary_platform && (
@@ -916,13 +945,13 @@ export default function TrendDiscoveryHub() {
                                       <span>{trend.primary_platform}</span>
                                     </div>
                                   )}
-                                  {trend?.evidence && (
+                                  {trend?.evidence && !isSectionEmpty(trend.evidence) && (
                                     <div className="mb-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                                      {trend.evidence}
+                                      {stripCitations(trend.evidence)}
                                     </div>
                                   )}
-                                  {trend?.why_it_matters && (
-                                    <p className="text-sm text-gray-700">{trend.why_it_matters}</p>
+                                  {trend?.why_it_matters && !isSectionEmpty(trend.why_it_matters) && (
+                                    <p className="text-sm text-gray-700">{stripCitations(trend.why_it_matters)}</p>
                                   )}
                                   <button
                                     onClick={() => handleCreatePostFromTrend(trend?.name || deepDiveResults.topic)}
@@ -937,82 +966,85 @@ export default function TrendDiscoveryHub() {
                           </div>
                         )}
 
-                        {showPlatformSection && (
-                          <div className="space-y-3">
-                            <h4 className="font-semibold text-gray-900">Platform Breakdown</h4>
-                            <div className="space-y-2">
-                              {platformActivity.map((platform, index) => {
-                                const dots = getActivityDots(platform?.activity_level);
-                                const happeningText = platform?.["what's_happening"] || platform?.whats_happening || platform?.what_s_happening || '';
-                                return (
-                                  <div key={`${platform?.name || 'platform'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                      <div className="space-y-2">
-                                        <div className="flex items-center gap-2">
-                                          {getPlatformIcon(platform?.name || '', 'w-4 h-4 text-gray-700')}
-                                          <span className="font-semibold text-gray-900">{platform?.name || 'Platform'}</span>
+                        {showPlatformSection && (() => {
+                          const meaningfulPlatforms = platformActivity.filter((p) => {
+                            const text = p?.["what's_happening"] || p?.whats_happening || p?.what_s_happening || '';
+                            return !isSectionEmpty(text);
+                          });
+                          if (meaningfulPlatforms.length === 0) return null;
+                          return (
+                            <div className="space-y-3">
+                              <h4 className="font-semibold text-gray-900">Platform Breakdown</h4>
+                              <div className="space-y-2">
+                                {meaningfulPlatforms.map((platform, index) => {
+                                  const dots = getActivityDots(platform?.activity_level);
+                                  const happeningText = stripCitations(platform?.["what's_happening"] || platform?.whats_happening || platform?.what_s_happening || '');
+                                  return (
+                                    <div key={`${platform?.name || 'platform'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2">
+                                            {getPlatformIcon(platform?.name || '', 'w-4 h-4 text-gray-700')}
+                                            <span className="font-semibold text-gray-900">{platform?.name || 'Platform'}</span>
+                                          </div>
+                                          {happeningText && (
+                                            <p className="text-sm text-gray-700">{happeningText}</p>
+                                          )}
                                         </div>
-                                        {happeningText && (
-                                          <p className="text-sm text-gray-700">{happeningText}</p>
-                                        )}
-                                      </div>
-                                      <div className="space-y-2 md:text-right">
-                                        <div className="flex items-center gap-1 md:justify-end">
-                                          {[0, 1, 2].map((dotIndex) => (
-                                            <span
-                                              key={dotIndex}
-                                              className={`h-2.5 w-2.5 rounded-full ${dotIndex < dots.filled ? dots.className : 'bg-gray-200'}`}
-                                            />
-                                          ))}
-                                          <span className="ml-1 text-xs font-medium text-gray-600">{platform?.activity_level || 'Low'}</span>
+                                        <div className="space-y-2 md:text-right">
+                                          <div className="flex items-center gap-1 md:justify-end">
+                                            {[0, 1, 2].map((dotIndex) => (
+                                              <span
+                                                key={dotIndex}
+                                                className={`h-2.5 w-2.5 rounded-full ${dotIndex < dots.filled ? dots.className : 'bg-gray-200'}`}
+                                              />
+                                            ))}
+                                            <span className="ml-1 text-xs font-medium text-gray-600">{platform?.activity_level || 'Low'}</span>
+                                          </div>
+                                          {platform?.top_format && !isSectionEmpty(platform.top_format) && (
+                                            <span className="inline-flex rounded-full border border-huttle-200 bg-huttle-50 px-2 py-0.5 text-xs font-medium text-huttle-primary">
+                                              {platform.top_format}
+                                            </span>
+                                          )}
                                         </div>
-                                        {platform?.top_format && (
-                                          <span className="inline-flex rounded-full border border-huttle-200 bg-huttle-50 px-2 py-0.5 text-xs font-medium text-huttle-primary">
-                                            {platform.top_format}
-                                          </span>
-                                        )}
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
-                        {showCompetitorSection && (
+                        {showCompetitorSection && !isSectionEmpty(report.competitor_landscape) && (
                           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h4 className="mb-2 font-semibold text-gray-900">Competitor Activity</h4>
-                            <p className="text-sm leading-relaxed text-gray-700">{report.competitor_landscape}</p>
+                            <p className="text-sm leading-relaxed text-gray-700">{stripCitations(report.competitor_landscape)}</p>
                           </div>
                         )}
 
-                        {report.audience_sentiment && (
+                        {report.audience_sentiment && !isSectionEmpty(report.audience_sentiment.overall_mood) && (
                           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h4 className="mb-2 font-semibold text-gray-900">Audience Sentiment</h4>
-                            {report.audience_sentiment.overall_mood && (
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getMoodStyles(report.audience_sentiment.overall_mood)}`}>
-                                {report.audience_sentiment.overall_mood}
-                              </span>
-                            )}
-                            {report.audience_sentiment.detail && (
-                              <p className="mt-2 text-sm text-gray-700">{report.audience_sentiment.detail}</p>
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getMoodStyles(report.audience_sentiment.overall_mood)}`}>
+                              {report.audience_sentiment.overall_mood}
+                            </span>
+                            {report.audience_sentiment.detail && !isSectionEmpty(report.audience_sentiment.detail) && (
+                              <p className="mt-2 text-sm text-gray-700">{stripCitations(report.audience_sentiment.detail)}</p>
                             )}
                           </div>
                         )}
 
-                        {report.timing_window && (
+                        {report.timing_window && !isSectionEmpty(report.timing_window.action_window) && (
                           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h4 className="mb-2 font-semibold text-gray-900">Timing Window</h4>
-                            {report.timing_window.action_window && (
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getTimingWindowStyles(report.timing_window.action_window)}`}>
-                                {report.timing_window.action_window}
-                              </span>
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getTimingWindowStyles(report.timing_window.action_window)}`}>
+                              {report.timing_window.action_window}
+                            </span>
+                            {report.timing_window.reasoning && !isSectionEmpty(report.timing_window.reasoning) && (
+                              <p className="mt-2 text-sm text-gray-700">{stripCitations(report.timing_window.reasoning)}</p>
                             )}
-                            {report.timing_window.reasoning && (
-                              <p className="mt-2 text-sm text-gray-700">{report.timing_window.reasoning}</p>
-                            )}
-                            {report.timing_window.lifespan && (
+                            {report.timing_window.lifespan && !isSectionEmpty(report.timing_window.lifespan) && (
                               <p className="mt-1 text-sm text-gray-500">Estimated lifespan: {report.timing_window.lifespan}</p>
                             )}
                           </div>

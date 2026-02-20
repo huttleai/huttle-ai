@@ -217,9 +217,9 @@ export default function SecureAccount() {
           {/* Footer */}
           <p className="text-center text-gray-400 text-xs mt-6">
             By continuing, you agree to our{' '}
-            <a href="#" className="text-huttle-blue hover:underline">Terms</a>
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-huttle-blue hover:underline">Terms</a>
             {' '}and{' '}
-            <a href="#" className="text-huttle-blue hover:underline">Privacy Policy</a>
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-huttle-blue hover:underline">Privacy Policy</a>
           </p>
         </div>
       </div>

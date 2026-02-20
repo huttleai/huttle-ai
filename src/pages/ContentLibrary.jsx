@@ -8,12 +8,13 @@ import CreateProjectModal from '../components/CreateProjectModal';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import { getContentLibraryItems, getStorageUsage, checkStorageLimit, uploadFileToStorage, saveContentLibraryItem, updateContentLibraryItem, deleteContentLibraryItem, getSignedUrl, getProjects, createProject, updateProject, deleteProject, TIERS } from '../config/supabase';
 import { compressImage, formatFileSize } from '../utils/imageCompression';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function ContentLibrary() {
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
   const { userTier, getStorageLimit, getTierDisplayName } = useSubscription();
+  const navigate = useNavigate();
   const skipAuth =
     import.meta.env.VITE_SKIP_AUTH === 'true' ||
     import.meta.env.VITE_SKIP_AUTH === 'true';
@@ -1499,7 +1500,7 @@ export default function ContentLibrary() {
               )}
 
               {/* Details */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
                   <p className="text-gray-900 font-medium mt-1">{selectedItem.name}</p>
@@ -1575,6 +1576,27 @@ export default function ContentLibrary() {
                   )}
                 </div>
                 
+                <button
+                  onClick={() => {
+                    const prefill = {
+                      title: selectedItem.name || '',
+                      caption: selectedItem.content || '',
+                      media: selectedItem.type !== 'text' ? [{
+                        name: selectedItem.name,
+                        type: selectedItem.type === 'video' ? 'video' : 'image',
+                        url: getDisplayUrl(selectedItem) || selectedItem.url || '',
+                        libraryItemId: selectedItem.id,
+                      }] : [],
+                    };
+                    setShowDetailModal(false);
+                    navigate('/dashboard/calendar', { state: { prefillContent: prefill } });
+                  }}
+                  className="w-full px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Create Post with This
+                </button>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowAddToProjectModal(true)}
@@ -1613,7 +1635,7 @@ export default function ContentLibrary() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto">
             <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Upload Content</h2>
-              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setSelectedFilePreview(null); }} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setSelectedFilePreview(null); }} className="p-3 hover:bg-gray-100 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>

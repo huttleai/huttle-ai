@@ -250,7 +250,6 @@ export function BrandProvider({ children }) {
 
   // Force reload brand data from Supabase (useful after onboarding)
   const refreshBrandData = () => {
-    console.log('🔄 [Brand] Forcing brand data reload');
     setReloadTrigger(prev => prev + 1);
   };
 

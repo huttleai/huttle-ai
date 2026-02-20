@@ -245,7 +245,6 @@ export default function Help() {
 
   const handleEmailSubmit = () => {
     // Here you would typically send to an email service or API
-    console.log('Email support request:', emailData);
     setEmailSubmitted(true);
     setTimeout(() => {
       setShowEmailModal(false);

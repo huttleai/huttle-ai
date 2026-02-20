@@ -53,8 +53,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Starting social media updates fetch...');
-    
     // Get current date for the prompt
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
@@ -199,8 +197,6 @@ ONLY include updates from: Facebook, Instagram, TikTok, X (Twitter), and YouTube
         };
       });
 
-    console.log(`Parsed ${filteredUpdates.length} updates from API`);
-
     // Clear old updates (older than 12 months) to keep database clean
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
@@ -224,8 +220,6 @@ ONLY include updates from: Facebook, Instagram, TikTok, X (Twitter), and YouTube
       console.error('Supabase insert error:', insertError);
       return res.status(500).json({ error: `Database error: ${insertError.message}` });
     }
-
-    console.log(`Successfully stored ${insertedData?.length || 0} updates in Supabase`);
 
     return res.status(200).json({
       success: true,

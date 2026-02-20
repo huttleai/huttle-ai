@@ -47,7 +47,6 @@ export function SubscriptionProvider({ children }) {
     }
     localStorage.setItem(DEMO_TIER_KEY, newTier);
     setUserTier(newTier);
-    console.log('🎭 Demo Mode: Tier changed to', newTier);
     return true;
   }, [skipAuth]);
 
@@ -59,7 +58,6 @@ export function SubscriptionProvider({ children }) {
       if (e.key === DEMO_TIER_KEY && e.newValue) {
         if (Object.values(TIERS).includes(e.newValue)) {
           setUserTier(e.newValue);
-          console.log('🎭 Demo Mode: Tier synced to', e.newValue);
         }
       }
     };
@@ -77,8 +75,6 @@ export function SubscriptionProvider({ children }) {
     if (userId) {
       refreshStorageUsage();
     }
-    
-    console.log('🚀 Founders Only: All users set to Founders Club tier');
   }, [userId]);
 
   const loadUserTier = async () => {

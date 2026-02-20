@@ -362,7 +362,6 @@ export default function OnboardingQuiz({ onComplete }) {
       }
 
       const userId = userData.user.id;
-      console.log('Saving profile for user:', userId);
 
       // Use formatEnumLabel to convert snake_case enum values to human-readable labels
       const formatArray = (arr) => Array.isArray(arr) ? [...new Set(arr)].map(formatEnumLabel) : arr;
@@ -394,8 +393,6 @@ export default function OnboardingQuiz({ onComplete }) {
         onboarding_step: totalSteps
       };
 
-      console.log('Saving profile data:', profileData);
-
       const { data: profileResult, error: saveError } = await supabase
         .from('user_profile')
         .upsert(profileData, {
@@ -408,8 +405,6 @@ export default function OnboardingQuiz({ onComplete }) {
         console.error('Profile save error:', saveError);
         throw saveError;
       }
-
-      console.log('Profile saved successfully:', profileResult);
 
       // Update local brand context with all quiz data
       updateBrandData({

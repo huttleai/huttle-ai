@@ -27,7 +27,7 @@ import {
   getCTAMocks, 
   getContentScoreMock,
   getVisualIdeaMocks 
-} from './demoMockData';
+} from '../data/demo/demoMockData';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -79,7 +79,6 @@ async function callGrokAPI(messages, temperature = 0.7) {
 export async function generateTrendIdeas(brandData, trendTopic) {
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock trend ideas');
     await simulateDelay(1000, 2000);
     const mockIdeas = [
       `1. Create a "Day in the Life" fitness routine video featuring ${trendTopic}. Show real, relatable moments that resonate with your audience.`,
@@ -129,7 +128,6 @@ Number them 1-5 with brief descriptions.`
     console.error('Grok API Error:', error);
     
     // Fallback to demo data on error
-    console.log('[Fallback] Using mock trend ideas due to API error');
     await simulateDelay(500, 800);
     const mockIdeas = [
       `1. Create a "Day in the Life" fitness routine video featuring ${trendTopic}. Show real, relatable moments.`,
@@ -150,7 +148,6 @@ Number them 1-5 with brief descriptions.`
 export async function generateCaption(contentData, brandData) {
   // Check if demo mode is enabled AND no real topic provided - return mock data
   if (isDemoMode() && !contentData.topic?.trim()) {
-    console.log('[Demo Mode] Generating mock captions (no topic provided)');
     await simulateDelay(1000, 2000);
     const length = contentData.length || 'medium';
     const mockCaptions = getCaptionMocks(length, 4);
@@ -250,7 +247,6 @@ Number them 1-4. Each caption should have a different hook approach.`
 export async function scoreContentQuality(content, brandData = null) {
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock content score');
     await simulateDelay(800, 1500);
     const mockScore = getContentScoreMock(content);
     return {
@@ -337,7 +333,6 @@ Provide specific, actionable improvement suggestions.`
     console.error('Grok API Error:', error);
     
     // Fallback to demo data on error
-    console.log('[Fallback] Using mock content score due to API error');
     await simulateDelay(500, 800);
     const mockScore = getContentScoreMock(content);
     return {
@@ -394,7 +389,6 @@ Make sure all content aligns with the brand voice and appeals to the target audi
 export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram') {
   // Check if demo mode is enabled AND no real input - return mock data
   if (isDemoMode() && !input?.trim()) {
-    console.log('[Demo Mode] Generating mock hooks (no input provided)');
     await simulateDelay(800, 1500);
     const mockHooks = getHookMocks(theme, 4);
     return {
@@ -645,7 +639,6 @@ IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Use pl
 export async function generateCTAs(goal, brandData, platform = 'instagram') {
   // Check if demo mode is enabled AND no real goal - return mock data
   if (isDemoMode() && !goal?.trim()) {
-    console.log('[Demo Mode] Generating mock CTAs (no goal provided)');
     await simulateDelay(800, 1500);
     const mockCTAs = getCTAMocks(goal, 5);
     return {
@@ -725,7 +718,6 @@ Number them 1-5. Include a brief explanation of why each CTA works for ${platfor
 export async function generateHashtags(input, brandData, platform = 'instagram') {
   // Check if demo mode is enabled AND no real input - return mock data
   if (isDemoMode() && !input?.trim()) {
-    console.log('[Demo Mode] Generating mock hashtags (no input provided)');
     await simulateDelay(800, 1500);
     const hashtagGuidelines = getHashtagGuidelines(platform);
     const hashtagCount = hashtagGuidelines?.max || 10;
@@ -963,7 +955,6 @@ Return ONLY the polished caption with hashtags, no explanations.`
 export async function generateCaptionVariations(originalCaption, brandData, count = 3) {
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
-    console.log('[Demo Mode] Generating mock caption variations');
     await simulateDelay(800, 1500);
     const mockVariations = [
       {
@@ -1046,7 +1037,6 @@ etc.`
     console.error('Grok API Error:', error);
     
     // Fallback to demo data on error
-    console.log('[Fallback] Using mock caption variations due to API error');
     await simulateDelay(500, 800);
     const mockVariations = [
       {
@@ -1275,7 +1265,6 @@ Hashtags: [platform-appropriate hashtags]
 export async function generateVisualIdeas(prompt, brandData, platform = 'instagram', mediaType = 'all') {
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
-    console.log(`[Demo Mode] Generating mock ${mediaType} ideas`);
     await simulateDelay(1000, 2000);
     const mockIdeas = getVisualIdeaMocks(platform, 4, mediaType);
     return {
@@ -1363,7 +1352,6 @@ Number them 1-4.`
     console.error('Grok API Error:', error);
     
     // Fallback to demo data on error
-    console.log(`[Fallback] Using mock ${mediaType} ideas due to API error`);
     await simulateDelay(500, 1000);
     const mockIdeas = getVisualIdeaMocks(platform, 4, mediaType);
     return {

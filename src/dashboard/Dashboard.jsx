@@ -56,15 +56,6 @@ function AppContent({ secureAccountMode = false }) {
   // Generate contextual notifications (onboarding nudges, post reminders, etc.)
   useNotificationGenerator();
 
-  // Debug logging for onboarding gatekeeper
-  console.log('🚦 [Dashboard] Gatekeeper check:', { 
-    user: !!user, 
-    loading, 
-    needsOnboarding, 
-    profileChecked,
-    userEmail: user?.email 
-  });
-
   // Show loading state while checking auth OR while profile is being checked
   // CRITICAL: Wait for BOTH auth loading AND profile check to complete
   // RACE CONDITION FIX: Always wait for loading to finish before making decisions
@@ -91,12 +82,8 @@ function AppContent({ secureAccountMode = false }) {
   // so Magic Link sessions have time to establish before we check user state
   if (secureAccountMode) {
     if (!user) {
-      // Not logged in (invalid/expired invite link) -> redirect to login
-      console.log('🔒 [Secure Account] No user found after loading complete, redirecting to login');
       return <Navigate to="/dashboard/login" replace />;
     }
-    // User is authenticated via invite link -> show password setup form
-    console.log('🔒 [Secure Account] User authenticated, showing password setup');
     return <SecureAccount />;
   }
 
@@ -105,7 +92,6 @@ function AppContent({ secureAccountMode = false }) {
     // GATEKEEPER: Force redirect to onboarding if user hasn't completed it
     // This check runs AFTER profileChecked is true, so we know the profile status
     if (needsOnboarding) {
-      console.log('🚨 [Dashboard] GATEKEEPER: Redirecting to onboarding quiz');
       return <OnboardingQuiz onComplete={completeOnboarding} />;
     }
 

@@ -133,124 +133,7 @@ const OBJECTIVES = [
  */
 const isVideoContent = (postType) => VIDEO_CONTENT_TYPES.includes(postType);
 
-/**
- * Mock blueprint generator - simulates AI response
- * Adapts output based on whether content is video or text/image based
- */
-const generateMockBlueprint = (platform, postType, topic) => {
-  const isVideo = isVideoContent(postType);
-  
-  // Video content blueprint (Script + Visual)
-  const videoDirectorsCut = [
-    {
-      step: 1,
-      title: 'The Hook',
-      script: `"Stop scrolling if you want to know the truth about ${topic}..."`,
-      visual: 'Close-up face shot, slight zoom-in effect. Text overlay: "THE TRUTH" in bold Impact font.'
-    },
-    {
-      step: 2,
-      title: 'The Problem',
-      script: `"Everyone's been doing ${topic} wrong, and it's costing them thousands."`,
-      visual: 'Split screen: Left shows common mistake, Right shows your face reacting with disbelief.'
-    },
-    {
-      step: 3,
-      title: 'The Revelation',
-      script: '"Here\'s what the top 1% actually do differently..."',
-      visual: 'B-roll of success imagery. Quick cuts. Text: "THE SECRET" with reveal animation.'
-    },
-    {
-      step: 4,
-      title: 'The Value Drop',
-      script: `"The key is [specific tip about ${topic}]. Most people skip this step entirely."`,
-      visual: 'Screen recording or demonstration. Arrow annotations pointing to key elements.'
-    },
-    {
-      step: 5,
-      title: 'The CTA',
-      script: '"Follow for more, and drop a 🔥 if this helped!"',
-      visual: 'Return to face. Point at camera. On-screen: Follow button animation + comment prompt.'
-    }
-  ];
-
-  // Non-video content blueprint (Text + Visual Suggestion)
-  const textDirectorsCut = [
-    {
-      step: 1,
-      title: 'Opening Line',
-      text: `The truth about ${topic} that nobody wants to talk about 👇`,
-      visualSuggestion: 'Bold headline graphic with contrasting colors. Use a pattern interrupt image or eye-catching statistic.'
-    },
-    {
-      step: 2,
-      title: 'The Problem',
-      text: `Most people approach ${topic} completely wrong. They focus on [common mistake] when they should be doing [better approach].`,
-      visualSuggestion: 'Before/after comparison graphic or a "myth vs reality" split image.'
-    },
-    {
-      step: 3,
-      title: 'The Insight',
-      text: `Here's what the top 1% understand: [Key insight about ${topic}]. This single shift changes everything.`,
-      visualSuggestion: 'Clean infographic or quote card with your key insight. Use brand colors.'
-    },
-    {
-      step: 4,
-      title: 'The Value',
-      text: `3 ways to apply this today:\n\n1. [Actionable tip]\n2. [Actionable tip]\n3. [Actionable tip]`,
-      visualSuggestion: 'Numbered list graphic or carousel slide with icons for each point.'
-    },
-    {
-      step: 5,
-      title: 'The CTA',
-      text: `Save this for later 🔖\n\nFollow @[handle] for more ${topic} insights.\n\nDrop a "🔥" if this helped!`,
-      visualSuggestion: 'Call-to-action graphic with your profile handle and a clear next step.'
-    }
-  ];
-
-  return {
-    isVideoContent: isVideo,
-    directorsCut: isVideo ? videoDirectorsCut : textDirectorsCut,
-    seoStrategy: {
-      visualKeywords: [
-        `${topic.split(' ')[0]} hack`,
-        'game changer',
-        isVideo ? 'watch this' : 'read this',
-        'secret revealed'
-      ],
-      spokenHooks: isVideo ? [
-        'Stop scrolling',
-        'Nobody talks about this',
-        'Here\'s the truth',
-        'You need to know this'
-      ] : [
-        'The truth about',
-        'Nobody talks about',
-        'Here\'s what works',
-        'Save this for later'
-      ],
-      captionKeywords: [
-        `#${topic.replace(/\s+/g, '').toLowerCase()}`,
-        `#${platform.toLowerCase()}tips`,
-        '#viralcontent',
-        '#growthhacks',
-        '#contentcreator'
-      ]
-    },
-    audioVibe: isVideo ? {
-      mood: platform === 'TikTok' || platform === 'Instagram' 
-        ? 'Trending Lo-Fi Beat or Phonk Drop' 
-        : platform === 'YouTube' 
-          ? 'Cinematic Build-Up' 
-          : 'Clean & Professional',
-      bpm: platform === 'TikTok' ? '120-140' : '90-110',
-      suggestion: platform === 'TikTok' 
-        ? 'Use trending sounds that match this energy for maximum reach' 
-        : 'Original audio performs best on this platform'
-    } : null,
-    viralScore: Math.floor(Math.random() * 20) + 75
-  };
-};
+// TODO: Update Grok API credentials in n8n workflow dashboard — current creds returning 403 Forbidden
 
 /**
  * Adapter function to translate n8n response formats into the existing state structure.
@@ -272,8 +155,6 @@ const generateMockBlueprint = (platform, postType, topic) => {
 const adaptBlueprintResponse = (data) => {
   let directorsCut = [];
   let isVideo = false;
-
-  console.log('[Blueprint Adapter] Input data type:', typeof data, '| Keys:', data ? Object.keys(data) : 'null');
 
   // Handle nested response structures — try many common wrappers
   let blueprintData = null;
@@ -300,8 +181,6 @@ const adaptBlueprintResponse = (data) => {
       blueprintData = null; // Let the format-specific handlers below take over
     }
   }
-
-  console.log('[Blueprint Adapter] Resolved blueprintData:', blueprintData ? Object.keys(blueprintData) : 'null (will try format-specific handlers)');
 
   // 0a. NEW: Nested blueprint format: { blueprint: { viral_score, hooks, content_script, seo_keywords, suggested_hashtags } }
   if (blueprintData && (blueprintData.hooks || blueprintData.content_script || blueprintData.seo_keywords || blueprintData.suggested_hashtags)) {
@@ -544,7 +423,6 @@ const adaptBlueprintResponse = (data) => {
         visual: '',
         visualSuggestion: ''
       }];
-      console.log('[Blueprint Adapter] Text fallback applied, length:', fallbackText.length);
     } else {
       console.error('[Blueprint Adapter] No usable content found in response. Full data:', JSON.stringify(data).substring(0, 500));
     }
@@ -556,89 +434,6 @@ const adaptBlueprintResponse = (data) => {
     viralScore: viralScore || 85,
     audioVibe,
     seoStrategy
-  };
-};
-
-// Mock fitness blueprint for marketing demo
-const generateFitnessMockBlueprint = () => {
-  return {
-    isVideoContent: true,
-    directorsCut: [
-      {
-        step: 1,
-        title: 'The Hook',
-        script: '"If you\'re still doing cardio for fat loss in 2026, you\'re wasting your time. Here\'s why..."',
-        visual: 'Intense close-up of your face with gym background slightly out of focus. Quick zoom on the words "STOP CARDIO" overlaid in bold red Impact font. Neon gym lights add drama.'
-      },
-      {
-        step: 2,
-        title: 'The Problem',
-        script: '"Most gym-goers spend 45 minutes on the treadmill thinking they\'re burning fat. But here\'s the truth: they\'re actually losing muscle and slowing down their metabolism."',
-        visual: 'B-roll split screen: Left shows someone exhausted on treadmill, Right shows your face explaining with genuine concern. Use slow-motion effect on treadmill footage. Add text: "Muscle Loss = Slower Metabolism"'
-      },
-      {
-        step: 3,
-        title: 'The Science',
-        script: '"Research shows that strength training with progressive overload burns more calories for up to 48 hours AFTER your workout. That\'s called EPOC - and cardio doesn\'t touch it."',
-        visual: 'Quick cuts of explosive strength training movements: deadlifts, squats, bench press. Use dynamic angles and slow-motion on the concentric phase. Overlay text: "EPOC Effect: 48hr Fat Burn 🔥"'
-      },
-      {
-        step: 4,
-        title: 'The Solution',
-        script: '"Here\'s the game plan: 3-4 days strength training, 10-15 minutes HIIT max. Build muscle, keep your metabolism high, and actually enjoy your workouts. That\'s how you transform."',
-        visual: 'Show yourself demonstrating a compound movement with perfect form. Cut to energetic HIIT sequence. End with before/after transformation photo with arrow animation. Text overlay: "The Real Formula ⚡"'
-      },
-      {
-        step: 5,
-        title: 'The CTA',
-        script: '"Follow for more evidence-based fitness truth. Drop a 💪 if you\'re ready to ditch the treadmill and build real strength!"',
-        visual: 'Return to face cam, point at camera with confident energy. Animate follow button bouncing in corner. Show comment section with fire emojis. End with branded gym logo fade.'
-      }
-    ],
-    seoStrategy: {
-      visualKeywords: [
-        'gym transformation',
-        'strength training benefits',
-        'fat loss science',
-        'muscle building tips',
-        'EPOC effect',
-        'cardio vs weights'
-      ],
-      spokenHooks: [
-        'Stop doing cardio',
-        'The truth about fat loss',
-        'What the fitness industry won\'t tell you',
-        'The science behind muscle gain',
-        'Evidence-based training'
-      ],
-      captionKeywords: [
-        '#gymtok',
-        '#fitnesstips',
-        '#strengthtraining',
-        '#fatloss',
-        '#musclebuilding',
-        '#gymmotivation',
-        '#fitnesstransformation',
-        '#sciencebasedfitness',
-        '#gymlife',
-        '#workout',
-        '#personaltrainer',
-        '#fitfam'
-      ]
-    },
-    audioVibe: {
-      mood: 'High-Energy Phonk with Heavy Bass Drops',
-      bpm: '140-160',
-      suggestion: 'Use trending gym motivation sounds from TikTok - Phonk beats perform incredibly well for fitness content. Look for "Gym Phonk" or "Aggressive Workout Music" in your audio library.'
-    },
-    viralScore: 92,
-    hooks: [
-      'If you\'re still doing cardio for fat loss in 2026, you\'re wasting your time...',
-      'The fitness industry doesn\'t want you to know this about "fat burning zones"',
-      'Why bodybuilders never do hours of cardio (and you shouldn\'t either)',
-      'I stopped doing cardio 6 months ago. Here\'s what happened to my body...',
-      'POV: You just learned that cardio is sabotaging your transformation'
-    ]
   };
 };
 
@@ -781,7 +576,6 @@ export default function ViralBlueprint() {
       // Always try the Vercel proxy first (it forwards to n8n webhook server-side).
       // The proxy handles "not configured" with a clear error response.
       // Fallback to mock generator only on proxy failure.
-      console.log('[Viral Blueprint] Using Vercel proxy to reach n8n workflow');
 
       // Build payload matching what the proxy expects
       const payload = {
@@ -802,11 +596,6 @@ export default function ViralBlueprint() {
         },
       };
 
-      console.log('[N8N] ====== WEBHOOK REQUEST DEBUG ======');
-      console.log('[N8N] Using proxy endpoint:', N8N_WEBHOOK_URL);
-      console.log('[N8N] Blueprint Payload:', JSON.stringify(payload, null, 2));
-      console.log('[N8N] ====================================');
-
       // Get auth token for the proxy
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
@@ -820,7 +609,6 @@ export default function ViralBlueprint() {
 
       let response;
       try {
-        console.log('[N8N] Making fetch request to:', N8N_WEBHOOK_URL);
         response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
@@ -832,7 +620,6 @@ export default function ViralBlueprint() {
           signal: controller.signal,
           mode: 'cors', // Explicitly set CORS mode
         });
-        console.log('[N8N] Fetch completed, status:', response.status, response.statusText);
       } catch (fetchError) {
         clearTimeout(timeoutId);
         console.error('[N8N] ====== FETCH ERROR ======');
@@ -857,8 +644,6 @@ export default function ViralBlueprint() {
 
       clearTimeout(timeoutId);
 
-      console.log('[N8N] Response status:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'No error details');
         console.error('[N8N] HTTP Error:', {
@@ -873,20 +658,11 @@ export default function ViralBlueprint() {
       let responseData;
       try {
         const rawText = await response.text();
-        console.log('[N8N] Raw response:', rawText.substring(0, 500));
         responseData = rawText ? JSON.parse(rawText) : {};
-        console.log('[N8N] Parsed response structure:', Object.keys(responseData));
       } catch (parseError) {
         console.error('[N8N] JSON Parse Error:', parseError);
         throw new Error('INVALID_JSON');
       }
-
-      console.log('[N8N] ====== RESPONSE PARSING DEBUG ======');
-      console.log('[N8N] Full response keys:', Object.keys(responseData));
-      console.log('[N8N] Has response.data.blueprint:', !!responseData?.data?.blueprint);
-      console.log('[N8N] Has response.blueprint:', !!responseData?.blueprint);
-      console.log('[N8N] Full response structure:', JSON.stringify(responseData, null, 2).substring(0, 1000));
-      console.log('[N8N] ====================================');
 
       // Try multiple candidate payload layers so nested useful content doesn't fail hard.
       const responseCandidates = [
@@ -926,14 +702,6 @@ export default function ViralBlueprint() {
         };
       }
 
-      console.log('[N8N] Adapted blueprint:', {
-        isVideoContent: adaptedBlueprint?.isVideoContent,
-        directorsCutLength: adaptedBlueprint?.directorsCut?.length,
-        viralScore: adaptedBlueprint?.viralScore,
-        hasAudioVibe: !!adaptedBlueprint?.audioVibe,
-        seoKeywordsCount: adaptedBlueprint?.seoStrategy?.visualKeywords?.length
-      });
-
       // Validate that the adapter produced usable content
       if (!adaptedBlueprint?.directorsCut || adaptedBlueprint.directorsCut.length === 0) {
         console.error('[N8N] Adapter produced empty directorsCut. Raw response:', JSON.stringify(responseData).substring(0, 1000));
@@ -970,8 +738,6 @@ export default function ViralBlueprint() {
       setShowAllVisualKeywords(false);
       setShowAllCaptionKeywords(false);
 
-      console.log('[N8N] Blueprint successfully adapted and mapped to state');
-
       // Update usage
       const newUsage = usageCount + 1;
       setUsageCount(newUsage);
@@ -991,39 +757,100 @@ export default function ViralBlueprint() {
         stack: error.stack,
       });
 
-      // Determine specific error message based on error type
-      let errorMessage = 'We could not generate your blueprint right now. Please try again.';
+      let errorMessage = "We're having trouble generating your blueprint. Please try again in a moment.";
       
       if (error.message === 'REQUEST_TIMEOUT') {
         errorMessage = 'This request is taking longer than expected. Please try again in a moment.';
-        console.error('[N8N] TIMEOUT: Workflow exceeded 120s limit');
-      } else if (error.message === 'INVALID_JSON') {
+      } else if (error.message === 'INVALID_JSON' || error.message === 'INVALID_BLUEPRINT_STRUCTURE') {
         errorMessage = 'We received an unexpected response. Please try again.';
-        console.error('[N8N] PARSE ERROR: n8n returned non-JSON response');
-      } else if (error.message === 'INVALID_BLUEPRINT_STRUCTURE') {
-        errorMessage = 'We could not process the generated blueprint. Please try again.';
-        console.error('[N8N] STRUCTURE ERROR: Blueprint data is missing or malformed');
-      } else if (error.message?.startsWith('HTTP_ERROR')) {
-        errorMessage = 'The generation service is temporarily unavailable. Please try again.';
-        console.error('[N8N] HTTP ERROR: n8n returned error status');
-      } else if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
-        errorMessage = 'We could not connect to the generation service. Please try again.';
-        console.error('[N8N] CORS/NETWORK ERROR: Cannot reach n8n webhook');
       }
 
       showToast(errorMessage, 'error');
       
-      // Fallback: use mock generator with user's topic so they still get a result
+      // Fallback: call Grok API directly via Vercel function
       if (topic.trim()) {
-        console.log('[Viral Blueprint] Falling back to mock generator after error');
-        const fallbackBlueprint = generateMockBlueprint(selectedPlatform, selectedPostType, topic);
-        setGeneratedBlueprint(fallbackBlueprint);
-        setExpandedBlueprintSteps({ 0: true });
-        setShowAllHooks(false);
-        setShowAllVisualKeywords(false);
-        setShowAllCaptionKeywords(false);
-        setCurrentView('results');
-        showToast('Generated with fallback template. Results may be less tailored.', 'info');
+        try {
+          const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+          const fallbackToken = fallbackSession?.access_token;
+          const isVideo = isVideoContent(selectedPostType);
+
+          const grokPrompt = `You are a viral content strategist. Generate a detailed viral blueprint for the following:
+
+Topic: ${topic.trim()}
+Platform: ${selectedPlatform}
+Post Type: ${selectedPostType}
+Objective: ${objective}
+Target Audience: ${targetAudience.trim() || 'general audience'}
+Brand Voice: ${brandProfile?.brandVoice || 'authentic'}
+
+Return ONLY valid JSON with this exact structure:
+{
+  "blueprint": {
+    "viral_score": <number 70-95>,
+    "hooks": ["hook1", "hook2", "hook3"],
+    "content_script": "<${isVideo ? 'Full video script with timing and visual directions' : 'Full post content with formatting'}>",
+    "seo_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+    "suggested_hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]${isVideo ? `,
+    "audio_vibe": {
+      "mood": "<music mood description>",
+      "bpm": "<bpm range>",
+      "suggestion": "<audio suggestion>"
+    }` : ''}
+  }
+}
+
+Make the content specific, actionable, and optimized for ${selectedPlatform}. No markdown fences, just raw JSON.`;
+
+          const grokResponse = await fetch('/api/ai/grok', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(fallbackToken ? { 'Authorization': `Bearer ${fallbackToken}` } : {}),
+            },
+            body: JSON.stringify({
+              model: 'grok-3-fast',
+              temperature: 0.7,
+              messages: [
+                { role: 'system', content: 'You are a viral content strategist. Return only valid JSON.' },
+                { role: 'user', content: grokPrompt }
+              ]
+            }),
+          });
+
+          if (grokResponse.ok) {
+            const grokData = await grokResponse.json();
+            let parsed = null;
+            try {
+              const raw = grokData.content || '';
+              const jsonMatch = raw.match(/\{[\s\S]*\}/);
+              if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+            } catch { /* parse failed */ }
+
+            if (parsed) {
+              const adapted = adaptBlueprintResponse(parsed);
+              if (adapted?.directorsCut?.length > 0) {
+                const expectsVideo = isVideoContent(selectedPostType);
+                setGeneratedBlueprint({
+                  isVideoContent: typeof adapted.isVideoContent === 'boolean' ? adapted.isVideoContent : expectsVideo,
+                  directorsCut: adapted.directorsCut,
+                  seoStrategy: adapted.seoStrategy || { visualKeywords: [], spokenHooks: [], captionKeywords: [] },
+                  audioVibe: adapted.audioVibe || null,
+                  viralScore: (Number(adapted.viralScore) > 0) ? Number(adapted.viralScore) : 85,
+                  hooks: adapted.hooks || [],
+                });
+                setExpandedBlueprintSteps({ 0: true });
+                setShowAllHooks(false);
+                setShowAllVisualKeywords(false);
+                setShowAllCaptionKeywords(false);
+                setCurrentView('results');
+                showToast('Blueprint generated via direct AI.', 'success');
+              }
+            }
+          }
+        } catch (fallbackError) {
+          // Both n8n and direct Grok failed — show error, never mock data
+          showToast("We're having trouble generating your blueprint. Please try again in a moment.", 'error');
+        }
       }
     } finally {
       // Always stop loading spinner
@@ -1087,7 +914,7 @@ export default function ViralBlueprint() {
                 </div>
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-3 mb-1 flex-wrap">
                   <h1 className="text-3xl md:text-4xl font-display font-bold text-gray-900 tracking-tight">
                     Viral Blueprint
                   </h1>

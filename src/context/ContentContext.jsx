@@ -11,7 +11,7 @@ import {
   uploadFileToStorage,
   getSignedUrl,
 } from '../config/supabase';
-import { mockScheduledPosts } from '../data/mockData';
+import { mockScheduledPosts } from '../data/demo/mockData';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 
 export const ContentContext = createContext();
@@ -230,12 +230,7 @@ export function ContentProvider({ children }) {
         autoSaved: true,
       },
     }).then(result => {
-      if (result.success) {
-        console.log('[ContentContext] Auto-saved media to library:', fileName);
-      } else if (result.error?.includes('duplicate') || result.error?.includes('unique')) {
-        // Already exists — that's fine, skip silently
-        console.log('[ContentContext] Media already in library, skipping:', fileName);
-      } else {
+      if (!result.success && !result.error?.includes('duplicate') && !result.error?.includes('unique')) {
         console.warn('[ContentContext] Failed to auto-save media to library:', result.error);
       }
     }).catch(err => {

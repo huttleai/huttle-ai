@@ -9,7 +9,47 @@ import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
-import { mockRepurposerExamples } from '../data/mockData';
+const REPURPOSER_EXAMPLES = [
+  {
+    id: 'ex-001',
+    originalContent: 'YouTube Video: "10 Tips for Growing Your Audience"',
+    format: 'Video to Text',
+    sourcePlatform: 'YouTube',
+    targetPlatform: 'X (Twitter)',
+    outputType: 'Thread (5 tweets)',
+    repurposedContent: {
+      content: '1/ Want to grow your audience faster? Here are 10 tips I\'ve learned from scaling multiple brands... 🧵👇',
+      hashtags: '#AudienceGrowth #ContentStrategy #CreatorTips',
+      hooks: ['Most creators fail at this one thing.', 'Your content isn\'t the problem — your strategy is.']
+    }
+  },
+  {
+    id: 'ex-002',
+    originalContent: 'Instagram Post: "5 Productivity Hacks That Changed My Business"',
+    format: 'Text to Video',
+    sourcePlatform: 'Instagram',
+    targetPlatform: 'TikTok',
+    outputType: 'Video Script',
+    repurposedContent: {
+      content: '(Hook: Stop wasting time on busy work!) Here are 5 productivity hacks that actually move the needle for creators. Number 3 is a game-changer...',
+      hashtags: '#ProductivityHacks #CreatorLife #WorkSmarter',
+      hooks: ['You\'re wasting 3 hours a day. Here\'s the fix.', 'This one habit doubled my output.']
+    }
+  },
+  {
+    id: 'ex-003',
+    originalContent: 'Blog Post: "The Ultimate Guide to Content Repurposing"',
+    format: 'Long-form to Carousel',
+    sourcePlatform: 'Blog',
+    targetPlatform: 'Instagram',
+    outputType: 'Carousel (8 slides)',
+    repurposedContent: {
+      content: 'Slide 1: One piece of content can become 10. Here\'s how.\nSlide 2: Start with your best-performing content.\nSlide 3: Break it into platform-specific formats...',
+      hashtags: '#ContentRepurposing #SocialMediaStrategy #CreatorEconomy',
+      hooks: ['Stop creating from scratch every time.', 'Work smarter, not harder with your content.']
+    }
+  }
+];
 import { saveContentLibraryItem, supabase } from '../config/supabase';
 
 const FORMAT_OPTIONS = [
@@ -572,7 +612,7 @@ Format as JSON with fields: content, hashtags, tips, hooks`
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {mockRepurposerExamples.map((example) => (
+          {REPURPOSER_EXAMPLES.map((example) => (
             <div 
               key={example.id}
               className="p-4 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"

@@ -99,16 +99,10 @@ export default function Subscription() {
     if (planId === 'freemium') return;
     
     setLoading(planId);
-    console.log('🔵 [Subscription] Starting upgrade for plan:', planId);
-    console.log('🔵 [Subscription] Current tier:', userTier);
-    console.log('🔵 [Subscription] Target plan:', planId);
-    console.log('🔵 [Subscription] Billing cycle:', billingCycle);
-    console.log('🔵 [Subscription] User:', user?.email || 'Not logged in');
-    
+
     try {
       const result = await createCheckoutSession(planId, billingCycle);
-      console.log('🔵 [Subscription] Checkout result:', JSON.stringify(result));
-      
+
       // Handle demo mode response
       if (result.demo) {
         // Update tier in demo mode
@@ -131,7 +125,6 @@ export default function Subscription() {
       // If successful with URL, the redirect should happen in stripeAPI.js
       // Set a timeout to clear loading state if redirect doesn't happen
       if (result.success && result.url) {
-        console.log('✅ [Subscription] Redirect should happen to:', result.url);
         // Give 5 seconds for redirect to happen, then clear loading
         setTimeout(() => {
           console.warn('⚠️ [Subscription] Redirect timeout - clearing loading state');
@@ -235,13 +228,8 @@ export default function Subscription() {
       // For paid plan downgrades, use checkout
       setLoading(planId);
       try {
-        console.log('🔵 [Subscription] Starting downgrade for plan:', planId);
-        console.log('🔵 [Subscription] Current tier:', userTier);
-        console.log('🔵 [Subscription] Billing cycle:', billingCycle);
-        
         const result = await createCheckoutSession(planId, billingCycle);
-        console.log('🔵 [Subscription] Downgrade result:', result);
-        
+
         if (result.demo) {
           if (setDemoTier) {
             const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };

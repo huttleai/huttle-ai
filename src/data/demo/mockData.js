@@ -1,7 +1,7 @@
+// DEMO MODE ONLY — this file is never loaded in production
 /**
- * Mock Data for Huttle AI - Iron Peak Fitness
- * Provides realistic, "lived-in" data for development and testing.
- * Theme: Fitness Gym / Health & Wellness
+ * Mock Data for Huttle AI Demo Mode (Iron Peak Fitness)
+ * Only imported when VITE_SKIP_AUTH=true or VITE_DEMO_MODE=true.
  */
 
 // No icon imports needed - icons are handled by components

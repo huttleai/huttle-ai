@@ -146,6 +146,24 @@ export default function SmartCalendar() {
     }
   }, [location.state]);
 
+  // Auto-open composer when navigating from Content Library with prefillContent
+  useEffect(() => {
+    const prefill = location.state?.prefillContent;
+    if (!prefill) return;
+
+    setComposerDraft({
+      title: prefill.title || '',
+      caption: prefill.caption || '',
+      platforms: Array.isArray(prefill.platforms) ? prefill.platforms : [],
+      media: Array.isArray(prefill.media) ? prefill.media : [],
+    });
+    setPostToEdit(null);
+    setQuickAddDate(null);
+    setIsCreatePostOpen(true);
+
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.prefillContent]);
+
   // Persist status filter to localStorage
   useEffect(() => {
     localStorage.setItem('smartCalendarStatusFilter', statusFilter);
@@ -331,8 +349,6 @@ export default function SmartCalendar() {
   const draggedPostRef = useRef(null);
   
   const handleDragStart = useCallback((e, post) => {
-    console.log('Drag started for post:', post.title);
-    
     // Store in both state and ref for reliable access
     draggedPostRef.current = post;
     setDraggedPost(post);
@@ -344,7 +360,6 @@ export default function SmartCalendar() {
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    console.log('Drag ended');
     draggedPostRef.current = null;
     setDraggedPost(null);
     setDragOverDate(null);
@@ -354,15 +369,11 @@ export default function SmartCalendar() {
     e.preventDefault();
     e.stopPropagation();
     setDragOverDate(null);
-    
-    console.log('Drop event on date:', targetDateStr);
-    
+
     // Use ref for reliable access to dragged post
     const post = draggedPostRef.current;
-    console.log('Dragged post from ref:', post?.title);
-    
+
     if (!post) {
-      console.log('No post in ref, returning');
       return;
     }
     
@@ -577,14 +588,8 @@ export default function SmartCalendar() {
       <div
         key={post.id}
         draggable={true}
-        onDragStart={(e) => {
-          console.log('onDragStart fired for:', post.title);
-          handleDragStart(e, post);
-        }}
-        onDragEnd={(e) => {
-          console.log('onDragEnd fired');
-          handleDragEnd();
-        }}
+        onDragStart={(e) => handleDragStart(e, post)}
+        onDragEnd={handleDragEnd}
         onClick={(e) => {
           e.stopPropagation();
           if (!draggedPostRef.current) {
@@ -709,7 +714,6 @@ export default function SmartCalendar() {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
           if (dragOverDate !== dateStr) {
-            console.log('Drag over cell:', dateStr);
             setDragOverDate(dateStr);
           }
         }}
@@ -731,10 +735,7 @@ export default function SmartCalendar() {
             setDragOverDate(null);
           }
         }}
-        onDrop={(e) => {
-          console.log('onDrop fired for cell:', dateStr);
-          handleDrop(e, dateStr);
-        }}
+        onDrop={(e) => handleDrop(e, dateStr)}
         className={`
           relative min-h-[60px] md:min-h-[120px] border-r border-b border-gray-100 
           cursor-pointer group

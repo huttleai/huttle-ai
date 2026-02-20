@@ -4,10 +4,12 @@ import { validatePost, checkPlatformConnections } from '../utils/socialConnectio
 import { useNotifications } from '../context/NotificationContext';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function PostValidationAlert({ post, onFix }) {
   const { addConnectionWarning } = useNotifications();
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [connectionCheck, setConnectionCheck] = useState({ allConnected: true, unconnected: [] });
   
   const validation = validatePost(post);
@@ -74,7 +76,7 @@ export default function PostValidationAlert({ post, onFix }) {
               </p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => window.location.href = '/settings'}
+                  onClick={() => navigate('/dashboard/settings')}
                   className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all text-sm font-medium"
                 >
                   Connect Accounts

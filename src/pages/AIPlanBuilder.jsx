@@ -177,11 +177,24 @@ export default function AIPlanBuilder() {
     showToast(errorMessage || 'Failed to generate plan', 'error');
   };
 
-  // Subscribe to job updates via Supabase Realtime
+  // Subscribe to job updates via Supabase Realtime + fallback polling
   useEffect(() => {
     if (!currentJobId) return;
+    let resolved = false;
 
-    // Create realtime channel for this job
+    const resolveJob = (result) => {
+      if (resolved) return;
+      resolved = true;
+      handleJobComplete(result);
+    };
+
+    const rejectJob = (error) => {
+      if (resolved) return;
+      resolved = true;
+      handleJobFailed(error);
+    };
+
+    // Realtime subscription
     const channel = supabase
       .channel(`job:${currentJobId}`)
       .on(
@@ -196,12 +209,10 @@ export default function AIPlanBuilder() {
           const updatedJob = payload.new;
           setJobStatus(updatedJob.status);
           
-          if (updatedJob.status === 'completed' && updatedJob.result) {
-            handleJobComplete(updatedJob.result);
+          if ((updatedJob.status === 'completed' || updatedJob.status === 'complete') && updatedJob.result) {
+            resolveJob(updatedJob.result);
           } else if (updatedJob.status === 'failed') {
-            handleJobFailed(updatedJob.error);
-          } else if (updatedJob.status === 'running') {
-            // Keep the progress animation going
+            rejectJob(updatedJob.error);
           }
         }
       )
@@ -209,39 +220,36 @@ export default function AIPlanBuilder() {
 
     realtimeChannelRef.current = channel;
 
-    // Timeout protection: if no update after 60 seconds, start polling
-    const timeoutId = setTimeout(async () => {
+    // Fallback polling every 5 seconds (handles RLS blocking Realtime)
+    const pollInterval = setInterval(async () => {
+      if (resolved) return;
       try {
-        const { data: job, error } = await supabase
+        const { data: job } = await supabase
           .from('jobs')
-          .select('*')
+          .select('status, result, error')
           .eq('id', currentJobId)
           .single();
         
-        if (error) {
-          console.error('Timeout poll error:', error);
-          return;
-        }
+        if (!job) return;
         
-        if (job.status === 'completed' && job.result) {
-          handleJobComplete(job.result);
+        if ((job.status === 'completed' || job.status === 'complete') && job.result) {
+          resolveJob(job.result);
         } else if (job.status === 'failed') {
-          handleJobFailed(job.error);
+          rejectJob(job.error);
         }
-      } catch (err) {
-        console.error('Timeout poll failed:', err);
-      }
-    }, 60000);
+      } catch { /* polling error - will retry */ }
+    }, 5000);
 
-    // Absolute timeout so UI never gets stuck indefinitely.
-    const hardTimeoutId = setTimeout(() => {
-      handleJobFailed('Plan generation timed out. Please try again.');
-    }, 180000);
+    // Soft timeout at 5 minutes — show helpful message with retry
+    const softTimeoutId = setTimeout(() => {
+      if (resolved) return;
+      rejectJob('This is taking longer than expected. Your plan may still be generating — check back in a few minutes.');
+    }, 300000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearTimeout(timeoutId);
-      clearTimeout(hardTimeoutId);
+      clearInterval(pollInterval);
+      clearTimeout(softTimeoutId);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
@@ -298,14 +306,6 @@ export default function AIPlanBuilder() {
 
       setCurrentJobId(jobId);
 
-      console.log('[PlanBuilder] Job created successfully:', jobId);
-      console.log('[PlanBuilder] Form data:', {
-        contentGoal: selectedGoal,
-        timePeriod: String(selectedPeriod),
-        platformFocus: selectedPlatforms,
-        brandVoice: brandVoice
-      });
-
       // Step 2: Trigger n8n webhook with job_id AND form data (fire-and-forget with retry)
       const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
         contentGoal: selectedGoal,
@@ -316,9 +316,8 @@ export default function AIPlanBuilder() {
       
       if (!webhookSuccess) {
         console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);
-        
+
         // Fallback: generate plan using Grok API directly
-        console.log('[PlanBuilder] Falling back to Grok API for plan generation');
         try {
           const { generateContentPlan } = await import('../services/grokAPI');
           const grokResult = await generateContentPlan(

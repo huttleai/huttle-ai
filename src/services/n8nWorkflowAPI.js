@@ -97,11 +97,8 @@ async function getCurrentUserId() {
  * // Or: { success: false, useFallback: true, reason: 'Workflow not configured' }
  */
 export async function getTrendingNow({ niche, industry, platforms = [] }) {
-  console.log('[N8N_WORKFLOW] getTrendingNow called', { niche, industry, platforms });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.DASHBOARD_TRENDING)) {
-    console.log('[N8N_WORKFLOW] Dashboard trending workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -113,8 +110,6 @@ export async function getTrendingNow({ niche, industry, platforms = [] }) {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.DASHBOARD_TRENDING);
-    
-    console.log('[N8N_WORKFLOW] Calling dashboard trending webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -139,8 +134,6 @@ export async function getTrendingNow({ niche, industry, platforms = [] }) {
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Dashboard trending response received');
     
     return {
       success: true,
@@ -179,11 +172,8 @@ export async function getTrendingNow({ niche, industry, platforms = [] }) {
  * // Returns: { success: true, hashtags: [{ tag: '#beauty', score: '95%' }], source: 'n8n' }
  */
 export async function getHashtagsOfDay({ niche, industry, limit = 4 }) {
-  console.log('[N8N_WORKFLOW] getHashtagsOfDay called', { niche, industry, limit });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.DASHBOARD_HASHTAGS)) {
-    console.log('[N8N_WORKFLOW] Dashboard hashtags workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -195,8 +185,6 @@ export async function getHashtagsOfDay({ niche, industry, limit = 4 }) {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.DASHBOARD_HASHTAGS);
-    
-    console.log('[N8N_WORKFLOW] Calling dashboard hashtags webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -221,8 +209,6 @@ export async function getHashtagsOfDay({ niche, industry, limit = 4 }) {
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Dashboard hashtags response received');
     
     return {
       success: true,
@@ -272,11 +258,8 @@ export async function getHashtagsOfDay({ niche, industry, limit = 4 }) {
  * });
  */
 export async function generateAIPlan({ goal, period, platforms, niche, brandVoice, brandProfile }) {
-  console.log('[N8N_WORKFLOW] generateAIPlan called', { goal, period, platforms, niche });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.AI_PLAN_BUILDER)) {
-    console.log('[N8N_WORKFLOW] AI Plan Builder workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -288,8 +271,6 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.AI_PLAN_BUILDER);
-    
-    console.log('[N8N_WORKFLOW] Calling AI Plan Builder webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -317,8 +298,6 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] AI Plan Builder response received');
     
     return {
       success: true,
@@ -361,8 +340,6 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
  * @returns {Promise<Object>} Deep dive analysis or fallback indicator
  */
 export async function getTrendDeepDive({ trend, niche, platforms = [], brandData }) {
-  console.log('[N8N_WORKFLOW] getTrendDeepDive called', { trend, niche, platforms });
-
   try {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
@@ -446,11 +423,8 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
  * @returns {Promise<Object>} Trend forecast or fallback indicator
  */
 export async function getTrendForecast({ niche, timeframe = '7 days', brandData }) {
-  console.log('[N8N_WORKFLOW] getTrendForecast called', { niche, timeframe });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.TREND_FORECASTER)) {
-    console.log('[N8N_WORKFLOW] Trend Forecaster workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -462,8 +436,6 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.TREND_FORECASTER);
-    
-    console.log('[N8N_WORKFLOW] Calling Trend Forecaster webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -488,8 +460,6 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Trend Forecaster response received');
     
     return {
       success: true,
@@ -535,11 +505,8 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
  * @returns {Promise<Object>} Viral blueprint or fallback indicator
  */
 export async function generateViralBlueprint({ platform, postType, topic, voiceContext, brandProfile }) {
-  console.log('[N8N_WORKFLOW] generateViralBlueprint called', { platform, postType, topic, voiceContext });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT)) {
-    console.log('[N8N_WORKFLOW] Viral Blueprint workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -551,8 +518,6 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.VIRAL_BLUEPRINT);
-    
-    console.log('[N8N_WORKFLOW] Calling Viral Blueprint webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -579,8 +544,6 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Viral Blueprint response received');
     
     return {
       success: true,
@@ -623,11 +586,8 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
  * @returns {Promise<Object>} Social updates or fallback indicator
  */
 export async function getSocialUpdates({ limit = 12, platforms = [] } = {}) {
-  console.log('[N8N_WORKFLOW] getSocialUpdates called', { limit, platforms });
-  
   // Check if workflow is configured
   if (!isWorkflowConfigured(WORKFLOW_NAMES.SOCIAL_UPDATES)) {
-    console.log('[N8N_WORKFLOW] Social Updates workflow not configured, using fallback');
     return {
       success: false,
       useFallback: true,
@@ -639,8 +599,6 @@ export async function getSocialUpdates({ limit = 12, platforms = [] } = {}) {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
     const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.SOCIAL_UPDATES);
-    
-    console.log('[N8N_WORKFLOW] Calling Social Updates webhook:', webhookUrl);
     
     const response = await retryFetch(
       webhookUrl,
@@ -664,8 +622,6 @@ export async function getSocialUpdates({ limit = 12, platforms = [] } = {}) {
     }
     
     const data = await response.json();
-    
-    console.log('[N8N_WORKFLOW] Social Updates response received');
     
     return {
       success: true,

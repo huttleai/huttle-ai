@@ -40,12 +40,6 @@ function pickFirstDefined(...values) {
  */
 async function trackAIAnalytics(data) {
   // Temporarily disabled - don't block user flow
-  console.log('📊 [Analytics] Would track:', {
-    contentType: data.contentType,
-    platform: data.platform,
-    success: data.success,
-    responseTime: data.responseTime
-  });
   // Analytics will be re-enabled later
   return Promise.resolve();
 }
@@ -91,14 +85,6 @@ async function getAuthHeaders() {
 export async function generateWithN8n(payload) {
   const startTime = Date.now();
   
-  console.log('🎯 [Frontend] generateWithN8n called with payload:', {
-    hasUserId: !!payload.userId,
-    hasTopic: !!payload.topic,
-    contentType: payload.contentType,
-    platform: payload.platform,
-    topicPreview: payload.topic?.substring(0, 50)
-  });
-  
   // Validate required fields
   if (!payload.userId) {
     console.error('❌ [Frontend] User ID is missing');
@@ -118,12 +104,7 @@ export async function generateWithN8n(payload) {
   }
 
   try {
-    console.log('🔐 [Frontend] Getting auth headers...');
     const headers = await getAuthHeaders();
-    console.log('✅ [Frontend] Auth headers obtained:', {
-      hasContentType: !!headers['Content-Type'],
-      hasAuthorization: !!headers['Authorization']
-    });
     
     const requestBody = {
       userId: payload.userId,
@@ -135,12 +116,6 @@ export async function generateWithN8n(payload) {
       remixMode: payload.remixMode || null,
       additionalContext: payload.additionalContext || {}
     };
-    
-    console.log('📤 [Frontend] Making fetch request to:', N8N_PROXY_URL);
-    console.log('📤 [Frontend] Request body:', {
-      ...requestBody,
-      topic: requestBody.topic.substring(0, 50) + '...'
-    });
     
     // Make request to n8n via serverless proxy
     const response = await retryFetch(
@@ -154,11 +129,8 @@ export async function generateWithN8n(payload) {
         timeoutMs: API_TIMEOUTS.STANDARD,
       }
     );
-    
-    console.log('📥 [Frontend] Received response. Status:', response.status, 'OK:', response.ok);
 
     const responseTime = Date.now() - startTime;
-    console.log('⏱️ [Frontend] Response time:', responseTime, 'ms');
 
     if (!response.ok) {
       console.error('❌ [Frontend] Response not OK. Status:', response.status);
@@ -183,7 +155,6 @@ export async function generateWithN8n(payload) {
       throw new Error(errorMessage);
     }
 
-    console.log('✅ [Frontend] Response OK. Parsing JSON...');
     const result = await response.json();
     const normalizedContent = pickFirstDefined(
       result.content,
@@ -208,13 +179,6 @@ export async function generateWithN8n(payload) {
         errorType: 'INVALID_RESPONSE',
       };
     }
-
-    console.log('✅ [Frontend] Result parsed:', {
-      hasContent: !!normalizedContent,
-      contentLength: typeof normalizedContent === 'string' ? normalizedContent.length : 0,
-      hasHashtags: !!normalizedHashtags,
-      hasMetadata: !!result.metadata
-    });
     
     // Track success
     await trackAIAnalytics({
@@ -230,7 +194,6 @@ export async function generateWithN8n(payload) {
       }
     });
 
-    console.log('✅ [Frontend] Returning success result');
     return {
       success: true,
       content: normalizedContent,

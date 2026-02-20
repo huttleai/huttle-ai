@@ -235,7 +235,7 @@ export const WORKFLOW_FEATURES = [
     name: 'Dashboard - Trending Now',
     workflow: WORKFLOW_NAMES.DASHBOARD_TRENDING,
     description: 'Real-time trending topics for dashboard',
-    fallback: 'Mock trending data from mockData.js'
+    fallback: 'Cached dashboard data or Grok API direct call'
   },
   {
     name: 'Dashboard - Hashtags of the Day',

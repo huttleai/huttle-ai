@@ -24,7 +24,6 @@ export default function ProtectedRoute({ children }) {
 
   // Only redirect to login AFTER loading is complete and we confirm there's no user
   if (!user) {
-    console.log('🚫 [ProtectedRoute] No user found after loading, redirecting to login');
     return <Navigate to="/dashboard/login" replace />;
   }
 
