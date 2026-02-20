@@ -89,7 +89,7 @@ function PostMediaThumbnail({ media, getMediaUrl: getUrl, size = 'sm' }) {
       <div className={`${sizeClasses} relative bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0`}>
         <Video className={`${size === 'lg' ? 'w-8 h-8' : 'w-3.5 h-3.5'} text-white/70`} />
         {media.length > 1 && (
-          <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
+          <span className="absolute bottom-0.5 right-0.5 text-xs bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
         )}
       </div>
     );
@@ -99,7 +99,7 @@ function PostMediaThumbnail({ media, getMediaUrl: getUrl, size = 'sm' }) {
     <div className={`${sizeClasses} relative overflow-hidden flex-shrink-0`}>
       <img src={thumbUrl} alt="" className={`${sizeClasses} object-cover`} loading="lazy" />
       {media.length > 1 && (
-        <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
+        <span className="absolute bottom-0.5 right-0.5 text-xs bg-black/60 text-white px-1 rounded">+{media.length - 1}</span>
       )}
     </div>
   );
@@ -111,6 +111,7 @@ export default function SmartCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('week');
   const [selectedDay, setSelectedDay] = useState(null);
+  const [mobileWeekSelectedDate, setMobileWeekSelectedDate] = useState(new Date());
   const [selectedPost, setSelectedPost] = useState(null);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -285,6 +286,8 @@ export default function SmartCalendar() {
       newDate.setMonth(month + direction);
     } else if (view === 'week') {
       newDate.setDate(newDate.getDate() + (direction * 7));
+      // Keep mobile selected day in sync with the new week's start
+      setMobileWeekSelectedDate(new Date(newDate));
     } else if (view === 'day') {
       newDate.setDate(newDate.getDate() + direction);
     }
@@ -560,7 +563,7 @@ export default function SmartCalendar() {
     };
 
     return (
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[status] || styles.scheduled}`}>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${styles[status] || styles.scheduled}`}>
         {labels[status] || status}
       </span>
     );
@@ -609,7 +612,7 @@ export default function SmartCalendar() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
                 <Clock className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-gray-400`} />
-                <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-600`}>
+                <span className={`text-xs font-medium text-gray-600`}>
                   {formatTo12Hour(post.time)}
                 </span>
               </div>
@@ -632,7 +635,7 @@ export default function SmartCalendar() {
               {!compact && post.media && post.media.length > 0 && (
                 <PostMediaThumbnail media={post.media} getMediaUrl={getMediaUrl} size="sm" />
               )}
-              <h4 className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-800 truncate`}>
+              <h4 className={`text-xs font-medium text-gray-800 truncate`}>
                 {post.title}
               </h4>
             </div>
@@ -647,7 +650,7 @@ export default function SmartCalendar() {
                   ) : null;
                 })}
                 {post.platforms.length > (compact ? 2 : 3) && (
-                  <span className="text-[9px] text-gray-400 font-medium">
+                  <span className="text-xs text-gray-400 font-medium">
                     +{post.platforms.length - (compact ? 2 : 3)}
                   </span>
                 )}
@@ -660,31 +663,31 @@ export default function SmartCalendar() {
             <div className="absolute top-1 right-1 flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-md p-1 shadow-sm border border-gray-100 animate-fadeIn z-10">
               <button
                 onClick={(e) => { e.stopPropagation(); handleEditPost(post); }}
-                className="p-1 hover:bg-gray-50 rounded transition-colors"
+                className="p-2.5 hover:bg-gray-50 rounded transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
                 title="Edit"
               >
-                <Pencil className="w-3.5 h-3.5 text-huttle-primary" />
+                <Pencil className="w-4 h-4 text-huttle-primary" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleOpenPublishModal(post); }}
-                className="p-1 hover:bg-gray-50 rounded transition-colors"
+                className="p-2.5 hover:bg-gray-50 rounded transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
                 title="Ready to Post"
               >
-                <Upload className="w-3.5 h-3.5 text-huttle-primary" />
+                <Upload className="w-4 h-4 text-huttle-primary" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleCopy(post); }}
-                className="p-1 hover:bg-gray-50 rounded transition-colors"
+                className="p-2.5 hover:bg-gray-50 rounded transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
                 title="Copy"
               >
-                <Copy className="w-3.5 h-3.5 text-gray-500" />
+                <Copy className="w-4 h-4 text-gray-500" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeletePost(post); }}
-                className="p-1 hover:bg-red-50 rounded transition-colors"
+                className="p-2.5 hover:bg-red-50 rounded transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
                 title="Delete"
               >
-                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                <Trash2 className="w-4 h-4 text-red-500" />
               </button>
             </div>
           )}
@@ -733,7 +736,7 @@ export default function SmartCalendar() {
           handleDrop(e, dateStr);
         }}
         className={`
-          relative min-h-[100px] md:min-h-[120px] border-r border-b border-gray-100 
+          relative min-h-[60px] md:min-h-[120px] border-r border-b border-gray-100 
           cursor-pointer group
           ${isToday ? 'bg-huttle-50/20' : 'bg-white hover:bg-gray-50/50'}
           ${isDragOver ? 'bg-huttle-100 ring-2 ring-huttle-primary ring-inset' : ''}
@@ -766,7 +769,7 @@ export default function SmartCalendar() {
           {hasMultiplePosts && (
             <button 
               onClick={(e) => { e.stopPropagation(); handleDayClick(day, e); }}
-              className="w-full text-center text-[10px] font-medium text-gray-500 hover:text-gray-700 py-1 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+              className="w-full text-center text-xs font-medium text-gray-500 hover:text-gray-700 py-1 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
             >
               +{posts.length - 2} more
             </button>
@@ -908,7 +911,7 @@ export default function SmartCalendar() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => navigate_calendar(-1)}
-                  className="p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100"
+                  className="p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   <ChevronLeft className="w-5 h-5 text-gray-600" />
                 </button>
@@ -917,13 +920,13 @@ export default function SmartCalendar() {
                     setCurrentDate(new Date());
                     if (view === 'day') setView('week');
                   }}
-                  className="px-3 py-1.5 text-sm font-medium text-huttle-primary hover:bg-huttle-50 rounded-lg transition-colors"
+                  className="px-4 py-2.5 text-sm font-medium text-huttle-primary hover:bg-huttle-50 rounded-lg transition-colors min-h-[44px]"
                 >
                   Today
                 </button>
                 <button
                   onClick={() => navigate_calendar(1)}
-                  className="p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100"
+                  className="p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   <ChevronRight className="w-5 h-5 text-gray-600" />
                 </button>
@@ -950,8 +953,8 @@ export default function SmartCalendar() {
                 <div className="grid grid-cols-7 bg-gray-50/50 border-b border-gray-100">
                   {dayNames.map((day, i) => (
                     <div key={day} className="p-3 text-center">
-                      <span className="hidden md:inline text-[10px] font-bold tracking-widest text-gray-400 uppercase">{day}</span>
-                      <span className="md:hidden text-[10px] font-bold tracking-widest text-gray-400 uppercase">{dayNamesShort[i]}</span>
+                      <span className="hidden md:inline text-xs font-bold tracking-widest text-gray-400 uppercase">{day}</span>
+                      <span className="md:hidden text-xs font-bold tracking-widest text-gray-400 uppercase">{dayNamesShort[i]}</span>
                     </div>
                   ))}
                 </div>
@@ -960,7 +963,7 @@ export default function SmartCalendar() {
                 <div className="grid grid-cols-7">
                   {/* Empty cells for days before month starts */}
                   {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                    <div key={`empty-${i}`} className="min-h-[100px] md:min-h-[120px] bg-gray-50/30 border-r border-b border-gray-100" />
+                    <div key={`empty-${i}`} className="min-h-[60px] md:min-h-[120px] bg-gray-50/30 border-r border-b border-gray-100" />
                   ))}
                   
                   {/* Day cells */}
@@ -979,7 +982,62 @@ export default function SmartCalendar() {
             {/* Week View */}
             {view === 'week' && (
               <>
-                <div className="grid grid-cols-7 bg-gray-50/50 border-b border-gray-100">
+                {/* Mobile Week View — Day strip + single-day list */}
+                <div className="sm:hidden">
+                  {/* Horizontal day selector strip */}
+                  <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-100 bg-gray-50/50">
+                    {getWeekDays().map((date, i) => {
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      const isSelected = date.toDateString() === mobileWeekSelectedDate.toDateString();
+                      const dayPosts = getPostsForDate(date);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setMobileWeekSelectedDate(date)}
+                          className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-3 min-w-[48px] min-h-[72px] transition-colors ${
+                            isSelected
+                              ? 'bg-huttle-primary text-white'
+                              : isToday
+                              ? 'bg-huttle-50 text-huttle-primary'
+                              : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className="text-xs font-bold uppercase tracking-wider">
+                            {dayNamesShort[i]}
+                          </span>
+                          <span className={`text-lg font-bold leading-none ${isSelected ? 'text-white' : isToday ? 'text-huttle-primary' : 'text-gray-900'}`}>
+                            {date.getDate()}
+                          </span>
+                          {dayPosts.length > 0 && (
+                            <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-huttle-primary'}`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Selected day's posts */}
+                  <div className="p-4 space-y-3 min-h-[200px]">
+                    {(() => {
+                      const dayPosts = getPostsForDate(mobileWeekSelectedDate);
+                      const dayStr = `${mobileWeekSelectedDate.getFullYear()}-${String(mobileWeekSelectedDate.getMonth() + 1).padStart(2, '0')}-${String(mobileWeekSelectedDate.getDate()).padStart(2, '0')}`;
+                      if (dayPosts.length === 0) {
+                        return (
+                          <button
+                            onClick={() => { setQuickAddDate(dayStr); setIsCreatePostOpen(true); }}
+                            className="w-full py-12 border border-dashed border-gray-200 rounded-xl text-gray-400 hover:border-huttle-primary hover:text-huttle-primary hover:bg-huttle-50/30 transition-all flex flex-col items-center gap-2"
+                          >
+                            <Plus className="w-6 h-6" />
+                            <span className="text-sm font-medium">Add a post for this day</span>
+                          </button>
+                        );
+                      }
+                      return dayPosts.map(post => renderPostCard(post, false));
+                    })()}
+                  </div>
+                </div>
+
+                {/* Desktop Week View — 7-column grid */}
+                <div className="hidden sm:grid grid-cols-7 bg-gray-50/50 border-b border-gray-100">
                   {getWeekDays().map((date, i) => {
                     const isToday = date.toDateString() === new Date().toDateString();
                     return (
@@ -987,7 +1045,7 @@ export default function SmartCalendar() {
                         key={i}
                         className={`p-3 text-center border-r border-gray-100 last:border-r-0 ${isToday ? 'bg-huttle-50/30' : ''}`}
                       >
-                        <div className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">{dayNames[date.getDay()]}</div>
+                        <div className="text-xs font-bold tracking-widest text-gray-400 uppercase">{dayNames[date.getDay()]}</div>
                         <div className={`text-lg font-bold mt-1 ${isToday ? 'text-huttle-primary' : 'text-gray-900'}`}>
                           {date.getDate()}
                         </div>
@@ -995,7 +1053,7 @@ export default function SmartCalendar() {
                     );
                   })}
                 </div>
-                <div className="grid grid-cols-7 min-h-[400px] md:min-h-[500px]">
+                <div className="hidden sm:grid grid-cols-7 min-h-[400px] md:min-h-[500px]">
                   {getWeekDays().map((date, i) => {
                     const posts = getPostsForDate(date);
                     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

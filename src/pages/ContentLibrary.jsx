@@ -869,7 +869,7 @@ export default function ContentLibrary() {
             </div>
           </div>
           {item.size && (
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded font-medium">
+            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-xs rounded font-medium">
               {item.size}
             </div>
           )}
@@ -993,17 +993,17 @@ export default function ContentLibrary() {
                     <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 scale-90">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
-                        className="w-6 h-6 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-huttle-primary hover:border-huttle-primary shadow-sm"
+                        className="w-9 h-9 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-huttle-primary hover:border-huttle-primary shadow-sm"
                         title="Edit project"
                       >
-                        <Edit2 className="w-3 h-3" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); confirmDeleteProject(project); }}
-                        className="w-6 h-6 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-500 shadow-sm"
+                        className="w-9 h-9 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-500 shadow-sm"
                         title="Delete project"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   )}
@@ -1144,7 +1144,7 @@ export default function ContentLibrary() {
                           </button>
                           
                           {/* Type badge */}
-                          <div className={`absolute top-2 left-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-sm backdrop-blur-md ${
+                          <div className={`absolute top-2 left-2 px-2.5 py-1 text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-sm backdrop-blur-md ${
                             item.type === 'image' ? 'bg-pink-500/90 text-white' :
                             item.type === 'video' ? 'bg-purple-500/90 text-white' :
                             'bg-huttle-primary/90 text-white'
@@ -1214,7 +1214,7 @@ export default function ContentLibrary() {
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-2">
-                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md ${
+                            <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded-md ${
                               item.type === 'image' ? 'bg-pink-50 text-pink-600 border border-pink-100' :
                               item.type === 'video' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
                               'bg-huttle-50 text-huttle-primary border border-huttle-100'
@@ -1222,7 +1222,7 @@ export default function ContentLibrary() {
                               {item.type}
                             </span>
                             {item.project && (
-                              <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[10px] font-medium rounded-md border border-gray-100 flex items-center gap-1">
+                              <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-xs font-medium rounded-md border border-gray-100 flex items-center gap-1">
                                 <Folder className="w-3 h-3" />
                                 {safeProjects.find(p => p.id === item.project)?.name}
                               </span>

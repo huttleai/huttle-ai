@@ -18,7 +18,7 @@ import {
   Repeat,
   Flame
 } from 'lucide-react';
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import useAIUsage from '../hooks/useAIUsage';
@@ -31,6 +31,8 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
   const handleLogout = async () => {
     try {
@@ -93,12 +95,28 @@ export default function Sidebar() {
     return location.pathname.startsWith(path);
   };
 
+  const handleSidebarTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSidebarTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    // Only close on clear left-swipe (not a vertical scroll)
+    if (deltaX < -60 && deltaY < 50) setIsMobileOpen(false);
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
   return (
     <>
       {/* Mobile Menu Button - positioned below safe area for notch/Dynamic Island */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-14 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
+        className="lg:hidden fixed top-14 left-4 z-50 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
+        aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
       >
         {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
       </button>
@@ -121,28 +139,43 @@ export default function Sidebar() {
           transition-transform duration-300 ease-out
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
+        onTouchStart={handleSidebarTouchStart}
+        onTouchEnd={handleSidebarTouchEnd}
       >
         {/* Subtle gradient overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.03),transparent_50%)] pointer-events-none" />
         
-        <div className="relative flex flex-col h-full p-5 overflow-y-auto scrollbar-thin">
-          {/* Logo */}
-          <div 
-            className="mb-8 mt-1 cursor-pointer group"
-            onClick={() => navigate('/dashboard')}
-          >
-            <img 
-              src="/huttle-logo.png" 
-              alt="Huttle AI" 
-              className="h-8 w-auto transition-all duration-200 group-hover:scale-105"
-            />
+        <div
+          className="relative flex flex-col h-full p-5 overflow-y-auto scrollbar-thin"
+          style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+        >
+          {/* Logo row with mobile close button */}
+          <div className="flex items-center justify-between mb-8 mt-1">
+            <div
+              className="cursor-pointer group"
+              onClick={() => { navigate('/dashboard'); setIsMobileOpen(false); }}
+            >
+              <img 
+                src="/huttle-logo.png" 
+                alt="Huttle AI" 
+                className="h-8 w-auto transition-all duration-200 group-hover:scale-105"
+              />
+            </div>
+            {/* In-sidebar close button — mobile only */}
+            <button
+              onClick={() => setIsMobileOpen(false)}
+              className="lg:hidden p-3 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors text-gray-500"
+              aria-label="Close navigation"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 space-y-6">
             {navItems.map((section) => (
               <div key={section.section}>
-                <h2 className="text-[10px] font-bold tracking-widest text-gray-400/80 mb-3 px-3 uppercase">
+                <h2 className="text-xs font-bold tracking-widest text-gray-400/80 mb-3 px-3 uppercase">
                   {section.section}
                 </h2>
                 <div className="space-y-1">
@@ -165,7 +198,7 @@ export default function Sidebar() {
                         )}
                         
                         {/* Content */}
-                        <div className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                        <div className={`relative flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 min-h-[48px] ${
                           isActive 
                             ? 'bg-huttle-50/80' 
                             : isHovered 
@@ -202,7 +235,7 @@ export default function Sidebar() {
                           
                           {/* Badge */}
                           {item.badge && (
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all duration-200 ${
+                            <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all duration-200 ${
                               isActive 
                                 ? 'bg-huttle-primary text-white' 
                                 : 'bg-gray-200 text-gray-700'

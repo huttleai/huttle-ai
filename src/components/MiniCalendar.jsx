@@ -72,7 +72,7 @@ export default function MiniCalendar({ onDateClick }) {
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
         <button 
           onClick={handlePrevMonth}
-          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-3 hover:bg-gray-100 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
           <ChevronLeft className="w-4 h-4 text-gray-500" />
         </button>
@@ -84,7 +84,7 @@ export default function MiniCalendar({ onDateClick }) {
         </div>
         <button 
           onClick={handleNextMonth}
-          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-3 hover:bg-gray-100 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
           <ChevronRight className="w-4 h-4 text-gray-500" />
         </button>
@@ -93,7 +93,7 @@ export default function MiniCalendar({ onDateClick }) {
       {/* Day Names */}
       <div className="grid grid-cols-7 border-b border-gray-50">
         {dayNames.map((day, i) => (
-          <div key={i} className="p-2 text-center text-[10px] font-medium text-gray-400">
+          <div key={i} className="p-2 text-center text-xs font-medium text-gray-400">
             {day}
           </div>
         ))}
@@ -151,11 +151,11 @@ export default function MiniCalendar({ onDateClick }) {
       <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-huttle-blue" />
-          <span className="text-[10px] text-gray-500 font-medium">Posts scheduled</span>
+          <span className="text-xs text-gray-500 font-medium">Posts scheduled</span>
         </div>
         <button
           onClick={() => navigate('/dashboard/calendar')}
-          className="text-[10px] text-huttle-blue font-medium hover:underline"
+          className="text-xs text-huttle-blue font-medium hover:underline"
         >
           Full Calendar →
         </button>

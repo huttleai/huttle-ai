@@ -9,9 +9,12 @@ import {
   Image, 
   AtSign,
   ChevronDown,
+  Check,
   Lightbulb
 } from 'lucide-react';
 import { getPlatform, getPlatformTips } from '../utils/platformGuidelines';
+import { BottomSheet } from './BottomSheet';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // Icon mapping for platforms
 const PLATFORM_ICONS = {
@@ -58,6 +61,7 @@ export default function PlatformSelector({
   className = '' 
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const isMobile = useIsMobile();
   const selectedPlatform = PLATFORM_LIST.find(p => p.id === value) || PLATFORM_LIST[0];
   const SelectedIcon = getPlatformIcon(selectedPlatform.icon);
   const tips = showTips ? getPlatformTips(value, contentType) : null;
@@ -67,14 +71,39 @@ export default function PlatformSelector({
     setIsOpen(false);
   };
 
+  const platformItems = PLATFORM_LIST.map((platform) => {
+    const Icon = getPlatformIcon(platform.icon);
+    const isSelected = platform.id === value;
+    return (
+      <button
+        key={platform.id}
+        type="button"
+        onClick={() => handleSelect(platform.id)}
+        className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 transition-colors text-sm min-h-[56px] ${
+          isSelected ? 'bg-huttle-primary/5 text-huttle-primary' : 'text-gray-700'
+        }`}
+      >
+        <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+          isSelected ? 'bg-huttle-primary/10' : 'bg-gray-100'
+        }`}>
+          <Icon className={`w-4 h-4 ${isSelected ? 'text-huttle-primary' : 'text-gray-600'}`} />
+        </div>
+        <span className={`font-medium flex-1 ${isSelected ? 'text-huttle-primary' : ''}`}>
+          {platform.name}
+        </span>
+        {isSelected && <Check className="w-4 h-4 text-huttle-primary ml-auto" />}
+      </button>
+    );
+  });
+
   return (
     <div className={`space-y-2 ${className}`}>
-      {/* Dropdown Button */}
+      {/* Trigger Button */}
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-lg hover:border-huttle-primary/50 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary transition-all text-sm"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-lg hover:border-huttle-primary/50 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary transition-all text-sm min-h-[44px]"
         >
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-gray-100 flex items-center justify-center">
@@ -85,48 +114,25 @@ export default function PlatformSelector({
           <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Dropdown Menu */}
-        {isOpen && (
+        {/* Desktop Dropdown */}
+        {!isMobile && isOpen && (
           <>
-            {/* Backdrop */}
-            <div 
-              className="fixed inset-0 z-10" 
-              onClick={() => setIsOpen(false)}
-            />
-            
-            {/* Menu */}
+            <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
-              {PLATFORM_LIST.map((platform) => {
-                const Icon = getPlatformIcon(platform.icon);
-                const isSelected = platform.id === value;
-                
-                return (
-                  <button
-                    key={platform.id}
-                    type="button"
-                    onClick={() => handleSelect(platform.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors text-sm ${
-                      isSelected ? 'bg-huttle-primary/5 text-huttle-primary' : 'text-gray-700'
-                    }`}
-                  >
-                    <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                      isSelected ? 'bg-huttle-primary/10' : 'bg-gray-100'
-                    }`}>
-                      <Icon className={`w-4 h-4 ${isSelected ? 'text-huttle-primary' : 'text-gray-600'}`} />
-                    </div>
-                    <span className={`font-medium ${isSelected ? 'text-huttle-primary' : ''}`}>
-                      {platform.name}
-                    </span>
-                    {isSelected && (
-                      <span className="ml-auto text-xs text-huttle-primary">Selected</span>
-                    )}
-                  </button>
-                );
-              })}
+              {platformItems}
             </div>
           </>
         )}
       </div>
+
+      {/* Mobile Bottom Sheet */}
+      {isMobile && (
+        <BottomSheet isOpen={isOpen} onClose={() => setIsOpen(false)} title="Select Platform">
+          <div className="pb-2">
+            {platformItems}
+          </div>
+        </BottomSheet>
+      )}
 
       {/* Platform Tips */}
       {showTips && tips && (

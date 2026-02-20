@@ -93,7 +93,7 @@ export default function CancelSubscriptionModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-slideUp max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-slideUp max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className="relative px-6 py-5 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
@@ -111,7 +111,7 @@ export default function CancelSubscriptionModal({
           <button
             onClick={handleCloseModal}
             disabled={isLoading}
-            className="absolute right-4 top-4 p-2 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600"
+            className="absolute right-4 top-4 p-3 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>

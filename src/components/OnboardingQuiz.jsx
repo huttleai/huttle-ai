@@ -1064,7 +1064,7 @@ export default function OnboardingQuiz({ onComplete }) {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
+      <div className="relative z-10 min-h-[100dvh] flex items-center justify-center p-4 py-8">
         <div className="w-full max-w-2xl">
           {/* Main Card */}
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
@@ -1116,7 +1116,7 @@ export default function OnboardingQuiz({ onComplete }) {
                       }`}>
                         {isCompleted ? <Check className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
                       </div>
-                      <span className={`text-[10px] mt-1.5 hidden sm:block font-medium ${
+                      <span className={`text-xs mt-1.5 hidden sm:block font-medium ${
                         isActive ? 'text-slate-900' : isCompleted ? 'text-emerald-600' : 'text-slate-400'
                       }`}>
                         {stepItem.label}

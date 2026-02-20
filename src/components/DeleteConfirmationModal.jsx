@@ -48,7 +48,7 @@ export default function DeleteConfirmationModal({
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="absolute right-6 top-6 p-2 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600"
+            className="absolute right-4 top-4 p-3 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50 text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>

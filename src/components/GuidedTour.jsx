@@ -182,7 +182,7 @@ export default function GuidedTour({ steps, onComplete, storageKey = 'guidedTour
             </div>
             <button
               onClick={handleSkip}
-              className="p-1 hover:bg-gray-100 rounded transition-all"
+              className="p-3 hover:bg-gray-100 rounded-lg transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>

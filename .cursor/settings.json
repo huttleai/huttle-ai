@@ -1,0 +1,16 @@
+{
+  "plugins": {
+    "slack": {
+      "enabled": true
+    },
+    "vercel": {
+      "enabled": true
+    },
+    "supabase": {
+      "enabled": true
+    },
+    "stripe": {
+      "enabled": true
+    }
+  }
+}

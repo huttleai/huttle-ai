@@ -11,7 +11,7 @@ export default function NotificationBell() {
       onClick={() => setShowNotificationPanel(true)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="relative p-2.5 hover:bg-gray-50 rounded-lg transition-all duration-150 group"
+      className="relative p-3 hover:bg-gray-50 rounded-lg transition-all duration-150 group min-w-[44px] min-h-[44px] flex items-center justify-center"
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
     >
       <Bell 

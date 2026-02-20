@@ -632,7 +632,7 @@ export default function Dashboard() {
               <>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-green-600">Active Now</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-green-600">Active Now</span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                   {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
@@ -648,7 +648,7 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                   {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
                 </h1>
@@ -694,14 +694,14 @@ export default function Dashboard() {
                 <stat.icon className={`w-5 h-5 ${stat.color}`} />
               </div>
               {stat.badge && (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-huttle-50 text-huttle-primary rounded-full">
+                <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 bg-huttle-50 text-huttle-primary rounded-full">
                   {stat.badge}
                 </span>
               )}
             </div>
             <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">{stat.label}</p>
-            {stat.subtext && <p className="text-[10px] text-gray-400 mt-1">{stat.subtext}</p>}
+            {stat.subtext && <p className="text-xs text-gray-400 mt-1">{stat.subtext}</p>}
           </div>
         ))}
       </div>
@@ -826,7 +826,7 @@ export default function Dashboard() {
                         </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
-                          className="p-2 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-3 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
                         >
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </button>
@@ -862,7 +862,7 @@ export default function Dashboard() {
                         : 'General trends across platforms'}
                     </p>
                     {dashboardData?.created_at && (
-                      <p className="text-[10px] text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-400 mt-0.5">
                         Updated {(() => {
                           const secs = Math.floor((Date.now() - new Date(dashboardData.created_at).getTime()) / 1000);
                           if (secs < 60) return 'just now';
@@ -877,7 +877,7 @@ export default function Dashboard() {
                 <button
                   onClick={handleRefreshDashboard}
                   disabled={isDashboardRefreshing}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1 px-3 py-2.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                   title="Refresh daily briefing"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isDashboardRefreshing ? 'animate-spin' : ''}`} />
@@ -1012,7 +1012,7 @@ export default function Dashboard() {
               ) : dashboardInsights.length > 0 ? (
                 <>
                   <div className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4">
-                    <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(dashboardInsights[insightIndex]?.category)}`}>
+                    <span className={`absolute top-3 right-3 text-xs font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(dashboardInsights[insightIndex]?.category)}`}>
                       {dashboardInsights[insightIndex]?.category}
                     </span>
                     <h4 className="font-bold text-gray-900 mb-2 pr-20">{dashboardInsights[insightIndex]?.headline}</h4>
@@ -1113,8 +1113,8 @@ export default function Dashboard() {
                         >
                           <span className={`w-1.5 h-1.5 rounded-full ${reachStyles.dotClass}`} />
                           <span className="font-medium text-gray-700 group-hover:text-gray-900">{keyword.hashtag}</span>
-                          <span className="text-[10px] text-gray-500">{keyword.relevance}</span>
-                          <span className="text-[10px] font-semibold uppercase text-gray-500">{keyword.estimated_reach}</span>
+                          <span className="text-xs text-gray-500">{keyword.relevance}</span>
+                          <span className="text-xs font-semibold uppercase text-gray-500">{keyword.estimated_reach}</span>
                             {isCopied ? (
                               <Check className="w-3.5 h-3.5 text-green-500" />
                             ) : (
@@ -1181,7 +1181,7 @@ export default function Dashboard() {
                   <div key={alert.id} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
                     <div className="flex items-start justify-between mb-2 gap-2">
                       <h4 className="font-semibold text-sm text-gray-900">{alert.update_title || 'Platform update'}</h4>
-                      <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-bold ${typeColor}`}>{impact}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${typeColor}`}>{impact}</span>
                     </div>
                     <p className="text-xs text-gray-600 mb-3">{alert.update_summary || 'A new social platform update is available.'}</p>
                     <Link to="/dashboard/social-updates" className="text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark flex items-center gap-1 group">

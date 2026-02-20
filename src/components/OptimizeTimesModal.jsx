@@ -185,8 +185,8 @@ export default function OptimizeTimesModal({
       />
       
       {/* Modal */}
-      <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="relative min-h-[100dvh] flex items-end sm:items-center sm:p-4">
+        <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85dvh] overflow-hidden flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export default function OptimizeTimesModal({
             </div>
             <button
               onClick={handleClose}
-              className="p-2 hover:bg-white/80 rounded-lg transition-colors"
+              className="p-3 hover:bg-white/80 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>
@@ -239,7 +239,7 @@ export default function OptimizeTimesModal({
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   <button
                     onClick={handleSelectAll}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
                       selectedPostIds.size === futurePosts.length
                         ? 'bg-huttle-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -257,7 +257,7 @@ export default function OptimizeTimesModal({
                       <button
                         key={platform}
                         onClick={() => handleSelectPlatform(platform)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] ${
                           allSelected
                             ? 'bg-huttle-primary/10 text-huttle-primary border border-huttle-primary/30'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'

@@ -115,7 +115,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
           <div className="relative p-6 rounded-t-xl border-b border-gray-100">
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 hover:bg-gray-50 rounded-lg transition-all text-gray-400 hover:text-gray-600"
+              className="absolute top-4 right-4 p-3 hover:bg-gray-50 rounded-lg transition-all text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <X className="w-5 h-5" />
             </button>

@@ -426,12 +426,16 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl max-w-4xl w-full max-h-[90dvh] overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/* Drag handle (mobile only) */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
+        </div>
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-huttle-primary">{postToEdit ? 'Edit Post' : 'Create Custom Post'}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-lg transition-colors">
+          <h2 className="text-xl sm:text-2xl font-bold text-huttle-primary">{postToEdit ? 'Edit Post' : 'Create Custom Post'}</h2>
+          <button onClick={onClose} className="p-3 hover:bg-gray-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -721,9 +725,9 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                     )}
                     <button
                       onClick={() => handleRemoveMedia(index)}
-                      className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity min-w-[36px] min-h-[36px] flex items-center justify-center"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-4 h-4" />
                     </button>
                     <div className="absolute bottom-1 left-1 bg-black bg-opacity-60 text-white text-xs px-2 py-0.5 rounded">
                       {item.type === 'image' ? <Image className="w-3 h-3" /> : <Video className="w-3 h-3" />}
