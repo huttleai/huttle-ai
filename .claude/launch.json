@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5180", "--strictPort"],
+      "port": 5180
+    },
+    {
+      "name": "API Server (Express)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/local-api-server.js"],
+      "port": 3001
+    },
+    {
+      "name": "Full Stack (Frontend + API)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:local"],
+      "port": 5176
+    },
+    {
+      "name": "Vercel Dev",
+      "runtimeExecutable": "vercel",
+      "runtimeArgs": ["dev"],
+      "port": 3000
+    }
+  ]
+}
