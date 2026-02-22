@@ -6,7 +6,7 @@
  * ============================================================================
  * 
  * Flow:
- * 1. Frontend calls createJobDirectly() -> inserts job in Supabase (status: pending)
+ * 1. Frontend calls createJobDirectly() -> inserts job in Supabase (status: queued)
  * 2. Frontend calls triggerN8nWebhook() -> fires job_id to n8n (no wait)
  * 3. Frontend subscribes to Supabase Realtime for job updates
  * 4. n8n processes job and updates Supabase when complete
@@ -60,7 +60,7 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
       .insert({
         user_id: session.user.id,
         type: 'plan_builder',
-        status: 'pending',
+        status: 'queued', // Must match DB lifecycle: queued → running → completed/failed
         input: {
           goal,
           duration,
