@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
@@ -35,31 +35,6 @@ import {
 // ============================================
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
-
-const fadeInUp = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0 }
-};
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.1,
-    }
-  }
-};
-
-const staggerItem = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: { duration: 0.4, ease: "easeOut" }
-  }
-};
 
 const FOUNDING_SPOTS_LEFT = 41;
 
@@ -174,9 +149,11 @@ const GlassCard = ({ children, className = "" }) => {
     <div
       className={`
         relative overflow-hidden rounded-3xl
-        bg-white/70 backdrop-blur-xl
-        border border-white/40
-        shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.2)]
+        bg-white
+        border border-slate-200/60
+        shadow-[0_8px_30px_rgb(0,0,0,0.04)]
+        hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]
+        transition-all duration-300
         ${className}
       `}
     >
@@ -359,7 +336,7 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 // FOUNDERS CLUB MODAL
 // ============================================
 
-const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
+const FoundersClubModal = ({ isOpen, onClose }) => {
   const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
 
   const handleProceedToCheckout = (e) => {
@@ -401,60 +378,51 @@ const FoundersClubModal = ({ isOpen, onClose, onJoinWaitlist }) => {
             </button>
 
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#2B8FC7] to-[#01bad2] flex items-center justify-center">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#2B8FC7] to-[#01bad2] flex items-center justify-center shadow-md">
                 <Crown className="text-white" size={24} />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Founders Club</h3>
-                <p className="text-sm text-slate-500">Early Access Membership</p>
+                <p className="text-sm font-medium text-amber-600">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</p>
               </div>
             </div>
 
             <div className="space-y-4 mb-6">
               {[
                 { title: "Lifetime Price Lock", desc: "$199/year forever, even when prices increase" },
-                { title: "Highest AI Limits", desc: "Pro & Founders get the most generous generation limits" },
+                { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
-                { title: "Priority Support", desc: "Direct access to the founding team" },
-                { title: "7 Day Happiness Guarantee", desc: "Not satisfied? Get a full refund within 7 days, no questions asked" },
+                { title: "Priority Support", desc: "Direct access to our founding team" },
+                { title: "7 Day Happiness Guarantee", desc: "Not satisfied? We will refund you within 7 days, no questions asked" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
                   <div>
-                    <p className="font-medium text-slate-900">{item.title}</p>
-                    <p className="text-sm text-slate-500">{item.desc}</p>
+                    <p className="font-bold text-slate-900 text-sm">{item.title}</p>
+                    <p className="text-xs text-slate-500 font-medium">{item.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-between mb-6 p-4 rounded-2xl bg-slate-50">
+            <div className="flex items-center justify-between mb-6 p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm">
               <div>
-                <p className="text-sm text-slate-500">Founders Price</p>
-                <p className="text-2xl font-bold text-slate-900">$199<span className="text-sm font-normal text-slate-500">/year</span></p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Founders Price</p>
+                <p className="text-3xl font-black text-slate-900">$199<span className="text-sm font-medium text-slate-500">/year</span></p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-slate-400 line-through">$357/year</p>
-                <p className="text-sm font-bold text-green-600">Save 41%</p>
+                <p className="text-sm text-slate-400 line-through font-medium mb-1">$357/year</p>
+                <p className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-200 inline-block">Save 44%</p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button 
-                onClick={() => {
-                  onClose();
-                  onJoinWaitlist();
-                }}
-                className="flex-1 px-6 py-3 rounded-xl border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-center"
-              >
-                Join Waitlist
-              </button>
+            <div className="flex flex-col gap-3">
               <button 
                 onClick={(e) => handleProceedToCheckout(e)}
-                className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow flex items-center justify-center gap-2"
+                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow flex items-center justify-center gap-2 text-base"
               >
-                Checkout
-                <ArrowRight size={16} />
+                Claim Your $199/yr Founders Spot
+                <ArrowRight size={18} />
               </button>
             </div>
 
@@ -488,14 +456,14 @@ const SocialProofMarquee = () => {
   ];
 
   return (
-    <div className="py-4 md:py-16 bg-white border-y border-slate-100 overflow-hidden">
+    <div className="py-4 md:py-16 bg-white border-y border-slate-200/60 overflow-hidden">
       <Marquee duration={40} pauseOnHover gap={16}>
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-1.5 md:gap-3 px-2 md:px-6">
             <div className="text-sm md:text-2xl lg:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] whitespace-nowrap">
               {item.name}
             </div>
-            <div className="text-[8px] md:text-xs text-slate-500 font-medium whitespace-nowrap">
+            <div className="text-[8px] md:text-xs text-slate-500 font-medium whitespace-nowrap uppercase tracking-widest">
               {item.subtitle}
             </div>
           </div>
@@ -511,31 +479,33 @@ const SocialProofMarquee = () => {
 
 const OrbitingPlatformsSection = () => {
   return (
-    <div className="relative min-h-[420px] md:min-h-[700px] lg:min-h-[800px] w-full overflow-hidden bg-gradient-to-b from-white to-slate-50 flex flex-col items-center justify-center py-10 md:py-32 px-4 md:px-8 lg:px-12">
-      <div className="absolute inset-0 opacity-20 md:opacity-30">
+    <div className="relative min-h-[500px] md:min-h-[800px] w-full overflow-hidden bg-white flex flex-col items-center justify-center py-16 md:py-32 px-4 md:px-8 border-t border-slate-200/60">
+      <div className="absolute inset-0 opacity-[0.03]">
         <div 
           className="absolute inset-0"
           style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(0,0,0,0.05) 1px, transparent 0)`,
-            backgroundSize: '24px 24px',
+            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(0,0,0,1) 1px, transparent 0)`,
+            backgroundSize: '32px 32px',
           }}
         />
       </div>
 
       <motion.div 
-        className="text-center relative z-20 max-w-3xl mx-auto mb-6 md:mb-16 px-1"
+        className="text-center relative z-20 max-w-4xl mx-auto mb-10 md:mb-20 px-2"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-6xl font-bold text-slate-900 mb-2.5 md:mb-6 tracking-tighter leading-tight">
-          Create for every platform,<br className="hidden sm:block"/>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">all in one place.</span>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-slate-900 mb-6 tracking-tighter leading-tight">
+          Create for every platform.<br/>
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
+            All in one place.
+          </span>
         </h2>
-        <p className="text-xs md:text-lg lg:text-xl text-slate-500 max-w-md md:max-w-xl mx-auto">
-            TikTok. Instagram. YouTube. X. Facebook. One tool that creates content optimized for every algorithm.
-          </p>
+        <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
+          TikTok. Instagram. YouTube. X. Facebook. We use one tool that creates content optimized for every algorithm.
+        </p>
       </motion.div>
 
       <div className="relative flex h-[220px] md:h-[500px] w-full items-center justify-center">
@@ -580,86 +550,156 @@ const OrbitingPlatformsSection = () => {
 };
 
 // ============================================
-// BENTO FEATURE GRID WITH MAGIC CARDS
+// BENTO FEATURE GRID
 // ============================================
 
 const BentoGrid = () => {
-  const features = [
-    { 
-      IconComponent: ViralBlueprintIcon, 
-      title: "Viral Blueprint Generator", 
-      description: "Tell it your topic and platform. It researches what's trending, writes a step-by-step script with hooks, visuals, and keywords — in 30 seconds." 
-    },
-    { 
-      IconComponent: AIPlanBuilderIcon, 
-      title: "AI Plan Builder", 
-      description: "Get a full week of posts planned in 30 seconds. No more Sunday night scrambling." 
-    },
-    { 
-      IconComponent: ContentRemixIcon, 
-      title: "Content Remix Studio", 
-      description: "Drop in one post. Get back 5 platform-optimized versions — TikTok, Instagram, X, YouTube, Facebook." 
-    },
-    { 
-      IconComponent: SmartCalendarIcon, 
-      title: "Smart Calendar", 
-      description: "AI picks the best times to post based on when your audience is actually online." 
-    },
-    { 
-      IconComponent: CaptionGeneratorIcon, 
-      title: "AI Power Tools", 
-      description: "Caption generator, hashtag research, hook builder, CTA suggester, and keyword tools — all in one place." 
-    },
-    { 
-      IconComponent: QualityScorerIcon, 
-      title: "Quality Scorer", 
-      description: "Get a viral potential score before you hit post. See exactly what to fix to boost engagement." 
-    },
-  ];
-
   return (
-    <section id="features" className="py-10 md:py-32 px-4 bg-white">
+    <section id="features" className="py-16 md:py-32 px-4 bg-white">
       <div className="container mx-auto max-w-6xl">
         <motion.div 
-          className="mb-6 md:mb-16"
+          className="mb-10 md:mb-20 text-center md:text-left"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
           <div 
-            className="inline-flex items-center gap-1.5 px-2 md:px-3 py-0.5 md:py-1.5 rounded-full bg-purple-100 text-purple-700 text-[9px] md:text-xs font-bold mb-2.5 md:mb-4 border border-purple-200 badge-pulse"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 text-[10px] md:text-xs font-bold mb-4 border border-purple-100 badge-pulse"
           >
-            <Zap size={10} className="w-2.5 h-2.5 md:w-3 md:h-3" />
-            More than just another smart calendar
+            <Zap size={12} className="w-3 h-3" />
+            The Ultimate AI Creative Director
           </div>
-          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter mb-2 md:mb-4 text-slate-900">
-            Your AI Creative Director.
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-4 text-slate-900 leading-[1.1]">
+            Everything we need.<br className="hidden md:block"/>
+            <span className="text-slate-400 font-medium">Nothing we don't.</span>
           </h2>
-          <p className="text-xs md:text-lg lg:text-xl text-slate-500">10+ AI tools that replace your content planner, trend researcher, and copywriter — for less than $17/month.</p>
+          <p className="text-sm md:text-lg lg:text-xl text-slate-500 max-w-2xl">We engineered a complete suite of AI tools that replace your content planner, trend researcher, and copywriter.</p>
         </motion.div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-4">
-          {features.map((feature, i) => (
-            <motion.div 
-              key={i}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ duration: 0.4, delay: i < 3 ? i * 0.08 : (i - 3) * 0.08 + 0.15 }}
-            >
-              <MagicCard 
-                className="p-2.5 sm:p-3 md:p-6 h-full border border-slate-200 bg-white hover:border-[#01bad2]/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-                gradientColor="rgba(1, 186, 210, 0.12)"
-              >
-                <div className="mb-2 md:mb-4">
-                  <feature.IconComponent size={32} />
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-6">
+          
+          {/* Main Feature: Viral Blueprint - Large */}
+          <motion.div 
+            className="col-span-1 md:col-span-2 lg:col-span-2 row-span-2 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="group w-full h-full p-6 md:p-10 rounded-3xl bg-slate-50 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden bg-gradient-to-br from-white to-slate-50">
+              <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#01bad2]/5 rounded-full blur-3xl group-hover:bg-[#01bad2]/10 transition-colors duration-500" />
+              <div className="mb-6 z-10">
+                <div className="h-14 w-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#01bad2] mb-6 group-hover:scale-110 transition-transform duration-500">
+                  <ViralBlueprintIcon size={28} />
                 </div>
-                <h3 className="text-xs sm:text-sm md:text-lg font-bold mb-1 text-slate-900 leading-tight">{feature.title}</h3>
-                <p className="text-[10px] sm:text-xs md:text-sm leading-relaxed text-slate-500 line-clamp-3">{feature.description}</p>
-              </MagicCard>
-            </motion.div>
-          ))}
+                <h3 className="text-2xl md:text-3xl font-bold mb-3 text-slate-900 leading-tight">Viral Blueprint Generator</h3>
+                <p className="text-base leading-relaxed text-slate-500">Tell us your topic and platform. We research what's trending, write a step-by-step script with hooks, visuals, and keywords — in 30 seconds.</p>
+              </div>
+              <div className="mt-auto z-10 flex-1 flex items-end justify-center pt-8">
+                <img src="/viral-blueprint-mockup.png" alt="Viral Blueprint Dashboard" className="w-full max-w-[300px] rounded-t-2xl shadow-2xl translate-y-8 group-hover:translate-y-4 transition-transform duration-700 ease-out" />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Secondary Feature: Content Remix - Wide */}
+          <motion.div 
+            className="col-span-1 md:col-span-2 lg:col-span-2 row-span-1 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            <div className="group w-full h-full p-6 md:p-8 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row gap-6 relative overflow-hidden">
+              <div className="z-10 flex-1">
+                <div className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[#2B8FC7] mb-4 group-hover:scale-110 transition-transform duration-500">
+                  <ContentRemixIcon size={24} />
+                </div>
+                <h3 className="text-xl md:text-2xl font-bold mb-2 text-slate-900 leading-tight">Content Remix Studio</h3>
+                <p className="text-sm leading-relaxed text-slate-500">Drop in one post. Get back 5 platform-optimized versions instantly. TikTok, Instagram, X, YouTube, Facebook.</p>
+              </div>
+              <div className="z-10 w-full sm:w-1/3 flex items-center justify-center">
+                 <div className="grid grid-cols-2 gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white"><Instagram size={18}/></div>
+                    <div className="h-10 w-10 bg-slate-900 rounded-lg flex items-center justify-center text-white"><X size={18}/></div>
+                    <div className="h-10 w-10 bg-red-600 rounded-lg flex items-center justify-center text-white"><Youtube size={18}/></div>
+                    <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center text-white"><Facebook size={18}/></div>
+                 </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Tertiary Feature: Smart Calendar - Small */}
+          <motion.div 
+            className="col-span-1 md:col-span-1 lg:col-span-1 row-span-1 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <div className="group w-full h-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden">
+              <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-green-500 mb-4 group-hover:scale-110 transition-transform duration-500">
+                <SmartCalendarIcon size={20} />
+              </div>
+              <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Smart Calendar</h3>
+              <p className="text-xs leading-relaxed text-slate-500">We pick the best times to post based on when your audience is online.</p>
+            </div>
+          </motion.div>
+
+          {/* Tertiary Feature: Quality Scorer - Small */}
+          <motion.div 
+            className="col-span-1 md:col-span-1 lg:col-span-1 row-span-1 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+          >
+            <div className="group w-full h-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden">
+              <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-orange-500 mb-4 group-hover:scale-110 transition-transform duration-500">
+                <QualityScorerIcon size={20} />
+              </div>
+              <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Viral Quality Score</h3>
+              <p className="text-xs leading-relaxed text-slate-500">Get a viral potential score before you hit post. See what to fix.</p>
+            </div>
+          </motion.div>
+
+          {/* Bottom Features: AI Plan Builder and Power Tools */}
+          <motion.div 
+            className="col-span-1 md:col-span-2 lg:col-span-2 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+          >
+            <div className="group w-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row items-center gap-6">
+               <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-gradient-to-br from-[#2B8FC7] to-[#01bad2] flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-500">
+                  <AIPlanBuilderIcon size={32} />
+               </div>
+               <div>
+                 <h3 className="text-xl font-bold mb-2 text-slate-900">AI Plan Builder</h3>
+                 <p className="text-sm text-slate-500">Get a full week of posts planned in 30 seconds. No more Sunday night scrambling.</p>
+               </div>
+            </div>
+          </motion.div>
+          
+          <motion.div 
+            className="col-span-1 md:col-span-2 lg:col-span-2 flex"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            <div className="group w-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row items-center gap-6">
+               <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[#2B8FC7] shadow-sm group-hover:scale-110 transition-transform duration-500">
+                  <CaptionGeneratorIcon size={32} />
+               </div>
+               <div>
+                 <h3 className="text-xl font-bold mb-2 text-slate-900">AI Power Tools</h3>
+                 <p className="text-sm text-slate-500">Caption generator, hashtag research, hook builder, CTA suggester — all built in.</p>
+               </div>
+            </div>
+          </motion.div>
+
         </div>
       </div>
     </section>
@@ -672,18 +712,18 @@ const BentoGrid = () => {
 
 const PainPointsSection = () => {
   const painPoints = [
-    { emoji: "🤔", title: "What should I post?", text: "It's 9am. You've been staring at a blank caption for 20 minutes. You post something generic. It gets 12 likes. You wonder why you bother." },
-    { emoji: "📉", title: "Why did that flop?", text: "You spent 3 hours on a Reel. Picked the music. Edited the cuts. Wrote the caption. 47 views. Meanwhile, some guy filming his lunch gets 200K." },
-    { emoji: "😫", title: "I can't keep up", text: "TikTok wants raw. Instagram wants polished. X wants hot takes. YouTube wants long-form. You're one person trying to be four different creators." }
+    { emoji: "🤔", title: "What should we post?", text: "It's 9am. We've been staring at a blank caption for 20 minutes. We post something generic. It gets 12 likes. We wonder why we bother." },
+    { emoji: "📉", title: "Why did that flop?", text: "We spent 3 hours on a Reel. Picked the music. Edited the cuts. Wrote the caption. 47 views. Meanwhile, someone filming their lunch gets 200K." },
+    { emoji: "😫", title: "We can't keep up", text: "TikTok wants raw. Instagram wants polished. X wants hot takes. YouTube wants long-form. We are one team trying to be four different creators." }
   ];
 
   return (
-    <section className="bg-slate-900 py-10 md:py-32 px-4 text-white relative overflow-hidden">
-      <div className="absolute inset-0 opacity-5">
+    <section className="bg-slate-50 py-16 md:py-32 px-4 relative overflow-hidden">
+      <div className="absolute inset-0 opacity-[0.03]">
         <div 
           className="absolute inset-0"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundImage: `linear-gradient(rgba(0,0,0,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,1) 1px, transparent 1px)`,
             backgroundSize: '48px 48px',
           }}
         />
@@ -691,17 +731,18 @@ const PainPointsSection = () => {
 
       <div className="container mx-auto max-w-6xl relative z-10">
         <motion.div 
-          className="text-center mb-6 md:mb-16"
+          className="text-center mb-10 md:mb-20"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-400 mb-2 md:mb-4">Sound Familiar?</h2>
-          <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tighter text-white">The content struggle is real.</h3>
+          <h2 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-[#01bad2] mb-3 border border-[#01bad2]/20 px-3 py-1 rounded-full inline-block bg-[#01bad2]/5">The Struggle</h2>
+          <h3 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-slate-900 mb-4">The content grind is real.</h3>
+          <p className="text-slate-500 max-w-2xl mx-auto text-sm md:text-lg">We built this because we were tired of the constant pressure to create for every platform.</p>
         </motion.div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8">
           {painPoints.map((item, i) => (
             <motion.div 
               key={i}
@@ -711,13 +752,13 @@ const PainPointsSection = () => {
               transition={{ duration: 0.5, delay: i * 0.1 }}
             >
               <div 
-                className="group bg-slate-800/60 backdrop-blur-sm p-4 md:p-10 rounded-xl md:rounded-3xl border border-slate-700/50 hover:border-[#01bad2]/50 transition-all duration-300 cursor-pointer h-full flex flex-col hover:-translate-y-2 hover:shadow-[0_25px_50px_-12px_rgba(1,186,210,0.2)]"
+                className="group bg-white p-6 md:p-10 rounded-2xl md:rounded-[2rem] border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 cursor-pointer h-full flex flex-col hover:-translate-y-2"
               >
-                <div className="text-2xl md:text-5xl mb-2 md:mb-6">
+                <div className="text-3xl md:text-5xl mb-4 md:mb-8 bg-slate-50 w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:scale-110 transition-transform duration-500">
                   {item.emoji}
                 </div>
-                <h4 className="text-sm md:text-xl font-bold mb-1.5 md:mb-3 text-white group-hover:text-[#01bad2] transition-colors">{item.title}</h4>
-                <p className="text-slate-300 leading-relaxed text-xs md:text-base flex-1">{item.text}</p>
+                <h4 className="text-lg md:text-2xl font-bold mb-2 md:mb-4 text-slate-900 group-hover:text-[#01bad2] transition-colors">{item.title}</h4>
+                <p className="text-slate-600 leading-relaxed text-sm md:text-base flex-1">{item.text}</p>
               </div>
             </motion.div>
           ))}
@@ -733,26 +774,26 @@ const PainPointsSection = () => {
 
 const FeatureShowcaseSection = () => {
   return (
-    <section className="py-12 md:py-32 px-4 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
+    <section className="py-16 md:py-32 px-4 bg-white overflow-hidden border-t border-slate-200/60">
       <div className="container mx-auto max-w-6xl">
         <motion.div 
-          className="text-center mb-8 md:mb-16"
+          className="text-center mb-10 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
             <span 
-              className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
+              className="inline-block px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-[#01bad2]/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20"
             >
-              <Play size={10} className="inline mr-1 -mt-0.5 md:w-3 md:h-3" />
+              <Play size={12} className="inline mr-1.5 -mt-0.5 md:w-3 md:h-3" />
               See It In Action
             </span>
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
-              Features That Make You Go Viral
+            <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-4 leading-tight">
+              Features that make us<br className="hidden md:block" /> go viral.
             </h2>
-            <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto px-2">
-              Explore the AI-powered tools that will transform your content strategy
+            <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto px-2 font-medium">
+              Explore the AI-powered tools that will transform our content strategy
             </p>
         </motion.div>
         
@@ -770,14 +811,14 @@ const FAQSectionComponent = () => {
   const faqs = [
     {
       question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Smart Calendar, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Smart Calendar, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
     },
     {
       question: "What happens when the Founding Member offer ends?",
       answer: "On March 1, the price becomes $249/yr (Builders Club) for 10 days. After March 10, regular Pro pricing is $357/yr. Your founding rate stays locked forever — it never increases, no matter what."
     },
     {
-      question: "Can I cancel anytime?",
+      question: "Can we cancel anytime?",
       answer: "Absolutely. Cancel from your account settings whenever you want. No hoops to jump through, no hidden fees, no awkward phone calls. Your access continues until the end of your billing period."
     },
     {
@@ -786,34 +827,34 @@ const FAQSectionComponent = () => {
     },
     {
       question: "What platforms does Huttle AI support?",
-      answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
+      answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All our AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
     },
     {
-      question: "Is my payment secure?",
+      question: "Is our payment secure?",
       answer: "100%. All payments are processed through Stripe, the same infrastructure trusted by Amazon, Google, and Shopify. We never store your card information on our servers."
     },
   ];
 
   return (
-    <section className="py-12 md:py-32 px-4 bg-white">
+    <section className="py-16 md:py-32 px-4 bg-slate-50 border-t border-slate-200/60">
       <div className="container mx-auto max-w-4xl">
         <motion.div 
-          className="text-center mb-8 md:mb-16"
+          className="text-center mb-10 md:mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
             <span 
-              className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20"
+              className="inline-block px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-[#01bad2]/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20"
             >
               FAQ
             </span>
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
+            <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-4 leading-tight">
               Frequently Asked Questions
             </h2>
-            <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
-              Everything you need to know about Huttle AI
+            <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
+              Everything we need to know about Huttle AI
             </p>
         </motion.div>
         
@@ -829,9 +870,9 @@ const FAQSectionComponent = () => {
 
 const PricingSection = ({ onOpenFoundersModal }) => {
   return (
-    <section id="pricing" className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
-      <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/10 blur-[150px] rounded-full pointer-events-none" />
-      <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/10 blur-[150px] rounded-full pointer-events-none" />
+    <section id="pricing" className="py-16 md:py-32 px-4 bg-slate-50 relative overflow-hidden">
+      <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto max-w-6xl relative z-10">
         <motion.div 
@@ -841,13 +882,13 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
-          <span className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-white/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-white/10">
+          <span className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20">
             Simple Pricing
           </span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tighter mb-3 md:mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
             Start creating. Pick your path.
           </h2>
-          <p className="text-sm md:text-lg text-slate-400 max-w-2xl mx-auto">
+          <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
             Every plan includes full access to all AI tools. The only question is when you join.
           </p>
         </motion.div>
@@ -862,37 +903,37 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-[#1E293B] p-6 md:p-8 border-2 border-[#06B6D4] overflow-hidden">
-              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-r from-[#06B6D4] to-[#22D3EE] opacity-20 blur-lg -z-10" />
+            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border-2 border-[#01bad2] shadow-2xl overflow-hidden">
+              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-r from-[#01bad2] to-[#2B8FC7] opacity-[0.03] blur-lg -z-10" />
               
               <div 
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-amber-500/30 badge-pulse"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-amber-200 badge-pulse"
               >
                 🔥 BEST VALUE
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-white mb-1">Founding Member</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Founders Club</h3>
               
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl md:text-5xl font-black text-white">
+                  <span className="text-4xl md:text-5xl font-black text-slate-900">
                     $<NumberTicker value={199} startValue={357} duration={0.8} triggerOnView={true} />
                   </span>
-                  <span className="text-sm md:text-base text-slate-400">/year</span>
+                  <span className="text-sm md:text-base text-slate-500">/year</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">$16.58/mo equivalent</p>
+                <p className="text-xs text-slate-500 mt-1">$16.58/mo equivalent</p>
               </div>
 
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm text-slate-500 line-through">$357/yr</span>
-                <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Save 44%</span>
+                <span className="text-sm text-slate-400 line-through">$357/yr</span>
+                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 44%</span>
               </div>
 
-              <p className="text-sm text-slate-300 mb-4">Lock in the lowest price we'll ever offer.</p>
+              <p className="text-sm text-slate-600 mb-4 font-medium">Lock in the lowest price we'll ever offer.</p>
               
-              <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <Users size={14} className="text-amber-400 flex-shrink-0" />
-                <span className="text-xs font-bold text-amber-400">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</span>
+              <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                <Users size={14} className="text-amber-600 flex-shrink-0" />
+                <span className="text-xs font-bold text-amber-600">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</span>
               </div>
 
               <ul className="space-y-2.5 mb-6">
@@ -905,8 +946,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'Smart Calendar with optimal timing',
                   'Cancel anytime',
                 ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-300">
-                    <Check size={14} className="text-[#06B6D4] mt-0.5 flex-shrink-0" />
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
+                    <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
                     {feat}
                   </li>
                 ))}
@@ -914,13 +955,13 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <BorderBeamButton 
                 onClick={onOpenFoundersModal}
-                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-base"
+                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-base shadow-lg shadow-[#01bad2]/20"
                 beamDuration={6}
               >
-                Claim Your Founding Spot
+                Claim Your $199/yr Founders Spot
                 <ArrowRight size={16} className="ml-2" />
               </BorderBeamButton>
-              <p className="text-center text-xs text-slate-500 mt-3">Offer closes February 28</p>
+              <p className="text-center text-xs text-slate-500 mt-3 font-medium">Offer closes February 28</p>
             </div>
           </motion.div>
 
@@ -932,23 +973,23 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div className="relative rounded-2xl md:rounded-3xl bg-[#1E293B]/80 p-6 md:p-8 border border-slate-700/50 opacity-90">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-600/30 text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-600/30">
+            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
                 COMING MARCH 1
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-white mb-1">Builders Club</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
               
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-white">$249</span>
-                  <span className="text-sm text-slate-400">/year</span>
+                  <span className="text-3xl md:text-4xl font-black text-slate-900">$249</span>
+                  <span className="text-sm text-slate-500">/year</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">$20.75/mo equivalent</p>
+                <p className="text-xs text-slate-500 mt-1">$20.75/mo equivalent</p>
               </div>
 
-              <p className="text-sm text-slate-400 mb-2">For the builders who move fast.</p>
-              <p className="text-xs text-slate-500 mb-5">Available March 1–10 only</p>
+              <p className="text-sm text-slate-600 mb-2">For the builders who move fast.</p>
+              <p className="text-xs text-slate-500 mb-5 font-medium">Available March 1–10 only</p>
 
               <ul className="space-y-2.5 mb-6">
                 {[
@@ -957,8 +998,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'Everything in Founding Member',
                   'Time-limited, not spot-limited',
                 ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-400">
-                    <Check size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
+                    <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
                     {feat}
                   </li>
                 ))}
@@ -966,7 +1007,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <button 
                 disabled 
-                className="w-full h-12 rounded-xl border border-slate-600 text-slate-500 font-medium text-sm cursor-not-allowed"
+                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
                 Available March 1
               </button>
@@ -982,22 +1023,22 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <div className="relative rounded-2xl md:rounded-3xl bg-[#1E293B]/60 p-6 md:p-8 border border-slate-700/30">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-600/20 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-700/30">
+            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
                 STARTING MARCH 11
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-white mb-1">Pro</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
               
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-white">$357</span>
-                  <span className="text-sm text-slate-400">/year</span>
+                  <span className="text-3xl md:text-4xl font-black text-slate-900">$357</span>
+                  <span className="text-sm text-slate-500">/year</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">$29.75/mo billed annually</p>
+                <p className="text-xs text-slate-500 mt-1">$29.75/mo billed annually</p>
               </div>
 
-              <p className="text-sm text-slate-400 mb-5">Or $35/month billed monthly</p>
+              <p className="text-sm text-slate-600 mb-5">Or $35/month billed monthly</p>
 
               <ul className="space-y-2.5 mb-6">
                 {[
@@ -1005,8 +1046,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'Highest AI generation limits',
                   'Full Trend Lab access',
                 ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-400">
-                    <Check size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
+                    <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
                     {feat}
                   </li>
                 ))}
@@ -1014,7 +1055,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <button 
                 disabled 
-                className="w-full h-12 rounded-xl border border-slate-700/50 text-slate-500 font-medium text-sm cursor-not-allowed"
+                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
                 Starting March 11
               </button>
@@ -1032,9 +1073,9 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
 const FinalCTASection = ({ onOpenFoundersModal }) => {
   return (
-    <section className="py-16 md:py-32 px-4 bg-[#0F172A] relative overflow-hidden">
-      <div className="absolute -top-1/3 -left-1/4 w-[600px] h-[600px] bg-[#01bad2]/8 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute -bottom-1/3 -right-1/4 w-[500px] h-[500px] bg-[#2B8FC7]/8 blur-[120px] rounded-full pointer-events-none" />
+    <section className="py-16 md:py-32 px-4 bg-white relative overflow-hidden border-t border-slate-200/60">
+      <div className="absolute -top-1/3 -left-1/4 w-[600px] h-[600px] bg-[#01bad2]/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute -bottom-1/3 -right-1/4 w-[500px] h-[500px] bg-[#2B8FC7]/5 blur-[120px] rounded-full pointer-events-none" />
       
       <div className="container mx-auto max-w-4xl text-center relative z-10">
         <motion.div
@@ -1043,31 +1084,35 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
         >
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-white tracking-tighter mb-3 md:mb-6 leading-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-slate-900 tracking-tighter mb-4 md:mb-6 leading-tight">
             Stop Guessing.<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
               Start Creating.
             </span>
           </h2>
-          <p className="text-sm md:text-lg lg:text-xl text-slate-400 max-w-xl md:max-w-2xl mx-auto mb-3 md:mb-4">
-            Join the creators who already have their content strategy handled.
+          <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto mb-4 md:mb-6">
+            Join the creators who already have their content strategy handled. We built the platform we wish we had.
           </p>
-          <p className="text-xs md:text-sm text-amber-400 font-medium mb-6 md:mb-10">
-            Only 41 founding member spots remaining. After February 28, the price goes up.
-          </p>
+          <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
+            <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
+              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Price increases March 1.
+            </p>
+          </div>
           
-          <BorderBeamButton 
-            onClick={onOpenFoundersModal}
-            className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg cta-pulse-glow"
-            beamDuration={6}
-          >
-            Lock In $199/Year Forever
-            <ArrowRight size={18} className="ml-2" />
-          </BorderBeamButton>
+          <div>
+            <BorderBeamButton 
+              onClick={onOpenFoundersModal}
+              className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow"
+              beamDuration={6}
+            >
+              Claim Your $199/yr Founders Spot
+              <ArrowRight size={18} className="ml-2" />
+            </BorderBeamButton>
+          </div>
           
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-5 md:mt-6 text-xs md:text-sm text-slate-400">
-            <span className="flex items-center gap-1.5"><Check size={14} className="text-green-400" /> 7-day money-back guarantee</span>
-            <span className="flex items-center gap-1.5"><Check size={14} className="text-green-400" /> Cancel anytime</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-6 md:mt-8 text-xs md:text-sm text-slate-500 font-medium">
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 7-day happiness guarantee</span>
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Cancel anytime</span>
           </div>
         </motion.div>
       </div>
@@ -1339,23 +1384,50 @@ export default function LandingPage() {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
+  useEffect(() => {
+    document.title = "Huttle AI | The Ultimate AI Creative Director";
+    // Setup generic meta description if missing
+    let metaDescription = document.querySelector('meta[name="description"]');
+    if (!metaDescription) {
+      metaDescription = document.createElement('meta');
+      metaDescription.name = "description";
+      document.head.appendChild(metaDescription);
+    }
+    metaDescription.content = "We built the ultimate web application for creators who hate the content grind. Lock in your $199/yr Founders Club spot today.";
+  }, []);
+
   return (
-    <div className="min-h-screen w-full max-w-full bg-white text-slate-950 overflow-x-hidden selection:bg-[#01bad2]/30">
+    <div className="min-h-screen w-full max-w-full bg-white text-slate-900 overflow-x-hidden selection:bg-[#01bad2]/30">
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "Huttle AI",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web Browser",
+          "description": "The ultimate web application for creators who hate the content grind. Huttle AI tells you exactly what to post, writes your scripts, and predicts viral success.",
+          "offers": {
+            "@type": "Offer",
+            "price": "199.00",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/LimitedAvailability"
+          }
+        })}
+      </script>
       <ScrollProgress />
       <WaitlistModal isOpen={isWaitlistModalOpen} onClose={() => setIsWaitlistModalOpen(false)} />
       <FoundersClubModal 
         isOpen={isFoundersModalOpen} 
         onClose={() => setIsFoundersModalOpen(false)} 
-        onJoinWaitlist={() => setIsWaitlistModalOpen(true)}
       />
       <PolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} type="privacy" />
       <PolicyModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} type="terms" />
       
       {/* ANNOUNCEMENT BAR */}
-      <div className="fixed top-0 left-0 right-0 z-[55] h-9 bg-[#0F172A] flex items-center justify-center overflow-hidden">
+      <div className="fixed top-0 left-0 right-0 z-[55] h-10 bg-slate-900 flex items-center justify-center overflow-hidden border-b border-slate-800">
         <div className="announcement-shimmer absolute inset-0 pointer-events-none" />
-        <p className="relative z-10 text-xs md:text-sm text-white font-medium tracking-wide">
-          <span className="mr-1">🔥</span> Only <span className="font-bold text-amber-400">{FOUNDING_SPOTS_LEFT}</span> of 100 Founding Member spots remaining — <span className="font-bold text-cyan-400">Lock in $199/yr forever</span>
+        <p className="relative z-10 text-[10px] md:text-xs text-white font-bold tracking-widest uppercase">
+          <span className="mr-2">🔥</span> Only <span className="text-[#01bad2] px-1">{FOUNDING_SPOTS_LEFT}</span> of 100 Founders Spots remaining — <span className="text-white bg-[#01bad2] px-2 py-0.5 rounded-full ml-1">Lock in $199/yr forever</span>
         </p>
       </div>
 
@@ -1375,11 +1447,11 @@ export default function LandingPage() {
           </button>
           <BorderBeamButton 
             onClick={() => setIsFoundersModalOpen(true)} 
-            className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white"
+            className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white shadow-md shadow-[#01bad2]/20"
             beamSize={100}
             beamDuration={4}
           >
-            Become a Founding Member
+            Claim Founders Spot
             <ArrowRight size={14} className="ml-1" />
           </BorderBeamButton>
           <Link
@@ -1402,46 +1474,59 @@ export default function LandingPage() {
             {/* LEFT COLUMN - Content */}
             <div className="text-center md:text-left order-1">
               
+              <BlurFade delay={0.1}>
+                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] md:text-xs font-bold mb-6 border border-slate-200">
+                    <Rocket size={12} className="w-3 h-3 text-[#01bad2]" />
+                    The Ultimate AI Creative Director
+                 </div>
+              </BlurFade>
+
               {/* HEADLINE - Simple CSS fade-in instead of per-character framer-motion */}
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tighter">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl 2xl:text-[5rem] font-bold text-slate-900 leading-[1.05] tracking-tighter">
                 <BlurFade delay={0.2}>
                   <span className="block">Know What to Post</span>
                 </BlurFade>
                 <BlurFade delay={0.4}>
-                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]">
-                    Before You Create It.
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] pb-2">
+                    Before We Create It.
                   </span>
                 </BlurFade>
               </h1>
 
               {/* SUBHEAD */}
               <BlurFade delay={0.6}>
-                <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-600 max-w-xl mx-auto md:mx-0 leading-relaxed">
-                  Stop guessing. Huttle AI tells you exactly what to post, writes your script word-for-word, and predicts if it'll go viral — before you create anything.
+                <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-500 max-w-xl mx-auto md:mx-0 leading-relaxed font-medium">
+                  We built the web application for creators who hate the content grind. Huttle AI tells us exactly what to post, writes our scripts, and predicts viral success — before we create anything.
                 </p>
               </BlurFade>
 
               {/* PRIMARY CTA BUTTON */}
               <BlurFade delay={0.8}>
-                <div className="mt-6 md:mt-8 flex flex-col items-center md:items-start">
+                <div className="mt-8 md:mt-10 flex flex-col items-center md:items-start">
                   <BorderBeamButton 
                     onClick={() => setIsFoundersModalOpen(true)} 
-                    className="w-full md:w-auto h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10 cta-pulse-glow"
+                    className="w-full md:w-auto h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10 shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow"
                     beamDuration={6}
                   >
-                    Become a Founding Member
+                    Claim Your $199/yr Founders Spot
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
-                  <span className="mt-2.5 text-sm md:text-lg font-semibold text-slate-700 w-full flex justify-center md:justify-start md:pl-2.5">
-                    $199/year forever <span className="text-slate-500 font-normal ml-1">(normally $357/yr)</span> <span className="text-green-600 font-bold ml-1">— Save 44%</span>
-                  </span>
+                  
+                  <div className="mt-4 flex items-center justify-center md:justify-start gap-2 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 w-auto">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    <span className="text-xs md:text-sm font-bold text-slate-700">
+                      {FOUNDING_SPOTS_LEFT} of 100 spots remaining
+                    </span>
+                  </div>
                   
                   {/* Trust Signals */}
                   <BlurFade delay={1.0}>
-                    <div className="flex flex-col md:flex-row flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1 mt-4 text-sm text-slate-500">
-                      <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> Full Pro access</span>
-                      <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> 44% off locked forever</span>
-                      <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> Cancel anytime</span>
+                    <div className="flex flex-col md:flex-row flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-2 mt-6 text-xs md:text-sm text-slate-500 font-medium">
+                      <span className="flex items-center gap-1.5"><Check size={16} className="text-[#01bad2]" /> Lock in 44% off forever</span>
+                      <span className="flex items-center gap-1.5"><Check size={16} className="text-[#01bad2]" /> 7-day happiness guarantee</span>
                     </div>
                   </BlurFade>
                 </div>
