@@ -815,7 +815,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "What happens when the Founding Member offer ends?",
-      answer: "On March 1, the price becomes $249/yr (Builders Club) for 10 days. After March 10, regular Pro pricing is $357/yr. Your founding rate stays locked forever — it never increases, no matter what."
+      answer: "On March 15, the price becomes $249/yr (Builders Club) for 16 days. After March 30, regular Pro pricing is $357/yr. Your founding rate stays locked forever — it never increases, no matter what."
     },
     {
       question: "Can we cancel anytime?",
@@ -955,13 +955,12 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <BorderBeamButton 
                 onClick={onOpenFoundersModal}
-                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-base shadow-lg shadow-[#01bad2]/20"
+                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-xs shadow-lg shadow-[#01bad2]/20"
                 beamDuration={6}
               >
                 Claim Your $199/yr Founders Spot
                 <ArrowRight size={16} className="ml-2" />
               </BorderBeamButton>
-              <p className="text-center text-xs text-slate-500 mt-3 font-medium">Offer closes February 28</p>
             </div>
           </motion.div>
 
@@ -975,7 +974,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                COMING MARCH 1
+                COMING MARCH 15
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
@@ -989,7 +988,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               </div>
 
               <p className="text-sm text-slate-600 mb-2">For the builders who move fast.</p>
-              <p className="text-xs text-slate-500 mb-5 font-medium">Available March 1–10 only</p>
+              <p className="text-xs text-slate-500 mb-5 font-medium">Available March 15–30 only</p>
 
               <ul className="space-y-2.5 mb-6">
                 {[
@@ -1009,7 +1008,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 disabled 
                 className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
-                Available March 1
+                Available March 15
               </button>
               <p className="text-center text-xs text-slate-500 mt-3">Save $108/yr vs regular pricing</p>
             </div>
@@ -1025,7 +1024,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                STARTING MARCH 11
+                STARTING MARCH 31
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
@@ -1057,7 +1056,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 disabled 
                 className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
-                Starting March 11
+                Starting March 31
               </button>
             </div>
           </motion.div>
@@ -1095,7 +1094,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </p>
           <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
             <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Price increases March 1.
+              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Price increases March 15.
             </p>
           </div>
           
@@ -1423,16 +1422,8 @@ export default function LandingPage() {
       <PolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} type="privacy" />
       <PolicyModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} type="terms" />
       
-      {/* ANNOUNCEMENT BAR */}
-      <div className="fixed top-0 left-0 right-0 z-[55] h-10 bg-slate-900 flex items-center justify-center overflow-hidden border-b border-slate-800">
-        <div className="announcement-shimmer absolute inset-0 pointer-events-none" />
-        <p className="relative z-10 text-[10px] md:text-xs text-white font-bold tracking-widest uppercase">
-          <span className="mr-2">🔥</span> Only <span className="text-[#01bad2] px-1">{FOUNDING_SPOTS_LEFT}</span> of 100 Founders Spots remaining — <span className="text-white bg-[#01bad2] px-2 py-0.5 rounded-full ml-1">Lock in $199/yr forever</span>
-        </p>
-      </div>
-
       {/* NAVBAR */}
-      <nav className="fixed top-9 md:top-9 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3">
+      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3">
         <div 
           className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50 nav-fade-in"
         >
@@ -1512,23 +1503,6 @@ export default function LandingPage() {
                     <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
                   </BorderBeamButton>
                   
-                  <div className="mt-4 flex items-center justify-center md:justify-start gap-2 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 w-auto">
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                    </span>
-                    <span className="text-xs md:text-sm font-bold text-slate-700">
-                      {FOUNDING_SPOTS_LEFT} of 100 spots remaining
-                    </span>
-                  </div>
-                  
-                  {/* Trust Signals */}
-                  <BlurFade delay={1.0}>
-                    <div className="flex flex-col md:flex-row flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-2 mt-6 text-xs md:text-sm text-slate-500 font-medium">
-                      <span className="flex items-center gap-1.5"><Check size={16} className="text-[#01bad2]" /> Lock in 44% off forever</span>
-                      <span className="flex items-center gap-1.5"><Check size={16} className="text-[#01bad2]" /> 7-day happiness guarantee</span>
-                    </div>
-                  </BlurFade>
                 </div>
               </BlurFade>
             </div>
@@ -1805,17 +1779,6 @@ export default function LandingPage() {
       <style>{`
         /* Smooth scroll */
         html { scroll-behavior: smooth; }
-
-        /* Announcement bar shimmer */
-        .announcement-shimmer {
-          background: linear-gradient(90deg, transparent 0%, rgba(6,182,212,0.08) 40%, rgba(6,182,212,0.15) 50%, rgba(6,182,212,0.08) 60%, transparent 100%);
-          background-size: 200% 100%;
-          animation: shimmer 3s ease-in-out infinite;
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
 
         /* Nav fade in */
         .nav-fade-in {

@@ -96,7 +96,7 @@ export function BorderBeamButton({
         />
         
         {/* Content */}
-        <span className="relative z-10 flex items-center justify-center gap-2">
+        <span className="relative z-10 flex items-center justify-center gap-2 whitespace-nowrap">
           {children}
         </span>
       </button>
