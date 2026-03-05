@@ -53,7 +53,7 @@ export const StickyNav = ({ onOpenFoundersModal }) => {
   );
 };
 
-export const HeroSection = ({ onOpenFoundersModal }) => {
+export const HeroSection = () => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
   const { scrollY } = useScroll();
@@ -64,7 +64,7 @@ export const HeroSection = ({ onOpenFoundersModal }) => {
   const mockupY = useTransform(scrollY, [0, 500], [0, -40]);
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-start pt-32 pb-20 px-6 md:px-8 lg:px-12 overflow-hidden bg-slate-50">
+    <section className="relative min-h-screen flex flex-col items-center justify-start pt-32 pb-24 px-6 md:px-8 lg:px-12 overflow-hidden bg-slate-50">
       {/* Background radial glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-[#01BAD2]/20 blur-[120px] rounded-full pointer-events-none" />
 
@@ -80,15 +80,15 @@ export const HeroSection = ({ onOpenFoundersModal }) => {
           ✨ The Ultimate AI Creative Director
         </div>
         
-        <h1 className="text-5xl md:text-7xl font-extrabold text-zinc-900 tracking-tight leading-tight mb-6">
+        <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[6.5rem] font-extrabold text-zinc-900 tracking-tight leading-[1.05] mb-6">
           Know What to Post <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#01BAD2] to-[#0284c7]">
             Before We Create It.
           </span>
         </h1>
         
-        <p className="text-lg md:text-xl text-slate-500 max-w-2xl mb-10 leading-relaxed">
-          Stop guessing. Get content strategy, scripts, and viral predictions — before you press record. We built the platform we wish we had.
+        <p className="text-sm sm:text-base md:text-lg text-slate-500 max-w-xl mb-10 leading-relaxed">
+          Stop guessing. Get content strategy, scripts, and viral predictions — before you press record.
         </p>
       </motion.div>
 
@@ -116,23 +116,6 @@ export const HeroSection = ({ onOpenFoundersModal }) => {
         <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-3/4 max-w-[400px] h-12 bg-[#01BAD2]/30 blur-[40px] rounded-full -z-10" />
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={isInView ? { opacity: 1, y: 0 } : {}}
-        transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
-        className="relative z-10 text-center mt-16 md:mt-24 flex flex-col items-center"
-      >
-        <button
-          onClick={onOpenFoundersModal}
-          className="group flex items-center gap-2 bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-full px-8 py-4 text-lg font-bold shadow-[0_0_24px_#01BAD220] transition-all hover:scale-105 active:scale-95"
-        >
-          Claim Your $199/yr Founders Spot
-          <ArrowRight className="group-hover:translate-x-1 transition-transform" />
-        </button>
-        <p className="mt-4 text-sm font-medium text-slate-500">
-          Only 41 of 100 founders spots remaining
-        </p>
-      </motion.div>
     </section>
   );
 };

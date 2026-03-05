@@ -1466,14 +1466,14 @@ export default function LandingPage() {
             <div className="text-center md:text-left order-1">
               
               <BlurFade delay={0.1}>
-                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] md:text-xs font-bold mb-6 border border-slate-200">
-                    <Rocket size={12} className="w-3 h-3 text-[#01bad2]" />
+                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-600 text-xs md:text-sm font-bold mb-6 border border-slate-200">
+                    <Rocket size={14} className="w-3.5 h-3.5 text-[#01bad2]" />
                     The Ultimate AI Creative Director
                  </div>
               </BlurFade>
 
-              {/* HEADLINE - Simple CSS fade-in instead of per-character framer-motion */}
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl 2xl:text-[5rem] font-bold text-slate-900 leading-[1.05] tracking-tighter">
+              {/* HEADLINE */}
+              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-7xl xl:text-8xl 2xl:text-[6rem] font-bold text-slate-900 leading-[1.05] tracking-tighter">
                 <BlurFade delay={0.2}>
                   <span className="block">Know What to Post</span>
                 </BlurFade>
@@ -1486,24 +1486,9 @@ export default function LandingPage() {
 
               {/* SUBHEAD */}
               <BlurFade delay={0.6}>
-                <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-500 max-w-xl mx-auto md:mx-0 leading-relaxed font-medium">
-                  We built the web application for creators who hate the content grind. Huttle AI tells us exactly what to post, writes our scripts, and predicts viral success — before we create anything.
+                <p className="mt-5 md:mt-6 text-sm md:text-base lg:text-lg text-slate-500 max-w-md mx-auto md:mx-0 leading-relaxed font-medium">
+                  Stop guessing. Get content strategy, scripts, and viral predictions — before you press record.
                 </p>
-              </BlurFade>
-
-              {/* PRIMARY CTA BUTTON */}
-              <BlurFade delay={0.8}>
-                <div className="mt-8 md:mt-10 flex flex-col items-center md:items-start">
-                  <BorderBeamButton 
-                    onClick={() => setIsFoundersModalOpen(true)} 
-                    className="w-full md:w-auto h-14 md:h-16 text-white font-bold text-base md:text-lg rounded-xl md:rounded-2xl px-8 md:px-10 shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow"
-                    beamDuration={6}
-                  >
-                    Claim Your $199/yr Founders Spot
-                    <ArrowRight size={18} className="ml-2 md:w-5 md:h-5" />
-                  </BorderBeamButton>
-                  
-                </div>
               </BlurFade>
             </div>
             
