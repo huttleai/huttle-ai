@@ -11,13 +11,11 @@ import TopHeader from '../components/TopHeader';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Dashboard from '../pages/Dashboard';
-import SmartCalendar from '../pages/SmartCalendar';
 import ContentLibrary from '../pages/ContentLibrary';
 import AIPlanBuilder from '../pages/AIPlanBuilder';
 import TrendLab from '../pages/TrendLab';
 import ViralBlueprint from '../pages/ViralBlueprint';
 import ContentRemix from '../pages/ContentRemix';
-// import HuttleAgent from './pages/HuttleAgent'; // Temporarily disabled - kept in backend for future implementation
 import Profile from '../pages/Profile';
 import BrandVoice from '../pages/BrandVoice';
 import Subscription from '../pages/Subscription';
@@ -25,9 +23,9 @@ import Settings from '../pages/Settings';
 import Help from '../pages/Help';
 import SocialUpdates from '../pages/SocialUpdates';
 import AITools from '../pages/AITools';
-// import ContentRepurposer from './pages/ContentRepurposer'; // Temporarily disabled - uncomment to re-enable
+import FullPostBuilder from '../pages/FullPostBuilder';
+import NicheIntel from '../pages/NicheIntel';
 import Login from '../pages/Login';
-// Signup disabled for Founders Only launch - accounts created via Stripe invite only
 import Security from '../pages/Security';
 import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
@@ -53,7 +51,6 @@ function AppContent({ secureAccountMode = false }) {
 
   const { user, loading, needsOnboarding, profileChecked, completeOnboarding } = authContext;
 
-  // Generate contextual notifications (onboarding nudges, post reminders, etc.)
   useNotificationGenerator();
 
   // Show loading state while checking auth OR while profile is being checked
@@ -101,13 +98,15 @@ function AppContent({ secureAccountMode = false }) {
         <TopHeader />
         <Routes>
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/calendar" element={<ProtectedRoute><SmartCalendar /></ProtectedRoute>} />
+          <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
           <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
           <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
           <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
           <Route path="/viral-blueprint" element={<ProtectedRoute><ViralBlueprint /></ProtectedRoute>} />
           <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
           <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
+          <Route path="/full-post-builder" element={<ProtectedRoute><FullPostBuilder /></ProtectedRoute>} />
+          <Route path="/niche-intel" element={<ProtectedRoute><NicheIntel /></ProtectedRoute>} />
           {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
           {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

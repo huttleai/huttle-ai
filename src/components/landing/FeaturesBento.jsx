@@ -109,7 +109,7 @@ export const BentoFeatures = () => {
             </div>
           </motion.div>
 
-          {/* Tertiary Feature: Smart Calendar - Small */}
+          {/* Tertiary Feature: Content Vault - Small */}
           <motion.div 
             variants={cardVariants}
             whileHover={{ scale: 1.02, boxShadow: '0 0 0 1px rgba(1,186,210,0.3), 0 8px 32px rgba(1,186,210,0.1)' }}
@@ -117,17 +117,14 @@ export const BentoFeatures = () => {
           >
             <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#01BAD2]/10 to-teal-500/20 border border-white/10 flex items-center justify-center text-[#01BAD2] mb-4 group-hover:scale-110 group-hover:border-[#01BAD2]/30 transition-all duration-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M8 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3 10H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <rect x="8" y="14" width="3" height="3" fill="currentColor"/>
-                <rect x="13" y="14" width="3" height="3" fill="currentColor"/>
+                <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M12 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 14H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h3 className="text-lg font-bold mb-2 text-white leading-tight">Smart Calendar</h3>
+            <h3 className="text-lg font-bold mb-2 text-white leading-tight">Content Vault</h3>
             <p className="text-xs leading-relaxed text-slate-400">
-              We pick the best times to post based on when your audience is online.
+              Store, organize, and access all your content assets in one secure place.
             </p>
           </motion.div>
 

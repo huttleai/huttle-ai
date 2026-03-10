@@ -240,7 +240,7 @@ export default function TrendDiscoveryHub() {
 
     // Check feature limit before proceeding
     if (!quickScanUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Quick Scan limit. Resets on the 1st.', 'warning');
+      showToast('You\'ve reached your monthly Trend Pulse limit. Resets on the 1st.', 'warning');
       return;
     }
 
@@ -477,7 +477,7 @@ export default function TrendDiscoveryHub() {
                   </span>
                 </div>
                 <p className="text-gray-500 text-sm md:text-base">
-                  Real-time intelligence for <span className="font-semibold text-huttle-primary">{brandData?.niche || 'your niche'}</span>
+                  What's going viral right now — across all platforms and niches
                 </p>
               </div>
             </div>
@@ -493,6 +493,7 @@ export default function TrendDiscoveryHub() {
               
               <button
                 onClick={() => setActiveMode('quickScan')}
+                title="See what's trending everywhere right now"
                 className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'quickScan'
                     ? 'text-gray-900'
@@ -500,12 +501,14 @@ export default function TrendDiscoveryHub() {
                 }`}
               >
                 <Search className={`w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0 transition-all duration-300 ${activeMode === 'quickScan' ? 'text-huttle-primary' : ''}`} />
-                <span className="hidden sm:inline">Quick Scan</span>
-                <span className="sm:hidden">Scan</span>
+                <span className="hidden sm:inline">Trend Pulse</span>
+                <span className="sm:hidden">Pulse</span>
+                <span className="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 bg-cyan-100 text-cyan-700 rounded-full font-bold">🌐 Live</span>
               </button>
               
               <button
                 onClick={() => canAccessDeepDive ? setActiveMode('deepDive') : setShowUpgradeModal(true)}
+                title="Research what works specifically in your niche"
                 className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'deepDive'
                     ? 'text-gray-900'
@@ -515,6 +518,7 @@ export default function TrendDiscoveryHub() {
                 <Target className={`w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0 transition-all duration-300 ${activeMode === 'deepDive' ? 'text-huttle-primary' : ''}`} />
                 <span className="hidden sm:inline">Deep Dive</span>
                 <span className="sm:hidden">Dive</span>
+                <span className="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-bold">🔍 Niche</span>
                 {!canAccessDeepDive && (
                   <Lock className="w-3 h-3 md:w-3.5 md:h-3.5 text-gray-400 flex-shrink-0" />
                 )}
@@ -532,7 +536,7 @@ export default function TrendDiscoveryHub() {
               <AIUsageMeter
                 used={quickScanUsage.featureUsed}
                 limit={quickScanUsage.featureLimit}
-                label="Quick Scans this month"
+                label="Trend Pulses this month"
                 compact
               />
             )}

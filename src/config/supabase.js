@@ -116,6 +116,11 @@ export const TIER_LIMITS = {
     trendForecaster: false, // Pro only
     trendLab: false, // Essentials+ only
     viralBlueprint: false, // Essentials+ only
+    fullPostBuilder: false, // Essentials+ only
+    humanizerScore: true, // All tiers
+    performancePrediction: false, // Essentials+ only
+    algorithmChecker: false, // Essentials+ only
+    nicheIntel: 0, // Pro+ only
     aiPlanBuilderDays: 7, // 7 days only for free
     storageLimit: 250 * 1024 * 1024, // 250MB in bytes
     scheduledPostsLimit: 10,
@@ -133,6 +138,11 @@ export const TIER_LIMITS = {
     trendForecaster: false, // Pro only
     trendLab: true, // Full access
     viralBlueprint: 15, // 15 blueprints/month
+    fullPostBuilder: true,
+    humanizerScore: true,
+    performancePrediction: true,
+    algorithmChecker: true,
+    nicheIntel: 0, // Pro+ only
     aiPlanBuilderDays: 14, // 7 or 14 days
     storageLimit: 5 * 1024 * 1024 * 1024, // 5GB in bytes
     scheduledPostsLimit: 50,
@@ -155,6 +165,11 @@ export const TIER_LIMITS = {
     huttleAgent: true, // Pro feature
     trendForecaster: true, // Pro feature
     trendLab: true, // Full access
+    fullPostBuilder: true,
+    humanizerScore: true,
+    performancePrediction: true,
+    algorithmChecker: true,
+    nicheIntel: 5, // 5 analyses/month
     aiPlanBuilderDays: 14, // 7 or 14 days
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
@@ -178,6 +193,11 @@ export const TIER_LIMITS = {
     huttleAgent: true,
     trendForecaster: true,
     trendLab: true,
+    fullPostBuilder: true,
+    humanizerScore: true,
+    performancePrediction: true,
+    algorithmChecker: true,
+    nicheIntel: 10, // 10 analyses/month
     aiPlanBuilderDays: 14,
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
@@ -198,6 +218,11 @@ export const FEATURES = {
   'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
   'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // Essentials: 15/month, Pro/Founder: 60/month
   'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // All tiers, but different day limits
+  'full-post-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'humanizer-score': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'performance-prediction': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'algorithm-checker': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
+  'niche-intel': [TIERS.PRO, TIERS.FOUNDER],
 };
 
 /**

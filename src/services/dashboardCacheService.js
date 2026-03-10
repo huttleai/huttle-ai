@@ -121,7 +121,7 @@ function normalizeDashboardData(data) {
         };
       })
       .filter((item) => item.hashtag.length > 1 && item.relevance)
-      .slice(0, 8)
+      .slice(0, 10)
     : [];
 
   // Support both legacy single ai_insight and new ai_insights array
@@ -211,8 +211,10 @@ function buildFallbackDashboardData(brandProfile) {
       { hashtag: '#contentcreator', relevance: 'broad reach across your audience', estimated_reach: 'high', type: 'niche' },
       { hashtag: '#digitalmarketing', relevance: 'strong engagement from marketers', estimated_reach: 'high', type: 'niche' },
       { hashtag: '#socialmediatips', relevance: 'consistent discovery traffic', estimated_reach: 'high', type: 'niche' },
+      { hashtag: '#growthhacks', relevance: `growth tactics for ${niche.toLowerCase()}`, estimated_reach: 'medium', type: 'niche' },
       { hashtag: '#fyp', relevance: 'universally trending on TikTok', estimated_reach: 'high', type: 'trending' },
-      { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending' }
+      { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending' },
+      { hashtag: '#viral', relevance: 'high-volume discovery tag across platforms', estimated_reach: 'high', type: 'trending' }
     ],
     ai_insights: [
       {
@@ -285,7 +287,7 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
 RULES:
 - Return ONLY valid JSON, no markdown, no preamble, no backticks.
 - trending_topics: exactly 4 topics. All must be current as of ${todayFormatted}. Each must include a "description" (1-2 sentences on why it is trending) and "content_angles" (array of 2-3 specific, actionable content ideas).
-- hashtags_of_day: exactly 8 hashtags. 5-6 must be niche-specific based on the user's brand profile (type: "niche") and 2-3 must be universally trending hashtags like #fyp, #trending, etc. (type: "trending"). Always include the # symbol.
+- hashtags_of_day: exactly 10 hashtags. 7 must be niche-specific based on the user's brand profile (type: "niche") and 3 must be universally trending hashtags like #fyp, #trending, etc. (type: "trending"). Always include the # symbol.
 - ai_insights: exactly 3 insight objects. One must be category "Timing" (best time to post today), one must be category "Content Type" (what format is working in their niche right now), one must be category "Audience" (what their audience is responding to this week).
 - Each ai_insight must be specific to their niche and actionable TODAY. No generic advice.
 - relevance text should be lowercase when it appears mid-sentence (e.g., "popular with ${targetAudience.toLowerCase()}" not "Popular with ${targetAudience}").
@@ -303,7 +305,7 @@ export async function getDashboardCache(userId) {
   try {
     const { data, error } = await supabase
       .from(DASHBOARD_CACHE_TABLE)
-      .select('generated_date, trending_topics, hashtags_of_day, ai_insights, ai_insight')
+      .select('generated_date, trending_topics, hashtags_of_day, ai_insights, ai_insight, created_at')
       .eq('user_id', userId)
       .eq('generated_date', generatedDate)
       .maybeSingle();
@@ -325,6 +327,9 @@ export async function getDashboardCache(userId) {
     };
 
     const normalizedCachedData = normalizeDashboardData(cachedData) || buildFallbackDashboardData();
+    if (data.created_at) {
+      normalizedCachedData.created_at = data.created_at;
+    }
 
     return {
       success: true,
@@ -388,6 +393,7 @@ export async function generateDashboardData(userId, brandProfile) {
     const finalData = normalized || fallbackData;
     const isFallback = !normalized;
 
+    const nowISO = new Date().toISOString();
     const { error: upsertError } = await supabase
       .from(DASHBOARD_CACHE_TABLE)
       .upsert({
@@ -397,10 +403,12 @@ export async function generateDashboardData(userId, brandProfile) {
         hashtags_of_day: finalData.hashtags_of_day,
         ai_insights: finalData.ai_insights || [],
         ai_insight: finalData.ai_insight,
-        created_at: new Date().toISOString()
+        created_at: nowISO
       }, {
         onConflict: 'user_id,generated_date'
       });
+
+    finalData.created_at = nowISO;
 
     if (upsertError) {
       console.error('Error upserting dashboard cache:', upsertError);

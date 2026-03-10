@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Save, Calendar, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, ArrowRight } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -19,10 +19,13 @@ import {
   generateVisualIdeas,
   generateVisualBrainstorm 
 } from '../services/grokAPI';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { saveContentLibraryItem } from '../config/supabase';
+import HumanizerScore from '../components/HumanizerScore';
+import PerformancePrediction from '../components/PerformancePrediction';
+import AlgorithmChecker from '../components/AlgorithmChecker';
 
 function uniqueNonEmpty(items) {
   return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
@@ -46,13 +49,13 @@ export default function AITools() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { userTier, getFeatureLimit } = useSubscription();
-  const { saveGeneratedContent, setDraft } = useContent();
-  const navigate = useNavigate();
+  const { saveGeneratedContent } = useContent();
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTool, setActiveTool] = useState('caption');
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [savedIndex, setSavedIndex] = useState(null);
-  const [scheduledIndex, setScheduledIndex] = useState(null);
+
   const [applyBrandVoice, setApplyBrandVoice] = useState(true);
 
   // Caption Generator State
@@ -89,6 +92,7 @@ export default function AITools() {
   const [contentToScore, setContentToScore] = useState('');
   const [contentScore, setContentScore] = useState(null);
   const [isLoadingScore, setIsLoadingScore] = useState(false);
+  const [scorerSubTab, setScorerSubTab] = useState('quality');
 
   // Visual Brainstormer State
   const [visualPrompt, setVisualPrompt] = useState('');
@@ -582,7 +586,7 @@ export default function AITools() {
       if (result.success) {
         setSavedIndex(itemIndex);
         setTimeout(() => setSavedIndex(null), 2000);
-        showToast('Added to Content Library!', 'success');
+        showToast('Saved to Content Vault!', 'success');
       } else {
         showToast('Failed to add to library', 'error');
         console.error('Error saving to library:', result.error);
@@ -593,29 +597,6 @@ export default function AITools() {
     }
   };
 
-  const handleScheduleContent = (content, itemIndex = null) => {
-    const contentAsText = typeof content === 'string' ? content : JSON.stringify(content);
-    const draftTitle =
-      captionInput
-      || hashtagInput
-      || hookInput
-      || ctaPromoting
-      || visualPrompt
-      || 'AI Draft';
-
-    setDraft({
-      source: 'ai-tools',
-      tool: activeTool,
-      title: draftTitle,
-      caption: contentAsText,
-      platforms: [captionPlatform || hashtagPlatform || hookPlatform || ctaPlatform || visualPlatform || 'instagram'],
-      timestamp: new Date().toISOString()
-    });
-    setScheduledIndex(itemIndex);
-    setTimeout(() => setScheduledIndex(null), 2000);
-    showToast('Opening post composer with your draft...', 'info');
-    setTimeout(() => navigate('/dashboard/calendar'), 300);
-  };
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden">
@@ -634,7 +615,10 @@ export default function AITools() {
                 AI Power Tools
               </h1>
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">
-                Generate captions, hashtags, hooks, and more
+                Already have a draft? Use these tools to sharpen specific parts —
+              </p>
+              <p className="text-xs text-gray-400">
+                captions, hooks, hashtags, CTAs, or quality check.
               </p>
             </div>
           </div>
@@ -800,10 +784,7 @@ export default function AITools() {
                             {copiedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
                           </button>
                           <button onClick={() => handleAddToLibrary(caption.trim(), 'caption', { input: captionInput }, `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
-                            {savedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Add to Library</span></>}
-                          </button>
-                          <button onClick={() => handleScheduleContent(caption.trim(), `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
-                            {scheduledIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Scheduled!</span></> : <><Calendar className="w-3 h-3 text-gray-600" /><span>Schedule</span></>}
+                            {savedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save to Vault</span></>}
                           </button>
                         </div>
                       </div>
@@ -902,7 +883,7 @@ export default function AITools() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 ml-2">
-                          <button onClick={() => handleAddToLibrary(hashtag.tag, 'hashtag', { input: hashtagInput }, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
+                          <button onClick={() => handleAddToLibrary(hashtag.tag, 'hashtag', { input: hashtagInput }, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Save to Vault">
                             {savedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
                           </button>
                           <button onClick={() => handleCopy(hashtag.tag, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
@@ -998,7 +979,7 @@ export default function AITools() {
                       <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
                         <p className="text-sm text-gray-800 font-medium flex-1">{hook.trim()}</p>
                         <div className="flex items-center gap-1.5 ml-2">
-                          <button onClick={() => handleAddToLibrary(hook.trim(), 'hook', { input: hookInput }, `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Add to Library">
+                          <button onClick={() => handleAddToLibrary(hook.trim(), 'hook', { input: hookInput }, `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Save to Vault">
                             {savedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
                           </button>
                           <button onClick={() => handleCopy(hook.trim(), `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
@@ -1144,9 +1125,6 @@ export default function AITools() {
                             <button onClick={() => handleAddToLibrary(item.cta, 'cta', { input: ctaPromoting, platform: ctaPlatform, style: item.style }, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
                               {savedIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save</span></>}
                             </button>
-                            <button onClick={() => handleScheduleContent(item.cta, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
-                              {scheduledIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><ArrowRight className="w-3 h-3 text-gray-600" /><span>Use in Post</span></>}
-                            </button>
                           </div>
                         </div>
                       );
@@ -1158,7 +1136,7 @@ export default function AITools() {
           </div>
         )}
 
-        {/* Content Quality Scorer */}
+        {/* Content Quality Scorer — with sub-tabs */}
         {activeTool === 'scorer' && (
           <div>
             <div className="px-4 md:px-6 py-4 md:py-5 border-b border-gray-100 bg-huttle-cyan-light/30">
@@ -1166,78 +1144,140 @@ export default function AITools() {
                 <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-huttle-primary flex items-center justify-center shadow-lg shadow-huttle-blue/20">
                   <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
-                <span className="text-base md:text-lg">Content Quality Scorer</span>
+                <span className="text-base md:text-lg">Content Scorer</span>
+                <span className="relative group ml-1.5 cursor-help">
+                  <svg className="w-4 h-4 text-gray-400 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="1.5"/><path strokeLinecap="round" d="M12 16v-1m0-3a2 2 0 10-2-2" strokeWidth="1.5"/></svg>
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                    Quality Score measures writing effectiveness: hook strength, readability, engagement triggers, and CTA clarity. It does not measure platform algorithm fit — use Algorithm Alignment in Trend Lab for that.
+                  </span>
+                </span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Get instant feedback and improvement tips</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                Is this well-written content?
+              </p>
             </div>
 
-            <div className="p-4 md:p-5 space-y-4">
-              <div>
+            {/* Scorer Sub-Tabs */}
+            <div className="border-b border-gray-100 px-4 md:px-6">
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px">
+                {[
+                  { id: 'quality', label: 'Quality Score', icon: BarChart3 },
+                  { id: 'human', label: 'Human Score', icon: User },
+                  { id: 'performance', label: 'Performance', icon: TrendingUp },
+                  { id: 'algorithm', label: 'Algorithm', icon: Shield },
+                ].map((tab) => {
+                  const TabIcon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setScorerSubTab(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-all ${
+                        scorerSubTab === tab.id
+                          ? 'border-huttle-primary text-huttle-primary'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <TabIcon className="w-3.5 h-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 md:p-5">
+              {/* Shared content input for all sub-tabs */}
+              <div className="mb-4">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Paste Your Content</label>
-                <textarea value={contentToScore} onChange={(e) => setContentToScore(e.target.value)} placeholder="Paste your draft post, caption, or content here to get a quality score..." className="w-full p-3 border border-gray-200 rounded-lg resize-none h-36 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
+                <textarea value={contentToScore} onChange={(e) => setContentToScore(e.target.value)} placeholder="Paste your draft post, caption, or content here..." className="w-full p-3 border border-gray-200 rounded-lg resize-none h-36 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
               </div>
 
-              <button onClick={handleScoreContent} disabled={isLoadingScore} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
-                {isLoadingScore ? <LoadingSpinner size="sm" /> : <BarChart3 className="w-4 h-4" />}
-                <span>{isLoadingScore ? 'Analyzing...' : 'Score Content'}</span>
-              </button>
+              {/* Quality Score sub-tab */}
+              {scorerSubTab === 'quality' && (
+                <div className="space-y-4">
+                  <button onClick={handleScoreContent} disabled={isLoadingScore} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+                    {isLoadingScore ? <LoadingSpinner size="sm" /> : <BarChart3 className="w-4 h-4" />}
+                    <span>{isLoadingScore ? 'Analyzing...' : 'Score Content'}</span>
+                  </button>
 
-              {contentScore && (
-                <div className="pt-4 border-t border-gray-100 space-y-4">
-                  <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
-                  
-                  {/* Overall Score */}
-                  <div className="flex flex-col items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
-                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
-                        <circle cx="40" cy="40" r="36" stroke="#e5e7eb" strokeWidth="6" fill="none" />
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r="36"
-                          stroke="#00bad3"
-                          strokeWidth="6"
-                          fill="none"
-                          strokeDasharray={`${(contentScore.overall / 100) * 226} 226`}
-                          className="transition-all duration-1000"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-lg sm:text-xl font-bold text-gray-900">{contentScore.overall}</span>
+                  {contentScore && (
+                    <div className="pt-4 border-t border-gray-100 space-y-4">
+                      <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                      <div className="flex flex-col items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                        <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="36" stroke="#e5e7eb" strokeWidth="6" fill="none" />
+                            <circle cx="40" cy="40" r="36" stroke="#00bad3" strokeWidth="6" fill="none" strokeDasharray={`${(contentScore.overall / 100) * 226} 226`} className="transition-all duration-1000" />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-lg sm:text-xl font-bold text-gray-900">{contentScore.overall}</span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-semibold text-gray-900 text-sm md:text-base">Overall Score</p>
+                          <p className="text-xs md:text-sm text-gray-500">{contentScore.overall >= 70 ? 'Great content!' : contentScore.overall >= 50 ? 'Good, with room to improve' : 'Needs work'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+                        {Object.entries(contentScore.breakdown).map(([key, value]) => (
+                          <div key={key} className="p-2.5 md:p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs text-gray-500 capitalize mb-1">{key}</p>
+                            <p className="text-lg md:text-xl font-bold text-gray-900">{value}%</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-huttle-primary/5 rounded-lg p-4 border border-huttle-primary/10">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                          <Lightbulb className="w-4 h-4 text-huttle-primary" />
+                          Suggestions
+                        </h4>
+                        <ul className="space-y-1.5">
+                          {contentScore.suggestions.map((suggestion, i) => (
+                            <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
+                              {suggestion}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
-                    <div className="text-center">
-                      <p className="font-semibold text-gray-900 text-sm md:text-base">Overall Score</p>
-                      <p className="text-xs md:text-sm text-gray-500">{contentScore.overall >= 70 ? 'Great content!' : contentScore.overall >= 50 ? 'Good, with room to improve' : 'Needs work'}</p>
+                  )}
+                  {contentScore && (
+                    <div className="mt-4 pt-3 border-t border-gray-100">
+                      <a
+                        href="/dashboard/trend-lab"
+                        className="text-xs text-huttle-primary hover:underline font-medium flex items-center gap-1"
+                      >
+                        Want to check platform algorithm fit? → Algorithm Alignment
+                      </a>
                     </div>
-                  </div>
-
-                  {/* Breakdown */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
-                    {Object.entries(contentScore.breakdown).map(([key, value]) => (
-                      <div key={key} className="p-2.5 md:p-3 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-gray-500 capitalize mb-1">{key}</p>
-                        <p className="text-lg md:text-xl font-bold text-gray-900">{value}%</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Suggestions */}
-                  <div className="bg-huttle-primary/5 rounded-lg p-4 border border-huttle-primary/10">
-                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4 text-huttle-primary" />
-                      Suggestions
-                    </h4>
-                    <ul className="space-y-1.5">
-                      {contentScore.suggestions.map((suggestion, i) => (
-                        <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
-                          {suggestion}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  )}
                 </div>
+              )}
+
+              {/* Human Score sub-tab */}
+              {scorerSubTab === 'human' && (
+                <HumanizerScore
+                  content={contentToScore}
+                  onContentUpdate={setContentToScore}
+                  hideInput
+                />
+              )}
+
+              {/* Performance Prediction sub-tab */}
+              {scorerSubTab === 'performance' && (
+                <PerformancePrediction
+                  content={contentToScore}
+                  hideInput
+                />
+              )}
+
+              {/* Algorithm Check sub-tab */}
+              {scorerSubTab === 'algorithm' && (
+                <AlgorithmChecker
+                  content={contentToScore}
+                  hideInput
+                />
               )}
             </div>
           </div>
@@ -1480,7 +1520,7 @@ export default function AITools() {
                         }}
                         className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded-lg text-xs font-medium transition-all"
                       >
-                        {savedIndex === 'full-guide-save' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save to Library</span></>}
+                        {savedIndex === 'full-guide-save' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save to Vault</span></>}
                       </button>
                     </div>
                   </div>

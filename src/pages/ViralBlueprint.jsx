@@ -895,47 +895,33 @@ Make the content specific, actionable, and optimized for ${selectedPlatform}. No
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50/50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
-      {/* Dynamic Background Mesh */}
-      <div className="fixed inset-0 pointer-events-none opacity-40 z-0 bg-command-center" />
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       
       <div className="relative z-10 max-w-4xl mx-auto space-y-8">
         
-        {/* Command Center Header */}
-        <div className="relative overflow-hidden rounded-2xl glass-panel p-8 md:p-10 transition-all duration-500 hover:shadow-lg group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/10 to-purple-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-gradient-to-br group-hover:from-orange-400/20 group-hover:to-purple-600/20 transition-all duration-700" />
-          
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-            <div className="flex items-center gap-5">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-purple-600 rounded-2xl blur opacity-40 animate-pulse" />
-                <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center shadow-xl ring-1 ring-white/20">
-                  <Flame className="w-8 h-8 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-3 mb-1 flex-wrap">
-                  <h1 className="text-3xl md:text-4xl font-display font-bold text-gray-900 tracking-tight">
-                    Viral Blueprint
-                  </h1>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-gray-900/20 ring-1 ring-white/20">
-                      Generator
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-huttle-gradient text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-huttle-blue/20 ring-1 ring-white/20">
-                      Beta
-                    </span>
-                  </div>
-                </div>
-                <p className="text-gray-500 text-lg">
-                  Engineer viral content with AI-powered precision
-                </p>
-              </div>
+        {/* Header */}
+        <div className="mb-4 md:mb-6 lg:mb-8">
+          <div className="flex items-start gap-2 md:gap-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+              <Flame className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
             </div>
-
-            {/* Usage Stats */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-0.5 flex-wrap">
+                <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
+                  Viral Blueprint
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full bg-huttle-gradient text-white text-[10px] font-bold uppercase tracking-wider">
+                  Beta
+                </span>
+              </div>
+              <p className="text-xs md:text-sm text-gray-500 mt-0.5">
+                Engineer viral content with AI-powered precision
+              </p>
+            </div>
             {hasAccess && (
-              <div className="w-full md:w-auto">
+              <div className="flex-shrink-0">
                 <AIUsageMeter
                   used={blueprintUsage.featureUsed}
                   limit={blueprintUsage.featureLimit}

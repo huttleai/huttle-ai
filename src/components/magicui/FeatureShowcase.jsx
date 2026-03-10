@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, 
-  Calendar, 
+  FolderOpen, 
   Repeat2, 
   Radio, 
   MessageSquare, 
@@ -60,53 +60,42 @@ const ViralBlueprintPreview = () => (
   </div>
 );
 
-const SmartCalendarPreview = () => (
+const ContentVaultPreview = () => (
   <div className="relative w-full bg-gradient-to-br from-slate-50 to-white rounded-2xl p-4 overflow-hidden border border-slate-200">
     <div className="flex items-center justify-between mb-3">
-      <span className="font-semibold text-slate-800 text-sm">February 2026</span>
+      <span className="font-semibold text-slate-800 text-sm">Content Vault</span>
       <div className="flex gap-1">
-        <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center">
-          <ChevronLeft size={14} className="text-slate-500" />
-        </div>
-        <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center">
-          <ChevronRight size={14} className="text-slate-500" />
-        </div>
+        <div className="px-2 py-0.5 rounded bg-cyan-100 text-cyan-600 text-xs font-medium">All Files</div>
+        <div className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-xs font-medium">Recent</div>
       </div>
     </div>
     
-    <div className="grid grid-cols-7 gap-1 text-center mb-2">
-      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-        <div key={i} className="text-xs text-slate-400 font-medium">{day}</div>
-      ))}
-    </div>
-    
-    <div className="grid grid-cols-7 gap-1">
-      {Array.from({ length: 28 }, (_, i) => {
-        const hasPost = [3, 7, 10, 14, 18, 21, 25].includes(i + 1);
-        const isOptimal = [7, 14, 21].includes(i + 1);
-        return (
-          <div
-            key={i}
-            className={`aspect-square rounded-lg flex items-center justify-center text-xs relative ${
-              hasPost 
-                ? isOptimal 
-                  ? 'bg-gradient-to-br from-cyan-400 to-blue-500 text-white font-bold' 
-                  : 'bg-cyan-100 text-cyan-700'
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {i + 1}
-            {isOptimal && (
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full feature-dot-pulse" />
-            )}
+    <div className="space-y-2">
+      {[
+        { name: 'Product Launch Script.txt', type: 'text', size: '2.4 KB', color: 'from-cyan-400 to-blue-500' },
+        { name: 'Brand Guidelines.pdf', type: 'pdf', size: '1.2 MB', color: 'from-red-400 to-red-500' },
+        { name: 'Instagram Carousel.png', type: 'image', size: '840 KB', color: 'from-purple-400 to-pink-500' },
+        { name: 'TikTok Hook Ideas.txt', type: 'text', size: '1.8 KB', color: 'from-slate-700 to-slate-900' },
+        { name: 'Q2 Content Plan.txt', type: 'text', size: '3.1 KB', color: 'from-green-400 to-emerald-500' },
+      ].map((file) => (
+        <div
+          key={file.name}
+          className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-100 shadow-sm"
+        >
+          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${file.color} flex items-center justify-center`}>
+            <span className="text-white text-[9px] font-bold uppercase">{file.type}</span>
           </div>
-        );
-      })}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-700 truncate">{file.name}</div>
+            <div className="text-[10px] text-slate-400">{file.size}</div>
+          </div>
+        </div>
+      ))}
     </div>
     
     <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
       <div className="w-2 h-2 bg-green-400 rounded-full" />
-      <span>Optimal posting time: 6:30 PM</span>
+      <span>5 assets stored · 250 MB available</span>
     </div>
   </div>
 );
@@ -263,12 +252,12 @@ const features = [
     preview: ViralBlueprintPreview,
   },
   {
-    id: 'smart-calendar',
-    title: 'Smart Calendar',
-    description: 'Auto-schedules posts at optimal times based on your audience engagement patterns and platform algorithms.',
-    icon: Calendar,
+    id: 'content-vault',
+    title: 'Content Vault',
+    description: 'Store, organize, and access all your content assets — scripts, images, drafts, and more — in one secure place.',
+    icon: FolderOpen,
     gradient: 'from-cyan-500 to-blue-500',
-    preview: SmartCalendarPreview,
+    preview: ContentVaultPreview,
   },
   {
     id: 'ai-plan-builder',

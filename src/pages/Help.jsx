@@ -1,6 +1,6 @@
 import { useState, useContext } from 'react';
 import { HelpCircle, Book, Mail, X, Star, Send, MessageSquarePlus, ChevronRight, 
-  LayoutDashboard, Calendar, FolderOpen, Wand2, Zap, Beaker, Repeat, Bot, Waves, Settings } from 'lucide-react';
+  LayoutDashboard, FolderOpen, Wand2, Zap, Beaker, Repeat, Waves, Settings, FileText, Target } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
@@ -34,7 +34,7 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations power all of Huttle AI\'s intelligent features. Your subscription includes a monthly pool of 800 total AI generations, plus individual limits on advanced features to ensure fair usage:\n\n• Trend Discovery (Quick Scan): 200/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Viral Blueprint: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Quality Scorer, Visual Brainstormer): Unlimited individual use — they count toward your 800 monthly total but have no individual cap.\n\nYour usage resets at the start of each billing cycle. You can track your usage in the sidebar AI meter and on each advanced feature\'s page.'
+      answer: 'AI generations power all of Huttle AI\'s intelligent features. Each plan includes a different monthly pool:\n\n• Essentials ($15/mo): 200 generations/month\n• Pro ($39/mo): 800 generations/month\n\nPro plans also have per-feature sub-limits on advanced tools to ensure fair usage:\n\n• Niche Intel: 5/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Viral Blueprint: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visual Brainstormer): No individual cap — they count toward your monthly total.\n\nYour usage resets at the start of each billing cycle. Track it in the sidebar AI meter or on each feature\'s page.'
     },
     {
       question: 'When do my AI generations reset?',
@@ -42,27 +42,31 @@ export default function Help() {
     },
     {
       question: 'How do I publish to social media?',
-      answer: 'Huttle AI uses a Copy & Open flow for posting. Click "Ready to Post" on any scheduled post, copy the full text (or caption/hashtags only), open your platform (Instagram, TikTok, YouTube, Facebook, or X), then paste and publish natively.'
+      answer: 'Huttle AI uses a Copy & Open flow for posting. Click "Ready to Post" on any scheduled post, copy the full text (or caption/hashtags only), open your platform (Instagram, TikTok, YouTube, Facebook, or X), then paste and publish natively. Huttle AI never connects to your social accounts — publishing is always copy-and-paste to the native app.'
+    },
+    {
+      question: 'What is the Full Post Builder?',
+      answer: 'Full Post Builder is a guided 5-step wizard that creates a complete, publish-ready post from scratch. You walk through Topic → Hook → Caption → Hashtags → CTA, with AI generating options at each step. Once finished, three scoring badges (Quality, Human Score, and Algorithm Alignment) grade your post so you can fine-tune before publishing. Your draft auto-saves so you can resume later.'
+    },
+    {
+      question: 'What is Niche Intel?',
+      answer: 'Niche Intel is an AI-powered research engine available on Pro and Founders Club plans. Enter your niche keywords or competitor handles and select a platform — the AI researches what content is actually working and returns Trending Themes (with momentum badges), Top Hook Patterns, Content Gap Opportunities, and 5 tailored Content Ideas. Click "Build Post" on any idea to send it directly to the Full Post Builder.'
     },
     {
       question: 'How does the Trend Lab work?',
-      answer: 'Trend Lab uses real-time AI analysis to scan social platforms and identify emerging trends in your niche. It provides trend scores, growth predictions, and content suggestions to help you create timely, relevant content.'
+      answer: 'Trend Lab is your hub for real-time trend intelligence. It has three sections:\n\n• Quick Scan — a rapid AI scan of rising topics in your niche, showing momentum, opportunity windows, and active platforms.\n• Deep Dive — a full intelligence report on a specific topic with competitor activity, audience sentiment, timing windows, and cited sources (Essentials/Pro).\n• Algorithm Alignment Checker — paste any draft content and select a platform to see how well it matches the platform\'s ranking signals.\n\nClick "Create Content" on any trend to jump to AI Tools, or "Remix" to send it to Content Remix Studio.'
     },
     {
-      question: 'How do I schedule posts with Smart Calendar?',
-      answer: 'Navigate to Smart Calendar, click on any date or use the "Create Post" button. Select your platforms, add your content, choose the date and time, and click Schedule. The calendar shows optimal posting times based on your audience engagement patterns.'
+      question: 'How do I save and organize content?',
+      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Free 250 MB, Essentials 5 GB, Pro 25 GB. Track your usage in the storage meter on the Content Vault page.'
     },
     {
       question: 'What is Brand Voice and how do I set it up?',
-      answer: 'Brand Voice helps AI understand your unique style. Go to Brand Voice page, describe your brand personality, tone, target audience, and key messaging. The AI will then generate content that matches your brand identity.'
-    },
-    {
-      question: 'How do I save content to my Content Library?',
-      answer: 'When you generate content using any AI tool, click the "Save to Library" button. You can also manually add content from the Content Library page. Organize saved content with tags and folders for easy access later.'
+      answer: 'Brand Voice helps AI understand your unique style. Go to Brand Voice page, describe your brand personality, tone, target audience, and key messaging. Select your active social platforms — these power features like Trend Lab, Remix Studio, and Viral Blueprint. The AI will then adapt all generated content to match your brand identity.'
     },
     {
       question: 'Is my data secure and private?',
-      answer: 'Yes, we take data security seriously. Your content and account information are encrypted and stored securely. We never share your data with third parties. You can delete your account and all associated data at any time from Settings.'
+      answer: 'Yes, we take data security seriously. Your content and account information are encrypted and stored securely. We never share your data with third parties. Huttle AI never connects to your social media accounts. You can delete your account and all associated data at any time from Settings.'
     }
   ];
 
@@ -77,120 +81,148 @@ export default function Help() {
       id: 'dashboard', 
       name: 'Dashboard', 
       icon: LayoutDashboard,
-      description: 'Your central hub for Huttle AI',
+      description: 'Your personalized daily content intelligence hub',
       tips: [
-        'View your content performance at a glance',
-        'See upcoming scheduled posts',
-        'Track your AI generation usage',
-        'Quick access to recent activity and trends'
+        'Trending Now shows 4 AI-curated trending topics in your niche with momentum badges and content angles',
+        'Hashtags of the Day gives you daily curated hashtags with reach estimates — click to copy any or all',
+        'AI Insights delivers 3 daily tips on timing, audience, platform strategy, and content types',
+        'Quick Create shortcuts let you jump straight into any of the 6 AI Power Tools',
+        'Recently Saved shows your latest Content Vault items for fast access',
+        'Dashboard data refreshes daily at 6 AM ET — check the freshness indicator in the header'
       ]
     },
     { 
-      id: 'calendar', 
-      name: 'Smart Calendar', 
-      icon: Calendar,
-      description: 'Schedule and manage your social media posts',
-      tips: [
-        'Click any date to create a new post',
-        'Drag and drop posts to reschedule',
-        'Green highlights show optimal posting times',
-        'Filter by platform to see specific content'
-      ]
-    },
-    { 
-      id: 'library', 
-      name: 'Content Library', 
+      id: 'content-vault', 
+      name: 'Content Vault', 
       icon: FolderOpen,
-      description: 'Store and organize your content',
+      description: 'Cloud storage and organization for all your content assets',
       tips: [
-        'Save generated content for later use',
-        'Organize with tags and categories',
-        'Search through your saved content',
-        'Export content for external use'
+        'Upload images (PNG/JPG/GIF), videos (MP4/MOV), or paste text content like captions and hooks',
+        'Create Projects to organize content into custom folders — assign items during upload or later',
+        'Switch between Grid view (visual thumbnails) and List view (metadata-dense rows)',
+        'Use the type filter tabs (All / Images / Videos / Text) and search bar to find content quickly',
+        'Click any item to preview, edit text inline, copy to clipboard, download, or move between projects',
+        'Storage limits vary by plan: Free 250 MB, Essentials 5 GB, Pro 25 GB — track usage in the sidebar meter'
+      ]
+    },
+    { 
+      id: 'full-post-builder', 
+      name: 'Full Post Builder', 
+      icon: FileText,
+      description: 'Guided 5-step wizard to create a complete, publish-ready post',
+      tips: [
+        'Step 1 — Enter your topic, select a platform and content goal (grow followers, drive engagement, generate leads, or make a sale)',
+        'Step 2 — Choose from 3 AI-generated hooks (Question, Bold Claim, Story, etc.) or regenerate for fresh options',
+        'Step 3 — Review and edit the AI-generated caption with a live character count for your platform\'s limit',
+        'Step 4 — Get up to 10 ranked hashtags labeled by tier (broad / mid / niche) with relevance scores',
+        'Step 5 — Pick a call-to-action style (Direct, Soft, Urgency, Question, Story) to close your post',
+        'Three scoring badges (Quality, Human Score, Algorithm Alignment) grade your finished post — use Copy All or Save to Vault'
       ]
     },
     { 
       id: 'plan-builder', 
       name: 'AI Plan Builder', 
       icon: Wand2,
-      description: 'Create comprehensive content plans',
+      description: 'Generate a 7-day or 14-day content strategy with AI',
       tips: [
-        'Generate a week or month of content ideas',
-        'Customize based on your niche and goals',
-        'Export plans to your calendar',
-        'Edit and refine AI suggestions'
+        'Set your content goal, time period (7 or 14 days), platform focus, and brand voice description',
+        'AI generates a day-by-day card grid with topic, format, best posting time, and tone for each day',
+        'Click "Open in Post Builder" on any day\'s card to start building that post immediately',
+        'Use "Save Full Plan to Vault" to keep the entire plan, or "Export Plan" to copy a text summary to clipboard',
+        'Generation takes about 25 seconds — a progress bar tracks it in real time'
       ]
     },
     { 
       id: 'ai-tools', 
       name: 'AI Power Tools', 
       icon: Zap,
-      description: 'Quick AI-powered content generation',
+      description: '6 specialized AI tools for sharpening every part of your content',
       tips: [
-        'Generate captions instantly',
-        'Create relevant hashtag sets',
-        'Get content ideas for any topic',
-        'Improve existing content with AI'
+        'Caption Generator — create up to 4 caption variations by keyword, platform, length, and tone',
+        'Hashtag Generator — get ranked hashtags with engagement scores and estimated reach per platform',
+        'Hook Builder — generate scroll-stopping openers in styles like Question, Teaser, Shocking Statement, or Story',
+        'CTA Suggester — get 3 call-to-action options (Direct, Soft, Urgency, Question, Story) tailored to your goal',
+        'Content Scorer — 4 sub-tabs: Quality Score, Human Score (AI detection), Performance Prediction, and Algorithm Alignment',
+        'Visual Brainstormer — choose a content format and get either AI Image Prompts or a Manual Shoot Guide with shot list, lighting, and props'
       ]
     },
     { 
       id: 'trend-lab', 
       name: 'Trend Lab', 
       icon: Beaker,
-      description: 'Discover trending topics and content',
+      description: 'Discover trending topics, check algorithm alignment, and plan timely content',
       tips: [
-        'See real-time trending topics',
-        'Filter trends by your niche',
-        'Get content suggestions for trends',
-        'Track trend momentum over time'
+        'Quick Scan runs a rapid AI scan of rising topics in your niche with momentum badges and opportunity windows',
+        'Deep Dive produces a full intelligence report for any topic — competitor activity, audience sentiment, timing windows, and sources',
+        'Algorithm Alignment Checker scores how well your draft content matches a platform\'s ranking signals',
+        'Click "Create Content" on any trend to jump to AI Tools with the topic pre-filled, or "Remix" to send it to Content Remix Studio',
+        'Trend Forecaster (Coming Soon) will deliver a 7-day outlook with velocity predictions'
+      ]
+    },
+    { 
+      id: 'niche-intel', 
+      name: 'Niche Intel', 
+      icon: Target,
+      description: 'AI-powered research engine that reveals what content is working in your niche (Pro)',
+      tips: [
+        'Enter your niche keywords or competitor handles, select a platform, and click "Analyze Now"',
+        'Trending Themes show momentum badges (Rising / Peaking / Declining), best formats, and why each theme is working',
+        'Top Hook Patterns give you ready-to-use, scroll-stopping hook templates — click to copy',
+        'Content Gap Opportunities surface topics your competitors are missing, with opportunity tiers',
+        '5 Content Ideas are tailored to your brand — click "Build Post" to send any idea to Full Post Builder',
+        'Available on Pro plan (5 analyses/month) and Founders Club (10/month)'
       ]
     },
     { 
       id: 'content-remix', 
       name: 'Content Remix Studio', 
       icon: Repeat,
-      description: 'Remix and transform content for maximum reach',
+      description: '4-step wizard to remix any content for multiple platforms at once',
       tips: [
-        'Remix content for viral reach or sales conversion',
-        'Transform content across different platforms and formats',
-        'AI-powered content adaptation using your brand voice',
-        'Generate multiple variations from a single piece of content'
+        'Step 1 — Paste any content (captions, blog excerpts, emails, scripts) with a 10-character minimum',
+        'Step 2 — Choose a remix goal: Viral Reach, Sales Conversion, Educational, or Community Building',
+        'Step 3 — Select which of your Brand Voice platforms to generate remixed versions for',
+        'Step 4 — Review per-platform results with up to 3 variations each — Copy, Save to Vault, or Remix Again',
+        'Trending topics from Trend Lab can be sent directly here via the "Remix" button'
       ]
     },
     { 
       id: 'viral-blueprint', 
       name: 'Viral Blueprint', 
       icon: Zap,
-      description: 'Generate step-by-step viral content scripts',
+      description: 'AI-generated complete content blueprint with scripts, visuals, and SEO strategy',
       tips: [
-        'Get a complete director\'s cut with script and visuals',
-        'AI generates platform-specific viral strategies',
-        'SEO-optimized hooks, captions, and hashtags included',
-        'Audio and visual mood recommendations for your content'
+        'Select a platform and format (Reel, Carousel, Thread, Short, etc.) then fill in your goal, topic, and audience',
+        'The blueprint includes Viral Hooks (copy-on-click), a Director\'s Cut with script and visual direction per section',
+        'SEO Strategy provides trending keywords and optimized hashtags with a "Copy All Tags" button',
+        'Video content includes Audio Vibe recommendations with mood, BPM, and audio suggestions',
+        'A Viral Score gauge (0–100) rates the overall virality potential of your blueprint',
+        'Generation takes 60–90 seconds — available on Essentials and Pro plans'
       ]
     },
     { 
       id: 'brand-voice', 
       name: 'Brand Voice', 
       icon: Waves,
-      description: 'Define your unique brand identity',
+      description: 'Define your brand identity so AI matches your unique style',
       tips: [
-        'Describe your brand personality',
-        'Set your preferred tone and style',
-        'Define your target audience',
-        'AI will match your voice in generations'
+        'Describe your brand personality, tone, and preferred writing style',
+        'Set your target audience and key messaging pillars',
+        'Select your active social platforms — these power Trend Lab, Remix Studio, and Viral Blueprint',
+        'All AI-generated content across Huttle AI will adapt to your configured voice'
       ]
     },
     { 
       id: 'settings', 
       name: 'Settings', 
       icon: Settings,
-      description: 'Configure your account',
+      description: 'Manage your account, platforms, billing, and preferences',
       tips: [
-        'Set your preferred platforms for content creation',
-        'Manage notification preferences',
-        'Update account information',
-        'Configure timezone and language'
+        'Quick Nav cards link you to Profile, Brand Voice, Security, and Billing pages',
+        'Preferred Platforms toggles control which platforms appear in Trend Lab, Remix Studio, and publishing flows',
+        'Manage Billing opens the Stripe Customer Portal for plan changes, payment methods, and cancellation',
+        'General settings let you choose your language and timezone',
+        'Notification toggles control Trend Alerts and AI Usage Alerts'
       ]
     }
   ];

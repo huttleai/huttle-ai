@@ -18,6 +18,10 @@ const PERPLEXITY_API_KEY =
   process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
+// Model: llama-3.1-sonar-small-128k-online | Updated: March 2026
+// To upgrade: change the model string below and update .env.example
+const MODEL = "llama-3.1-sonar-small-128k-online";
+
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

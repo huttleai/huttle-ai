@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, Calendar, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video, AlertCircle, Eye, Clock, Lightbulb, HelpCircle, Building2, AtSign } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Sparkles, Target, Users, MessageSquare, Rocket, TrendingUp, Palette, Zap, Briefcase, User, BookOpen, Smile, PenTool, Heart, Search, Instagram, Facebook, Youtube, Twitter, Video, AlertCircle, Eye, Clock, Lightbulb, HelpCircle, Building2, AtSign } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
 import { BrandContext, useBrand } from '../context/BrandContext';
@@ -105,7 +105,7 @@ const CREATOR_CONTENT_GOALS = [
 const POSTING_FREQUENCIES = [
   { value: 'daily', label: 'Daily', description: '7+ posts per week', icon: Zap },
   { value: 'frequent', label: '3-5 times per week', description: 'Regular posting schedule', icon: TrendingUp },
-  { value: 'moderate', label: '1-2 times per week', description: 'Consistent but flexible', icon: Calendar },
+  { value: 'moderate', label: '1-2 times per week', description: 'Consistent but flexible', icon: Clock },
   { value: 'occasional', label: 'A few times per month', description: 'Quality over quantity', icon: Sparkles }
 ];
 
@@ -156,7 +156,7 @@ const CONTENT_STRENGTHS = [
 
 // Biggest challenges
 const CONTENT_CHALLENGES = [
-  { value: 'consistency', label: 'Staying Consistent', description: 'Posting regularly is hard', icon: Calendar },
+  { value: 'consistency', label: 'Staying Consistent', description: 'Creating regularly is hard', icon: Target },
   { value: 'ideas', label: 'Coming Up With Ideas', description: 'Running out of content ideas', icon: Lightbulb },
   { value: 'engagement', label: 'Getting Engagement', description: 'Not enough likes/comments', icon: MessageSquare },
   { value: 'growth', label: 'Growing My Audience', description: 'Gaining new followers', icon: TrendingUp },

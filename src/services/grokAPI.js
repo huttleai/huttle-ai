@@ -15,6 +15,7 @@
  * DEMO MODE: When VITE_DEMO_MODE=true or API fails, returns fitness-themed mock data
  */
 
+import { callClaudeAPI } from './claudeAPI';
 import { buildSystemPrompt, getBrandVoice, getNiche, getTargetAudience, buildBrandContext } from '../utils/brandContextBuilder';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import { supabase } from '../config/supabase';
@@ -261,7 +262,7 @@ export async function scoreContentQuality(content, brandData = null) {
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const brandSection = brandContext ? `\n\nBrand Profile to evaluate against:\n${brandContext}` : '';
 
-    const data = await callGrokAPI([
+    const messages = [
       {
         role: 'system',
         content: `You are Content Intelligence Engine — a senior content strategist trained on thousands of viral posts, A/B test results, and platform algorithm signals. You combine data-driven analysis with creative judgment. You are direct, specific, and never give meaningless praise or vague suggestions.
@@ -322,7 +323,17 @@ Content: ${content}${brandSection}
 
 Provide specific, actionable improvement suggestions.`
       }
-    ], 0.3);
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
     
     return {
       success: true,
@@ -1574,4 +1585,348 @@ Be HIGHLY SPECIFIC to the topic "${topic}" — never give generic photography ad
     console.error('Visual brainstorm error:', error);
     return { success: false, error: error.message || 'Failed to generate visual brainstorm' };
   }
+}
+
+/**
+ * Score how "human" vs AI-generated content sounds.
+ * Returns structured JSON with overall score, 4 dimension scores, and flagged phrases.
+ */
+export async function scoreHumanness(content, brandData = null) {
+  if (isDemoMode()) {
+    await simulateDelay(800, 1500);
+    return {
+      success: true,
+      score: {
+        overall: 72,
+        label: 'Mostly natural',
+        dimensions: {
+          sentenceVariety: { score: 78, feedback: 'Good mix of sentence lengths. One run-on sentence in paragraph 2.' },
+          naturalVocabulary: { score: 65, feedback: 'Flagged 2 AI-typical phrases: "delve into" and "it\'s important to note".' },
+          voiceConsistency: { score: 80, feedback: 'Tone mostly matches brand voice. Slight formality drift in closing.' },
+          conversationalFlow: { score: 68, feedback: 'Transitions between paragraphs feel slightly mechanical.' },
+        },
+        flaggedPhrases: [
+          { original: 'delve into this topic', suggestion: 'dig into this topic', dimension: 'naturalVocabulary' },
+          { original: "It's important to note that", suggestion: 'Here\'s the thing —', dimension: 'naturalVocabulary' },
+        ],
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const brandSection = brandContext ? `\n\nBrand Voice Profile:\n${brandContext}` : '';
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Human Voice Analyst — an expert in distinguishing AI-generated text from authentic human writing. You evaluate content strictly on how natural, human, and voice-consistent it sounds — NOT on grammar, quality, or persuasion.
+
+SCORING DIMENSIONS (each 0–100):
+- sentenceVariety: Do sentences vary in length and structure, or is there a repetitive pattern typical of LLMs?
+- naturalVocabulary: Are there AI-typical phrases like "delve into", "it's important to note", "in today's world", "comprehensive guide", "in conclusion", "Moreover", "Furthermore", "landscape"? Flag each one.
+- voiceConsistency: Does the tone match the provided brand voice profile? Flag any drift.
+- conversationalFlow: Do transitions feel natural or stiff? Does it read like speech or like a textbook?
+
+OVERALL SCORE (0–100):
+- 80-100: "Sounds like you"
+- 60-79: "Mostly natural"
+- 40-59: "Slightly robotic"
+- 0-39: "AI detectable"
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "overall": 72,
+  "label": "Mostly natural",
+  "dimensions": {
+    "sentenceVariety": { "score": 78, "feedback": "specific observation" },
+    "naturalVocabulary": { "score": 65, "feedback": "specific observation" },
+    "voiceConsistency": { "score": 80, "feedback": "specific observation" },
+    "conversationalFlow": { "score": 68, "feedback": "specific observation" }
+  },
+  "flaggedPhrases": [
+    { "original": "exact phrase from content", "suggestion": "more natural alternative", "dimension": "naturalVocabulary" }
+  ]
+}
+
+RULES:
+- Flag a minimum of 1 phrase and maximum of 5
+- Each suggestion must be a drop-in replacement, not a rewrite of the whole sentence
+- Never score above 90 unless the content genuinely reads like casual human speech
+- Do not evaluate content quality, grammar, or marketing effectiveness`,
+      },
+      {
+        role: 'user',
+        content: `Analyze how human this content sounds. Score it and flag specific AI-sounding phrases with natural alternatives.${brandSection}
+
+Content:
+${content}`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, score: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Humanizer score error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Auto-improve a flagged phrase to sound more human.
+ */
+export async function autoImprovePhrase(fullContent, originalPhrase, brandData = null) {
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const messages = [
+      {
+        role: 'system',
+        content: `You rewrite ONLY the specific flagged phrase to sound more natural and human. Return ONLY the improved full content with the phrase replaced — no explanation, no JSON.${brandContext ? `\n\nBrand Voice:\n${brandContext}` : ''}`,
+      },
+      {
+        role: 'user',
+        content: `Replace this phrase: "${originalPhrase}"
+
+Full content:
+${fullContent}
+
+Return the full content with ONLY that phrase rewritten to sound more human. Do not change anything else.`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.5);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.5);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
+  } catch (error) {
+    console.error('Auto-improve error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Predict performance of content on a given platform.
+ * trendContext comes from a prior Perplexity search.
+ */
+export async function predictPerformance(content, platform, trendContext, brandData = null) {
+  if (isDemoMode()) {
+    await simulateDelay(1000, 2000);
+    return {
+      success: true,
+      prediction: {
+        engagementLevel: 'High',
+        reachPotential: 'Growing',
+        reachRange: '500-5K',
+        platformFitScore: 78,
+        platformFitNote: `This content is optimized for ${platform} at 78%.`,
+        trendAlignment: 72,
+        trendAlignmentNote: 'Topic aligns with 2 currently trending themes in your niche.',
+        bestPostingWindow: 'Tuesday-Thursday, 7-9 PM',
+        confidence: 'Medium',
+        confidenceNote: 'Based on caption + hashtags. Add a hook for higher confidence.',
+        reasoning: 'Content structure follows current high-performing patterns. Strong emotional hook but could benefit from a more specific CTA.',
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Performance Predictor — a data analyst who evaluates social media content against current platform signals and trend alignment. You are cautious and honest. Never claim high confidence. Always label output as AI prediction.
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "engagementLevel": "Low" | "Medium" | "High" | "Viral Potential",
+  "reachPotential": "Niche" | "Growing" | "Breakout" | "Trending",
+  "reachRange": "under 500 views" | "500-5K" | "5K-50K" | "50K+",
+  "platformFitScore": 78,
+  "platformFitNote": "This content is optimized for [platform] at X%.",
+  "trendAlignment": 72,
+  "trendAlignmentNote": "one sentence",
+  "bestPostingWindow": "Tuesday-Thursday, 7-9 PM",
+  "confidence": "Low" | "Medium",
+  "confidenceNote": "brief reason for confidence level",
+  "reasoning": "2-3 sentence analysis"
+}
+
+RULES:
+- Never set confidence to "High" — always "Low" or "Medium"
+- platformFitScore under 60 must include a better-fitting platform suggestion in platformFitNote
+- Base engagement prediction on content structure, not just topic
+- If trendContext is provided, use it for trendAlignment scoring`,
+      },
+      {
+        role: 'user',
+        content: `Predict the performance of this content on ${platform}.
+${brandContext ? `\nBrand context:\n${brandContext}` : ''}
+${trendContext ? `\nCurrent trend context for this niche on ${platform}:\n${trendContext}` : ''}
+
+Content:
+${content}`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, prediction: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Performance prediction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Analyze niche research data and generate structured content ideas.
+ */
+export async function analyzeNiche(researchData, brandData, platform = 'instagram') {
+  if (isDemoMode()) {
+    await simulateDelay(1500, 2500);
+    return {
+      success: true,
+      analysis: {
+        trendingThemes: [
+          { name: 'Behind-the-scenes content', why: 'Audiences crave authenticity over polished content.', bestFormat: 'Reel', momentum: 'Rising' },
+          { name: 'Myth-busting posts', why: 'Controversial takes drive massive comment engagement.', bestFormat: 'Carousel', momentum: 'Peaking' },
+          { name: 'Day-in-the-life', why: 'Relatable lifestyle content builds parasocial connection.', bestFormat: 'Reel', momentum: 'Rising' },
+        ],
+        hookPatterns: [
+          'How I [result] in [timeframe] without [common objection]',
+          'The [adjective] truth about [topic] nobody tells you',
+          'Stop doing [common mistake] — here\'s what works instead',
+          'I tested [method] for [timeframe]. Here\'s what happened...',
+        ],
+        contentGaps: [
+          { topic: 'Budget-friendly alternatives', reason: 'High search volume but few creators covering this angle.', label: 'Untapped Opportunity' },
+          { topic: 'Common mistakes beginners make', reason: 'Questions flooding comments but no dedicated content.', label: 'Untapped Opportunity' },
+        ],
+        contentIdeas: [
+          { title: '5 myths holding you back', format: 'Carousel', hook: 'Everyone believes #3 but it\'s completely wrong...', platformFit: 'Instagram' },
+          { title: 'My morning routine breakdown', format: 'Reel', hook: 'I changed one thing and it changed everything.', platformFit: 'TikTok' },
+          { title: 'The tool nobody talks about', format: 'Static Post', hook: 'I\'ve been keeping this secret for 6 months.', platformFit: 'Instagram' },
+          { title: 'Honest review after 90 days', format: 'Reel', hook: 'Here\'s what they don\'t show you...', platformFit: 'TikTok' },
+          { title: 'Beginner vs. Pro comparison', format: 'Carousel', hook: 'Which one are you? Slide to find out.', platformFit: 'Instagram' },
+        ],
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Niche Intelligence Analyst — you transform raw trend research into actionable content strategy. You generate ORIGINAL ideas inspired by trends, never copied from them.
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "trendingThemes": [
+    { "name": "Theme name", "why": "Why it's working (1-2 sentences)", "bestFormat": "Reel|Carousel|Static|Story", "momentum": "Rising|Peaking|Declining" }
+  ],
+  "hookPatterns": [
+    "How I [result] in [timeframe] without [common objection]"
+  ],
+  "contentGaps": [
+    { "topic": "Underserved topic", "reason": "Why this is an opportunity", "label": "Untapped Opportunity" }
+  ],
+  "contentIdeas": [
+    { "title": "Post title/concept", "format": "Reel|Carousel|Static", "hook": "Opening hook line", "platformFit": "Platform name" }
+  ]
+}
+
+RULES:
+- trendingThemes: 3-5 themes, each with momentum badge
+- hookPatterns: 3-4 fillable templates with [brackets]
+- contentGaps: 2-3 underserved topics with clear audience demand
+- contentIdeas: exactly 5 original ideas with format + hook + platform fit
+- All ideas must be original and aligned with the brand voice
+- Never copy or closely paraphrase existing content`,
+      },
+      {
+        role: 'user',
+        content: `Based on this niche research, generate content intelligence:
+
+Research data:
+${researchData}
+
+Target platform: ${platform}
+${brandContext ? `\nBrand profile:\n${brandContext}` : ''}
+
+Generate trending themes, hook patterns, content gaps, and 5 original content ideas.`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.7);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.7);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, analysis: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Niche analysis error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+function parseJsonFromResponse(text) {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    return JSON.parse(text.trim());
+  } catch {
+    /* continue */
+  }
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    try { return JSON.parse(fenced[1].trim()); } catch { /* continue */ }
+  }
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) {
+    try { return JSON.parse(braceMatch[0]); } catch { /* continue */ }
+  }
+  return null;
 }

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
 
@@ -7,6 +8,41 @@ process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(
   '.cache',
   'ms-playwright'
 );
+
+function resolveChromiumExecutablePath() {
+  const systemChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+  if (fs.existsSync(systemChromePath)) {
+    return systemChromePath;
+  }
+
+  const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+
+  if (!browsersPath || !fs.existsSync(browsersPath)) {
+    return undefined;
+  }
+
+  const shellDirectory = fs
+    .readdirSync(browsersPath)
+    .find((entry) => entry.startsWith('chromium_headless_shell-'));
+
+  if (!shellDirectory) {
+    return undefined;
+  }
+
+  const shellPath = path.join(browsersPath, shellDirectory);
+  const platformDirectory = fs
+    .readdirSync(shellPath)
+    .find((entry) => entry.startsWith('chrome-headless-shell-mac'));
+
+  if (!platformDirectory) {
+    return undefined;
+  }
+
+  return path.join(shellPath, platformDirectory, 'chrome-headless-shell');
+}
+
+const chromiumExecutablePath = resolveChromiumExecutablePath();
 
 /**
  * Huttle AI - Playwright E2E Configuration
@@ -37,14 +73,19 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: chromiumExecutablePath
+          ? { executablePath: chromiumExecutablePath }
+          : undefined,
+      },
     },
   ],
   webServer: {
     command: 'VITE_SKIP_AUTH=true npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
-    timeout: 30000,
+    timeout: 120000,
     env: {
       VITE_SKIP_AUTH: 'true',
     },

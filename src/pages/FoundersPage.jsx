@@ -324,7 +324,7 @@ export default function FoundersPage() {
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     "Viral Blueprint Generator",
-                    "Smart Calendar",
+                    "AI Power Tools",
                     "Content Remix Studio",
                     "AI Power Tools",
                     "Quality Scorer",

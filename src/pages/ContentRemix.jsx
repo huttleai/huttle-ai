@@ -742,18 +742,6 @@ export default function ContentRemix() {
                             {isCopied ? 'Copied!' : 'Copy'}
                           </button>
                           <button
-                            onClick={() => {
-                              const varText = typeof variation === 'string' ? variation : ensureString(variation);
-                              sessionStorage.setItem('createPostContent', varText.substring(0, 500));
-                              showToast('Opening post creator...', 'success');
-                              navigate('/dashboard/smart-calendar');
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-huttle-50 text-huttle-primary border border-huttle-200 rounded-lg hover:bg-huttle-100 transition-colors"
-                          >
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            Use in Post
-                          </button>
-                          <button
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                           >
                             <Save className="w-3.5 h-3.5" />

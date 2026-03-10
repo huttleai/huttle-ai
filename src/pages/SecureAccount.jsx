@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../config/supabase';
-import { Lock, Loader, ShieldCheck, Sparkles, Calendar, TrendingUp, Zap, Eye, EyeOff } from 'lucide-react';
+import { Lock, Loader, ShieldCheck, Sparkles, TrendingUp, Zap, Eye, EyeOff } from 'lucide-react';
 
 export default function SecureAccount() {
   const [password, setPassword] = useState('');
@@ -53,7 +53,7 @@ export default function SecureAccount() {
 
   const features = [
     { icon: Sparkles, text: 'AI-powered content generation' },
-    { icon: Calendar, text: 'Smart scheduling & planning' },
+    { icon: Zap, text: 'Full suite of AI creation tools' },
     { icon: TrendingUp, text: 'Trend analysis & forecasting' },
     { icon: Zap, text: 'Boost engagement instantly' },
   ];

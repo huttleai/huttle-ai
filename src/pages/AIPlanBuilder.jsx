@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
-import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useRef, useContext } from 'react';
+import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, ArrowRight, Copy, Check, FolderPlus } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { useContent } from '../context/ContentContext';
 import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
 import { createJobDirectly, triggerN8nWebhook } from '../services/planBuilderAPI';
-import { supabase } from '../config/supabase';
+import { supabase, saveContentLibraryItem } from '../config/supabase';
+import { AuthContext } from '../context/AuthContext';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
 import { usePreferredPlatforms, ALL_PLATFORMS } from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
@@ -99,6 +101,7 @@ export default function AIPlanBuilder() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const planUsage = useAIUsage('planBuilder');
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   
   // Form state
   const [selectedGoal, setSelectedGoal] = useState('Grow followers');
@@ -415,7 +418,7 @@ export default function AIPlanBuilder() {
               AI Plan Builder
             </h1>
             <p className="text-sm md:text-base text-gray-500">
-              Generate strategic 7-14 day content calendars powered by AI
+              Generate your content strategy
             </p>
           </div>
         </div>
@@ -438,7 +441,7 @@ export default function AIPlanBuilder() {
             <History className="w-5 h-5 text-huttle-primary" />
             Your Latest Plan
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Scroll down to see your generated content calendar</p>
+          <p className="text-sm text-gray-500 mt-1">Scroll down to see your content strategy</p>
         </div>
       )}
 
@@ -590,7 +593,7 @@ export default function AIPlanBuilder() {
         <p className="text-gray-600 mb-6 text-sm md:text-base">
           {isGenerating 
             ? 'Our AI is analyzing trends and creating your personalized content strategy'
-            : 'AI will generate a complete content calendar based on your goals and preferences'
+            : 'AI will generate a complete content strategy based on your goals and preferences'
           }
         </p>
         
@@ -618,183 +621,193 @@ export default function AIPlanBuilder() {
         </button>
       </div>
 
-      {/* Generated Plan Display */}
+      {/* Generated Plan Display — Day Cards */}
       {generatedPlan && (
         <div className="mt-8 space-y-6">
-          {/* Plan Summary */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
+          {/* Plan Summary Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6"
+          >
             <div className="flex items-center gap-3 mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Your AI-Generated Plan</h2>
-                <p className="text-gray-600">Goal: {generatedPlan.goal} over {generatedPlan.period} {typeof generatedPlan.period === 'number' ? 'days' : ''}</p>
+                <h2 className="text-2xl font-bold text-gray-900">Your Content Strategy</h2>
+                <p className="text-gray-600">Goal: {generatedPlan.goal}</p>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-lg p-4 border border-green-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Platforms</h4>
+                <p className="text-sm font-semibold text-gray-900">{generatedPlan.platforms?.join(', ') || 'Multi-platform'}</p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-green-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Days</h4>
+                <p className="text-3xl font-bold text-huttle-primary">{generatedPlan.schedule?.length || generatedPlan.period || 7}</p>
+              </div>
               <div className="bg-white rounded-lg p-4 border border-green-200">
                 <h4 className="text-sm font-semibold text-gray-700 mb-1">Total Posts</h4>
                 <p className="text-3xl font-bold text-huttle-primary">{generatedPlan.totalPosts}</p>
               </div>
               <div className="bg-white rounded-lg p-4 border border-green-200">
-                <h4 className="text-sm font-semibold text-gray-700 mb-1">Platforms</h4>
-                <p className="text-lg font-semibold text-gray-900">{generatedPlan.platforms.join(', ')}</p>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-green-200">
-                <h4 className="text-sm font-semibold text-gray-700 mb-1">Content Mix</h4>
-                <div className="text-sm">
-                  <span className="text-green-600 font-semibold">{generatedPlan.contentMix.educational}%</span> Educational • 
-                  <span className="text-huttle-primary font-semibold"> {generatedPlan.contentMix.entertaining}%</span> Fun • 
-                  <span className="text-purple-600 font-semibold"> {generatedPlan.contentMix.promotional}%</span> Promo
-                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Generations Needed</h4>
+                <p className="text-sm text-gray-600">~{generatedPlan.totalPosts * 5} to build all posts</p>
               </div>
             </div>
+          </motion.div>
+
+          {/* Plan-Level Actions */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                const firstPost = generatedPlan.schedule?.[0]?.posts?.[0];
+                if (firstPost) {
+                  const params = new URLSearchParams({
+                    topic: firstPost.topic || firstPost.theme || '',
+                    platform: (firstPost.platform || 'instagram').toLowerCase(),
+                  });
+                  navigate(`/dashboard/full-post-builder?${params.toString()}`);
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-huttle-gradient text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all"
+            >
+              <Sparkles className="w-4 h-4" />
+              Build All in Post Builder
+            </button>
+            <button
+              onClick={async () => {
+                if (!user?.id) { showToast('Please log in to save', 'error'); return; }
+                try {
+                  const planData = {
+                    goal: generatedPlan.goal,
+                    period: generatedPlan.period,
+                    platforms: generatedPlan.platforms,
+                    schedule: generatedPlan.schedule,
+                    totalPosts: generatedPlan.totalPosts,
+                    contentMix: generatedPlan.contentMix,
+                    savedAt: new Date().toISOString(),
+                  };
+                  const result = await saveContentLibraryItem(user.id, {
+                    name: `Content Plan — ${generatedPlan.goal}`,
+                    type: 'text',
+                    content: JSON.stringify(planData, null, 2),
+                    size_bytes: 0,
+                    description: 'Content Plan from AI Plan Builder',
+                  });
+                  if (result.success) showToast('Plan saved to Content Vault!', 'success');
+                  else showToast('Failed to save plan', 'error');
+                } catch { showToast('Failed to save plan', 'error'); }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-all"
+            >
+              <FolderPlus className="w-4 h-4" />
+              Save Full Plan to Vault
+            </button>
+            <button
+              onClick={() => {
+                const planText = generatedPlan.schedule?.map((day) =>
+                  day.posts?.map((post) =>
+                    `Day ${day.day}: [${post.platform}] — ${post.topic || post.theme}`
+                  ).join('\n')
+                ).join('\n') || '';
+                navigator.clipboard.writeText(planText).then(() => showToast('Plan copied to clipboard!', 'success'));
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-all"
+            >
+              <Copy className="w-4 h-4" />
+              Export Plan
+            </button>
           </div>
 
-          {/* Content Calendar */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-huttle-primary" />
-              Content Calendar
-            </h3>
-            
-            <div className="space-y-4">
-              {generatedPlan.schedule.map((daySchedule, dayIdx) => (
-                <div 
-                  key={daySchedule.day} 
-                  className="border border-gray-200 rounded-xl p-4 hover:border-huttle-primary transition-all animate-fadeIn"
-                  style={{ animationDelay: `${dayIdx * 100}ms` }}
+          {/* Day Cards */}
+          <div className="space-y-4">
+            {generatedPlan.schedule?.map((daySchedule, dayIdx) => (
+              daySchedule.posts?.map((post, postIdx) => (
+                <motion.div
+                  key={`day-${daySchedule.day}-post-${postIdx}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: (dayIdx * daySchedule.posts.length + postIdx) * 0.1 }}
+                  className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-all"
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="px-3 py-1 bg-huttle-gradient text-white text-sm font-bold rounded-lg">
-                      Day {daySchedule.day}
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="px-3 py-1 bg-huttle-gradient text-white text-sm font-bold rounded-lg">
+                        Day {daySchedule.day}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {getPlatformIcon(post.platform, 'w-4 h-4')}
+                        <span className="text-sm font-semibold text-gray-900">{post.platform}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                      Goal: {generatedPlan.goal}
                     </span>
                   </div>
-                  <div className="space-y-2">
-                    {daySchedule.posts.map((post, idx) => (
-                      <HoverPreview
-                        key={idx}
-                        preview={
-                          <div className="space-y-3">
-                            <div>
-                              <h4 className="font-bold text-gray-900 mb-2">
-                                {post.topic || post.theme || post.type}
-                              </h4>
-                              {post.reasoning && (
-                                <p className="text-sm text-gray-600 mb-3">
-                                  <span className="font-medium">Why this works:</span> {post.reasoning}
-                                </p>
-                              )}
-                            </div>
-                            <div className="space-y-1 text-sm border-t pt-2">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Content Type:</span>
-                                <span className="font-semibold">{post.content_type || post.type}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Topic:</span>
-                                <span className="font-semibold">{post.topic || post.theme}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Platform:</span>
-                                <span className="font-semibold flex items-center gap-1">
-                                  {getPlatformIcon(post.platform, 'w-4 h-4')}
-                                  {post.platform}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Optimal Time:</span>
-                                <span className="font-semibold text-green-600">
-                                  {formatTo12Hour(post.scheduled_time || post.time)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="bg-huttle-50 rounded p-2 text-xs text-huttle-primary border-t">
-                              💡 Time optimized for {post.platform} peak engagement
-                            </div>
-                          </div>
-                        }
-                      >
-                        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all cursor-pointer group">
-                          <div className="flex-shrink-0 mt-0.5">
-                            {getPlatformIcon(post.platform, 'w-5 h-5')}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className="font-semibold text-sm text-gray-900">
-                                {post.platform} • {formatTo12Hour(post.scheduled_time || post.time)}
-                              </span>
-                              <span className="text-xs px-2 py-0.5 bg-huttle-primary/10 text-huttle-primary rounded-full font-medium">
-                                {post.content_type || post.type}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-700 truncate">
-                              {post.topic || post.theme}
-                            </p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-huttle-primary transition-colors flex-shrink-0" />
-                        </div>
-                      </HoverPreview>
-                    ))}
+                  
+                  <p className="text-gray-800 mb-4">{post.topic || post.theme || 'Content idea'}</p>
+                  
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-600 mb-4">
+                    <span className="bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                      Format: {post.content_type || post.type || 'Post'}
+                    </span>
+                    <span className="bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                      Best time: {post.scheduled_time ? formatTo12Hour(post.scheduled_time) : 'TBD'}
+                    </span>
+                    {post.reasoning && (
+                      <span className="bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                        Tone: {post.reasoning.includes('educational') ? 'Educational' : post.reasoning.includes('entertaining') ? 'Entertaining' : 'Inspirational'}
+                      </span>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-            
-            {/* Info Message */}
-            <div className="bg-huttle-50 border border-huttle-200 rounded-lg p-4 flex items-start gap-3">
-              <Info className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-gray-900 font-medium mb-1">
-                  Customize Your Plan in Smart Calendar
-                </p>
-                <p className="text-xs text-gray-700">
-                  After exporting, you can edit post details, adjust timing, and make any custom changes within the Smart Calendar.
-                </p>
-              </div>
-            </div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const params = new URLSearchParams({
+                          topic: post.topic || post.theme || '',
+                          platform: (post.platform || 'instagram').toLowerCase(),
+                        });
+                        navigate(`/dashboard/full-post-builder?${params.toString()}`);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-huttle-primary text-white rounded-lg text-xs font-semibold hover:bg-huttle-primary-dark transition-all"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Open in Post Builder →
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) return;
+                        try {
+                          const result = await saveContentLibraryItem(user.id, {
+                            name: `Day ${daySchedule.day} — ${post.topic || post.theme || 'Content'}`,
+                            type: 'text',
+                            content: `Platform: ${post.platform}\nTopic: ${post.topic || post.theme}\nFormat: ${post.content_type || post.type || 'Post'}\nGoal: ${generatedPlan.goal}`,
+                            size_bytes: 0,
+                            description: 'Content idea from AI Plan Builder',
+                          });
+                          if (result.success) showToast('Saved to Vault!', 'success');
+                        } catch { showToast('Failed to save', 'error'); }
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      Save to Vault
+                    </button>
+                  </div>
+                </motion.div>
+              ))
+            ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-4 justify-center">
-            <button 
+          {/* Generate New Plan Button */}
+          <div className="flex justify-center pt-4">
+            <button
               onClick={() => setGeneratedPlan(null)}
               className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all font-medium"
             >
               Generate New Plan
-            </button>
-            <button 
-              onClick={() => {
-                // Add all posts to calendar with optimized times
-                let count = 0;
-                const today = new Date();
-                generatedPlan.schedule.forEach((daySchedule) => {
-                  daySchedule.posts.forEach((post) => {
-                    const postDate = new Date(today);
-                    postDate.setDate(today.getDate() + daySchedule.day - 1);
-                    const dateStr = postDate.toISOString().split('T')[0];
-                    
-                    schedulePost({
-                      title: post.topic || post.theme || `${post.content_type || post.type}`,
-                      platforms: [post.platform],
-                      contentType: post.content_type || post.type,
-                      scheduledDate: dateStr,
-                      scheduledTime: post.scheduled_time || post.time,
-                      caption: post.reasoning 
-                        ? `${post.topic || post.theme}\n\n${post.reasoning}`
-                        : `Generated from AI Plan Builder: ${post.topic || post.theme}`,
-                      hashtags: '',
-                      keywords: ''
-                    });
-                    count++;
-                  });
-                });
-                showToast(`🎉 ${count} posts added to Smart Calendar!`, 'success');
-              }}
-              className="px-6 py-3 bg-huttle-gradient text-white rounded-lg hover:bg-huttle-primary-dark transition-all shadow-md font-medium flex items-center gap-2"
-            >
-              <Calendar className="w-5 h-5" />
-              Export to Calendar
             </button>
           </div>
         </div>

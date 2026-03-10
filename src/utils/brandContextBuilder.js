@@ -291,7 +291,7 @@ VIRAL CONTENT OPTIMIZATION:`;
   // Challenge-aware suggestions
   if (brandData?.biggestChallenge) {
     const challengeAdvice = {
-      consistency: 'Create content that can be easily batched and scheduled',
+      consistency: 'Create content that can be easily batched and repurposed',
       ideas: 'Suggest creative angles and unique perspectives',
       engagement: 'Include strong CTAs and conversation starters',
       growth: 'Optimize for shareability and discoverability',
