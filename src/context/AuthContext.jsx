@@ -61,13 +61,13 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      if (data && data.quiz_completed_at) {
-        // User has completed onboarding
+      const hasCompletedOnboarding = data?.has_completed_onboarding === true;
+
+      if (hasCompletedOnboarding) {
         setUserProfile(data);
         setNeedsOnboarding(false);
       } else {
-        // User exists but hasn't completed quiz, OR no profile exists
-        // Either way, they need onboarding
+        // Missing profile rows or incomplete profiles should always see onboarding.
         setUserProfile(data || null);
         setNeedsOnboarding(true);
       }
@@ -344,9 +344,9 @@ export function AuthProvider({ children }) {
     
     // First refresh the profile from database to get the complete data
     await checkUserProfile(user.id);
-    
-    // The checkUserProfile will set needsOnboarding to false if quiz_completed_at is set
-    // But we also set it explicitly here for immediate UI update
+
+    // The profile refresh will clear the onboarding gate once the Supabase flag is true.
+    // Set it eagerly as well so the dashboard can render immediately after submit.
     setNeedsOnboarding(false);
 
     return { success: true };

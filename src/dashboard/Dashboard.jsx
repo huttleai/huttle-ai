@@ -33,7 +33,7 @@ import IPhoneMockupDemo from '../components/IPhoneMockupDemo';
 import MockupShowcase from '../pages/MockupShowcase';
 import useNotificationGenerator from '../hooks/useNotificationGenerator';
 
-function AppContent({ secureAccountMode = false }) {
+function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   const authContext = useContext(AuthContext);
   
   // Safety check - if context is undefined, show error
@@ -84,12 +84,22 @@ function AppContent({ secureAccountMode = false }) {
     return <SecureAccount />;
   }
 
-  // If user is logged in, show the main app layout
-  if (user) {
-    // GATEKEEPER: Force redirect to onboarding if user hasn't completed it
-    // This check runs AFTER profileChecked is true, so we know the profile status
+  if (onboardingMode) {
+    if (!user) {
+      return <Navigate to="/dashboard/login" replace />;
+    }
+
     if (needsOnboarding) {
       return <OnboardingQuiz onComplete={completeOnboarding} />;
+    }
+
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If user is logged in, show the main app layout
+  if (user) {
+    if (needsOnboarding) {
+      return <Navigate to="/onboarding" replace />;
     }
 
     return (
@@ -137,7 +147,7 @@ function AppContent({ secureAccountMode = false }) {
   );
 }
 
-export default function DashboardManager({ secureAccountMode = false }) {
+export default function DashboardManager({ secureAccountMode = false, onboardingMode = false }) {
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -146,7 +156,7 @@ export default function DashboardManager({ secureAccountMode = false }) {
             <NotificationProvider>
               <SubscriptionProvider>
                 <ContentProvider>
-                    <AppContent secureAccountMode={secureAccountMode} />
+                    <AppContent secureAccountMode={secureAccountMode} onboardingMode={onboardingMode} />
                 </ContentProvider>
               </SubscriptionProvider>
             </NotificationProvider>
