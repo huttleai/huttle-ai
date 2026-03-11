@@ -30,6 +30,7 @@ export function BrandProvider({ children }) {
     creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
     brandName: '',
     niche: '',
+    city: '',
     industry: '',
     targetAudience: '',
     brandVoice: '',
@@ -53,14 +54,25 @@ export function BrandProvider({ children }) {
 
   // Load brand data from Supabase user_profile table
   useEffect(() => {
-    const loadBrandData = async () => {
+    let isActive = true;
+    let retryTimeoutId = null;
+
+    const applyLocalBrandFallback = () => {
+      const savedBrand = localStorage.getItem('brandData');
+      if (savedBrand && isActive) {
+        setBrandData(JSON.parse(savedBrand));
+      }
+    };
+
+    const fetchBrandData = async (retryCount = 0) => {
+      let shouldRetry = false;
+
       if (!user) {
         // Fallback to localStorage if no user
-        const savedBrand = localStorage.getItem('brandData');
-        if (savedBrand) {
-          setBrandData(JSON.parse(savedBrand));
+        if (isActive) {
+          applyLocalBrandFallback();
+          setLoading(false);
         }
-        setLoading(false);
         return;
       }
 
@@ -82,17 +94,10 @@ export function BrandProvider({ children }) {
         const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
         if (error) {
-          console.error('Error loading user profile:', error);
-          // Check for table not existing
-          if (error.code === '42P01' || error.message?.includes('does not exist')) {
-            console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
-          }
-          // Fallback to localStorage
-          const savedBrand = localStorage.getItem('brandData');
-          if (savedBrand) {
-            setBrandData(JSON.parse(savedBrand));
-          }
-        } else if (data) {
+          throw error;
+        }
+
+        if (data) {
           // Map user_profile fields to brandData structure
           // Apply formatEnumLabel to convert snake_case values to human-readable labels
           const mappedData = {
@@ -101,6 +106,7 @@ export function BrandProvider({ children }) {
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
+            city: data.city || '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
             targetAudience: Array.isArray(data.target_audience)
               ? formatEnumArray(data.target_audience)
@@ -114,29 +120,47 @@ export function BrandProvider({ children }) {
             hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
           };
-          setBrandData(mappedData);
+
+          if (isActive) {
+            setBrandData(mappedData);
+          }
           // Also sync to localStorage as backup
           localStorage.setItem('brandData', JSON.stringify(mappedData));
         } else {
           // No profile found, try localStorage
-          const savedBrand = localStorage.getItem('brandData');
-          if (savedBrand) {
-            setBrandData(JSON.parse(savedBrand));
-          }
+          applyLocalBrandFallback();
         }
       } catch (error) {
-        console.error('Error loading brand data:', error);
-        // Fallback to localStorage
-        const savedBrand = localStorage.getItem('brandData');
-        if (savedBrand) {
-          setBrandData(JSON.parse(savedBrand));
+        if (retryCount === 0) {
+          shouldRetry = true;
+          console.warn('[Brand] First load failed, retrying in 3s...');
+          retryTimeoutId = setTimeout(() => {
+            if (isActive) {
+              fetchBrandData(1);
+            }
+          }, 3000);
+          return;
         }
+
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
+        }
+        console.error('[Brand] Brand data load failed after retry:', error.message);
+        applyLocalBrandFallback();
       } finally {
-        setLoading(false);
+        if (isActive && !shouldRetry) {
+          setLoading(false);
+        }
       }
     };
 
-    loadBrandData();
+    setLoading(true);
+    fetchBrandData();
+
+    return () => {
+      isActive = false;
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
+    };
   }, [user, userProfile, needsOnboarding, reloadTrigger]); // Reload when user, userProfile, or onboarding status changes
 
   const updateBrandData = async (newData) => {
@@ -158,6 +182,7 @@ export function BrandProvider({ children }) {
           brand_name: updated.brandName || null,
           industry: updated.industry || null,
           niche: updated.niche,
+          city: updated.city || null,
           target_audience: updated.targetAudience,
           brand_voice_preference: updated.brandVoice,
           preferred_platforms: updated.platforms,
@@ -199,6 +224,7 @@ export function BrandProvider({ children }) {
       creatorArchetype: '',
       brandName: '',
       niche: '',
+      city: '',
       industry: '',
       targetAudience: '',
       brandVoice: '',
@@ -223,6 +249,7 @@ export function BrandProvider({ children }) {
           brand_name: null,
           industry: null,
           niche: null,
+          city: null,
           target_audience: null,
           brand_voice_preference: null,
           preferred_platforms: [],

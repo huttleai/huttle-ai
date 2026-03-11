@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
   const checkUserProfile = useCallback(async (userId) => {
     // Create a timeout promise to prevent hanging queries
-    const QUERY_TIMEOUT_MS = 10000; // 10 seconds
+    const QUERY_TIMEOUT_MS = 15000; // 15 seconds
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error(`Profile query timed out after ${QUERY_TIMEOUT_MS / 1000} seconds. This may indicate the user_profile table doesn't exist or RLS policies are misconfigured.`));
@@ -118,17 +118,17 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        // Set a timeout to prevent infinite loading (8 seconds - increased for Resend auth)
+        // Set a timeout to prevent infinite loading during slow Supabase cold starts
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('⚠️ [Auth] Auth check timed out after 8 seconds. Proceeding without session.');
+            console.warn('⚠️ [Auth] Auth check timed out after 15 seconds. Proceeding without session.');
             setLoading(false);
             setUser(null);
             setUserProfile(null);
             setNeedsOnboarding(false);
             setProfileChecked(true);
           }
-        }, 8000);
+        }, 15000);
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;

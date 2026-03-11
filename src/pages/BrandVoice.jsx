@@ -38,6 +38,7 @@ const PLATFORMS = [
   { value: 'tiktok', label: 'TikTok' },
   { value: 'youtube', label: 'YouTube' },
   { value: 'facebook', label: 'Facebook' },
+  { value: 'linkedin', label: 'LinkedIn' },
   { value: 'twitter', label: 'X (Twitter)' }
 ];
 
@@ -114,6 +115,7 @@ export default function BrandVoice() {
     brandName: source.brandName || '',
     socialHandle: source.socialHandle || '',
     niche: source.niche || '',
+    city: source.city || '',
     industry: source.industry || '',
     targetAudience: source.targetAudience || '',
     brandVoice: source.brandVoice || '',
@@ -208,6 +210,7 @@ export default function BrandVoice() {
       brandName: '',
       socialHandle: '',
       niche: '',
+      city: '',
       industry: '',
       targetAudience: '',
       brandVoice: '',
@@ -519,6 +522,26 @@ export default function BrandVoice() {
                   setFormData(prev => ({ ...prev, industry: capitalized }));
                 }}
                 placeholder={labels.industryPlaceholder}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+              />
+            </div>
+
+            {/* City */}
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
+                City
+                <span className="text-gray-400 font-normal ml-1 normal-case text-xs">(Optional)</span>
+              </label>
+              <p className="text-xs text-gray-400 mb-2">Used to localize dashboard trends and hashtags when available.</p>
+              <input
+                type="text"
+                value={formData.city}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
+                  setFormData(prev => ({ ...prev, city: capitalized }));
+                }}
+                placeholder="e.g., Atlanta"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
               />
             </div>

@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useMemo } from 'react';
+import { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useBrand } from '../context/BrandContext';
@@ -37,9 +37,7 @@ import { getPlatformIcon } from '../components/SocialIcons';
 import { supabase } from '../config/supabase';
 import { getContentLibraryItems } from '../config/supabase';
 import {
-  getDashboardCache,
   generateDashboardData,
-  deleteDashboardCache,
   trackDashboardGenerationUsage,
 } from '../services/dashboardCacheService';
 
@@ -51,6 +49,41 @@ const fadeUp = {
     transition: { delay: i * 0.08, duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] },
   }),
 };
+const MotionDiv = motion.div;
+const TOTAL_HASHTAG_CAP = 10;
+const HASHTAG_REACH_RANK = { high: 3, medium: 2, niche: 1 };
+
+function mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, hashtag) {
+  const normalizedHashtag = hashtag.hashtag?.toLowerCase().trim();
+  if (!normalizedHashtag) return false;
+
+  if (hashtagMap.has(normalizedHashtag)) {
+    const existingHashtag = hashtagMap.get(normalizedHashtag);
+    const mergedPlatforms = [
+      ...existingHashtag.relevant_platforms,
+      ...((Array.isArray(hashtag.relevant_platforms) ? hashtag.relevant_platforms : [hashtag.platform]).filter(Boolean)),
+    ];
+    existingHashtag.relevant_platforms = [...new Set(mergedPlatforms)];
+
+    if ((HASHTAG_REACH_RANK[hashtag.estimated_reach] ?? 0) > (HASHTAG_REACH_RANK[existingHashtag.estimated_reach] ?? 0)) {
+      existingHashtag.estimated_reach = hashtag.estimated_reach;
+      existingHashtag.display_type_label = hashtag.display_type_label;
+      existingHashtag.status = hashtag.status;
+      existingHashtag.type = hashtag.type;
+    }
+
+    return false;
+  }
+
+  const hashtagEntry = {
+    ...hashtag,
+    relevant_platforms: [...new Set((Array.isArray(hashtag.relevant_platforms) ? hashtag.relevant_platforms : [hashtag.platform]).filter(Boolean))],
+  };
+
+  hashtagMap.set(normalizedHashtag, hashtagEntry);
+  deduplicatedHashtags.push(hashtagEntry);
+  return true;
+}
 
 const QUICK_CREATE_TOOLS = [
   { id: 'caption', name: 'Caption Generator', icon: MessageSquare, description: 'Create engaging social captions', color: 'from-blue-500 to-cyan-500' },
@@ -62,12 +95,12 @@ const QUICK_CREATE_TOOLS = [
 ];
 
 export default function Dashboard() {
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const { brandProfile, loading: isBrandProfileLoading } = useBrand();
   const { showToast } = useToast();
-  const { addInfo, addNotification, addAIUsageWarning, addSocialUpdate } = useNotifications();
-  const { userTier, getFeatureLimit, getTierDisplayName } = useSubscription();
+  const { addNotification, addSocialUpdate } = useNotifications();
+  const { userTier, getTierDisplayName } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const [copiedHashtag, setCopiedHashtag] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
@@ -78,6 +111,10 @@ export default function Dashboard() {
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
   const [recentVaultItems, setRecentVaultItems] = useState([]);
   const [copiedVaultItem, setCopiedVaultItem] = useState(null);
+  const [selectedHashtagPlatform, setSelectedHashtagPlatform] = useState('All');
+  const dashboardLoadedRef = useRef(false);
+  const brandProfileRef = useRef(brandProfile);
+  const brandLoadingRef = useRef(isBrandProfileLoading);
 
   const copyHashtag = async (hashtag) => {
     try {
@@ -97,7 +134,7 @@ export default function Dashboard() {
       setCopiedVaultItem(id);
       showToast('Copied to clipboard!', 'success');
       setTimeout(() => setCopiedVaultItem(null), 2000);
-    } catch (err) {
+    } catch {
       showToast('Failed to copy', 'error');
     }
   };
@@ -106,11 +143,10 @@ export default function Dashboard() {
     if (!user?.id || isHashtagsRefreshing) return;
     setIsHashtagsRefreshing(true);
     try {
-      await deleteDashboardCache(user.id);
-      const result = await generateDashboardData(user.id, brandProfile);
+      const result = await generateDashboardData(user.id, brandProfile, { forceRefreshHashtags: true });
       if (result.success) {
         setDashboardData(result.data);
-        if (!result.isFallback) {
+        if (result.shouldTrackUsage) {
           await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
         }
         showToast('Hashtags refreshed!', 'success');
@@ -122,6 +158,29 @@ export default function Dashboard() {
       showToast('Could not refresh hashtags. Try again.', 'error');
     } finally {
       setIsHashtagsRefreshing(false);
+    }
+  };
+
+  const retryTrending = async () => {
+    if (!user?.id || isDashboardLoading) return;
+    setIsDashboardLoading(true);
+    setDashboardError('');
+    try {
+      const result = await generateDashboardData(user.id, brandProfile, { forceRefreshTrending: true });
+      if (result.success) {
+        setDashboardData(result.data);
+        if (result.shouldTrackUsage) {
+          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
+        }
+        showToast('Refreshing trends...', 'info');
+      } else {
+        setDashboardError('Unable to load your daily briefing right now. Please try again.');
+      }
+    } catch (error) {
+      console.error('[Dashboard] Failed to refresh trends:', error);
+      setDashboardError('Unable to load your daily briefing right now. Please try again.');
+    } finally {
+      setIsDashboardLoading(false);
     }
   };
 
@@ -172,6 +231,10 @@ export default function Dashboard() {
     () => (Array.isArray(dashboardData?.trending_topics) ? dashboardData.trending_topics : []),
     [dashboardData]
   );
+  const displayedDashboardTrendingTopics = useMemo(
+    () => dashboardTrendingTopics.slice(0, 6),
+    [dashboardTrendingTopics]
+  );
   const dashboardInsights = useMemo(() => {
     const arr = Array.isArray(dashboardData?.ai_insights) ? dashboardData.ai_insights : [];
     if (arr.length > 0) return arr;
@@ -216,32 +279,62 @@ export default function Dashboard() {
   }, [user?.id]);
 
   useEffect(() => {
+    dashboardLoadedRef.current = false;
+  }, [user?.id]);
+
+  useEffect(() => {
+    brandProfileRef.current = brandProfile;
+  }, [brandProfile]);
+
+  useEffect(() => {
+    brandLoadingRef.current = isBrandProfileLoading;
+  }, [isBrandProfileLoading]);
+
+  useEffect(() => {
     let isActive = true;
-    const loadDailyDashboard = async () => {
-      if (!user?.id || isBrandProfileLoading) return;
-      setDashboardError('');
-      const cacheResult = await getDashboardCache(user.id);
-      if (!isActive) return;
-      if (cacheResult.success && cacheResult.data) {
-        setDashboardData(cacheResult.data);
-        return;
+
+    const waitForBrandProfile = async () => {
+      while (isActive && brandLoadingRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      setIsDashboardLoading(true);
-      const generatedResult = await generateDashboardData(user.id, brandProfile);
-      if (!isActive) return;
-      if (generatedResult.success) {
-        setDashboardData(generatedResult.data);
-        if (!generatedResult.isFallback) {
-          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
-        }
-      } else {
-        setDashboardError('Unable to load your daily briefing right now. Please try again.');
-      }
-      setIsDashboardLoading(false);
     };
+
+    const loadDailyDashboard = async () => {
+      await waitForBrandProfile();
+      if (!isActive || !user?.id) return;
+      setDashboardError('');
+      setIsDashboardLoading(true);
+      try {
+        const generatedResult = await generateDashboardData(user.id, brandProfileRef.current);
+        if (!isActive) return;
+        if (generatedResult.success) {
+          setDashboardData(generatedResult.data);
+          if (generatedResult.shouldTrackUsage) {
+            await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
+          }
+        } else {
+          setDashboardError('Unable to load your daily briefing right now. Please try again.');
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to load daily dashboard:', error);
+        setDashboardError('Unable to load your daily briefing right now. Please try again.');
+      } finally {
+        if (isActive) {
+          setIsDashboardLoading(false);
+        }
+      }
+    };
+
+    if (authLoading) return () => { isActive = false; };
+    if (!user) return () => { isActive = false; };
+    if (dashboardLoadedRef.current) return () => { isActive = false; };
+
+    dashboardLoadedRef.current = true;
+    console.log('[Dashboard] Auth ready, loading dashboard...');
     loadDailyDashboard();
+
     return () => { isActive = false; };
-  }, [brandProfile, isBrandProfileLoading, user?.id]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -341,6 +434,92 @@ export default function Dashboard() {
     () => (Array.isArray(dashboardData?.hashtags_of_day) ? dashboardData.hashtags_of_day : []),
     [dashboardData]
   );
+  const dashboardHashtagPlatforms = useMemo(
+    () => (Array.isArray(dashboardData?.selected_platforms) ? dashboardData.selected_platforms : []),
+    [dashboardData?.selected_platforms]
+  );
+  const displayedDashboardHashtags = useMemo(() => {
+    const deduplicatedHashtags = [];
+    const hashtagMap = new Map();
+
+    if (dashboardHashtagPlatforms.length === 0) {
+      for (const hashtag of dashboardHashtags) {
+        mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, hashtag);
+        if (deduplicatedHashtags.length >= TOTAL_HASHTAG_CAP) break;
+      }
+
+      return deduplicatedHashtags;
+    }
+
+    const hashtagsByPlatform = dashboardHashtagPlatforms.map((platform) => ({
+      platform,
+      hashtags: dashboardHashtags.filter((tag) => tag.platform === platform),
+      index: 0,
+    }));
+
+    const perPlatformLimit = Math.floor(TOTAL_HASHTAG_CAP / dashboardHashtagPlatforms.length);
+    const remainder = TOTAL_HASHTAG_CAP % dashboardHashtagPlatforms.length;
+    const initialPlatformLimits = new Map(
+      dashboardHashtagPlatforms.map((platform, index) => [
+        platform,
+        perPlatformLimit + (index < remainder ? 1 : 0),
+      ])
+    );
+
+    for (const platformData of hashtagsByPlatform) {
+      const initialLimit = initialPlatformLimits.get(platformData.platform) ?? 0;
+
+      while (platformData.index < platformData.hashtags.length && platformData.index < initialLimit) {
+        mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, platformData.hashtags[platformData.index]);
+        platformData.index += 1;
+      }
+    }
+
+    while (deduplicatedHashtags.length < TOTAL_HASHTAG_CAP) {
+      let addedOrMerged = false;
+
+      for (const platformData of hashtagsByPlatform) {
+        if (platformData.index >= platformData.hashtags.length) {
+          continue;
+        }
+
+        mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, platformData.hashtags[platformData.index]);
+        platformData.index += 1;
+        addedOrMerged = true;
+
+        if (deduplicatedHashtags.length >= TOTAL_HASHTAG_CAP) {
+          break;
+        }
+      }
+
+      if (!addedOrMerged) break;
+    }
+
+    return deduplicatedHashtags;
+  }, [dashboardHashtagPlatforms, dashboardHashtags]);
+  const filteredDashboardHashtags = useMemo(() => {
+    if (selectedHashtagPlatform === 'All') {
+      return displayedDashboardHashtags;
+    }
+
+    return displayedDashboardHashtags.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
+  }, [displayedDashboardHashtags, selectedHashtagPlatform]);
+  const showBrandVoiceNudge = Boolean(dashboardData?.show_brand_voice_nudge);
+  const trendingFallbackMessage = dashboardData?.trending_fallback_message || 'Trends are refreshing — check back in a few minutes.';
+  const hashtagsFallbackMessage = dashboardData?.hashtags_fallback_message || 'Hashtags loading — refresh in a moment.';
+  const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
+
+  useEffect(() => {
+    if (dashboardHashtagPlatforms.length <= 1) {
+      setSelectedHashtagPlatform('All');
+      return;
+    }
+
+    const availablePlatforms = ['All', ...dashboardHashtagPlatforms];
+    if (!availablePlatforms.includes(selectedHashtagPlatform)) {
+      setSelectedHashtagPlatform('All');
+    }
+  }, [dashboardHashtagPlatforms, selectedHashtagPlatform]);
 
   const freshnessDisplay = useMemo(() => {
     if (isDashboardLoading) {
@@ -392,7 +571,7 @@ export default function Dashboard() {
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
-      <motion.div className="relative mb-6 pt-6" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
+      <MotionDiv className="relative mb-6 pt-6" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             {isCreator ? (
@@ -437,7 +616,7 @@ export default function Dashboard() {
             </Link>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
 
       {/* Data Freshness Indicator */}
       {freshnessDisplay && (
@@ -525,11 +704,12 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {!isDashboardLoading && !dashboardError && dashboardTrendingTopics.map((trend, index) => {
+                {!isDashboardLoading && !dashboardError && displayedDashboardTrendingTopics.map((trend, index) => {
                   const momentumStyles = getMomentumStyles(trend.momentum);
                   const expandKey = `trend-${index}`;
                   const isExpanded = expandedTrend === expandKey;
                   const hasExpandableContent = (Array.isArray(trend.content_angles) && trend.content_angles.length > 0);
+                  const trendDescription = trend.description || trend.context;
                   return (
                     <div
                       key={`${trend.topic}-${index}`}
@@ -546,16 +726,21 @@ export default function Dashboard() {
                               <span className="text-[11px] text-gray-500 font-medium">{trend.relevant_platform || 'Multi-platform'}</span>
                             </div>
                           </div>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
-                            <span>{momentumStyles.indicator}</span>
-                            <span className="capitalize">{trend.momentum}</span>
-                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {trend.from_cache && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
+                                Updated today
+                              </span>
+                            )}
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
+                              <span>{momentumStyles.indicator}</span>
+                              <span className="capitalize">{trend.momentum}</span>
+                            </span>
+                          </div>
                         </div>
 
-                        <p className="text-xs text-gray-700 leading-relaxed mb-2">{trend.context}</p>
-
-                        {trend.description && (
-                          <p className="text-xs text-gray-500 leading-relaxed mb-3">{trend.description}</p>
+                        {trendDescription && (
+                          <p className="text-xs text-gray-700 leading-relaxed mb-3">{trendDescription}</p>
                         )}
 
                         <div className="flex items-center gap-2">
@@ -600,12 +785,29 @@ export default function Dashboard() {
                   );
                 })}
 
-                {!isDashboardLoading && !dashboardError && dashboardTrendingTopics.length === 0 && (
-                  <div className="col-span-full p-3 text-xs text-gray-500 rounded-xl border border-gray-100">
-                    No trend intelligence is available yet. Check back soon.
+                {!isDashboardLoading && !dashboardError && displayedDashboardTrendingTopics.length === 0 && (
+                  <div className="col-span-full p-4 text-xs text-gray-500 rounded-xl border border-gray-100 bg-gray-50/60">
+                    <p className="text-sm text-gray-700 mb-3">{trendingFallbackMessage}</p>
+                    <button
+                      onClick={retryTrending}
+                      disabled={isDashboardLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 font-medium hover:bg-white transition-colors disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Retry
+                    </button>
                   </div>
                 )}
               </div>
+
+              {showBrandVoiceNudge && (
+                <Link
+                  to="/dashboard/brand-voice"
+                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-huttle-primary hover:text-huttle-primary-dark"
+                >
+                  {dashboardData?.brand_voice_nudge_copy || 'Set your Brand Voice for niche-specific trends →'}
+                </Link>
+              )}
 
               <Link to="/dashboard/trend-lab" className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-sm">
                 <Beaker className="w-4 h-4" /> Explore Trend Lab
@@ -651,13 +853,38 @@ export default function Dashboard() {
                 </div>
               ) : dashboardHashtags.length > 0 ? (
                 <div className="space-y-1.5">
-                  {dashboardHashtags.map((tag, index) => {
+                  {hashtagsFromPreviousDay && (
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                      From yesterday — updating now
+                    </div>
+                  )}
+                  {dashboardHashtagPlatforms.length > 1 && (
+                    <div className="flex flex-wrap gap-2 pb-2">
+                      {['All', ...dashboardHashtagPlatforms].map((platform) => {
+                        const isSelected = selectedHashtagPlatform === platform;
+                        return (
+                          <button
+                            key={platform}
+                            onClick={() => setSelectedHashtagPlatform(platform)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                              isSelected
+                                ? 'bg-huttle-primary text-white border-huttle-primary'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {platform}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {filteredDashboardHashtags.map((tag, index) => {
                     const reachColor = tag.estimated_reach === 'high'
                       ? 'bg-emerald-100 text-emerald-700'
                       : tag.estimated_reach === 'medium'
                         ? 'bg-amber-100 text-amber-700'
-                        : 'bg-gray-100 text-gray-600';
-                    const typeLabel = tag.type === 'trending' ? 'Trending' : 'Niche';
+                        : 'bg-violet-100 text-violet-700';
                     const platforms = Array.isArray(tag.relevant_platforms) ? tag.relevant_platforms : [];
                     return (
                       <button
@@ -684,9 +911,8 @@ export default function Dashboard() {
                           </div>
                         )}
                         <span className={`ml-auto text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${reachColor}`}>
-                          {tag.estimated_reach}
+                          {tag.estimated_reach?.toUpperCase() || 'MEDIUM'}
                         </span>
-                        <span className="text-[10px] font-medium text-gray-400 flex-shrink-0">{typeLabel}</span>
                         {copiedHashtag === tag.hashtag ? (
                           <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
                         ) : (
@@ -695,9 +921,12 @@ export default function Dashboard() {
                       </button>
                     );
                   })}
+                  {filteredDashboardHashtags.length === 0 && (
+                    <p className="text-xs text-gray-500 p-3 border border-gray-100 rounded-xl">No tags available for this platform right now.</p>
+                  )}
                   <button
                     onClick={() => {
-                      const allTags = dashboardHashtags.map(t => t.hashtag).join(' ');
+                      const allTags = filteredDashboardHashtags.map(t => t.hashtag).join(' ');
                       navigator.clipboard.writeText(allTags).then(() => showToast('All hashtags copied!', 'success'));
                     }}
                     className="mt-3 w-full py-2 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-xs"
@@ -706,7 +935,16 @@ export default function Dashboard() {
                   </button>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 p-3 border border-gray-100 rounded-xl">No hashtags available yet. Check back soon.</p>
+                <p className="text-xs text-gray-500 p-3 border border-gray-100 rounded-xl">{hashtagsFallbackMessage}</p>
+              )}
+
+              {showBrandVoiceNudge && (
+                <Link
+                  to="/dashboard/brand-voice"
+                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-huttle-primary hover:text-huttle-primary-dark"
+                >
+                  {dashboardData?.brand_voice_nudge_copy || 'Set your Brand Voice for niche-specific trends →'}
+                </Link>
               )}
             </div>
           </div>

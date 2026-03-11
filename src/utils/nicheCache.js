@@ -4,15 +4,18 @@ const DEFAULT_TTL_HOURS = 24;
 
 export async function getCachedResult(cacheKey) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('result_data, generated_at, expires_at')
+      .select('payload, generated_at, expires_at')
       .eq('cache_key', cacheKey)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
 
     if (error || !data) return null;
-    return { data: data.result_data, generatedAt: data.generated_at, cached: true };
+    return { data: data.payload, generatedAt: data.generated_at, cached: true };
   } catch {
     return null;
   }
@@ -20,6 +23,12 @@ export async function getCachedResult(cacheKey) {
 
 export async function setCacheResult(cacheKey, resultData, metadata = {}, ttlHours = DEFAULT_TTL_HOURS) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.warn('[Cache Write FAILED] No active session for', cacheKey);
+      return;
+    }
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
 
@@ -31,12 +40,18 @@ export async function setCacheResult(cacheKey, resultData, metadata = {}, ttlHou
         platform: metadata.platform || null,
         feature: metadata.feature || null,
         user_type: metadata.userType || null,
-        result_data: resultData,
+        payload: resultData,
         generated_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
+        hit_count: 0,
       }, { onConflict: 'cache_key' });
 
-    if (error) console.warn('Cache write failed:', error.message);
+    if (error) {
+      console.error('[Cache Write FAILED]', error.message, cacheKey);
+      return;
+    }
+
+    console.log('[Cache Write SUCCESS]', cacheKey);
   } catch {
     // Cache write failures should not break the app
   }
