@@ -78,6 +78,155 @@ const STRENGTH_DESCRIPTIONS = {
   authenticity: 'Emphasize genuine, relatable, and honest content'
 };
 
+const NICHE_SMART_DEFAULTS = [
+  {
+    match: /med\s*spa|medical spa|aesthetic|injectable|botox|facial/i,
+    niche: 'Med Spa',
+    targetAudience: 'Adults seeking confidence-boosting skincare, injectables, and non-surgical rejuvenation',
+    tone: 'Professional, warm, and reassuring',
+    platforms: ['Instagram', 'Facebook'],
+    city: 'United States',
+    contentStyle: 'Educational with treatment benefits, visible results, and trust-building explanations'
+  },
+  {
+    match: /fitness|trainer|coach|wellness|gym|nutrition/i,
+    niche: 'Fitness Coach',
+    targetAudience: 'Busy adults who want sustainable fat loss, strength, energy, and accountability',
+    tone: 'Energetic, motivating, and supportive',
+    platforms: ['Instagram', 'TikTok'],
+    city: 'United States',
+    contentStyle: 'Actionable coaching with simple routines, mindset shifts, and transformation-focused examples'
+  },
+  {
+    match: /real estate|realtor|broker|property|mortgage/i,
+    niche: 'Real Estate Agent',
+    targetAudience: 'Buyers and sellers navigating a competitive local market',
+    tone: 'Professional, calm, and trustworthy',
+    platforms: ['Instagram', 'Facebook'],
+    city: 'United States',
+    contentStyle: 'Educational market insights with neighborhood guidance, listings, and proof-of-results stories'
+  },
+  {
+    match: /.*/,
+    niche: 'Small Business',
+    targetAudience: 'People looking for a trusted local expert who can solve a real problem',
+    tone: 'Professional and approachable',
+    platforms: ['Instagram'],
+    city: 'United States',
+    contentStyle: 'Helpful, specific, and trust-building content with practical takeaways'
+  }
+];
+
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeCreatorType(value) {
+  const normalizedValue = normalizeString(value).toLowerCase().replace(/\s+/g, '_');
+  if (!normalizedValue) return null;
+  if (normalizedValue === 'creator' || normalizedValue === 'solo_creator') return 'solo_creator';
+  if (normalizedValue === 'brand' || normalizedValue === 'business' || normalizedValue === 'brand_business') return 'brand_business';
+  return null;
+}
+
+function normalizeGrowthStage(value) {
+  const normalizedValue = normalizeString(value).toLowerCase().replace(/\s+/g, '_');
+  return normalizedValue || '';
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => normalizeString(item))
+    .filter(Boolean);
+}
+
+function getSmartDefaults(rawNiche = '') {
+  const normalizedNiche = normalizeString(rawNiche);
+  return NICHE_SMART_DEFAULTS.find((preset) => preset.match.test(normalizedNiche)) || NICHE_SMART_DEFAULTS[NICHE_SMART_DEFAULTS.length - 1];
+}
+
+function inferContentStyle(brandData, preset) {
+  const contentStyle = normalizeString(brandData?.contentStyle);
+  if (contentStyle) return contentStyle;
+
+  const strengths = normalizeStringArray(brandData?.contentStrengths);
+  if (strengths.length > 0) {
+    return `${strengths.join(', ')} content with practical takeaways`;
+  }
+
+  return preset.contentStyle;
+}
+
+export function getPromptBrandProfile(brandData = {}, overrides = {}) {
+  const rawNiche = normalizeString(
+    overrides.niche
+    ?? overrides.contentFocus
+    ?? overrides.content_focus
+    ?? brandData?.niche
+    ?? brandData?.contentFocus
+    ?? brandData?.content_focus
+  );
+  const preset = getSmartDefaults(rawNiche);
+  const niche = rawNiche || preset.niche;
+
+  const targetAudience = normalizeString(overrides.targetAudience ?? brandData?.targetAudience) || preset.targetAudience;
+  const tone = normalizeString(overrides.tone ?? overrides.brandVoice ?? brandData?.brandVoice) || preset.tone;
+  const platforms = normalizeStringArray(overrides.platforms ?? brandData?.platforms);
+  const city = normalizeString(overrides.city ?? brandData?.city) || preset.city;
+  const contentStyle = normalizeString(overrides.contentStyle) || inferContentStyle(brandData, preset);
+  const creatorType = normalizeCreatorType(
+    overrides.creatorType
+    ?? overrides.creator_type
+    ?? brandData?.creatorType
+    ?? brandData?.creator_type
+  );
+  const growthStage = normalizeGrowthStage(
+    overrides.growthStage
+    ?? overrides.growth_stage
+    ?? brandData?.growthStage
+    ?? brandData?.growth_stage
+  );
+
+  return {
+    niche,
+    contentFocus: niche,
+    targetAudience,
+    tone,
+    platforms: platforms.length > 0 ? platforms : preset.platforms,
+    city,
+    contentStyle,
+    creatorType,
+    creator_type: creatorType,
+    growthStage,
+    growth_stage: growthStage,
+  };
+}
+
+export function buildPromptBrandSection(brandData = {}, overrides = {}) {
+  const {
+    niche,
+    targetAudience,
+    tone,
+    platforms,
+    city,
+    contentStyle,
+    creatorType,
+    growthStage,
+  } = getPromptBrandProfile(brandData, overrides);
+
+  return `About this business:
+- Niche: ${niche}
+- Target audience: ${targetAudience || `customers interested in ${niche}`}
+- Brand tone: ${tone || 'Professional and approachable'}
+- Location: ${city || 'United States'}
+- Primary platforms: ${platforms.join(', ') || 'Instagram'}
+- Content style: ${contentStyle || 'Helpful, specific, and trust-building content'}
+- Creator type: ${creatorType ? creatorType.replace(/_/g, ' ') : 'not set'}
+- Growth stage: ${growthStage ? growthStage.replace(/_/g, ' ') : 'not set'}`;
+}
+
 /**
  * Checks if the profile is a solo creator type
  * @param {Object} brandData - Brand data from BrandContext
@@ -118,64 +267,63 @@ export function getArchetypeTraits(archetype) {
  * @returns {string} Formatted context string
  */
 export function buildBrandContext(brandData) {
-  if (!brandData || Object.keys(brandData).length === 0) {
-    return 'No profile available. Use a professional, engaging tone.';
-  }
-
-  const isCreator = isCreatorProfile(brandData);
+  const safeBrandData = brandData || {};
+  const isCreator = isCreatorProfile(safeBrandData);
+  const promptProfile = getPromptBrandProfile(safeBrandData);
   const parts = [];
   
   // Profile type header
   if (isCreator) {
     parts.push('PROFILE TYPE: Solo Creator / Personal Brand');
-    if (brandData.brandName) {
-      parts.push(`Creator Name: ${brandData.brandName}`);
+    if (safeBrandData.brandName) {
+      parts.push(`Creator Name: ${safeBrandData.brandName}`);
     }
   } else {
     parts.push('PROFILE TYPE: Brand / Business');
-  if (brandData.brandName) {
-    parts.push(`Brand Name: ${brandData.brandName}`);
+    if (safeBrandData.brandName) {
+      parts.push(`Brand Name: ${safeBrandData.brandName}`);
+    }
   }
-  }
+
+  parts.push('');
+  parts.push(buildPromptBrandSection(safeBrandData));
   
   // Creator archetype (for creators only)
-  if (isCreator && brandData.creatorArchetype) {
-    const traits = getArchetypeTraits(brandData.creatorArchetype);
+  if (isCreator && safeBrandData.creatorArchetype) {
+    const traits = getArchetypeTraits(safeBrandData.creatorArchetype);
     if (traits) {
-      parts.push(`Creator Archetype: ${brandData.creatorArchetype.charAt(0).toUpperCase() + brandData.creatorArchetype.slice(1)}`);
+      parts.push(`Creator Archetype: ${safeBrandData.creatorArchetype.charAt(0).toUpperCase() + safeBrandData.creatorArchetype.slice(1)}`);
       parts.push(`Content Style: ${traits.style}`);
       parts.push(`Approach: ${traits.approach}`);
     }
   }
   
   // Niche / Content Focus
-  if (brandData.niche) {
-    parts.push(isCreator ? `Content Focus: ${brandData.niche}` : `Niche: ${brandData.niche}`);
-  }
+  parts.push(isCreator ? `Content Focus: ${promptProfile.niche}` : `Niche: ${promptProfile.niche}`);
   
   // Industry / Category
-  if (brandData.industry) {
-    parts.push(isCreator ? `Category: ${brandData.industry}` : `Industry: ${brandData.industry}`);
+  if (safeBrandData.industry) {
+    parts.push(isCreator ? `Category: ${safeBrandData.industry}` : `Industry: ${safeBrandData.industry}`);
   }
   
   // Target Audience / Community
-  if (brandData.targetAudience) {
-    parts.push(isCreator ? `Community: ${brandData.targetAudience}` : `Target Audience: ${brandData.targetAudience}`);
-  }
+  parts.push(isCreator ? `Community: ${promptProfile.targetAudience}` : `Target Audience: ${promptProfile.targetAudience}`);
   
   // Voice / Vibe
-  if (brandData.brandVoice) {
-    parts.push(isCreator ? `Vibe & Style: ${brandData.brandVoice}` : `Brand Voice/Tone: ${brandData.brandVoice}`);
-  }
+  parts.push(isCreator ? `Vibe & Style: ${promptProfile.tone}` : `Brand Voice/Tone: ${promptProfile.tone}`);
+  parts.push(`Location Focus: ${promptProfile.city}`);
+  parts.push(`Content Style: ${promptProfile.contentStyle}`);
   
   // Platforms
-  if (brandData.platforms && brandData.platforms.length > 0) {
-    parts.push(`Preferred Platforms: ${brandData.platforms.join(', ')}`);
+  parts.push(`Preferred Platforms: ${promptProfile.platforms.join(', ')}`);
+  parts.push(`Creator Type: ${promptProfile.creator_type ? promptProfile.creator_type.replace(/_/g, ' ') : 'not set'}`);
+  if (promptProfile.growth_stage) {
+    parts.push(`Growth Stage: ${promptProfile.growth_stage.replace(/_/g, ' ')}`);
   }
   
   // Goals
-  if (brandData.goals && brandData.goals.length > 0) {
-    parts.push(`Content Goals: ${brandData.goals.join(', ')}`);
+  if (safeBrandData.goals && safeBrandData.goals.length > 0) {
+    parts.push(`Content Goals: ${safeBrandData.goals.join(', ')}`);
   }
   
   // Viral Content Strategy Fields
@@ -183,32 +331,32 @@ export function buildBrandContext(brandData) {
   parts.push('VIRAL CONTENT STRATEGY:');
   
   // Content Strengths
-  if (brandData.contentStrengths && brandData.contentStrengths.length > 0) {
-    const strengthDescriptions = brandData.contentStrengths
+  if (safeBrandData.contentStrengths && safeBrandData.contentStrengths.length > 0) {
+    const strengthDescriptions = safeBrandData.contentStrengths
       .map(s => STRENGTH_DESCRIPTIONS[s] || s)
       .join('; ');
-    parts.push(`Content Strengths: ${brandData.contentStrengths.join(', ')}`);
+    parts.push(`Content Strengths: ${safeBrandData.contentStrengths.join(', ')}`);
     parts.push(`Leverage these strengths: ${strengthDescriptions}`);
   }
   
   // Biggest Challenge (helps AI provide targeted advice)
-  if (brandData.biggestChallenge) {
-    parts.push(`Main Challenge: ${brandData.biggestChallenge.replace(/_/g, ' ')}`);
+  if (safeBrandData.biggestChallenge) {
+    parts.push(`Main Challenge: ${safeBrandData.biggestChallenge.replace(/_/g, ' ')}`);
   }
   
   // Hook Style Preference
-  if (brandData.hookStylePreference) {
-    const hookDescription = HOOK_STYLE_DESCRIPTIONS[brandData.hookStylePreference] || brandData.hookStylePreference;
-    parts.push(`Preferred Hook Style: ${brandData.hookStylePreference.replace(/_/g, ' ')}`);
+  if (safeBrandData.hookStylePreference) {
+    const hookDescription = HOOK_STYLE_DESCRIPTIONS[safeBrandData.hookStylePreference] || safeBrandData.hookStylePreference;
+    parts.push(`Preferred Hook Style: ${safeBrandData.hookStylePreference.replace(/_/g, ' ')}`);
     parts.push(`Hook Approach: ${hookDescription}`);
   }
   
   // Emotional Triggers
-  if (brandData.emotionalTriggers && brandData.emotionalTriggers.length > 0) {
-    const emotionDescriptions = brandData.emotionalTriggers
+  if (safeBrandData.emotionalTriggers && safeBrandData.emotionalTriggers.length > 0) {
+    const emotionDescriptions = safeBrandData.emotionalTriggers
       .map(e => EMOTIONAL_TRIGGER_DESCRIPTIONS[e] || e)
       .join('; ');
-    parts.push(`Emotional Triggers: ${brandData.emotionalTriggers.join(', ')}`);
+    parts.push(`Emotional Triggers: ${safeBrandData.emotionalTriggers.join(', ')}`);
     parts.push(`Content should make audience feel: ${emotionDescriptions}`);
   }
 
@@ -291,7 +439,7 @@ VIRAL CONTENT OPTIMIZATION:`;
   // Challenge-aware suggestions
   if (brandData?.biggestChallenge) {
     const challengeAdvice = {
-      consistency: 'Create content that can be easily batched and scheduled',
+      consistency: 'Create content that can be easily batched and repurposed',
       ideas: 'Suggest creative angles and unique perspectives',
       engagement: 'Include strong CTAs and conversation starters',
       growth: 'Optimize for shareability and discoverability',
@@ -337,7 +485,7 @@ IMPORTANT: All content must align with the ${isCreator ? 'creator\'s personal vo
  * @returns {string} Brand voice string
  */
 export function getBrandVoice(brandData, defaultVoice = 'professional and engaging') {
-  return brandData?.brandVoice || defaultVoice;
+  return getPromptBrandProfile(brandData, { tone: brandData?.brandVoice || defaultVoice }).tone;
 }
 
 /**
@@ -347,7 +495,7 @@ export function getBrandVoice(brandData, defaultVoice = 'professional and engagi
  * @returns {string} Niche string
  */
 export function getNiche(brandData, defaultNiche = 'general') {
-  return brandData?.niche || defaultNiche;
+  return getPromptBrandProfile(brandData, { niche: brandData?.niche || defaultNiche }).niche;
 }
 
 /**
@@ -357,7 +505,7 @@ export function getNiche(brandData, defaultNiche = 'general') {
  * @returns {string} Target audience string
  */
 export function getTargetAudience(brandData, defaultAudience = 'general audience') {
-  return brandData?.targetAudience || defaultAudience;
+  return getPromptBrandProfile(brandData, { targetAudience: brandData?.targetAudience || defaultAudience }).targetAudience;
 }
 
 /**
@@ -386,18 +534,20 @@ export function getName(brandData, defaultName = '') {
  */
 export function buildBriefBrandContext(brandData) {
   const isCreator = isCreatorProfile(brandData);
-  const voice = getBrandVoice(brandData);
-  const niche = getNiche(brandData);
-  const audience = getTargetAudience(brandData);
+  const { tone, niche, targetAudience, city, platforms, contentStyle, creator_type, growth_stage } = getPromptBrandProfile(brandData);
   
   if (isCreator) {
     const archetype = brandData?.creatorArchetype;
     const traits = getArchetypeTraits(archetype);
     const archetypeInfo = traits ? ` | Style: ${traits.style}` : '';
-    return `Creator Voice: ${voice} | Focus: ${niche} | Community: ${audience}${archetypeInfo}`;
+    const growthStageInfo = growth_stage ? ` | Growth Stage: ${growth_stage}` : '';
+    const creatorTypeInfo = ` | Creator Type: ${creator_type || 'not_set'}`;
+    return `Creator Voice: ${tone} | Focus: ${niche} | Community: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}${creatorTypeInfo}${growthStageInfo}${archetypeInfo}`;
   }
   
-  return `Brand Voice: ${voice} | Niche: ${niche} | Audience: ${audience}`;
+  const growthStageInfo = growth_stage ? ` | Growth Stage: ${growth_stage}` : '';
+  const creatorTypeInfo = ` | Creator Type: ${creator_type || 'not_set'}`;
+  return `Brand Voice: ${tone} | Niche: ${niche} | Audience: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}${creatorTypeInfo}${growthStageInfo}`;
 }
 
 /**

@@ -196,52 +196,49 @@ const scorerSuggestions = [
 ];
 
 export const getContentScoreMock = (content) => {
-  // Generate semi-random but realistic scores based on content length
+  // Generate more realistic scores in the same range as production scoring
   const contentLength = content?.length || 0;
-  const hasEmoji = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]/u.test(content);
+  const firstLine = content?.split('\n')?.[0]?.trim() || '';
+  const hasStrongHook = firstLine.length > 0 && firstLine.length < 90 && (firstLine.includes('?') || /how|why|stop|before|most|if you/i.test(firstLine));
+  const hasAudienceSpecificity = /you|your|client|customer|busy|women|men|owners|buyers|sellers/i.test(content);
+  const hasClearStructure = /\n/.test(content) || contentLength < 280;
   const hasQuestion = content?.includes('?');
-  const hasHashtag = content?.includes('#');
-  const hasCTA = /comment|share|follow|tap|click|dm|link/i.test(content);
-  
-  // Base scores with some randomness
-  let hookScore = Math.floor(Math.random() * 15) + 70;
-  let engagementScore = Math.floor(Math.random() * 15) + 65;
-  let ctaScore = Math.floor(Math.random() * 15) + 70;
-  let readabilityScore = Math.floor(Math.random() * 15) + 68;
-  
-  // Adjust based on content analysis
-  if (hasEmoji) engagementScore += 5;
-  if (hasQuestion) engagementScore += 8;
-  if (hasHashtag) engagementScore += 3;
-  if (hasCTA) ctaScore += 10;
-  if (contentLength > 100 && contentLength < 500) readabilityScore += 5;
-  if (contentLength > 500) readabilityScore -= 5;
-  
-  // Cap scores at 100
-  hookScore = Math.min(hookScore, 100);
-  engagementScore = Math.min(engagementScore, 100);
-  ctaScore = Math.min(ctaScore, 100);
-  readabilityScore = Math.min(readabilityScore, 100);
-  
-  const overall = Math.round((hookScore + engagementScore + ctaScore + readabilityScore) / 4);
-  
-  // Pick relevant suggestions
-  const suggestions = pickRandom(scorerSuggestions, 4);
-  
+  const hasCTA = /comment|share|follow|tap|click|dm|link|book|save|message/i.test(content);
+
+  let hookStrength = hasStrongHook ? 15 + Math.floor(Math.random() * 8) : Math.floor(Math.random() * 9);
+  let audienceRelevance = hasAudienceSpecificity ? 11 + Math.floor(Math.random() * 7) : 5 + Math.floor(Math.random() * 6);
+  let clarityOfMessage = hasClearStructure ? 10 + Math.floor(Math.random() * 7) : 6 + Math.floor(Math.random() * 6);
+  let callToAction = hasCTA ? 10 + Math.floor(Math.random() * 8) : Math.floor(Math.random() * 6);
+  let platformFit = contentLength > 500 ? 6 + Math.floor(Math.random() * 5) : 8 + Math.floor(Math.random() * 6);
+
+  if (hasQuestion) {
+    hookStrength = Math.min(hookStrength + 2, 25);
+  }
+
+  const overall = hookStrength + audienceRelevance + clarityOfMessage + callToAction + platformFit;
+  const weakestSection = [
+    ['hookStrength', hookStrength],
+    ['audienceRelevance', audienceRelevance],
+    ['clarityOfMessage', clarityOfMessage],
+    ['callToAction', callToAction],
+    ['platformFit', platformFit],
+  ].sort((a, b) => a[1] - b[1])[0][0];
+
+  const suggestions = pickRandom(scorerSuggestions, 3);
+
   return {
     overall,
     breakdown: {
-      hook: hookScore,
-      engagement: engagementScore,
-      cta: ctaScore,
-      readability: readabilityScore,
+      hookStrength,
+      audienceRelevance,
+      clarityOfMessage,
+      callToAction,
+      platformFit,
     },
     suggestions,
-    details: {
-      hook: hookScore >= 80 ? "Strong opening that creates curiosity" : "Consider a more attention-grabbing opening",
-      engagement: engagementScore >= 80 ? "Good use of engagement triggers" : "Add questions or interactive elements",
-      cta: ctaScore >= 80 ? "Clear call-to-action" : "Add a clearer call-to-action",
-      readability: readabilityScore >= 80 ? "Good length and formatting" : "Consider adjusting length or adding line breaks",
+    weakestSection: {
+      section: weakestSection,
+      rewriteExample: 'Lead with one specific audience pain point, tighten the middle, and end with a single clear next step.',
     }
   };
 };

@@ -12,8 +12,10 @@
  * SECURITY: All API calls now go through the server-side proxy to protect API keys
  */
 
-import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
+import { buildBrandContext, buildPromptBrandSection, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
 import { supabase } from '../config/supabase';
+import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
+import { getCachedResult, setCacheResult } from '../utils/nicheCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -157,6 +159,13 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
   try {
     const niche = getNiche(brandData, 'general creator');
     const audience = getTargetAudience(brandData, 'general audience');
+    
+    const cacheKey = buildCacheKey([niche, platform, 'trending']);
+    const cached = await getCachedResult(cacheKey);
+    if (cached) {
+      return { success: true, scan: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
+    }
+
     const platformList = Array.isArray(brandData?.platforms) && brandData.platforms.length > 0
       ? brandData.platforms.join(', ')
       : (platform !== 'all' ? platform : 'Instagram, TikTok, X, YouTube, Facebook');
@@ -212,6 +221,8 @@ RULES:
       };
     }
 
+    setCacheResult(cacheKey, normalized, { niche: normalizeNiche(niche), platform, feature: 'trending' }, 24);
+    
     return {
       success: true,
       scan: normalized,
@@ -378,6 +389,12 @@ export async function getAudienceInsights(brandData, demographics = null) {
     const niche = getNiche(brandData);
     const audience = demographics || getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
+    
+    const cacheKey = buildCacheKey([niche, 'all', 'audience']);
+    const cached = await getCachedResult(cacheKey);
+    if (cached) {
+      return { success: true, insights: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
+    }
 
     const data = await callPerplexityAPI([
       {
@@ -401,9 +418,12 @@ Include:
       }
     ], 0.2);
 
+    const insightsContent = data.content || '';
+    setCacheResult(cacheKey, insightsContent, { niche: normalizeNiche(niche), feature: 'audience' }, 24);
+    
     return {
       success: true,
-      insights: data.content || '',
+      insights: insightsContent,
       citations: data.citations || [],
       usage: data.usage
     };
@@ -588,21 +608,20 @@ export async function getSocialMediaUpdates(months = 12) {
       };
     }
     
-    // Try to parse JSON from the response
+    // Strip Perplexity citation markers (e.g. [1], [2]) that break JSON parsing
+    const cleanedContent = content.replace(/\[\d+\]/g, '');
+
     let updates = [];
     try {
-      // First, try to extract JSON from markdown code blocks
-      const jsonBlockMatch = content.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+      const jsonBlockMatch = cleanedContent.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
       if (jsonBlockMatch) {
         updates = JSON.parse(jsonBlockMatch[1]);
       } else {
-        // Try to find JSON array in the content
-        const jsonArrayMatch = content.match(/(\[[\s\S]*\])/);
+        const jsonArrayMatch = cleanedContent.match(/(\[[\s\S]*\])/);
         if (jsonArrayMatch) {
           updates = JSON.parse(jsonArrayMatch[1]);
         } else {
-          // Try parsing the entire content as JSON
-          updates = JSON.parse(content.trim());
+          updates = JSON.parse(cleanedContent.trim());
         }
       }
     } catch (parseError) {
@@ -644,5 +663,107 @@ export async function getSocialMediaUpdates(months = 12) {
       error: error.message,
       updates: []
     };
+  }
+}
+
+/**
+ * Research niche content intelligence using real-time search
+ * @param {string} nicheQuery - Niche keywords or competitor handles
+ * @param {string} platform - Target platform
+ * @param {Object} brandData - Brand data from BrandContext
+ * @returns {Promise<Object>} Raw research text for Grok to analyze
+ */
+export async function researchNicheContent(nicheQuery, platform = 'instagram', brandData = null) {
+  try {
+    const niche = brandData ? getNiche(brandData) : nicheQuery;
+    const audience = brandData ? getTargetAudience(brandData) : 'general audience';
+    const now = new Date();
+    const currentMonth = now.toLocaleString('default', { month: 'long' });
+    const currentYear = now.getFullYear();
+    const currentDate = now.toISOString().slice(0, 10);
+    
+    const cacheKey = buildCacheKey([niche, platform, currentDate, 'niche_intel']);
+    const cached = await getCachedResult(cacheKey);
+    if (cached) {
+      return { success: true, research: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
+    }
+
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a social media content research analyst. Research what content is currently performing best in a given niche. Focus on content formats, hooks, topics, and engagement patterns. Return detailed research findings — not content ideas.'
+      },
+      {
+        role: 'user',
+        content: `${buildPromptBrandSection(brandData, { niche, targetAudience: audience, platforms: [platform] })}
+
+Search for current social media trends and content strategies for ${niche} businesses on ${platform} as of ${currentMonth} ${currentYear}.
+
+Focus on the last 30 days where possible. Research what is performing right now for: "${nicheQuery}".
+
+Find:
+1. What content formats are performing best right now (Reels vs carousels vs static posts, etc.)
+2. What topics/themes are getting the most engagement
+3. What hashtags top ${niche} accounts are using
+4. What posting frequency successful accounts use
+5. Any recent algorithm changes affecting ${niche} content
+6. Specific competitor content strategies or recurring patterns that are clearly working
+
+Requirements:
+- Keep the research specific to ${platform}
+- Focus on actionable, current findings rather than evergreen advice
+- Cite concrete examples where possible
+- Prioritize findings that matter to ${audience}
+- Do not generate content ideas yet; return research only`
+      }
+    ], 0.2);
+
+    const researchContent = data.content || '';
+    setCacheResult(cacheKey, researchContent, { niche: normalizeNiche(niche), platform, feature: 'niche_intel' }, 24);
+    
+    return {
+      success: true,
+      research: researchContent,
+      citations: data.citations || [],
+      usage: data.usage
+    };
+  } catch (error) {
+    console.error('Perplexity niche research error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get current trend context for performance prediction
+ * @param {string} platform - Platform to check trends for
+ * @param {Object} brandData - Brand data for niche context
+ * @returns {Promise<Object>} Trend context text
+ */
+export async function getTrendContextForPrediction(platform, brandData = null) {
+  try {
+    const niche = brandData ? getNiche(brandData) : 'general';
+
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a trend analyst. Provide a brief summary of what content is currently trending on a specific platform in a given niche. Be concise and factual.'
+      },
+      {
+        role: 'user',
+        content: `What content topics and formats are currently trending on ${platform} in the ${niche} niche? Provide a brief 3-5 sentence summary of the current trend landscape that can be used to evaluate how well new content aligns with current trends.`
+      }
+    ], 0.2);
+
+    return {
+      success: true,
+      context: data.content || '',
+      usage: data.usage
+    };
+  } catch (error) {
+    console.error('Perplexity trend context error:', error);
+    return { success: false, error: error.message };
   }
 }

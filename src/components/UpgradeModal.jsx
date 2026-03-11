@@ -26,7 +26,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
         'Upload more images and videos',
         'Automatic file compression',
         'Organize content in projects',
-        'Unlimited scheduled posts'
+        'Unlimited saved content'
       ],
       tier: 'Pro'
     },
@@ -55,13 +55,13 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
       tier: 'Essentials or Pro'
     },
     calendarTemplates: {
-      title: 'Unlock Content Calendar Templates',
-      description: 'Start with pre-built templates and let AI generate a customized content plan for your brand.',
-      preview: '"Product Launch Week template: 7 days of strategic content ready to schedule"',
+      title: 'Unlock Full AI Power Tools',
+      description: 'Access the complete suite of AI creation tools to supercharge your content workflow.',
+      preview: '"Product Launch Week: 7 days of strategic content generated and ready to use"',
       benefits: [
-        '6 pre-built calendar templates',
+        '6 pre-built content plan templates',
         'AI-generated content based on your brand voice',
-        'One-click scheduling to your calendar',
+        'One-click save to Content Vault',
         'Customizable post selection'
       ],
       tier: 'Essentials or Pro'

@@ -60,6 +60,9 @@ function App() {
           </AuthProvider>
         } />
         
+        {/* Onboarding Gate */}
+        <Route path="/onboarding" element={<DashboardManager onboardingMode />} />
+
         {/* Main Dashboard App */}
         <Route path="/dashboard/*" element={<DashboardManager />} />
         

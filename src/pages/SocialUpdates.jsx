@@ -194,6 +194,7 @@ export default function SocialUpdates() {
     const now = new Date();
 
     let result = updates.filter((update) => {
+      if (String(update.platform || '').toLowerCase() === 'system') return false;
       if (update.expires_at && new Date(update.expires_at) < now) return false;
       if (selectedPlatform !== 'All' && normalizePlatformName(update.platform) !== selectedPlatform) return false;
       if (selectedImpact !== 'All') {
@@ -217,10 +218,8 @@ export default function SocialUpdates() {
     result.sort((a, b) => {
       const aImp = String(a.impact_level || a.impact || '').toLowerCase();
       const bImp = String(b.impact_level || b.impact || '').toLowerCase();
-      const aHigh = aImp === 'high';
-      const bHigh = bImp === 'high';
-      if (aHigh && !bHigh) return -1;
-      if (!aHigh && bHigh) return 1;
+      const aDate = parsePublishedDate(a.published_date || a.date_month) || new Date(a.fetched_at || 0);
+      const bDate = parsePublishedDate(b.published_date || b.date_month) || new Date(b.fetched_at || 0);
 
       if (sortOrder === 'impact') {
         const aOrder = IMPACT_ORDER[aImp] ?? 2;
@@ -228,8 +227,6 @@ export default function SocialUpdates() {
         if (aOrder !== bOrder) return aOrder - bOrder;
       }
 
-      const aDate = parsePublishedDate(a.published_date || a.date_month) || new Date(a.fetched_at || 0);
-      const bDate = parsePublishedDate(b.published_date || b.date_month) || new Date(b.fetched_at || 0);
       return bDate - aDate;
     });
 

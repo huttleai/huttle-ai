@@ -2,7 +2,6 @@ import { useEffect, useRef, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { useContent } from '../context/ContentContext';
 
 /** localStorage key for tracking which notification types have been shown */
 const NOTIF_SHOWN_KEY = 'huttle_notif_shown';
@@ -33,19 +32,15 @@ function markShown(key) {
 /**
  * useNotificationGenerator
  *
- * Runs on mount and periodically to generate contextual notifications:
+ * Runs on mount to generate contextual notifications:
  * 1. Welcome message for new users
  * 2. Onboarding nudges (incomplete Brand Voice, no platforms)
- * 3. Scheduled post reminders (upcoming posts within 30 min)
- * 4. Post confirmations (triggered externally via schedulePost)
  */
 export default function useNotificationGenerator() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { addNotification, addPostReminder } = useNotifications();
-  const { scheduledPosts } = useContent();
+  const { addNotification } = useNotifications();
   const generatedRef = useRef(false);
-  const reminderIntervalRef = useRef(null);
 
   // ──────────────── One-time notifications on mount ────────────────
   useEffect(() => {
@@ -89,55 +84,4 @@ export default function useNotificationGenerator() {
       }
     }
   }, [user?.id, brandData]);
-
-  // ──────────────── Scheduled post reminders (runs every minute) ────────────────
-  useEffect(() => {
-    if (!scheduledPosts || scheduledPosts.length === 0) return;
-
-    const checkUpcoming = () => {
-      const now = new Date();
-      const remindedKey = 'huttle_reminded_posts';
-      let reminded;
-      try {
-        reminded = new Set(JSON.parse(localStorage.getItem(remindedKey) || '[]'));
-      } catch {
-        reminded = new Set();
-      }
-
-      scheduledPosts.forEach(post => {
-        if (post.status === 'posted' || post.status === 'cancelled') return;
-
-        const postDate = post.date || post.scheduledDate;
-        const postTime = post.time || post.scheduledTime;
-        if (!postDate || !postTime) return;
-
-        const [year, month, day] = postDate.split('-').map(Number);
-        const [hours, minutes] = postTime.split(':').map(Number);
-        const scheduledAt = new Date(year, month - 1, day, hours, minutes);
-        const minutesUntil = (scheduledAt - now) / (1000 * 60);
-
-        // Remind at 30, 15, and 5 minutes before
-        const thresholds = [30, 15, 5];
-        for (const threshold of thresholds) {
-          const key = `${post.id}_${threshold}`;
-          if (minutesUntil > 0 && minutesUntil <= threshold && !reminded.has(key)) {
-            addPostReminder(post, Math.round(minutesUntil));
-            reminded.add(key);
-          }
-        }
-      });
-
-      localStorage.setItem(remindedKey, JSON.stringify([...reminded]));
-    };
-
-    // Check immediately, then every 60 seconds
-    checkUpcoming();
-    reminderIntervalRef.current = setInterval(checkUpcoming, 60000);
-
-    return () => {
-      if (reminderIntervalRef.current) {
-        clearInterval(reminderIntervalRef.current);
-      }
-    };
-  }, [scheduledPosts]);
 }

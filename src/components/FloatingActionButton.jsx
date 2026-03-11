@@ -1,4 +1,4 @@
-import { Plus, PenSquare, MessageSquare, RefreshCw, CalendarPlus } from 'lucide-react';
+import { Plus, PenSquare, MessageSquare, RefreshCw, Wand2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,12 +8,12 @@ import { useNavigate } from 'react-router-dom';
  */
 const QUICK_ACTIONS = [
   {
-    id: 'create-post',
-    label: 'Create Post',
+    id: 'create-content',
+    label: 'Create Content',
     icon: PenSquare,
     color: 'bg-huttle-primary',
     hoverColor: 'hover:bg-huttle-primary-dark',
-    action: 'createPost',
+    action: '/dashboard/ai-tools',
   },
   {
     id: 'quick-caption',
@@ -34,25 +34,21 @@ const QUICK_ACTIONS = [
   {
     id: 'generate-plan',
     label: 'Generate Plan',
-    icon: CalendarPlus,
+    icon: Wand2,
     color: 'bg-emerald-500',
     hoverColor: 'hover:bg-emerald-600',
     action: '/dashboard/plan-builder',
   },
 ];
 
-export default function FloatingActionButton({ onCreatePost }) {
+export default function FloatingActionButton({ onCreatePost } = {}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
 
   const handleAction = useCallback((action) => {
     setIsExpanded(false);
-    if (action === 'createPost') {
-      onCreatePost();
-    } else {
-      navigate(action);
-    }
-  }, [onCreatePost, navigate]);
+    navigate(action);
+  }, [navigate]);
 
   const close = () => setIsExpanded(false);
 
@@ -63,6 +59,7 @@ export default function FloatingActionButton({ onCreatePost }) {
         <div
           onClick={close}
           className="fixed inset-0 bg-black/20 z-40 transition-opacity duration-200"
+          data-testid="fab-backdrop"
         />
       )}
 
@@ -92,6 +89,7 @@ export default function FloatingActionButton({ onCreatePost }) {
                 onClick={() => handleAction(item.action)}
                 className={`w-11 h-11 rounded-full ${item.color} ${item.hoverColor} text-white shadow-lg flex items-center justify-center transition-all duration-150 active:scale-95`}
                 aria-label={item.label}
+                data-testid={`fab-action-${item.id}`}
               >
                 <Icon className="w-5 h-5" />
               </button>
@@ -109,6 +107,7 @@ export default function FloatingActionButton({ onCreatePost }) {
             : 'bg-huttle-cyan hover:bg-huttle-cyan-dark rotate-0'
         }`}
         aria-label={isExpanded ? 'Close quick actions' : 'Open quick actions'}
+        data-testid="floating-action-button"
       >
         <Plus className="w-6 h-6 text-white transition-transform duration-200" />
       </button>

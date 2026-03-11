@@ -7,6 +7,7 @@ import UpgradeModal from '../components/UpgradeModal';
 import TrendDiscoveryHub from '../components/TrendDiscoveryHub';
 import { useToast } from '../context/ToastContext';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
+import AlgorithmChecker from '../components/AlgorithmChecker';
 
 // TODO: N8N_WORKFLOW - Import workflow services for features moving to n8n
 import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
@@ -141,15 +142,15 @@ export default function TrendLab() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
-            <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Lightbulb className="w-7 h-7 text-huttle-primary" />
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+              <Lightbulb className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+              <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
                 Trend Lab
               </h1>
-              <p className="text-gray-500">
-                Discover, predict, and remix trends tailored to {brandData?.niche || 'your niche'}
+              <p className="text-xs md:text-sm text-gray-500 mt-0.5">
+                Discover trends, check algorithm fit, and find content opportunities
               </p>
             </div>
           </div>
@@ -157,6 +158,23 @@ export default function TrendLab() {
 
         {/* Trend Discovery Hub - Quick Scan & Deep Dive */}
         <TrendDiscoveryHub />
+
+        {/* Algorithm Alignment Checker Widget */}
+        <div className="my-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              Algorithm Alignment Checker
+              <span className="text-[10px] ml-2 px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded-full font-bold">⚙️ Platform</span>
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">Check how your content aligns with platform algorithm signals</p>
+          </div>
+          <div className="p-6">
+            <AlgorithmChecker />
+          </div>
+        </div>
 
       {/* Modular Dashboard Cards */}
       <div 

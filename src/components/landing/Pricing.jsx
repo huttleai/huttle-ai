@@ -90,7 +90,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                   'Viral Blueprint & AI Plan Builder',
                   'Content Remix Studio & Trend Lab',
                   'AI Power Tools (captions, hooks, CTAs)',
-                  'Smart Calendar with optimal timing',
+                  'Content Vault for all your assets',
                   'Cancel anytime',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-3 text-sm text-zinc-600 font-medium">
@@ -177,7 +177,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 <p className="text-sm text-slate-500 mt-1">$29.75/mo billed annually</p>
               </div>
 
-              <p className="text-sm text-zinc-600 mb-8 font-medium">Or $35/month billed monthly</p>
+              <p className="text-sm text-zinc-600 mb-8 font-medium">Or $39/month billed monthly</p>
 
               <ul className="space-y-3 mb-8 flex-1">
                 {[

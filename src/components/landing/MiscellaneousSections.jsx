@@ -9,7 +9,7 @@ import { Plus, Minus } from 'lucide-react';
 export const SocialProofBar = () => {
   const items = [
     { name: "Optimized Posting", subtitle: "AI-Powered Timing" },
-    { name: "Smart Calendar", subtitle: "7 & 14-Day Planning" },
+    { name: "Content Vault", subtitle: "Organized Assets" },
     { name: "AI Plan Builder", subtitle: "Content Strategy" },
     { name: "Hashtag Generator", subtitle: "Trending Tags" },
     { name: "Content Remix Studio", subtitle: "5 Platform Variations" },
@@ -169,7 +169,7 @@ export const FAQSection = () => {
   const faqs = [
     {
       question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Smart Calendar, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
     },
     {
       question: "What happens when the Founding Member offer ends?",

@@ -66,23 +66,6 @@ export function NotificationProvider({ children }) {
   };
 
   /**
-   * Add a post reminder notification
-   */
-  const addPostReminder = (post, minutesUntil) => {
-    return addNotification({
-      type: 'reminder',
-      title: minutesUntil === 0 ? `Time to post: ${post.title}` : `Upcoming: ${post.title}`,
-      message: minutesUntil === 0 
-        ? `Your post is ready to publish on ${post.platforms?.join(', ')}!` 
-        : `Your post is scheduled in ${minutesUntil} minutes for ${post.platforms?.join(', ')}`,
-      actionUrl: '/dashboard/calendar',
-      actionLabel: 'View Post',
-      persistent: true,
-      postId: post.id,
-    });
-  };
-
-  /**
    * Add a connection warning
    */
   const addConnectionWarning = (platform) => {
@@ -104,7 +87,7 @@ export function NotificationProvider({ children }) {
       type: 'error',
       title: 'Post incomplete',
       message: `Missing: ${missingFields.join(', ')}`,
-      actionUrl: '/dashboard/calendar',
+      actionUrl: '/dashboard',
       actionLabel: 'Fix Now',
       persistent: true,
     });
@@ -217,22 +200,6 @@ export function NotificationProvider({ children }) {
   };
 
   /**
-   * Add a scheduled post reminder
-   */
-  const addScheduledPostReminder = (postCount, nextPostTime) => {
-    const title = `${postCount} Post${postCount !== 1 ? 's' : ''} Scheduled`;
-    return addNotification({
-      type: 'reminder',
-      title,
-      message: `Next post: ${nextPostTime}`,
-      dismissKey: `scheduled_count_${postCount}`,
-      actionUrl: '/dashboard/calendar',
-      actionLabel: 'View Calendar',
-      persistent: false,
-    });
-  };
-
-  /**
    * Add a content performance insight
    */
   const addContentInsight = (insight, description) => {
@@ -284,7 +251,6 @@ export function NotificationProvider({ children }) {
         showNotificationPanel,
         setShowNotificationPanel,
         addNotification,
-        addPostReminder,
         addConnectionWarning,
         addMissingContentWarning,
         addSuccess,
@@ -293,7 +259,6 @@ export function NotificationProvider({ children }) {
         addAIUsageWarning,
         addSocialUpdate,
         addEngagementSpike,
-        addScheduledPostReminder,
         addContentInsight,
         markAsRead,
         markAllAsRead,

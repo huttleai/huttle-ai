@@ -915,10 +915,10 @@ export default function ContentLibrary() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Content Library
+                Content Vault
               </h1>
               <p className="text-gray-500">
-                Your centralized hub for all content assets
+                Everything you've created, organized and ready to use.
               </p>
             </div>
           </div>
@@ -1077,7 +1077,7 @@ export default function ContentLibrary() {
                   }}
                   className="px-3 py-1.5 bg-white text-huttle-primary rounded-lg hover:bg-gray-100 transition-all font-medium text-sm"
                 >
-                  Add to Post
+                  Use Content
                 </button>
                 <button 
                   onClick={() => {
@@ -1255,9 +1255,9 @@ export default function ContentLibrary() {
                       <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-huttle-primary/10 to-indigo-100 flex items-center justify-center">
                         <CloudUpload className="w-10 h-10 text-huttle-primary" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">Start building your library</h3>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">Your content vault is empty</h3>
                       <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                        Upload images, videos, and text content to keep all your creative assets organized in one place.
+                        Generate your first piece of content
                       </p>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button 
@@ -1269,11 +1269,11 @@ export default function ContentLibrary() {
                           Upload Your First Asset
                         </button>
                         <button 
-                          onClick={() => setShowCreateProjectModal(true)}
+                          onClick={() => navigate('/dashboard/ai-tools')}
                           className="px-6 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-2"
                         >
-                          <FolderPlus className="w-5 h-5" />
-                          Create a Project
+                          <Sparkles className="w-5 h-5" />
+                          Start Creating
                         </button>
                       </div>
                       <div className="mt-8 pt-6 border-t border-gray-100">
@@ -1576,27 +1576,6 @@ export default function ContentLibrary() {
                   )}
                 </div>
                 
-                <button
-                  onClick={() => {
-                    const prefill = {
-                      title: selectedItem.name || '',
-                      caption: selectedItem.content || '',
-                      media: selectedItem.type !== 'text' ? [{
-                        name: selectedItem.name,
-                        type: selectedItem.type === 'video' ? 'video' : 'image',
-                        url: getDisplayUrl(selectedItem) || selectedItem.url || '',
-                        libraryItemId: selectedItem.id,
-                      }] : [],
-                    };
-                    setShowDetailModal(false);
-                    navigate('/dashboard/calendar', { state: { prefillContent: prefill } });
-                  }}
-                  className="w-full px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Create Post with This
-                </button>
-
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowAddToProjectModal(true)}

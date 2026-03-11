@@ -15,7 +15,16 @@
  * DEMO MODE: When VITE_DEMO_MODE=true or API fails, returns fitness-themed mock data
  */
 
-import { buildSystemPrompt, getBrandVoice, getNiche, getTargetAudience, buildBrandContext } from '../utils/brandContextBuilder';
+import { callClaudeAPI } from './claudeAPI';
+import {
+  buildSystemPrompt,
+  getBrandVoice,
+  getNiche,
+  getTargetAudience,
+  buildBrandContext,
+  buildPromptBrandSection,
+  getPromptBrandProfile
+} from '../utils/brandContextBuilder';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import { supabase } from '../config/supabase';
 import { 
@@ -31,6 +40,137 @@ import {
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
+const NO_FABRICATED_STATS_GUARDRAIL = 'Do not invent specific statistics or percentages. If referencing data, use general language like "studies show" or "research suggests" rather than fabricating specific numbers like "73% of users".';
+const NO_PLACEHOLDER_GUARDRAIL = 'Never include placeholder text like [Your Name], [Insert Link], or [Add Emoji Here] in your output. Either fill it in with a reasonable example or omit it.';
+const READY_TO_USE_GUARDRAIL = 'Your output must be copy-paste ready. A user should be able to take your output directly to their social media app and post it without any editing required.';
+
+function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}) {
+  return [
+    includeStats ? NO_FABRICATED_STATS_GUARDRAIL : null,
+    NO_PLACEHOLDER_GUARDRAIL,
+    readyToUse ? READY_TO_USE_GUARDRAIL : null,
+  ].filter(Boolean).join('\n');
+}
+
+function resolveCreatorPromptType(promptProfile, brandData = null) {
+  const explicitCreatorType = promptProfile?.creator_type || promptProfile?.creatorType || null;
+  if (explicitCreatorType === 'brand_business' || explicitCreatorType === 'solo_creator') {
+    return explicitCreatorType;
+  }
+
+  return brandData?.profileType === 'brand' ? 'brand_business' : 'solo_creator';
+}
+
+function getCreatorPromptGuidance(promptProfile, brandData = null) {
+  const creatorType = resolveCreatorPromptType(promptProfile, brandData);
+
+  if (creatorType === 'brand_business') {
+    return {
+      creatorType,
+      label: 'Brand / Business',
+      instructions: `BRAND/BUSINESS VOICE RULES:
+- Write in brand voice or polished third-person framing when needed
+- Keep the tone professional, service-focused, and authority-building
+- Prioritize conversion intent, bookings, consultations, and trust signals
+- Position the brand as the expert guide or provider
+- Avoid overly diary-like, personal-creator storytelling unless the input explicitly calls for it`,
+    };
+  }
+
+  return {
+    creatorType: 'solo_creator',
+    label: 'Solo Creator',
+    instructions: `SOLO CREATOR VOICE RULES:
+- Default to first-person voice when it feels natural ("I", "me", "my")
+- Sound personal, relatable, authentic, and emotionally real
+- Prioritize growth, community-building, conversation, and audience connection
+- Use trend-aware language and creator-native phrasing when it fits the platform
+- Avoid stiff corporate phrasing or generic business-speak`,
+  };
+}
+
+function getCaptionPlatformInstructions(platform) {
+  const normalizedPlatform = (platform || 'instagram').toLowerCase();
+
+  switch (normalizedPlatform) {
+    case 'facebook':
+      return 'Facebook format: conversational and slightly longer-form, with natural paragraph spacing and no excessive emojis.';
+    case 'linkedin':
+      return 'LinkedIn format: professional, insight-led, no emojis, and structured like a thought-leadership post.';
+    case 'tiktok':
+      return 'TikTok format: punchy, trend-aware, short, and direct. Keep the rhythm fast.';
+    case 'youtube':
+      return 'YouTube format: keyword-rich description style with a clear topic promise and scannable formatting.';
+    case 'instagram':
+    default:
+      return 'Instagram format: up to 2200 characters, line breaks every 2-3 sentences, and at most 1-2 emojis.';
+  }
+}
+
+function getHashtagOutputRules(platform, city) {
+  const normalizedPlatform = (platform || 'instagram').toLowerCase();
+
+  if (normalizedPlatform === 'tiktok') {
+    return {
+      count: '5-7',
+      outputLabel: 'hashtags',
+      formatRule: 'Use TikTok-friendly hashtags. Include #fyp or #foryou only when it fits naturally, not as filler.',
+      cityRule: city ? `Include 1 city-specific tag if realistic for ${city}.` : 'Do not force city tags if location is unavailable.'
+    };
+  }
+
+  if (normalizedPlatform === 'facebook') {
+    return {
+      count: '4-6',
+      outputLabel: 'hashtags',
+      formatRule: 'Use fewer, highly relevant Facebook hashtags. Prioritize clarity over volume.',
+      cityRule: city ? `Include 1 city-specific tag if realistic for ${city}.` : 'Do not force city tags if location is unavailable.'
+    };
+  }
+
+  if (normalizedPlatform === 'linkedin') {
+    return {
+      count: '4-6',
+      outputLabel: 'hashtags',
+      formatRule: 'Use professional, industry-specific hashtags only. Keep them polished and credibility-focused.',
+      cityRule: city ? `Include 1 location-aware professional tag if realistic for ${city}.` : 'Do not force city tags if location is unavailable.'
+    };
+  }
+
+  if (normalizedPlatform === 'youtube') {
+    return {
+      count: '5-7',
+      outputLabel: 'search keywords',
+      formatRule: 'Return search-friendly discovery terms instead of casual filler hashtags. Prefix with # only if it feels natural for YouTube descriptions.',
+      cityRule: city ? `Include 1-2 local discovery terms if realistic for ${city}.` : 'Do not force city keywords if location is unavailable.'
+    };
+  }
+
+  return {
+    count: '8-10',
+    outputLabel: 'hashtags',
+    formatRule: 'Use Instagram-ready hashtags with a clear HIGH / MEDIUM / NICHE spread.',
+    cityRule: city ? `Include 1-2 city-specific niche hashtags if realistic for ${city}.` : 'Do not force city tags if location is unavailable.'
+  };
+}
+
+function getAudiencePainPointGuidance(niche) {
+  const value = (niche || '').toLowerCase();
+
+  if (/med\s*spa|medical spa|aesthetic|injectable|botox|facial/.test(value)) {
+    return 'Pain points to draw from: visible aging, skin confidence, busy schedules, wanting natural-looking results, skepticism about treatments.';
+  }
+
+  if (/fitness|trainer|coach|wellness|gym|nutrition/.test(value)) {
+    return 'Pain points to draw from: weight-loss plateaus, low motivation, inconsistent routines, lack of accountability, limited time.';
+  }
+
+  if (/real estate|realtor|broker|property|mortgage/.test(value)) {
+    return 'Pain points to draw from: market anxiety, pricing uncertainty, finding the right home, preparing a property to sell, timing the market.';
+  }
+
+  return 'Pain points to draw from: the audience\'s biggest frustrations, doubts, time constraints, and desired outcomes within this niche.';
+}
 
 /**
  * Get auth headers for API requests
@@ -159,6 +299,16 @@ export async function generateCaption(contentData, brandData) {
   }
 
   try {
+    const promptProfile = getPromptBrandProfile(brandData, {
+      tone: contentData.tone || brandData?.brandVoice,
+      platforms: [contentData.platform || 'instagram'],
+    });
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
+    const isSingleCaptionMode = Boolean(contentData.selectedHook || contentData.singleCaption);
+    const brandSection = buildPromptBrandSection(brandData, {
+      tone: promptProfile.tone,
+      platforms: promptProfile.platforms,
+    });
     const systemPrompt = buildSystemPrompt(
       `You are Caption Architect — an elite social media copywriter who has written captions for 7-figure creator brands and Fortune 500 companies. You combine conversion copywriting with deep platform psychology to produce captions that stop the scroll, build connection, and drive measurable action.
 
@@ -170,13 +320,24 @@ CHAIN-OF-THOUGHT (apply internally before every output):
 5. CTA ALIGNMENT: Does the closing ask match the emotional state the caption just created?
 
 OUTPUT RULES:
-- Number captions 1–4, each opening with a distinct hook archetype
+- ${isSingleCaptionMode ? 'Return exactly 1 caption.' : 'Number captions 1–4.'}
+- ${isSingleCaptionMode ? 'Use the provided hook as the exact opening line.' : 'Caption 1 = Educational / informative'}
+- ${isSingleCaptionMode ? 'Maintain narrative flow from the hook through the body.' : 'Caption 2 = Emotional / story-driven'}
+- ${isSingleCaptionMode ? 'End with a soft CTA setup, not the final hard sell.' : 'Caption 3 = Direct promotional with a clear offer angle'}
+- ${isSingleCaptionMode ? 'Do not include placeholder text or alternative versions.' : 'Caption 4 = Social proof / results-focused'}
+- Each caption must mention a pain point, desire, or outcome that is specific to the niche and target audience.
+- Each caption must stay specific to the user's business, audience, and platform.
 - Body: 2–5 punchy paragraphs with line breaks for mobile readability
-- One clear CTA per caption, placed at the end
-- Hashtags after a blank line — never mid-copy
+- ${isSingleCaptionMode ? 'Use a soft CTA setup only; the CTA step will complete the post.' : 'One clear CTA per caption, placed at the end'}
+- ${isSingleCaptionMode ? 'Do not include placeholder text, [brackets], or fake links.' : 'Hashtags after a blank line — never mid-copy'}
 - NO filler openers: "Are you ready?", "In today's post...", "Hey guys!"
 - NO passive voice, corporate jargon, or vague enthusiasm
 - NO caption that could apply to any brand — each must feel specific
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
+
+${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
 
 QUALITY GATE: Before outputting, confirm each caption has a distinct hook, a payoff in the body, and a CTA that matches the platform's culture.
 
@@ -199,7 +360,9 @@ VAGUE INPUT FALLBACK: If the topic is absent, one word, or clearly incomplete, g
       },
       {
         role: 'user',
-        content: `Write 4 compelling social media captions about: "${contentData.topic}". 
+        content: `${brandSection}
+
+Write ${isSingleCaptionMode ? '1 compelling social media caption' : '4 compelling social media captions'} about: "${contentData.topic}". 
 
 ${platformContext}
 
@@ -208,14 +371,25 @@ PLATFORM-SPECIFIC REQUIREMENTS:
 - Hook style: ${hookGuidelines.style}
 - Include ${hashtagGuidelines.count} hashtags (${hashtagGuidelines.style})
 - CTA style: ${ctaGuidelines.style} (examples: ${ctaGuidelines.examples.slice(0, 3).join(', ')})
+- ${getCaptionPlatformInstructions(platform)}
 
 GENERAL REQUIREMENTS:
-- Match the brand voice exactly
-- Appeal to the target audience
+- Creator type: ${creatorPromptGuidance.label}
+- Speak to ${promptProfile.targetAudience}
+- Match this brand tone exactly: ${promptProfile.tone}
+- Make the content unmistakably relevant to a ${promptProfile.niche} business
 - Keep it authentic and engaging
 - Optimize for ${platformData?.name || 'social media'} algorithm and culture
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'Make the voice feel personal, relatable, and creator-led, using first-person phrasing where natural.'
+  : 'Make the voice feel polished, trustworthy, and conversion-aware, using brand/service language where natural.'}
+- If a hook is provided, use it as the exact opening line: ${contentData.selectedHook ? `"${contentData.selectedHook}"` : 'No fixed hook provided'}
+- If a goal is provided, align the CTA and offer framing to: ${contentData.goal || 'engagement'}
+- ${promptProfile.contentStyle}
 
-Number them 1-4. Each caption should have a different hook approach.`
+${isSingleCaptionMode
+  ? 'Write only the single caption, with no numbering or alternatives.'
+  : 'Number them 1-4. Each caption should have a different strategic angle and should feel ready to publish as-is.'}`
       }
     ], 0.7);
 
@@ -260,18 +434,20 @@ export async function scoreContentQuality(content, brandData = null) {
   try {
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const brandSection = brandContext ? `\n\nBrand Profile to evaluate against:\n${brandContext}` : '';
+    const promptProfile = getPromptBrandProfile(brandData);
+    const primaryPlatform = promptProfile.platforms[0] || 'Instagram';
 
-    const data = await callGrokAPI([
+    const messages = [
       {
         role: 'system',
         content: `You are Content Intelligence Engine — a senior content strategist trained on thousands of viral posts, A/B test results, and platform algorithm signals. You combine data-driven analysis with creative judgment. You are direct, specific, and never give meaningless praise or vague suggestions.
 
 SCORING DIMENSIONS (max 100 total):
-- Hook Strength (0–25): Does the first line stop the scroll? Is it specific and surprising? Does it earn the next sentence?
-- Body & Value (0–25): Does the body deliver on the hook's promise? Is it well-paced, readable, and free of filler?
-- CTA Effectiveness (0–20): Is the ask clear? Does the friction level match the content's emotional arc?
-- Hashtag Quality (0–15): Are tags relevant, tiered, and platform-optimized?
-- Brand Voice Alignment (0–15): Does tone, vocabulary, and personality match the stated brand profile?
+- Hook Strength (0–25): Does the first line make you stop scrolling?
+- Audience Relevance (0–20): Is the content clearly specific to the target audience's needs and desires?
+- Clarity of Message (0–20): Is the main point obvious and easy to follow?
+- Call to Action (0–20): Is there a clear next step for the reader?
+- Platform Fit (0–15): Is the length, tone, and format right for the target platform?
 
 CHAIN-OF-THOUGHT (apply before scoring):
 1. Read the entire content before assigning any score
@@ -282,48 +458,96 @@ CHAIN-OF-THOUGHT (apply before scoring):
 
 OUTPUT FORMAT — Return ONLY valid JSON:
 {
-  "overallScore": 74,
-  "grade": "B",
-  "verdict": "One honest sentence identifying the biggest opportunity",
-  "dimensions": {
-    "hook":       { "score": 18, "max": 25, "feedback": "Specific, actionable feedback" },
-    "body":       { "score": 20, "max": 25, "feedback": "..." },
-    "cta":        { "score": 14, "max": 20, "feedback": "..." },
-    "hashtags":   { "score": 10, "max": 15, "feedback": "..." },
-    "brandVoice": { "score": 12, "max": 15, "feedback": "..." }
+  "totalScore": 62,
+  "scoreBand": "good foundation, specific fixes needed",
+  "summary": "One honest sentence identifying the biggest improvement opportunity",
+  "categoryScores": {
+    "hookStrength": { "score": 9, "max": 25, "feedback": "Specific, actionable feedback" },
+    "audienceRelevance": { "score": 13, "max": 20, "feedback": "..." },
+    "clarityOfMessage": { "score": 15, "max": 20, "feedback": "..." },
+    "callToAction": { "score": 8, "max": 20, "feedback": "..." },
+    "platformFit": { "score": 12, "max": 15, "feedback": "..." }
   },
-  "topImprovements": [
-    "Improvement #1 — include a rewrite example where possible",
-    "Improvement #2",
-    "Improvement #3"
+  "improvements": [
+    "2-3 highly specific improvements tied to the actual weak spots"
   ],
-  "strengths": ["What is already working well"]
+  "weakestSection": {
+    "name": "Hook Strength",
+    "rewriteExample": "A concrete rewritten example for the weakest area only"
+  }
 }
 
 QUALITY GATES:
-- Never round every score to a multiple of 5 — be precise
-- topImprovements must include at least one rewrite example
-- A score above 85 requires explicit justification in the verdict
-- Missing hashtags = 0 in that dimension with a fix instruction
-- If no CTA is present, score CTA as 0 and write a suggested CTA in the feedback field
+- Scores must add up to exactly 100
+- Keep average content in the 45-70 range unless it is unusually strong
+- Missing hook = hookStrength between 0 and 8
+- Missing CTA = callToAction between 0 and 5
+- A total below 50 means "needs major revision"
+- 50-69 means "good foundation, specific fixes needed"
+- 70-84 means "solid, minor improvements suggested"
+- 85-100 means "strong, publish-ready"
+- Never fabricate platform metrics or statistics
+
+${buildPromptGuardrails({ includeStats: true })}
 
 VAGUE INPUT FALLBACK: If content is empty or under 20 characters, return: { "error": "Content too short to analyze. Provide the full post text including hashtags and CTA for an accurate score." }`
       },
       {
         role: 'user',
-        content: `Analyze this content and provide a quality score (0-100) with breakdown for:
-- Hook (attention-grabbing opening)
-- CTA (call-to-action effectiveness)
-- Hashtags (relevance and reach)
-- Overall Engagement Potential
-${brandData ? '- Brand Voice Alignment (how well it matches the brand)' : ''}
+        content: `Analyze this content and score it for ${primaryPlatform}.
+
+${buildPromptBrandSection(brandData, { platforms: [primaryPlatform] })}
+
+Use this rubric:
+- Hook Strength (0-25)
+- Audience Relevance (0-20)
+- Clarity of Message (0-20)
+- Call to Action (0-20)
+- Platform Fit for ${primaryPlatform} (0-15)
 
 Content: ${content}${brandSection}
 
-Provide specific, actionable improvement suggestions.`
+Provide 2-3 specific improvements and one concrete rewrite example for the weakest section.`
       }
-    ], 0.3);
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
     
+    const parsed = parseJsonFromResponse(data.content || '');
+    if (parsed?.totalScore != null) {
+      return {
+        success: true,
+        analysis: data.content || '',
+        score: {
+          overall: parsed.totalScore,
+          breakdown: {
+            hookStrength: parsed.categoryScores?.hookStrength?.score ?? 0,
+            audienceRelevance: parsed.categoryScores?.audienceRelevance?.score ?? 0,
+            clarityOfMessage: parsed.categoryScores?.clarityOfMessage?.score ?? 0,
+            callToAction: parsed.categoryScores?.callToAction?.score ?? 0,
+            platformFit: parsed.categoryScores?.platformFit?.score ?? 0,
+          },
+          suggestions: [
+            ...(Array.isArray(parsed.improvements) ? parsed.improvements.slice(0, 3) : []),
+            parsed.weakestSection?.rewriteExample
+              ? `Rewrite example for ${parsed.weakestSection.name}: ${parsed.weakestSection.rewriteExample}`
+              : null,
+          ].filter(Boolean),
+          weakestSection: parsed.weakestSection || null,
+          raw: parsed,
+        },
+        usage: data.usage
+      };
+    }
+
     return {
       success: true,
       analysis: data.content || '',
@@ -399,9 +623,11 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
   }
 
   try {
-    const niche = getNiche(brandData);
-    const brandVoice = getBrandVoice(brandData);
-    const audience = getTargetAudience(brandData);
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const niche = promptProfile.niche;
+    const brandVoice = promptProfile.tone;
+    const audience = promptProfile.targetAudience;
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     
     // Get platform-specific hook guidelines
     const hookGuidelines = getHookGuidelines(platform);
@@ -428,10 +654,18 @@ CHAIN-OF-THOUGHT (apply before generating):
 OUTPUT RULES:
 - Exactly 4 hooks, numbered 1–4
 - Hard limit: 15 words per hook
-- Each hook must use a different archetype (do not label them in output)
+- Hook 1 must be a question hook addressing a specific pain point
+- Hook 2 must be a statistic-style hook using a plausible general claim without fabricated numbers
+- Hook 3 must be a contrarian hook challenging a common belief in this niche
+- Hook 4 must be a story hook opening a relatable scenario for this audience
 - No hooks starting with "Are you...", "Have you ever...", "Do you want..."
 - Every hook must stand alone — no context required to understand it
 - Emojis only if brand voice explicitly calls for them
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
+
+${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
 
 QUALITY GATE: Read each hook out loud. If it doesn't create a physical "lean in" reaction, rewrite it.
 
@@ -446,16 +680,20 @@ VAGUE INPUT FALLBACK: If the input is missing or a single generic word, generate
       },
       {
         role: 'user',
-        content: `Build 4 short hooks (under 15 words each) for: "${input}"
+        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+
+Build 4 short hooks (under 15 words each) for: "${input}"
 
 PLATFORM: ${platformData?.name || 'Social Media'}
 Platform hook style: ${hookGuidelines.style}
 Platform hook examples: ${hookGuidelines.examples.join(', ')}
 Platform tip: ${hookGuidelines.tip}
 
-Hook theme: ${theme}
-Niche: ${niche.toLowerCase()}
-Target audience: ${audience.toLowerCase()}
+Requested emphasis: ${theme}
+Niche: ${niche}
+Target audience: ${audience}
+Creator type: ${creatorPromptGuidance.label}
+${getAudiencePainPointGuidance(niche)}
 
 Each hook must:
 - Match the ${brandVoice} brand voice
@@ -463,8 +701,12 @@ Each hook must:
 - Stop the scroll immediately
 - Create curiosity or urgency
 - Feel authentic to the brand
+- Reference a specific audience frustration, desire, belief, or lived scenario within this niche
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'For solo creators, lean into first-person, relatable, creator-native phrasing when it sharpens the hook.'
+  : 'For brands/businesses, lean into expert positioning, service outcomes, and authority-first framing.'}
 
-Number them 1-4. Vary the approach for each hook.`
+Number them 1-4 and return only the hooks.`
       }
     ], 0.8);
 
@@ -492,6 +734,70 @@ Number them 1-4. Vary the approach for each hook.`
   }
 }
 
+export async function generateFullPostHooks({ topic, goal, platform = 'instagram' }, brandData) {
+  try {
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const platformData = getPlatform(platform);
+
+    const data = await callGrokAPI([
+      {
+        role: 'system',
+        content: buildSystemPrompt(
+          `You are Hook Sniper for a multi-step post builder. Generate 5 niche-specific hooks that will be used as the first line of a publish-ready post.
+
+OUTPUT RULES:
+- Return exactly 5 hooks, numbered 1-5.
+- Hook 1 = Question
+- Hook 2 = Teaser
+- Hook 3 = Shocking Stat using a plausible general claim and zero fabricated numbers
+- Hook 4 = Story
+- Hook 5 = Bold Claim
+- Every hook must be under 15 words.
+- Every hook must be immediately relevant to the user's specific topic.
+- Every hook must feel different in structure and emotional angle.
+- Never use placeholders.
+- Make them copy-paste ready.
+
+${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
+          brandData
+        )
+      },
+      {
+        role: 'user',
+        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+
+Generate 5 hooks for this full-post workflow.
+
+Topic: "${topic}"
+Goal: ${goal || 'engagement'}
+Platform: ${platformData?.name || platform}
+${getAudiencePainPointGuidance(promptProfile.niche)}
+
+Requirements:
+- Question hook: address a real pain point for this audience
+- Teaser hook: reference something specific to this niche
+- Shocking Stat hook: use phrasing like "Most [audience] don't realize..." without fake numbers
+- Story hook: open a scenario this audience actually lives through
+- Bold Claim hook: take a strong opinion specific to this niche
+
+Return only the numbered hooks.`
+      }
+    ], 0.7);
+
+    return {
+      success: true,
+      hooks: data.content || '',
+      usage: data.usage
+    };
+  } catch (error) {
+    console.error('Full post hook generation error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 /**
  * Generate styled CTAs grouped by category (Direct, Soft, Urgency, Question, Story)
  * @param {Object} params - { promoting, goalType, platform }
@@ -513,28 +819,30 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     return {
       success: true,
       ctas: [
-        { style: 'Direct', cta: `Grab your spot — link in bio`, tip: 'Clear and straightforward works best for high-intent audiences' },
         { style: 'Soft', cta: `Save this for your next session`, tip: 'Low-pressure CTAs boost saves and shares' },
-        { style: 'Urgency', cta: `Only 10 spots left — DM "YES" now`, tip: 'Scarcity creates immediate action' },
-        { style: 'Question', cta: `Would you try this? Drop a comment below`, tip: 'Questions drive comment engagement by 3x' },
-        { style: 'Story', cta: `I went from burnt out to blissed out. Here's how...`, tip: 'Story-driven CTAs create emotional connection' }
+        { style: 'Engagement', cta: `Comment YES if this is on your list`, tip: 'Comment CTAs boost engagement signals' },
+        { style: 'Traffic', cta: `Get the full details through the link in bio`, tip: 'Traffic CTAs work when the destination is clear' },
+        { style: 'Lead', cta: `DM me "YES" for the next steps`, tip: 'Lead CTAs turn warm interest into conversations' },
+        { style: 'Direct', cta: `Grab your spot this week before it fills up`, tip: 'Direct CTAs work best for high-intent audiences' }
       ],
-      platformTip: `On ${platform}, soft CTAs and questions tend to drive the most engagement.`
+      platformTip: `On ${platform}, mix save/comment CTAs with one clear conversion CTA.`
     };
   }
 
   try {
     const platformData = getPlatform(platform);
     const ctaGuidelines = getCTAGuidelines(platform);
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const systemPrompt = buildSystemPrompt(
       `You are Conversion Architect — a direct response copywriter who has studied the psychology of micro-commitments, social proof triggers, and platform-specific friction points. You know a CTA is not a sentence at the end of a post — it is a precision-engineered invitation that matches the emotional state the content just created.
 
 THE 5 CTA STYLES YOU MASTER:
-- Direct: Clear imperative, zero ambiguity ("Tap the link in bio")
-- Soft: Low-friction invite that lowers resistance ("Save this for later")
-- Urgency: Time or scarcity trigger that activates loss aversion
-- Question: Engagement bait that feeds the algorithm and builds community
-- Story: First-person narrative that creates emotional resonance and curiosity about the outcome
+- Soft: Low-friction invite that lowers resistance
+- Engagement: Comment, reply, save, or share action tailored to the platform
+- Traffic: Click, tap, bio-link, or comment-to-get-the-link CTA
+- Lead: DM, inquiry, booking, or opt-in CTA tied to a specific outcome
+- Direct: Highest-intent conversion CTA tied to the service or offer
 
 CHAIN-OF-THOUGHT (apply before generating):
 1. What specific action does the creator want the audience to take?
@@ -546,21 +854,28 @@ CHAIN-OF-THOUGHT (apply before generating):
 OUTPUT FORMAT — Return ONLY valid JSON:
 {
   "ctas": [
-    { "style": "Direct", "cta": "exact CTA text — must reference the specific offering", "tip": "why this style works on [platform] for [goal]" },
     { "style": "Soft", "cta": "...", "tip": "..." },
-    { "style": "Urgency", "cta": "...", "tip": "..." },
-    { "style": "Question", "cta": "...", "tip": "..." },
-    { "style": "Story", "cta": "...", "tip": "..." }
+    { "style": "Engagement", "cta": "...", "tip": "..." },
+    { "style": "Traffic", "cta": "...", "tip": "..." },
+    { "style": "Lead", "cta": "...", "tip": "..." },
+    { "style": "Direct", "cta": "...", "tip": "..." }
   ],
   "platformTip": "which CTA style performs best on this platform for this goal, and the single biggest CTA mistake to avoid here"
 }
 
 QUALITY GATES:
 - Each CTA must name or reference what is being promoted — no generic filler
-- Urgency CTAs must include a concrete scarcity or deadline element
-- Question CTAs must end with a question or a specific emoji/word prompt
-- Story CTAs must open with "I" and contain an emotional contrast
+- Match the platform action surface: link in bio, comments, messages, bookings, profile button, or reposts
+- Engagement CTA should feel native to the platform's algorithm
+- Traffic CTA should tell the user exactly where to go next
+- Lead CTA should mention the specific service, keyword, consultation, or deliverable
+- Direct CTA should feel like the clearest conversion move for a ready buyer
 - Soft CTAs must feel like a gift, not an ask
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
+
+${buildPromptGuardrails({ readyToUse: true })}
 
 VAGUE INPUT FALLBACK: If the promoting field is empty or generic, generate CTAs for a broad "offer or content" and note in platformTip: "No specific offering provided — CTAs are intentionally broad. Add what you're promoting for hyper-specific results."`,
       brandData
@@ -570,26 +885,34 @@ VAGUE INPUT FALLBACK: If the promoting field is empty or generic, generate CTAs 
       { role: 'system', content: systemPrompt },
       {
         role: 'user',
-        content: `Generate 5 CTAs for someone promoting: "${promoting}"
+        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+
+Generate 5 CTAs for someone promoting: "${promoting}"
 Goal: ${goalLabels[goalType] || goalType}
 Platform: ${platformData?.name || platform}
+Brand tone to match: ${promptProfile.tone}
+Creator type: ${creatorPromptGuidance.label}
 
 Platform CTA style: ${ctaGuidelines.style}
 Platform examples: ${ctaGuidelines.examples.join(', ')}
+Platform fit reminder: use ${platform === 'instagram' ? 'bio-link, save, comment, or DM language' : platform === 'facebook' ? 'button, share, or comment language' : platform === 'tiktok' ? 'comment, follow, or DM language' : platform === 'linkedin' ? 'message, comment, or profile CTA language' : 'platform-native next-step language'}
 
 Generate exactly 5 CTAs, one for each style below. Return ONLY a JSON object:
 {
   "ctas": [
-    { "style": "Direct", "cta": "straightforward ask CTA text here", "tip": "why this style works on ${platformData?.name || platform}" },
     { "style": "Soft", "cta": "low-pressure CTA text here", "tip": "why this style works" },
-    { "style": "Urgency", "cta": "time-sensitive CTA text here", "tip": "why this style works" },
-    { "style": "Question", "cta": "engagement-first question CTA here", "tip": "why this style works" },
-    { "style": "Story", "cta": "narrative hook CTA here", "tip": "why this style works" }
+    { "style": "Engagement", "cta": "comment/share/save CTA text here", "tip": "why this style works" },
+    { "style": "Traffic", "cta": "click or visit CTA text here", "tip": "why this style works" },
+    { "style": "Lead", "cta": "DM or inquiry CTA text here", "tip": "why this style works" },
+    { "style": "Direct", "cta": "highest-intent CTA text here", "tip": "why this style works" }
   ],
   "platformTip": "which CTA style tends to perform best on ${platformData?.name || platform} and why"
 }
 
-IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Use platform conventions for ${platformData?.name || platform}.`
+IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Reference the service, outcome, or transformation wherever possible. Use platform conventions for ${platformData?.name || platform}.
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'For solo creators, favor community, conversation, creator growth, and personal-brand phrasing.'
+  : 'For brands/businesses, favor bookings, consultations, lead capture, trust, and outcome-focused service language.'}`
       }
     ], 0.7);
 
@@ -610,11 +933,11 @@ IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Use pl
     return {
       success: true,
       ctas: [
-        { style: 'Direct', cta: `Get started with ${promoting} — link in bio`, tip: 'Clear and action-oriented' },
-        { style: 'Soft', cta: `Save this for later`, tip: 'Low pressure drives saves' },
-        { style: 'Urgency', cta: `Limited time — DM to reserve your spot`, tip: 'Scarcity creates urgency' },
-        { style: 'Question', cta: `Would you try this? Let me know below`, tip: 'Questions boost comments' },
-        { style: 'Story', cta: `This changed everything for me. Here's how...`, tip: 'Stories create connection' }
+        { style: 'Soft', cta: `Save this for when you're ready to revisit ${promoting}.`, tip: 'Low pressure drives saves.' },
+        { style: 'Engagement', cta: `Comment YES if ${promoting} is on your radar.`, tip: 'Comments signal interest to the algorithm.' },
+        { style: 'Traffic', cta: `Get the full breakdown for ${promoting} through the link in bio.`, tip: 'Clear destination boosts click intent.' },
+        { style: 'Lead', cta: `DM me "${promoting}" and I'll send the next steps.`, tip: 'Lead CTAs reduce friction for warm prospects.' },
+        { style: 'Direct', cta: `Book your ${promoting} this week before spots fill up.`, tip: 'Direct CTAs work best for ready buyers.' }
       ],
       platformTip: `On ${platformData?.name || platform}, questions and soft CTAs drive the most engagement.`,
       usage: data.usage
@@ -624,11 +947,11 @@ IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Use pl
     return {
       success: true,
       ctas: [
-        { style: 'Direct', cta: `Ready for ${promoting}? Link in bio`, tip: 'Straightforward works on most platforms' },
-        { style: 'Soft', cta: `Save this for when you need it`, tip: 'Soft CTAs boost saves' },
-        { style: 'Urgency', cta: `Don't miss out — DM me "START" now`, tip: 'Urgency drives immediate action' },
-        { style: 'Question', cta: `Would you try ${promoting}? Drop a comment`, tip: 'Questions drive engagement' },
-        { style: 'Story', cta: `I used to struggle with this. Then I found ${promoting}...`, tip: 'Stories build trust' }
+        { style: 'Soft', cta: `Save this for later if ${promoting} is something you want to try.`, tip: 'Soft CTAs boost saves.' },
+        { style: 'Engagement', cta: `Comment YES if you want more tips on ${promoting}.`, tip: 'Comment prompts drive algorithmic engagement.' },
+        { style: 'Traffic', cta: `The full guide to ${promoting} is linked in bio.`, tip: 'Traffic CTAs work when the next step is obvious.' },
+        { style: 'Lead', cta: `DM me "${promoting}" for details and pricing.`, tip: 'DM CTAs work well for leads.' },
+        { style: 'Direct', cta: `Book your ${promoting} today if you want to start this week.`, tip: 'Direct CTAs convert warm audiences.' }
       ],
       platformTip: `Mix different CTA styles for best results on ${platform}.`,
       usage: { fallback: true }
@@ -649,16 +972,21 @@ export async function generateCTAs(goal, brandData, platform = 'instagram') {
   }
 
   try {
-    const niche = getNiche(brandData);
-    const brandVoice = getBrandVoice(brandData);
-    const audience = getTargetAudience(brandData);
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const niche = promptProfile.niche;
+    const brandVoice = promptProfile.tone;
+    const audience = promptProfile.targetAudience;
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     
     // Get platform-specific CTA guidelines
     const ctaGuidelines = getCTAGuidelines(platform);
     const platformData = getPlatform(platform);
 
     const systemPrompt = buildSystemPrompt(
-      'You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.',
+      `You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}`,
       brandData
     );
 
@@ -675,6 +1003,7 @@ PLATFORM: ${platformData?.name || 'Social Media'}
 Platform CTA style: ${ctaGuidelines.style}
 Platform CTA examples: ${ctaGuidelines.examples.join(', ')}
 Platform tip: ${ctaGuidelines.tip}
+Creator type: ${creatorPromptGuidance.label}
 
 Niche: ${niche.toLowerCase()}
 Target audience: ${audience.toLowerCase()}
@@ -685,6 +1014,9 @@ Each CTA must:
 - Create urgency or desire
 - Feel natural, not pushy
 - Use platform-specific language and conventions
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'Use personal-brand, first-person, community-oriented phrasing where natural.'
+  : 'Use polished brand/service language with authority and conversion intent.'}
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
       }
@@ -731,13 +1063,15 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
   }
 
   try {
-    const niche = getNiche(brandData);
-    const brandVoice = getBrandVoice(brandData);
-    const audience = getTargetAudience(brandData);
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const niche = promptProfile.niche;
+    const brandVoice = promptProfile.tone;
+    const audience = promptProfile.targetAudience;
     
     // Get platform-specific hashtag guidelines
     const hashtagGuidelines = getHashtagGuidelines(platform);
     const platformData = getPlatform(platform);
+    const hashtagRules = getHashtagOutputRules(platform, promptProfile.city);
     
     // Determine hashtag count based on platform
     const hashtagCount = hashtagGuidelines.max || 10;
@@ -745,11 +1079,10 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
     const systemPrompt = buildSystemPrompt(
       `You are Hashtag Strategist — a platform growth specialist who treats hashtag selection as algorithmic science, not guesswork. You understand the difference between reach potential and competition density, and you build stacks designed to get content discovered by high-intent, relevant audiences.
 
-THE 4 TIERS YOU ALWAYS MIX:
-- Mega (1M+ posts): Brand context, low chance of standing out
-- Mid (100K–1M): Sweet spot — discovery meets competition balance
-- Micro (10K–100K): High engagement rate, niche-relevant community
-- Nano (<10K): Targeted early-adopter community, low competition
+THE 3 TIERS YOU ALWAYS MIX:
+- HIGH: Broad but still relevant discovery terms
+- MEDIUM: Mid-competition tags with stronger intent
+- NICHE: Highly specific audience, topic, service, or location tags
 
 CHAIN-OF-THOUGHT (apply before generating):
 1. What is the core topic, niche, and viewer intent for this content?
@@ -762,7 +1095,7 @@ OUTPUT FORMAT — Return ONLY a valid JSON array of objects:
 [
   {
     "tag": "#ExactTag",
-    "tier": "mid",
+    "tier": "HIGH",
     "estimatedPosts": "450K",
     "score": 87,
     "reason": "Why this tag works for this specific content and audience"
@@ -775,6 +1108,10 @@ QUALITY GATES:
 - Never invent tags — only suggest hashtags that plausibly exist on this platform
 - Do not include the brand name unless the user's profile specifies it
 - Avoid generic filler tags (#love, #instagood, #photooftheday) unless platform conventions strongly call for them
+- Volume distribution must be 3-4 HIGH, 3-4 MEDIUM, and 2-3 NICHE for Instagram-style outputs
+- If location is available, include realistic city-specific tags or search terms
+
+${buildPromptGuardrails({ readyToUse: true })}
 
 VAGUE INPUT FALLBACK: If input is a single word or clearly generic, generate hashtags for a broad content category and add a "note" field as the first element: { "note": "Broad topic detected — add context (niche, angle, format) for a more targeted stack" }.`,
       brandData
@@ -787,29 +1124,40 @@ VAGUE INPUT FALLBACK: If input is a single word or clearly generic, generate has
       },
       {
         role: 'user',
-        content: `Generate exactly ${hashtagCount} optimized hashtags for: "${input}"
+        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+
+Generate exactly ${hashtagCount} optimized ${hashtagRules.outputLabel} for: "${input}"
 
 PLATFORM: ${platformData?.name || 'Social Media'}
 Recommended hashtag count: ${hashtagGuidelines.count}
 Hashtag style for this platform: ${hashtagGuidelines.style}
 Platform tip: ${hashtagGuidelines.tip}
+Platform-specific output rule: ${hashtagRules.formatRule}
+Location rule: ${hashtagRules.cityRule}
 
-Niche: ${niche.toLowerCase()}
+Niche: ${niche}
 Brand voice: ${brandVoice}
-Target audience: ${audience.toLowerCase()}
+Target audience: ${audience}
 
 Return ONLY a valid JSON array of exactly ${hashtagCount} objects, ranked by engagement potential:
 [
   {
     "tag": "#ExactHashtag",
-    "tier": "mega|mid|micro|nano",
+    "tier": "HIGH|MEDIUM|NICHE",
     "estimatedPosts": "2.4M",
     "score": 84,
     "reason": "Why this tag reaches the right audience for this content on ${platformData?.name || 'this platform'}"
   }
 ]
 
-Ensure the mix spans all 4 tiers (mega, mid, micro, nano) and every tag is directly relevant to "${input}". Do not include markdown, explanation text, or anything outside the JSON array.`
+Distribution requirements:
+- Instagram: 3-4 HIGH, 3-4 MEDIUM, 2-3 NICHE
+- TikTok: 5-7 total, still include a broad / medium / niche mix and allow #fyp or #foryou only if it fits
+- Facebook: 4-6 total, fewer but still niche-specific
+- LinkedIn: 4-6 total, professional and credibility-focused
+- YouTube: 5-7 total and optimize them as search-friendly discovery terms
+
+Ensure every tag is directly relevant to "${input}" and to the ${niche} niche. Do not include markdown, explanation text, or anything outside the JSON array.`
       }
     ], 0.5);
 
@@ -1574,4 +1922,374 @@ Be HIGHLY SPECIFIC to the topic "${topic}" — never give generic photography ad
     console.error('Visual brainstorm error:', error);
     return { success: false, error: error.message || 'Failed to generate visual brainstorm' };
   }
+}
+
+/**
+ * Score how "human" vs AI-generated content sounds.
+ * Returns structured JSON with overall score, 4 dimension scores, and flagged phrases.
+ */
+export async function scoreHumanness(content, brandData = null) {
+  if (isDemoMode()) {
+    await simulateDelay(800, 1500);
+    return {
+      success: true,
+      score: {
+        overall: 72,
+        label: 'Mostly natural',
+        dimensions: {
+          sentenceVariety: { score: 78, feedback: 'Good mix of sentence lengths. One run-on sentence in paragraph 2.' },
+          naturalVocabulary: { score: 65, feedback: 'Flagged 2 AI-typical phrases: "delve into" and "it\'s important to note".' },
+          voiceConsistency: { score: 80, feedback: 'Tone mostly matches brand voice. Slight formality drift in closing.' },
+          conversationalFlow: { score: 68, feedback: 'Transitions between paragraphs feel slightly mechanical.' },
+        },
+        flaggedPhrases: [
+          { original: 'delve into this topic', suggestion: 'dig into this topic', dimension: 'naturalVocabulary' },
+          { original: "It's important to note that", suggestion: 'Here\'s the thing —', dimension: 'naturalVocabulary' },
+        ],
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const brandSection = brandContext ? `\n\nBrand Voice Profile:\n${brandContext}` : '';
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Human Voice Analyst — an expert in distinguishing AI-generated text from authentic human writing. You evaluate content strictly on how natural, human, and voice-consistent it sounds — NOT on grammar, quality, or persuasion.
+
+SCORING DIMENSIONS (each 0–100):
+- sentenceVariety: Do sentences vary in length and structure, or is there a repetitive pattern typical of LLMs?
+- naturalVocabulary: Are there AI-typical phrases like "delve into", "it's important to note", "in today's world", "comprehensive guide", "in conclusion", "Moreover", "Furthermore", "landscape"? Flag each one.
+- voiceConsistency: Does the tone match the provided brand voice profile? Flag any drift.
+- conversationalFlow: Do transitions feel natural or stiff? Does it read like speech or like a textbook?
+
+OVERALL SCORE (0–100):
+- 80-100: "Sounds like you"
+- 60-79: "Mostly natural"
+- 40-59: "Slightly robotic"
+- 0-39: "AI detectable"
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "overall": 72,
+  "label": "Mostly natural",
+  "dimensions": {
+    "sentenceVariety": { "score": 78, "feedback": "specific observation" },
+    "naturalVocabulary": { "score": 65, "feedback": "specific observation" },
+    "voiceConsistency": { "score": 80, "feedback": "specific observation" },
+    "conversationalFlow": { "score": 68, "feedback": "specific observation" }
+  },
+  "flaggedPhrases": [
+    { "original": "exact phrase from content", "suggestion": "more natural alternative", "dimension": "naturalVocabulary" }
+  ]
+}
+
+RULES:
+- Flag a minimum of 1 phrase and maximum of 5
+- Each suggestion must be a drop-in replacement, not a rewrite of the whole sentence
+- Never score above 90 unless the content genuinely reads like casual human speech
+- Typical AI-sounding content should often land in the 40-70 range, not 80+
+- Heavily penalize phrases like "In today's world", "It's important to", "As a [niche] professional", "In conclusion", "delve into", "Moreover", and "Furthermore"
+- Do not evaluate content quality, grammar, or marketing effectiveness
+
+${buildPromptGuardrails()}`,
+      },
+      {
+        role: 'user',
+        content: `${buildPromptBrandSection(brandData)}
+
+Analyze how human this content sounds. Score it and flag specific AI-sounding phrases with natural alternatives.${brandSection}
+
+Content:
+${content}`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, score: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Humanizer score error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Auto-improve a flagged phrase to sound more human.
+ */
+export async function autoImprovePhrase(fullContent, originalPhrase, brandData = null) {
+  try {
+    const messages = [
+      {
+        role: 'system',
+        content: `You rewrite the full sentence containing the flagged phrase so it sounds more natural, human, and brand-consistent. You may lightly smooth the neighboring sentence if needed, but do not rewrite the whole draft. Return ONLY the improved full content with the local edit applied — no explanation, no JSON.
+
+${buildPromptBrandSection(brandData)}`,
+      },
+      {
+        role: 'user',
+        content: `Replace this phrase: "${originalPhrase}"
+
+Full content:
+${fullContent}
+
+Return the full content with that phrase rewritten to sound more human. Keep the meaning intact, avoid AI clichés, and make the local edit feel genuinely different.`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.5);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.5);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
+  } catch (error) {
+    console.error('Auto-improve error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Predict performance of content on a given platform.
+ * trendContext comes from a prior Perplexity search.
+ */
+export async function predictPerformance(content, platform, trendContext, brandData = null) {
+  if (isDemoMode()) {
+    await simulateDelay(1000, 2000);
+    return {
+      success: true,
+      prediction: {
+        engagementLevel: 'High',
+        reachPotential: 'Growing',
+        reachRange: '500-5K',
+        platformFitScore: 78,
+        platformFitNote: `This content is optimized for ${platform} at 78%.`,
+        trendAlignment: 72,
+        trendAlignmentNote: 'Topic aligns with 2 currently trending themes in your niche.',
+        bestPostingWindow: 'Tuesday-Thursday, 7-9 PM',
+        confidence: 'Medium',
+        confidenceNote: 'Based on caption + hashtags. Add a hook for higher confidence.',
+        reasoning: 'Content structure follows current high-performing patterns. Strong emotional hook but could benefit from a more specific CTA.',
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Performance Predictor — a data analyst who evaluates social media content against current platform signals and trend alignment. You are cautious and honest. Never claim high confidence. Always label output as AI prediction.
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "engagementLevel": "Low" | "Medium" | "High" | "Viral Potential",
+  "reachPotential": "Niche" | "Growing" | "Breakout" | "Trending",
+  "reachRange": "under 500 views" | "500-5K" | "5K-50K" | "50K+",
+  "platformFitScore": 78,
+  "platformFitNote": "This content is optimized for [platform] at X%.",
+  "trendAlignment": 72,
+  "trendAlignmentNote": "one sentence",
+  "bestPostingWindow": "Tuesday-Thursday, 7-9 PM",
+  "confidence": "Low" | "Medium",
+  "confidenceNote": "brief reason for confidence level",
+  "reasoning": "2-3 sentence analysis"
+}
+
+RULES:
+- Never set confidence to "High" — always "Low" or "Medium"
+- platformFitScore under 60 must include a better-fitting platform suggestion in platformFitNote
+- Base engagement prediction on content structure, not just topic
+- If trendContext is provided, use it for trendAlignment scoring`,
+      },
+      {
+        role: 'user',
+        content: `Predict the performance of this content on ${platform}.
+${brandContext ? `\nBrand context:\n${brandContext}` : ''}
+${trendContext ? `\nCurrent trend context for this niche on ${platform}:\n${trendContext}` : ''}
+
+Content:
+${content}`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.3);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.3);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, prediction: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Performance prediction error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Analyze niche research data and generate structured content ideas.
+ */
+export async function analyzeNiche(researchData, brandData, platform = 'instagram') {
+  if (isDemoMode()) {
+    await simulateDelay(1500, 2500);
+    return {
+      success: true,
+      analysis: {
+        trendingThemes: [
+          { name: 'Behind-the-scenes content', why: 'Audiences crave authenticity over polished content.', bestFormat: 'Reel', momentum: 'Rising' },
+          { name: 'Myth-busting posts', why: 'Controversial takes drive massive comment engagement.', bestFormat: 'Carousel', momentum: 'Peaking' },
+          { name: 'Day-in-the-life', why: 'Relatable lifestyle content builds parasocial connection.', bestFormat: 'Reel', momentum: 'Rising' },
+        ],
+        hookPatterns: [
+          'How I [result] in [timeframe] without [common objection]',
+          'The [adjective] truth about [topic] nobody tells you',
+          'Stop doing [common mistake] — here\'s what works instead',
+          'I tested [method] for [timeframe]. Here\'s what happened...',
+        ],
+        contentGaps: [
+          { topic: 'Budget-friendly alternatives', reason: 'High search volume but few creators covering this angle.', label: 'Untapped Opportunity' },
+          { topic: 'Common mistakes beginners make', reason: 'Questions flooding comments but no dedicated content.', label: 'Untapped Opportunity' },
+        ],
+        contentIdeas: [
+          { title: '5 myths holding you back', format: 'Carousel', hook: 'Everyone believes #3 but it\'s completely wrong...', platformFit: 'Instagram' },
+          { title: 'My morning routine breakdown', format: 'Reel', hook: 'I changed one thing and it changed everything.', platformFit: 'TikTok' },
+          { title: 'The tool nobody talks about', format: 'Static Post', hook: 'I\'ve been keeping this secret for 6 months.', platformFit: 'Instagram' },
+          { title: 'Honest review after 90 days', format: 'Reel', hook: 'Here\'s what they don\'t show you...', platformFit: 'TikTok' },
+          { title: 'Beginner vs. Pro comparison', format: 'Carousel', hook: 'Which one are you? Slide to find out.', platformFit: 'Instagram' },
+        ],
+      },
+      usage: { demo: true },
+    };
+  }
+
+  try {
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Niche Intelligence Analyst — you transform raw trend research into actionable content strategy. You generate ORIGINAL ideas inspired by trends, never copied from them.
+
+OUTPUT — Return ONLY valid JSON:
+{
+  "trendingThemes": [
+    { "name": "Theme name", "why": "Why it's working (1-2 sentences)", "bestFormat": "Reel|Carousel|Static|Story", "momentum": "Rising|Peaking|Declining" }
+  ],
+  "hookPatterns": [
+    "How I [result] in [timeframe] without [common objection]"
+  ],
+  "contentGaps": [
+    { "topic": "Underserved topic", "reason": "Why this is an opportunity", "label": "Untapped Opportunity" }
+  ],
+  "contentIdeas": [
+    {
+      "title": "Specific executable content idea",
+      "format": "Reel|Carousel|Static",
+      "hook": "Suggested opening hook",
+      "platformFit": "Platform name",
+      "momentum": "Rising|Peaking|Declining",
+      "whyThisWorks": "Specific reason tied back to the research",
+      "hashtags": ["#tag1", "#tag2", "#tag3"]
+    }
+  ]
+}
+
+RULES:
+- trendingThemes: 3-5 themes, each with momentum badge
+- hookPatterns: 3-4 fillable templates with [brackets]
+- contentGaps: 2-3 underserved topics with clear audience demand
+- contentIdeas: exactly 5 original ideas, specific enough to execute immediately
+- Every content idea must be niche-specific, platform-specific, and grounded in the research findings
+- Every content idea must include a direct hook, a momentum label, a whyThisWorks explanation, and 3-5 relevant hashtags
+- All ideas must be original and aligned with the brand voice
+- Never copy or closely paraphrase existing content`,
+      },
+      {
+        role: 'user',
+        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+
+Based on this niche research, generate content intelligence:
+
+Research data:
+${researchData}
+
+Target platform: ${platform}
+${brandContext ? `\nBrand profile:\n${brandContext}` : ''}
+
+Generate trending themes, hook patterns, content gaps, and 5 original content ideas.
+
+For content ideas:
+- Make them immediately executable, not generic
+- Translate the research into opportunities for THIS user
+- Use "Rising" when the research suggests the topic is gaining traction, "Peaking" when it is hottest now, and "Declining" when it is fading
+- Include 3-5 relevant hashtags for each idea
+- Include one strong hook per idea`,
+      },
+    ];
+    let data;
+    try {
+      data = await callClaudeAPI([...messages], 0.7);
+    } catch (claudeError) {
+      if (claudeError.message?.includes('coming soon')) {
+        data = await callGrokAPI([...messages], 0.7);
+      } else {
+        throw claudeError;
+      }
+    }
+
+    const parsed = parseJsonFromResponse(data.content);
+    if (parsed) {
+      return { success: true, analysis: parsed, usage: data.usage };
+    }
+    return { success: true, rawAnalysis: data.content, usage: data.usage };
+  } catch (error) {
+    console.error('Niche analysis error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+function parseJsonFromResponse(text) {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    return JSON.parse(text.trim());
+  } catch {
+    /* continue */
+  }
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    try { return JSON.parse(fenced[1].trim()); } catch { /* continue */ }
+  }
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) {
+    try { return JSON.parse(braceMatch[0]); } catch { /* continue */ }
+  }
+  return null;
 }

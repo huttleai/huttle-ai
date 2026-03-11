@@ -273,8 +273,8 @@ Format as JSON with fields: content, hashtags, tips, hooks`
 
     setScheduled(true);
     setTimeout(() => setScheduled(false), 2000);
-    addToast('Navigating to calendar...', 'info');
-    setTimeout(() => navigate('/dashboard/calendar'), 500);
+    addToast('Navigating to AI Tools...', 'info');
+    setTimeout(() => navigate('/dashboard/ai-tools'), 500);
   };
 
   return (

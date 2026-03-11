@@ -73,7 +73,7 @@ export const SUBSCRIPTION_PLANS = {
       aiGenerations: 20,
       storageGB: 0.25, // 250MB
       features: [
-        'Smart Calendar',
+        'AI Power Tools',
         'Content Library (250MB)',
         'Trending Now',
         'Hashtags of the Day',

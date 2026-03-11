@@ -6,8 +6,8 @@ import { motion } from 'framer-motion';
  * Each icon tells a story about its feature with animated elements
  */
 
-// Smart Calendar - Calendar with AI brain overlay
-export function SmartCalendarIcon({ className = "", size = 64 }) {
+// Content Vault - Secure storage with AI overlay
+export function ContentVaultIcon({ className = "", size = 64 }) {
   return (
     <motion.svg
       width={size}
@@ -522,7 +522,7 @@ export function ViralBlueprintIcon({ className = "", size = 64 }) {
 // Export all icons as a collection
 export const FeatureIcons = {
   ViralBlueprint: ViralBlueprintIcon,
-  SmartCalendar: SmartCalendarIcon,
+  ContentVault: ContentVaultIcon,
   AIPlanBuilder: AIPlanBuilderIcon,
   ContentRemix: ContentRemixIcon,
   TrendRadar: TrendRadarIcon,

@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
   const checkUserProfile = useCallback(async (userId) => {
     // Create a timeout promise to prevent hanging queries
-    const QUERY_TIMEOUT_MS = 10000; // 10 seconds
+    const QUERY_TIMEOUT_MS = 15000; // 15 seconds
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error(`Profile query timed out after ${QUERY_TIMEOUT_MS / 1000} seconds. This may indicate the user_profile table doesn't exist or RLS policies are misconfigured.`));
@@ -61,13 +61,13 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      if (data && data.quiz_completed_at) {
-        // User has completed onboarding
+      const hasCompletedOnboarding = data?.has_completed_onboarding === true;
+
+      if (hasCompletedOnboarding) {
         setUserProfile(data);
         setNeedsOnboarding(false);
       } else {
-        // User exists but hasn't completed quiz, OR no profile exists
-        // Either way, they need onboarding
+        // Missing profile rows or incomplete profiles should always see onboarding.
         setUserProfile(data || null);
         setNeedsOnboarding(true);
       }
@@ -118,17 +118,17 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        // Set a timeout to prevent infinite loading (8 seconds - increased for Resend auth)
+        // Set a timeout to prevent infinite loading during slow Supabase cold starts
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('⚠️ [Auth] Auth check timed out after 8 seconds. Proceeding without session.');
+            console.warn('⚠️ [Auth] Auth check timed out after 15 seconds. Proceeding without session.');
             setLoading(false);
             setUser(null);
             setUserProfile(null);
             setNeedsOnboarding(false);
             setProfileChecked(true);
           }
-        }, 8000);
+        }, 15000);
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -344,9 +344,9 @@ export function AuthProvider({ children }) {
     
     // First refresh the profile from database to get the complete data
     await checkUserProfile(user.id);
-    
-    // The checkUserProfile will set needsOnboarding to false if quiz_completed_at is set
-    // But we also set it explicitly here for immediate UI update
+
+    // The profile refresh will clear the onboarding gate once the Supabase flag is true.
+    // Set it eagerly as well so the dashboard can render immediately after submit.
     setNeedsOnboarding(false);
 
     return { success: true };

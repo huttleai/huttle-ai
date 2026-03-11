@@ -18,6 +18,10 @@ const PERPLEXITY_API_KEY =
   process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
+// Model: llama-3.1-sonar-small-128k-online | Updated: March 2026
+// To upgrade: change the model string below and update .env.example
+const MODEL = "llama-3.1-sonar-small-128k-online";
+
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,6 +29,117 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user (more restrictive for Perplexity)
+
+function parseStructuredJson(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  const trimmed = rawText.trim();
+
+  const tryParse = (value) => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(trimmed);
+  if (direct) return direct;
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    const fenced = tryParse(fencedMatch[1].trim());
+    if (fenced) return fenced;
+  }
+
+  const arrayStart = trimmed.indexOf('[');
+  const arrayEnd = trimmed.lastIndexOf(']');
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    const arrayValue = tryParse(trimmed.slice(arrayStart, arrayEnd + 1));
+    if (arrayValue) return arrayValue;
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return tryParse(trimmed.slice(firstBrace, lastBrace + 1));
+  }
+
+  return null;
+}
+
+async function incrementCacheHitCount(cacheRow) {
+  if (!supabase || !cacheRow?.id) return;
+
+  try {
+    const nextHitCount = Number.isFinite(cacheRow.hit_count) ? cacheRow.hit_count + 1 : 1;
+    await supabase
+      .from('niche_content_cache')
+      .update({ hit_count: nextHitCount })
+      .eq('id', cacheRow.id);
+  } catch {
+    // Best-effort only. Some environments may not yet have hit_count.
+  }
+}
+
+async function getCachedPerplexityResult(cacheConfig) {
+  if (!supabase || !cacheConfig?.key) return null;
+
+  const { data, error } = await supabase
+    .from('niche_content_cache')
+    .select('id, payload, generated_at, expires_at, hit_count')
+    .eq('cache_key', cacheConfig.key)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  if (!data.expires_at || new Date(data.expires_at).getTime() <= Date.now()) {
+    return null;
+  }
+
+  await incrementCacheHitCount(data);
+
+  return {
+    resultData: data.payload,
+    generatedAt: data.generated_at,
+  };
+}
+
+async function setCachedPerplexityResult(cacheConfig, structuredData) {
+  if (!cacheConfig?.key || !structuredData) return;
+  if (!supabase) {
+    console.error('[Cache Write FAILED] Missing service-role Supabase client', cacheConfig.key);
+    return;
+  }
+
+  const now = new Date();
+  const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
+  const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+
+  const { error } = await supabase
+    .from('niche_content_cache')
+    .upsert({
+      cache_key: cacheConfig.key,
+      niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
+      platform: cacheConfig.platform || 'instagram',
+      feature: cacheConfig.type || 'trending',
+      payload: structuredData,
+      generated_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      hit_count: 0,
+    }, {
+      onConflict: 'cache_key',
+    });
+
+  if (error) {
+    console.error('[Cache Write FAILED]', error.message, cacheConfig.key);
+    return;
+  }
+
+  console.log('[Cache Write SUCCESS]', cacheConfig.key);
+}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -38,8 +153,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    const requestedCache = req.body?.cache;
+
     // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
     if (!PERPLEXITY_API_KEY) {
+      if (requestedCache?.key) {
+        logError('perplexity.missing_api_key_for_cached_dashboard_request');
+        return res.status(500).json({ error: 'Perplexity is required for live dashboard trend data.' });
+      }
+
       logError('perplexity.missing_api_key_using_grok_fallback');
       const grokKey = process.env.GROK_API_KEY || process.env.VITE_GROK_API_KEY || process.env.XAI_API_KEY;
       if (!grokKey) {
@@ -101,10 +223,26 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.2 } = req.body;
+    const { messages, temperature = 0.2, cache } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
+    }
+
+    if (cache?.key && !cache?.forceRefresh) {
+      const cachedResult = await getCachedPerplexityResult(cache);
+
+      if (cachedResult) {
+        return res.status(200).json({
+          success: true,
+          content: JSON.stringify(cachedResult.resultData),
+          structuredData: cachedResult.resultData,
+          citations: [],
+          usage: { cached: true },
+          cached: true,
+          generatedAt: cachedResult.generatedAt,
+        });
+      }
     }
 
     // Enforce fastest in-app Perplexity model for cost/performance consistency.
@@ -116,6 +254,14 @@ export default async function handler(req, res) {
     // Validate messages array size to prevent abuse
     if (messages.length > 20) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
+    }
+
+    if (cache?.key) {
+      console.log(`[Cache MISS] Fresh Perplexity fetch:
+  niche: ${cache.niche || 'small business'}
+  platform: ${cache.platform || 'instagram'}
+  city: ${cache.city || 'global'}
+  type: ${cache.type || 'trending'}`);
     }
 
     // Forward request to Perplexity API
@@ -144,12 +290,21 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const structuredData = cache?.key ? parseStructuredJson(content) : null;
+
+    if (cache?.key && structuredData) {
+      await setCachedPerplexityResult(cache, structuredData);
+    }
     
     return res.status(200).json({
       success: true,
-      content: data.choices?.[0]?.message?.content || '',
+      content,
+      structuredData,
       citations: data.citations || [],
-      usage: data.usage
+      usage: data.usage,
+      cached: false,
+      generatedAt: new Date().toISOString(),
     });
 
   } catch (error) {

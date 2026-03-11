@@ -1,7 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Calendar,
   FolderOpen,
   Wand2,
   Beaker,
@@ -15,13 +14,22 @@ import {
   Newspaper,
   LogOut,
   Zap,
+  PenLine,
   Repeat,
-  Flame
+  Flame,
+  Search
 } from 'lucide-react';
 import { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import useAIUsage from '../hooks/useAIUsage';
+
+function toTestId(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -36,22 +44,18 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
-      // Clear any local storage data first
       localStorage.removeItem('brandData');
       localStorage.removeItem('hasSeenWelcome');
       
       const result = await logout();
       if (result.success) {
-        // Force full page reload to clear all state and redirect to login
         window.location.href = '/dashboard/login';
       } else {
         console.error('Logout failed:', result.error);
-        // Force navigation even if logout had issues
         window.location.href = '/dashboard/login';
       }
     } catch (error) {
       console.error('Logout error:', error);
-      // Force navigation on error
       window.location.href = '/dashboard/login';
     }
   };
@@ -61,20 +65,19 @@ export default function Sidebar() {
       section: 'MAIN', 
       items: [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', color: 'from-blue-500 to-cyan-500' },
-        { name: 'Smart Calendar', icon: Calendar, path: '/dashboard/calendar', color: 'from-emerald-500 to-teal-500' },
-        { name: 'Content Library', icon: FolderOpen, path: '/dashboard/library', color: 'from-amber-500 to-orange-500' }
+        { name: 'Content Vault', icon: FolderOpen, path: '/dashboard/library', color: 'from-amber-500 to-orange-500' }
       ]
     },
     { 
       section: 'AI TOOLS', 
       items: [
+        { name: 'Full Post Builder', icon: PenLine, path: '/dashboard/full-post-builder', color: 'from-teal-500 to-cyan-500' },
         { name: 'AI Plan Builder', icon: Wand2, path: '/dashboard/plan-builder', color: 'from-violet-500 to-purple-500' },
-        { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools', color: 'from-yellow-500 to-orange-500' },
+        { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools?tool=caption', color: 'from-yellow-500 to-orange-500' },
         { name: 'Trend Lab', icon: Beaker, path: '/dashboard/trend-lab', color: 'from-pink-500 to-rose-500' },
+        { name: 'Niche Intel', icon: Search, path: '/dashboard/niche-intel', badge: 'Pro', color: 'from-indigo-500 to-blue-500' },
         { name: 'Viral Blueprint', icon: Flame, path: '/dashboard/viral-blueprint', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
-        { name: 'Content Remix', icon: Repeat, path: '/dashboard/content-remix', color: 'from-teal-500 to-cyan-500' },
-        // { name: 'Content Repurposer', icon: Repeat, path: '/dashboard/repurposer', badge: 'Pro', color: 'from-cyan-500 to-blue-500' }, // Temporarily disabled - uncomment to re-enable
-        // { name: 'Huttle Agent', icon: Bot, path: '/dashboard/agent', badge: 'Pro', color: 'from-indigo-500 to-violet-500' } // Temporarily disabled - kept in backend for future implementation
+        { name: 'Content Remix Studio', icon: Repeat, path: '/dashboard/content-remix', color: 'from-teal-500 to-cyan-500' },
       ]
     },
     { 
@@ -89,9 +92,12 @@ export default function Sidebar() {
     }
   ];
 
-  // Check if path is active
   const isPathActive = (path) => {
     if (path === '/dashboard') return location.pathname === '/dashboard' || location.pathname === '/dashboard/';
+    if (path.includes('?')) {
+      const basePath = path.split('?')[0];
+      return location.pathname.startsWith(basePath) && location.search.includes(path.split('?')[1]);
+    }
     return location.pathname.startsWith(path);
   };
 
@@ -104,7 +110,6 @@ export default function Sidebar() {
     if (touchStartX.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-    // Only close on clear left-swipe (not a vertical scroll)
     if (deltaX < -60 && deltaY < 50) setIsMobileOpen(false);
     touchStartX.current = null;
     touchStartY.current = null;
@@ -112,16 +117,15 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile Menu Button - positioned below safe area for notch/Dynamic Island */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
         className="lg:hidden fixed top-14 left-4 z-50 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
         aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
+        data-testid="sidebar-mobile-toggle"
       >
         {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
       </button>
 
-      {/* Overlay for mobile */}
       {isMobileOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30 animate-fadeIn"
@@ -129,7 +133,6 @@ export default function Sidebar() {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed left-0 top-0 h-screen w-64 
@@ -141,15 +144,14 @@ export default function Sidebar() {
         `}
         onTouchStart={handleSidebarTouchStart}
         onTouchEnd={handleSidebarTouchEnd}
+        data-testid="sidebar"
       >
-        {/* Subtle gradient overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.03),transparent_50%)] pointer-events-none" />
         
         <div
           className="relative flex flex-col h-full p-5 overflow-y-auto scrollbar-thin"
           style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
         >
-          {/* Logo row with mobile close button */}
           <div className="flex items-center justify-between mb-8 mt-1">
             <div
               className="cursor-pointer group"
@@ -161,7 +163,6 @@ export default function Sidebar() {
                 className="h-8 w-auto transition-all duration-200 group-hover:scale-105"
               />
             </div>
-            {/* In-sidebar close button — mobile only */}
             <button
               onClick={() => setIsMobileOpen(false)}
               className="lg:hidden p-3 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors text-gray-500"
@@ -171,7 +172,6 @@ export default function Sidebar() {
             </button>
           </div>
 
-          {/* Navigation */}
           <nav className="flex-1 space-y-6">
             {navItems.map((section) => (
               <div key={section.section}>
@@ -185,19 +185,18 @@ export default function Sidebar() {
                     
                     return (
                       <NavLink
-                        key={item.path}
+                        key={item.path + item.name}
                         to={item.path}
                         onClick={() => setIsMobileOpen(false)}
                         onMouseEnter={() => setHoveredItem(item.path)}
                         onMouseLeave={() => setHoveredItem(null)}
                         className="group relative block"
+                        data-testid={`sidebar-link-${toTestId(item.name)}`}
                       >
-                        {/* Left accent border for active */}
                         {isActive && (
                           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-huttle-primary rounded-r-full" />
                         )}
                         
-                        {/* Content */}
                         <div className={`relative flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 min-h-[48px] ${
                           isActive 
                             ? 'bg-huttle-50/80' 
@@ -205,7 +204,6 @@ export default function Sidebar() {
                               ? 'bg-gray-50' 
                               : 'bg-transparent'
                         }`}>
-                          {/* Icon Container - Simple monochrome */}
                           <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
                             isActive 
                               ? 'bg-huttle-primary/10' 
@@ -222,7 +220,6 @@ export default function Sidebar() {
                             }`} />
                           </div>
                           
-                          {/* Text */}
                           <span className={`text-sm flex-1 font-medium transition-all duration-200 ${
                             isActive 
                               ? 'text-gray-900' 
@@ -233,7 +230,6 @@ export default function Sidebar() {
                             {item.name}
                           </span>
                           
-                          {/* Badge */}
                           {item.badge && (
                             <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all duration-200 ${
                               isActive 
@@ -252,7 +248,6 @@ export default function Sidebar() {
             ))}
           </nav>
 
-          {/* AI Meter */}
           <div className="mt-auto pt-4">
             {(() => {
               const displayLimit = aiLimit;
@@ -280,7 +275,7 @@ export default function Sidebar() {
                   : 'text-gray-700';
 
               return (
-                <div className={`rounded-xl border p-3 mb-3 ${bgColor}`}>
+                <div className={`rounded-xl border p-3 mb-3 ${bgColor}`} data-testid="sidebar-ai-meter">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <Zap className={`w-3.5 h-3.5 ${isRed ? 'text-red-500' : isAmber ? 'text-amber-500' : 'text-huttle-primary'}`} />
@@ -291,7 +286,6 @@ export default function Sidebar() {
                     </span>
                   </div>
                   
-                  {/* Progress bar */}
                   <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all duration-500 ${barColor}`}
@@ -299,7 +293,6 @@ export default function Sidebar() {
                     />
                   </div>
                   
-                  {/* Founders Only: No upgrade CTAs — just usage info */}
                   {isRed && (
                     <p className="text-xs text-red-600 font-medium mt-2">
                       Monthly limit reached. Resets next billing cycle.
@@ -315,11 +308,11 @@ export default function Sidebar() {
             })()}
           </div>
 
-          {/* Logout Button */}
           <div className="pt-2">
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group"
+              data-testid="sidebar-sign-out"
             >
               <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:rotate-[-12deg]" />
               <span className="text-sm font-medium">Sign Out</span>

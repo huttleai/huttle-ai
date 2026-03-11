@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   -- Extended brand/creator info
   first_name TEXT, -- User first name from onboarding
   brand_name TEXT, -- Brand name or creator handle
+  city TEXT, -- Optional city for localized trend and hashtag research
   industry TEXT, -- Industry or category
   
   -- Viral content strategy fields (for AI personalization)
@@ -96,6 +97,7 @@ COMMENT ON TABLE public.user_profile IS 'Stores user onboarding quiz data and pr
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS creator_archetype TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS first_name TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS brand_name TEXT;
+-- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS city TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS industry TEXT;
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS content_strengths TEXT[];
 -- ALTER TABLE public.user_profile ADD COLUMN IF NOT EXISTS biggest_challenge TEXT;

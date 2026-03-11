@@ -1,4 +1,4 @@
-import { AlertCircle, X, Calendar, Loader2, Zap, Star, TrendingDown, MessageSquare } from 'lucide-react';
+import { AlertCircle, X, Calendar, Loader2, Zap, TrendingDown, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 
 export default function CancelSubscriptionModal({ 
@@ -32,29 +32,10 @@ export default function CancelSubscriptionModal({
         {
           id: 'essentials',
           name: 'Essentials',
-          price: '$9/mo',
+          price: '$15/mo',
           icon: Zap,
           features: ['200 AI generations/month', '5GB storage', 'Email Support'],
           gradient: 'from-huttle-primary to-cyan-400'
-        },
-        {
-          id: 'freemium',
-          name: 'Freemium',
-          price: 'Free',
-          icon: Star,
-          features: ['20 AI generations/month', '250MB storage', 'Basic features'],
-          gradient: 'from-gray-500 to-gray-600'
-        }
-      ];
-    } else if (currentTier === 'essentials') {
-      return [
-        {
-          id: 'freemium',
-          name: 'Freemium',
-          price: 'Free',
-          icon: Star,
-          features: ['20 AI generations/month', '250MB storage', 'Basic features'],
-          gradient: 'from-gray-500 to-gray-600'
         }
       ];
     }
@@ -192,7 +173,7 @@ export default function CancelSubscriptionModal({
                 </p>
                 <p className="text-sm text-gray-700">
                   Your subscription will remain active until <span className="font-semibold">{formatDate(renewalDate)}</span>. 
-                  After that, you'll be automatically moved to the free plan.
+                  After that, access to premium features will end.
                 </p>
               </div>
             </div>
@@ -204,15 +185,15 @@ export default function CancelSubscriptionModal({
             <ul className="space-y-1.5 text-sm text-gray-600">
               <li className="flex items-start gap-2">
                 <span className="text-gray-400 mt-0.5">•</span>
-                <span>AI generations will be limited to 20/month</span>
+                <span>AI-powered features will no longer be available</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-gray-400 mt-0.5">•</span>
-                <span>Storage will be reduced to 250MB</span>
+                <span>Your saved content in the Content Vault will remain accessible</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-gray-400 mt-0.5">•</span>
-                <span>Premium features will no longer be available</span>
+                <span>You can resubscribe at any time to restore full access</span>
               </li>
             </ul>
           </div>

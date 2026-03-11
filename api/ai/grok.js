@@ -16,6 +16,10 @@ import { logError, logInfo } from '../_utils/observability.js';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
+// Model: grok-4.1-fast-reasoning | Updated: March 2026
+// To upgrade: change the model string below and update .env.example
+const MODEL = "grok-4.1-fast-reasoning";
+
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

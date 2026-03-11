@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Star, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, ShieldCheck, Award, Lock, Users, CalendarCheck } from 'lucide-react';
+import { Check, CreditCard, Zap, Crown, Loader2, ExternalLink, Sparkles, Shield, AlertCircle, ShieldCheck, Award, Lock, Users, CalendarCheck } from 'lucide-react';
 import Badge from '../components/Badge';
 import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -35,26 +35,6 @@ export default function Subscription() {
 
   const plans = [
     {
-      id: 'freemium',
-      name: 'Freemium',
-      monthlyPrice: 0,
-      annualPrice: 0,
-      icon: Star,
-      description: 'Perfect for getting started',
-      features: [
-        '20 AI generations/month',
-        'Smart Calendar',
-        'Content Library (250MB)',
-        'Trending Now & Hashtags',
-        'All AI Power Tools',
-        'Daily Alerts',
-        'AI-Powered Insights',
-        'AI Plan Builder (7 days)'
-      ],
-      gradient: 'from-gray-500 to-gray-600',
-      tier: TIERS.FREE
-    },
-    {
       id: 'essentials',
       name: 'Essentials',
       monthlyPrice: 15,
@@ -63,11 +43,11 @@ export default function Subscription() {
       popular: true,
       description: 'Best for growing creators',
       features: [
-        'Everything in Freemium, plus:',
         '200 AI generations/month',
         '5GB storage',
-        'AI Plan Builder (7 & 14 days)',
+        'Full Post Builder & AI Plan Builder',
         'Full Trend Lab access',
+        'All AI Power Tools',
         'Email Support'
       ],
       gradient: 'from-huttle-primary to-cyan-400',
@@ -76,7 +56,7 @@ export default function Subscription() {
     {
       id: 'pro',
       name: 'Pro',
-      monthlyPrice: 35,
+      monthlyPrice: 39,
       annualPrice: 350,
       icon: Crown,
       description: 'For power users & teams',
@@ -86,7 +66,7 @@ export default function Subscription() {
         '50GB storage',
         'Viral Blueprint',
         'Content Remix Studio',
-        'Trend Lab',
+        'Niche Intel',
         'Huttle Agent',
         'Priority Email Support'
       ],
@@ -96,8 +76,6 @@ export default function Subscription() {
   ];
 
   const handleUpgrade = async (planId) => {
-    if (planId === 'freemium') return;
-    
     setLoading(planId);
 
     try {
@@ -207,58 +185,36 @@ export default function Subscription() {
 
   const handleDowngrade = async (planId) => {
     setShowCancelModal(false);
-    
-    if (planId === 'freemium') {
-      // For downgrade to free, open portal to cancel subscription
-      setLoading('portal');
-      try {
-        const result = await createPortalSession();
-        if (!result.success) {
-          addToast(result.error || 'Failed to open billing portal. Please try again.', 'error');
-        } else {
-          addToast('You can cancel your subscription in the billing portal to downgrade to Freemium.', 'info');
-        }
-      } catch (error) {
-        console.error('Portal error:', error);
-        addToast('Something went wrong. Please try again.', 'error');
-      } finally {
-        setLoading(null);
-      }
-    } else {
-      // For paid plan downgrades, use checkout
-      setLoading(planId);
-      try {
-        const result = await createCheckoutSession(planId, billingCycle);
+    setLoading(planId);
+    try {
+      const result = await createCheckoutSession(planId, billingCycle);
 
-        if (result.demo) {
-          if (setDemoTier) {
-            const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
-            setDemoTier(tierMap[planId] || TIERS.FREE);
-          }
-          addToast(`${planId.charAt(0).toUpperCase() + planId.slice(1)} plan selected.`, 'success');
-          setLoading(null);
-          return;
+      if (result.demo) {
+        if (setDemoTier) {
+          const tierMap = { 'essentials': TIERS.ESSENTIALS, 'pro': TIERS.PRO };
+          setDemoTier(tierMap[planId] || TIERS.ESSENTIALS);
         }
-        
-        if (!result.success) {
-          console.error('❌ [Subscription] Downgrade failed:', result.error);
-          addToast(result.error || 'Failed to start downgrade. Please try again.', 'error');
-          setLoading(null);
-          return;
-        }
-        
-        // If successful, the page should redirect to Stripe Checkout
-        if (result.success && !result.url) {
-          console.error('❌ [Subscription] No redirect URL in successful response');
-          addToast('Checkout session created but no redirect URL. Please try again.', 'error');
-          setLoading(null);
-        }
-        // If there's a URL, the redirect happens in stripeAPI.js
-      } catch (error) {
-        console.error('❌ [Subscription] Downgrade error:', error);
-        addToast('Something went wrong. Please try again.', 'error');
+        addToast(`${planId.charAt(0).toUpperCase() + planId.slice(1)} plan selected.`, 'success');
+        setLoading(null);
+        return;
+      }
+      
+      if (!result.success) {
+        console.error('❌ [Subscription] Downgrade failed:', result.error);
+        addToast(result.error || 'Failed to start downgrade. Please try again.', 'error');
+        setLoading(null);
+        return;
+      }
+      
+      if (result.success && !result.url) {
+        console.error('❌ [Subscription] No redirect URL in successful response');
+        addToast('Checkout session created but no redirect URL. Please try again.', 'error');
         setLoading(null);
       }
+    } catch (error) {
+      console.error('❌ [Subscription] Downgrade error:', error);
+      addToast('Something went wrong. Please try again.', 'error');
+      setLoading(null);
     }
   };
 
@@ -274,10 +230,6 @@ export default function Subscription() {
     
     if (plan.tier === userTier) {
       return 'Current Plan';
-    }
-    
-    if (plan.id === 'freemium') {
-      return 'Free Forever';
     }
     
     const tierOrder = { [TIERS.FREE]: 0, [TIERS.ESSENTIALS]: 1, [TIERS.PRO]: 2 };
@@ -655,7 +607,7 @@ export default function Subscription() {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-12 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mb-12 max-w-3xl mx-auto">
           {plans.map((plan) => (
             <div
               key={plan.name}
@@ -708,23 +660,17 @@ export default function Subscription() {
                 className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
                   plan.tier === userTier
                     ? 'bg-gray-100 text-gray-500 cursor-default border border-gray-200'
-                    : plan.popular
-                      ? 'bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] hover:shadow-lg disabled:opacity-50'
-                      : plan.id === 'freemium'
-                        ? 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300 cursor-default'
-                        : 'bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] hover:shadow-lg disabled:opacity-50'
+                    : 'bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] hover:shadow-lg disabled:opacity-50'
                 }`}
               >
                 {getButtonText(plan)}
               </button>
 
               {/* 7-Day Happiness Guarantee */}
-              {plan.id !== 'freemium' && (
-                <div className="flex items-center justify-center gap-1.5 mt-3">
-                  <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="text-xs text-gray-400">7-day money-back guarantee</span>
-                </div>
-              )}
+              <div className="flex items-center justify-center gap-1.5 mt-3">
+                <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-xs text-gray-400">7-day money-back guarantee</span>
+              </div>
             </div>
           ))}
         </div>

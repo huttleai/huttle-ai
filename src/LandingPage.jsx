@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
-  ArrowRight, Check, Sparkles, Calendar, TrendingUp, 
+  ArrowRight, Check, Sparkles, TrendingUp, 
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
@@ -25,7 +25,6 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // Custom Feature Icons
 import { 
   ViralBlueprintIcon,
-  SmartCalendarIcon, 
   AIPlanBuilderIcon, 
   ContentRemixIcon, 
   CaptionGeneratorIcon, 
@@ -443,7 +442,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
 const SocialProofMarquee = () => {
   const items = [
     { name: "Optimized Posting", subtitle: "AI-Powered Timing" },
-    { name: "Smart Calendar", subtitle: "7 & 14-Day Planning" },
+    { name: "Content Vault", subtitle: "Organized Assets" },
     { name: "AI Plan Builder", subtitle: "Content Strategy" },
     { name: "Hashtag Generator", subtitle: "Trending Tags" },
     { name: "Content Remix Studio", subtitle: "5 Platform Variations" },
@@ -629,7 +628,7 @@ const BentoGrid = () => {
             </div>
           </motion.div>
 
-          {/* Tertiary Feature: Smart Calendar - Small */}
+          {/* Tertiary Feature: Content Vault - Small */}
           <motion.div 
             className="col-span-1 md:col-span-1 lg:col-span-1 row-span-1 flex"
             initial={{ opacity: 0, y: 24 }}
@@ -639,10 +638,10 @@ const BentoGrid = () => {
           >
             <div className="group w-full h-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden">
               <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-green-500 mb-4 group-hover:scale-110 transition-transform duration-500">
-                <SmartCalendarIcon size={20} />
+                <Search size={20} />
               </div>
-              <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Smart Calendar</h3>
-              <p className="text-xs leading-relaxed text-slate-500">We pick the best times to post based on when your audience is online.</p>
+              <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Content Vault</h3>
+              <p className="text-xs leading-relaxed text-slate-500">Save, organize, and access all your AI-created content in one place.</p>
             </div>
           </motion.div>
 
@@ -811,7 +810,7 @@ const FAQSectionComponent = () => {
   const faqs = [
     {
       question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Smart Calendar, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
     },
     {
       question: "What happens when the Founding Member offer ends?",
@@ -943,7 +942,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'Viral Blueprint & AI Plan Builder',
                   'Content Remix Studio & Trend Lab',
                   'AI Power Tools (captions, hooks, CTAs)',
-                  'Smart Calendar with optimal timing',
+                  'Content Vault for all your creations',
                   'Cancel anytime',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
@@ -1527,7 +1526,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                {/* Bottom Left Card - Scheduled */}
+                {/* Bottom Left Card - Created */}
                 <div 
                   className="absolute z-10 hidden md:block hero-card-in"
                   style={{ left: '0%', bottom: '15%', animationDelay: '1.1s' }}
@@ -1535,7 +1534,7 @@ export default function LandingPage() {
                   <div className="hero-float-2" style={{ transform: 'rotate(-6deg)' }}>
                     <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4">
                       <div className="flex justify-between items-center mb-2.5">
-                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Created</span>
                         <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
                           <Check size={9} className="text-green-600" />
                         </div>
@@ -1546,7 +1545,7 @@ export default function LandingPage() {
                         </div>
                         <div>
                           <div className="font-bold text-slate-900 text-[11px] lg:text-xs">Instagram Reel</div>
-                          <div className="text-[10px] lg:text-[11px] text-slate-500">Today, 6:00 PM</div>
+                          <div className="text-[10px] lg:text-[11px] text-slate-500">Saved to Vault</div>
                         </div>
                       </div>
                     </GlassCard>
@@ -1638,12 +1637,12 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                {/* Bottom Left - Scheduled */}
+                {/* Bottom Left - Created */}
                 <div className="absolute z-10 md:hidden left-2 bottom-[25%] origin-center hero-card-mobile" style={{ animationDelay: '1.0s' }}>
                   <div className="hero-float-2" style={{ transform: 'rotate(-8deg)' }}>
                     <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
                       <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Scheduled</span>
+                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Created</span>
                         <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
                           <Check size={7} className="text-green-600" />
                         </div>
@@ -1654,7 +1653,7 @@ export default function LandingPage() {
                         </div>
                         <div>
                           <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
-                          <div className="text-[7px] text-slate-500">6:00 PM</div>
+                          <div className="text-[7px] text-slate-500">Saved</div>
                         </div>
                       </div>
                     </GlassCard>

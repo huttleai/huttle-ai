@@ -77,15 +77,10 @@ const ALL_FEATURES = [
     }
   },
   {
-    name: 'Smart Calendar',
-    key: 'smart-calendar',
+    name: 'AI Power Tools',
+    key: 'ai-power-tools',
     tiers: ['free', 'essentials', 'pro'],
-    description: 'Schedule and manage posts',
-    limits: {
-      free: '10 posts',
-      essentials: '50 posts',
-      pro: 'Unlimited'
-    }
+    description: 'Full suite of AI creation tools'
   }
 ];
 
@@ -156,59 +151,13 @@ export default function FeatureAccessList({ compact = false }) {
 
   // Full view for subscription page
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Free Tier */}
-      <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">Free</h3>
-          <p className="text-3xl font-bold text-gray-900 mb-1">$0</p>
-          <p className="text-sm text-gray-600">20 AI generations/month</p>
-        </div>
-        
-        <ul className="space-y-3 mb-6">
-          {ALL_FEATURES.filter(f => f.tiers.includes('free')).map((feature) => (
-            <li key={feature.key} className="flex items-start gap-2">
-              <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">{feature.name}</p>
-                {feature.limits?.free && (
-                  <p className="text-xs text-gray-600">{feature.limits.free}</p>
-                )}
-              </div>
-            </li>
-          ))}
-          
-          {ALL_FEATURES.filter(f => !f.tiers.includes('free')).slice(0, 2).map((feature) => (
-            <li key={feature.key} className="flex items-start gap-2 opacity-50">
-              <Lock className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-600">{feature.name}</p>
-            </li>
-          ))}
-        </ul>
-        
-        {currentTier === 'free' ? (
-          <button
-            disabled
-            className="w-full py-2 bg-gray-200 text-gray-600 rounded-lg font-semibold cursor-default"
-          >
-            Current Plan
-          </button>
-        ) : (
-          <button
-            onClick={handleUpgrade}
-            className="w-full py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:border-huttle-primary transition-all font-semibold"
-          >
-            Downgrade
-          </button>
-        )}
-      </div>
-
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
       {/* Essentials Tier */}
       <div className="bg-white rounded-xl border-2 border-huttle-300 p-6">
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-huttle-primary mb-2">Essentials</h3>
-          <p className="text-3xl font-bold text-gray-900 mb-1">$9</p>
-          <p className="text-sm text-gray-600">300 AI generations/month</p>
+          <p className="text-3xl font-bold text-gray-900 mb-1">$15</p>
+          <p className="text-sm text-gray-600">200 AI generations/month</p>
         </div>
         
         <ul className="space-y-3 mb-6">
@@ -244,7 +193,7 @@ export default function FeatureAccessList({ compact = false }) {
             onClick={handleUpgrade}
             className="w-full py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-semibold"
           >
-            {currentTier === 'free' ? 'Upgrade' : 'Downgrade'}
+            {currentTier === 'pro' ? 'Downgrade' : 'Upgrade'}
           </button>
         )}
       </div>
@@ -260,7 +209,7 @@ export default function FeatureAccessList({ compact = false }) {
         
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-          <p className="text-3xl font-bold text-white mb-1">$19</p>
+          <p className="text-3xl font-bold text-white mb-1">$39</p>
           <p className="text-sm text-white/80">800 AI generations/month</p>
         </div>
         
