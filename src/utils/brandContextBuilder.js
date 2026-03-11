@@ -121,6 +121,19 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeCreatorType(value) {
+  const normalizedValue = normalizeString(value).toLowerCase().replace(/\s+/g, '_');
+  if (!normalizedValue) return null;
+  if (normalizedValue === 'creator' || normalizedValue === 'solo_creator') return 'solo_creator';
+  if (normalizedValue === 'brand' || normalizedValue === 'business' || normalizedValue === 'brand_business') return 'brand_business';
+  return null;
+}
+
+function normalizeGrowthStage(value) {
+  const normalizedValue = normalizeString(value).toLowerCase().replace(/\s+/g, '_');
+  return normalizedValue || '';
+}
+
 function normalizeStringArray(value) {
   if (!Array.isArray(value)) return [];
 
@@ -147,7 +160,14 @@ function inferContentStyle(brandData, preset) {
 }
 
 export function getPromptBrandProfile(brandData = {}, overrides = {}) {
-  const rawNiche = normalizeString(overrides.niche ?? brandData?.niche);
+  const rawNiche = normalizeString(
+    overrides.niche
+    ?? overrides.contentFocus
+    ?? overrides.content_focus
+    ?? brandData?.niche
+    ?? brandData?.contentFocus
+    ?? brandData?.content_focus
+  );
   const preset = getSmartDefaults(rawNiche);
   const niche = rawNiche || preset.niche;
 
@@ -156,19 +176,45 @@ export function getPromptBrandProfile(brandData = {}, overrides = {}) {
   const platforms = normalizeStringArray(overrides.platforms ?? brandData?.platforms);
   const city = normalizeString(overrides.city ?? brandData?.city) || preset.city;
   const contentStyle = normalizeString(overrides.contentStyle) || inferContentStyle(brandData, preset);
+  const creatorType = normalizeCreatorType(
+    overrides.creatorType
+    ?? overrides.creator_type
+    ?? brandData?.creatorType
+    ?? brandData?.creator_type
+  );
+  const growthStage = normalizeGrowthStage(
+    overrides.growthStage
+    ?? overrides.growth_stage
+    ?? brandData?.growthStage
+    ?? brandData?.growth_stage
+  );
 
   return {
     niche,
+    contentFocus: niche,
     targetAudience,
     tone,
     platforms: platforms.length > 0 ? platforms : preset.platforms,
     city,
     contentStyle,
+    creatorType,
+    creator_type: creatorType,
+    growthStage,
+    growth_stage: growthStage,
   };
 }
 
 export function buildPromptBrandSection(brandData = {}, overrides = {}) {
-  const { niche, targetAudience, tone, platforms, city, contentStyle } = getPromptBrandProfile(brandData, overrides);
+  const {
+    niche,
+    targetAudience,
+    tone,
+    platforms,
+    city,
+    contentStyle,
+    creatorType,
+    growthStage,
+  } = getPromptBrandProfile(brandData, overrides);
 
   return `About this business:
 - Niche: ${niche}
@@ -176,7 +222,9 @@ export function buildPromptBrandSection(brandData = {}, overrides = {}) {
 - Brand tone: ${tone || 'Professional and approachable'}
 - Location: ${city || 'United States'}
 - Primary platforms: ${platforms.join(', ') || 'Instagram'}
-- Content style: ${contentStyle || 'Helpful, specific, and trust-building content'}`;
+- Content style: ${contentStyle || 'Helpful, specific, and trust-building content'}
+- Creator type: ${creatorType ? creatorType.replace(/_/g, ' ') : 'not set'}
+- Growth stage: ${growthStage ? growthStage.replace(/_/g, ' ') : 'not set'}`;
 }
 
 /**
@@ -268,6 +316,10 @@ export function buildBrandContext(brandData) {
   
   // Platforms
   parts.push(`Preferred Platforms: ${promptProfile.platforms.join(', ')}`);
+  parts.push(`Creator Type: ${promptProfile.creator_type ? promptProfile.creator_type.replace(/_/g, ' ') : 'not set'}`);
+  if (promptProfile.growth_stage) {
+    parts.push(`Growth Stage: ${promptProfile.growth_stage.replace(/_/g, ' ')}`);
+  }
   
   // Goals
   if (safeBrandData.goals && safeBrandData.goals.length > 0) {
@@ -482,16 +534,20 @@ export function getName(brandData, defaultName = '') {
  */
 export function buildBriefBrandContext(brandData) {
   const isCreator = isCreatorProfile(brandData);
-  const { tone, niche, targetAudience, city, platforms, contentStyle } = getPromptBrandProfile(brandData);
+  const { tone, niche, targetAudience, city, platforms, contentStyle, creator_type, growth_stage } = getPromptBrandProfile(brandData);
   
   if (isCreator) {
     const archetype = brandData?.creatorArchetype;
     const traits = getArchetypeTraits(archetype);
     const archetypeInfo = traits ? ` | Style: ${traits.style}` : '';
-    return `Creator Voice: ${tone} | Focus: ${niche} | Community: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}${archetypeInfo}`;
+    const growthStageInfo = growth_stage ? ` | Growth Stage: ${growth_stage}` : '';
+    const creatorTypeInfo = ` | Creator Type: ${creator_type || 'not_set'}`;
+    return `Creator Voice: ${tone} | Focus: ${niche} | Community: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}${creatorTypeInfo}${growthStageInfo}${archetypeInfo}`;
   }
   
-  return `Brand Voice: ${tone} | Niche: ${niche} | Audience: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}`;
+  const growthStageInfo = growth_stage ? ` | Growth Stage: ${growth_stage}` : '';
+  const creatorTypeInfo = ` | Creator Type: ${creator_type || 'not_set'}`;
+  return `Brand Voice: ${tone} | Niche: ${niche} | Audience: ${targetAudience} | Location: ${city} | Platforms: ${platforms.join(', ')} | Content Style: ${contentStyle}${creatorTypeInfo}${growthStageInfo}`;
 }
 
 /**

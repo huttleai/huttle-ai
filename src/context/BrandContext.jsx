@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../config/supabase';
+import { supabase, getUserPreferences } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/formatEnumLabel';
 
@@ -30,8 +30,11 @@ export function BrandProvider({ children }) {
     creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
     brandName: '',
     niche: '',
+    contentFocus: '',
     city: '',
     industry: '',
+    growthStage: '',
+    creatorType: null,
     targetAudience: '',
     brandVoice: '',
     platforms: [],
@@ -91,11 +94,18 @@ export function BrandProvider({ children }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+        const [{ data, error }, preferencesResult] = await Promise.all([
+          Promise.race([queryPromise, timeoutPromise]),
+          getUserPreferences(user.id),
+        ]);
 
         if (error) {
           throw error;
         }
+
+        const userPreferences = preferencesResult?.success && preferencesResult.data
+          ? preferencesResult.data
+          : {};
 
         if (data) {
           // Map user_profile fields to brandData structure
@@ -106,8 +116,17 @@ export function BrandProvider({ children }) {
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
+            contentFocus: userPreferences.content_focus
+              ? formatEnumArray(userPreferences.content_focus)
+              : (data.content_focus ? formatEnumArray(data.content_focus) : ''),
             city: data.city || '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
+            growthStage: userPreferences.growth_stage
+              ? normalizeOptionalEnum(userPreferences.growth_stage)
+              : (data.growth_stage ? normalizeOptionalEnum(data.growth_stage) : ''),
+            creatorType: userPreferences.creator_type
+              ? normalizeOptionalEnum(userPreferences.creator_type)
+              : (data.creator_type ? normalizeOptionalEnum(data.creator_type) : null),
             targetAudience: Array.isArray(data.target_audience)
               ? formatEnumArray(data.target_audience)
               : (data.target_audience ? formatEnumArray(data.target_audience) : ''),
@@ -224,8 +243,11 @@ export function BrandProvider({ children }) {
       creatorArchetype: '',
       brandName: '',
       niche: '',
+      contentFocus: '',
       city: '',
       industry: '',
+      growthStage: '',
+      creatorType: null,
       targetAudience: '',
       brandVoice: '',
       platforms: [],

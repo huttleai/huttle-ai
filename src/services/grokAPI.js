@@ -52,6 +52,43 @@ function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}
   ].filter(Boolean).join('\n');
 }
 
+function resolveCreatorPromptType(promptProfile, brandData = null) {
+  const explicitCreatorType = promptProfile?.creator_type || promptProfile?.creatorType || null;
+  if (explicitCreatorType === 'brand_business' || explicitCreatorType === 'solo_creator') {
+    return explicitCreatorType;
+  }
+
+  return brandData?.profileType === 'brand' ? 'brand_business' : 'solo_creator';
+}
+
+function getCreatorPromptGuidance(promptProfile, brandData = null) {
+  const creatorType = resolveCreatorPromptType(promptProfile, brandData);
+
+  if (creatorType === 'brand_business') {
+    return {
+      creatorType,
+      label: 'Brand / Business',
+      instructions: `BRAND/BUSINESS VOICE RULES:
+- Write in brand voice or polished third-person framing when needed
+- Keep the tone professional, service-focused, and authority-building
+- Prioritize conversion intent, bookings, consultations, and trust signals
+- Position the brand as the expert guide or provider
+- Avoid overly diary-like, personal-creator storytelling unless the input explicitly calls for it`,
+    };
+  }
+
+  return {
+    creatorType: 'solo_creator',
+    label: 'Solo Creator',
+    instructions: `SOLO CREATOR VOICE RULES:
+- Default to first-person voice when it feels natural ("I", "me", "my")
+- Sound personal, relatable, authentic, and emotionally real
+- Prioritize growth, community-building, conversation, and audience connection
+- Use trend-aware language and creator-native phrasing when it fits the platform
+- Avoid stiff corporate phrasing or generic business-speak`,
+  };
+}
+
 function getCaptionPlatformInstructions(platform) {
   const normalizedPlatform = (platform || 'instagram').toLowerCase();
 
@@ -266,6 +303,7 @@ export async function generateCaption(contentData, brandData) {
       tone: contentData.tone || brandData?.brandVoice,
       platforms: [contentData.platform || 'instagram'],
     });
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const isSingleCaptionMode = Boolean(contentData.selectedHook || contentData.singleCaption);
     const brandSection = buildPromptBrandSection(brandData, {
       tone: promptProfile.tone,
@@ -295,6 +333,9 @@ OUTPUT RULES:
 - NO filler openers: "Are you ready?", "In today's post...", "Hey guys!"
 - NO passive voice, corporate jargon, or vague enthusiasm
 - NO caption that could apply to any brand — each must feel specific
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
 
 ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
 
@@ -333,11 +374,15 @@ PLATFORM-SPECIFIC REQUIREMENTS:
 - ${getCaptionPlatformInstructions(platform)}
 
 GENERAL REQUIREMENTS:
+- Creator type: ${creatorPromptGuidance.label}
 - Speak to ${promptProfile.targetAudience}
 - Match this brand tone exactly: ${promptProfile.tone}
 - Make the content unmistakably relevant to a ${promptProfile.niche} business
 - Keep it authentic and engaging
 - Optimize for ${platformData?.name || 'social media'} algorithm and culture
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'Make the voice feel personal, relatable, and creator-led, using first-person phrasing where natural.'
+  : 'Make the voice feel polished, trustworthy, and conversion-aware, using brand/service language where natural.'}
 - If a hook is provided, use it as the exact opening line: ${contentData.selectedHook ? `"${contentData.selectedHook}"` : 'No fixed hook provided'}
 - If a goal is provided, align the CTA and offer framing to: ${contentData.goal || 'engagement'}
 - ${promptProfile.contentStyle}
@@ -582,6 +627,7 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
     const niche = promptProfile.niche;
     const brandVoice = promptProfile.tone;
     const audience = promptProfile.targetAudience;
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     
     // Get platform-specific hook guidelines
     const hookGuidelines = getHookGuidelines(platform);
@@ -616,6 +662,9 @@ OUTPUT RULES:
 - Every hook must stand alone — no context required to understand it
 - Emojis only if brand voice explicitly calls for them
 
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
+
 ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
 
 QUALITY GATE: Read each hook out loud. If it doesn't create a physical "lean in" reaction, rewrite it.
@@ -643,6 +692,7 @@ Platform tip: ${hookGuidelines.tip}
 Requested emphasis: ${theme}
 Niche: ${niche}
 Target audience: ${audience}
+Creator type: ${creatorPromptGuidance.label}
 ${getAudiencePainPointGuidance(niche)}
 
 Each hook must:
@@ -652,6 +702,9 @@ Each hook must:
 - Create curiosity or urgency
 - Feel authentic to the brand
 - Reference a specific audience frustration, desire, belief, or lived scenario within this niche
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'For solo creators, lean into first-person, relatable, creator-native phrasing when it sharpens the hook.'
+  : 'For brands/businesses, lean into expert positioning, service outcomes, and authority-first framing.'}
 
 Number them 1-4 and return only the hooks.`
       }
@@ -780,6 +833,7 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const platformData = getPlatform(platform);
     const ctaGuidelines = getCTAGuidelines(platform);
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const systemPrompt = buildSystemPrompt(
       `You are Conversion Architect — a direct response copywriter who has studied the psychology of micro-commitments, social proof triggers, and platform-specific friction points. You know a CTA is not a sentence at the end of a post — it is a precision-engineered invitation that matches the emotional state the content just created.
 
@@ -818,6 +872,9 @@ QUALITY GATES:
 - Direct CTA should feel like the clearest conversion move for a ready buyer
 - Soft CTAs must feel like a gift, not an ask
 
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}
+
 ${buildPromptGuardrails({ readyToUse: true })}
 
 VAGUE INPUT FALLBACK: If the promoting field is empty or generic, generate CTAs for a broad "offer or content" and note in platformTip: "No specific offering provided — CTAs are intentionally broad. Add what you're promoting for hyper-specific results."`,
@@ -834,6 +891,7 @@ Generate 5 CTAs for someone promoting: "${promoting}"
 Goal: ${goalLabels[goalType] || goalType}
 Platform: ${platformData?.name || platform}
 Brand tone to match: ${promptProfile.tone}
+Creator type: ${creatorPromptGuidance.label}
 
 Platform CTA style: ${ctaGuidelines.style}
 Platform examples: ${ctaGuidelines.examples.join(', ')}
@@ -851,7 +909,10 @@ Generate exactly 5 CTAs, one for each style below. Return ONLY a JSON object:
   "platformTip": "which CTA style tends to perform best on ${platformData?.name || platform} and why"
 }
 
-IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Reference the service, outcome, or transformation wherever possible. Use platform conventions for ${platformData?.name || platform}.`
+IMPORTANT: Each CTA should be specific to "${promoting}" — not generic. Reference the service, outcome, or transformation wherever possible. Use platform conventions for ${platformData?.name || platform}.
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'For solo creators, favor community, conversation, creator growth, and personal-brand phrasing.'
+  : 'For brands/businesses, favor bookings, consultations, lead capture, trust, and outcome-focused service language.'}`
       }
     ], 0.7);
 
@@ -911,16 +972,21 @@ export async function generateCTAs(goal, brandData, platform = 'instagram') {
   }
 
   try {
-    const niche = getNiche(brandData);
-    const brandVoice = getBrandVoice(brandData);
-    const audience = getTargetAudience(brandData);
+    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
+    const niche = promptProfile.niche;
+    const brandVoice = promptProfile.tone;
+    const audience = promptProfile.targetAudience;
+    const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     
     // Get platform-specific CTA guidelines
     const ctaGuidelines = getCTAGuidelines(platform);
     const platformData = getPlatform(platform);
 
     const systemPrompt = buildSystemPrompt(
-      'You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.',
+      `You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.
+
+CREATOR-TYPE BRANCHING:
+${creatorPromptGuidance.instructions}`,
       brandData
     );
 
@@ -937,6 +1003,7 @@ PLATFORM: ${platformData?.name || 'Social Media'}
 Platform CTA style: ${ctaGuidelines.style}
 Platform CTA examples: ${ctaGuidelines.examples.join(', ')}
 Platform tip: ${ctaGuidelines.tip}
+Creator type: ${creatorPromptGuidance.label}
 
 Niche: ${niche.toLowerCase()}
 Target audience: ${audience.toLowerCase()}
@@ -947,6 +1014,9 @@ Each CTA must:
 - Create urgency or desire
 - Feel natural, not pushy
 - Use platform-specific language and conventions
+- ${creatorPromptGuidance.creatorType === 'solo_creator'
+  ? 'Use personal-brand, first-person, community-oriented phrasing where natural.'
+  : 'Use polished brand/service language with authority and conversion intent.'}
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
       }

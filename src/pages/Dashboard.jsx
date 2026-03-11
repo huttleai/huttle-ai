@@ -505,6 +505,11 @@ export default function Dashboard() {
     return displayedDashboardHashtags.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
   }, [displayedDashboardHashtags, selectedHashtagPlatform]);
   const showBrandVoiceNudge = Boolean(dashboardData?.show_brand_voice_nudge);
+  const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
+  const primaryPlatformLabel = dashboardData?.primary_platform_label
+    || dashboardHashtagPlatforms[0]
+    || 'Instagram';
+  const showPlatformWideNicheNudge = Boolean(dashboardData?.show_platform_wide_niche_nudge);
   const trendingFallbackMessage = dashboardData?.trending_fallback_message || 'Trends are refreshing — check back in a few minutes.';
   const hashtagsFallbackMessage = dashboardData?.hashtags_fallback_message || 'Hashtags loading — refresh in a moment.';
   const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
@@ -652,7 +657,11 @@ export default function Dashboard() {
                   <div>
                     <h2 className="font-bold text-gray-900">Trending Now</h2>
                     <p className="text-xs text-gray-500">
-                      {hasNicheConfigured ? `Hot topics in ${normalizedNiche || normalizedIndustry}` : 'General trends across platforms'}
+                      {dashboardTrendingMode === 'platform_wide'
+                        ? `What's trending on ${primaryPlatformLabel}`
+                        : hasNicheConfigured
+                          ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
+                          : 'General trends across platforms'}
                     </p>
                   </div>
                 </div>
@@ -800,6 +809,16 @@ export default function Dashboard() {
                 )}
               </div>
 
+              {showPlatformWideNicheNudge && (
+                <div className="text-xs text-gray-400 mt-3 text-center">
+                  Showing platform-wide trends ·{' '}
+                  <Link to="/dashboard/brand-voice" className="text-teal-500 underline">
+                    Add your niche
+                  </Link>{' '}
+                  for personalized trends
+                </div>
+              )}
+
               {showBrandVoiceNudge && (
                 <Link
                   to="/dashboard/brand-voice"
@@ -826,7 +845,11 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
-                  <p className="text-xs text-gray-500">Copy &amp; paste ready</p>
+                  <p className="text-xs text-gray-500">
+                    {dashboardTrendingMode === 'platform_wide'
+                      ? `Top reach tags on ${primaryPlatformLabel}`
+                      : 'Copy & paste ready'}
+                  </p>
                 </div>
                 <button
                   onClick={refreshHashtags}

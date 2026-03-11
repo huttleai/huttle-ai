@@ -12,6 +12,16 @@ const DEFAULT_CITY = 'global';
 const DEFAULT_AUDIENCE = '';
 const BRAND_VOICE_NUDGE_COPY = 'Set your Brand Voice for niche-specific trends →';
 const SUPPORTED_DASHBOARD_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'youtube', 'linkedin', 'twitter'];
+const GENERIC_TRENDING_NICHES = new Set([
+  '',
+  'lifestyle',
+  'general',
+  'personal',
+  'content creator',
+  'content_creator',
+  'influencer',
+  'social media',
+]);
 const MOMENTUM_VALUES = new Set(['rising', 'peaking', 'steady', 'declining']);
 const REACH_VALUES = new Set(['high', 'medium', 'niche']);
 const INSIGHT_CATEGORIES = new Set(['Strategy', 'Timing', 'Audience', 'Platform', 'Content Type']);
@@ -91,6 +101,49 @@ function formatPlatformLabel(platform) {
 function normalizeCity(rawCity) {
   const city = normalizeTextValue(rawCity).toLowerCase();
   return city ? city.replace(/\s+/g, '_') : DEFAULT_CITY;
+}
+
+function getBrandVoiceNiche(brandVoice = {}) {
+  return normalizeTextValue(brandVoice?.niche || brandVoice?.contentFocus || brandVoice?.content_focus);
+}
+
+function getBrandVoiceGrowthStage(brandVoice = {}) {
+  return normalizeTextValue(brandVoice?.growthStage || brandVoice?.growth_stage).toLowerCase();
+}
+
+function getBrandVoiceCreatorType(brandVoice = {}) {
+  const explicitCreatorType = normalizeTextValue(brandVoice?.creatorType || brandVoice?.creator_type).toLowerCase();
+  if (explicitCreatorType) {
+    if (explicitCreatorType === 'creator') return 'solo_creator';
+    if (explicitCreatorType === 'brand' || explicitCreatorType === 'business') return 'brand_business';
+    return explicitCreatorType.replace(/\s+/g, '_');
+  }
+
+  const profileType = normalizeTextValue(brandVoice?.profileType || brandVoice?.profile_type).toLowerCase();
+  if (profileType === 'creator') return 'solo_creator';
+  if (profileType === 'brand') return 'brand_business';
+  return null;
+}
+
+function isGenericTrendingNiche(niche) {
+  const normalizedNiche = normalizeTextValue(niche).toLowerCase();
+  return !normalizedNiche || GENERIC_TRENDING_NICHES.has(normalizedNiche);
+}
+
+function getTrendingMode(brandVoice = {}) {
+  const niche = getBrandVoiceNiche(brandVoice);
+  const growthStage = getBrandVoiceGrowthStage(brandVoice);
+  const creatorType = getBrandVoiceCreatorType(brandVoice) || 'solo_creator';
+
+  const hasSpecificNiche = Boolean(niche) && !isGenericTrendingNiche(niche);
+  const isJustStarting = growthStage === 'just_starting_out';
+  const isSoloCreatorWithGenericNiche = creatorType === 'solo_creator' && !hasSpecificNiche;
+
+  if (!hasSpecificNiche || isJustStarting || isSoloCreatorWithGenericNiche) {
+    return 'platform_wide';
+  }
+
+  return 'niche_specific';
 }
 
 function parseStructuredJson(rawText) {
@@ -236,22 +289,34 @@ async function getDashboardSession() {
 }
 
 function buildDashboardBrandContext(brandProfile) {
-  const niche = normalizeTextValue(brandProfile?.niche) || DEFAULT_NICHE;
+  const rawNiche = getBrandVoiceNiche(brandProfile);
+  const niche = rawNiche || DEFAULT_NICHE;
   const selectedPlatforms = ensureArray(brandProfile?.platforms)
     .map(normalizePlatformValue)
     .filter((platform, index, array) => platform && array.indexOf(platform) === index)
     .filter((platform) => SUPPORTED_DASHBOARD_PLATFORMS.includes(platform));
   const hasCompletePlatforms = selectedPlatforms.length > 0;
-  const hasCompleteNiche = Boolean(normalizeTextValue(brandProfile?.niche));
+  const hasCompleteNiche = Boolean(rawNiche);
   const hasCompleteBrandVoice = hasCompletePlatforms && hasCompleteNiche;
+  const trendingMode = getTrendingMode(brandProfile);
+  const cacheNiche = trendingMode === 'platform_wide'
+    ? 'platform_wide'
+    : normalizeNiche(niche || DEFAULT_NICHE);
+  const primaryPlatform = hasCompletePlatforms ? selectedPlatforms[0] : DEFAULT_PLATFORM;
 
   return {
+    rawNiche,
     niche,
     normalizedNiche: normalizeNiche(niche || DEFAULT_NICHE),
+    cacheNiche,
     selectedPlatforms: hasCompletePlatforms ? selectedPlatforms : [DEFAULT_PLATFORM],
+    primaryPlatform,
+    primaryPlatformLabel: formatPlatformLabel(primaryPlatform),
     city: normalizeTextValue(brandProfile?.city) || null,
     normalizedCity: normalizeCity(brandProfile?.city),
     targetAudience: normalizeTextValue(brandProfile?.targetAudience) || DEFAULT_AUDIENCE,
+    trendingMode,
+    showPlatformWideNicheNudge: trendingMode === 'platform_wide' && !rawNiche,
     showBrandVoiceNudge: !hasCompleteBrandVoice,
     brandVoiceNudgeCopy: BRAND_VOICE_NUDGE_COPY,
   };
@@ -259,7 +324,7 @@ function buildDashboardBrandContext(brandProfile) {
 
 function buildPerPlatformCacheKey(context, platform, type, generatedDate) {
   return buildCacheKey(
-    context.normalizedNiche,
+    context.cacheNiche,
     normalizePlatformValue(platform),
     context.normalizedCity,
     generatedDate,
@@ -309,11 +374,11 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
   try {
     const currentPlatform = normalizePlatformValue(platform);
     const currentDateStart = new Date(`${generatedDate}T00:00:00.000Z`).toISOString();
-    const cacheKeyPattern = `${context.normalizedNiche}__${currentPlatform}__${context.normalizedCity}__%__${type}`;
+    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__%__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
       .select('cache_key, payload, generated_at')
-      .eq('niche', context.normalizedNiche)
+      .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
       .like('cache_key', cacheKeyPattern)
@@ -350,7 +415,67 @@ async function getAuthHeaders() {
   return headers;
 }
 
-function buildTrendingMessages(context, platform) {
+function getPlatformWideTrendingPrompt(platform) {
+  const platformKey = normalizePlatformValue(platform);
+  const platformLabel = formatPlatformLabel(platform);
+  const { month, year } = getCurrentMonthYear();
+  const platformSpecificFocus = platformKey === 'tiktok'
+    ? `- Viral sounds and audio trends
+- Trending challenges and duet formats
+- Popular content formats (#fyp, #foryou style)
+- Trending hashtag categories
+- POV, storytime, transformation formats that are peaking`
+    : platformKey === 'instagram'
+      ? `- Trending Reel formats and styles
+- What content is getting the most saves and shares
+- Trending audio on Reels
+- Popular carousel formats
+- Hashtag categories driving reach`
+      : platformKey === 'facebook'
+        ? `- Content formats getting the most shares
+- Topics driving community discussion
+- Video formats performing well
+- What types of posts are reaching beyond followers`
+        : platformKey === 'youtube'
+          ? `- Video formats trending in the algorithm
+- Thumbnail and title styles getting clicks
+- Content lengths performing best
+- Topics with growing search volume`
+          : platformKey === 'linkedin'
+            ? `- Post formats getting the most impressions
+- Topics driving professional discussion
+- Content styles outperforming on the feed`
+            : `- Trending topics and hashtags
+- Thread formats getting engagement
+- Content styles being retweeted most`;
+
+  return `You are a social media trend analyst with real-time knowledge of viral content.
+
+What is trending RIGHT NOW on ${platformLabel} as of ${month} ${year}?
+
+Return a JSON array of 5 trending topics or content formats that are getting the most reach and engagement on ${platformLabel} today — regardless of niche or industry.
+
+Focus on:
+${platformSpecificFocus}
+
+Each item must have exactly these fields:
+{
+  "title": "Trend or format name (3-6 words)",
+  "description": "Why this is blowing up right now (1-2 sentences)",
+  "momentum": "rising" | "peaking" | "steady",
+  "category": "education" | "entertainment" | "community" | "promotion"
+}
+
+Rules:
+- Return ONLY the JSON array, no markdown, no other text
+- These must be PLATFORM-WIDE trends, not niche-specific
+- Base on actual current ${platformLabel} algorithm and viral patterns
+- momentum must be exactly: rising, peaking, or steady
+
+Return the JSON array now:`;
+}
+
+function buildNicheSpecificTrendingMessages(context, platform) {
   const platformLabel = formatPlatformLabel(platform);
   const trendingPrompt = `You are a social media trend analyst.
 
@@ -395,7 +520,26 @@ Return the JSON array now:`;
   ];
 }
 
-function buildHashtagPromptByPlatform(context, platform) {
+function buildPlatformWideTrendingMessages(platform) {
+  return [
+    {
+      role: 'system',
+      content: 'You are a social media trend analyst with real-time knowledge of viral content.',
+    },
+    {
+      role: 'user',
+      content: getPlatformWideTrendingPrompt(platform),
+    },
+  ];
+}
+
+function buildTrendingMessages(context, platform) {
+  return context.trendingMode === 'platform_wide'
+    ? buildPlatformWideTrendingMessages(platform)
+    : buildNicheSpecificTrendingMessages(context, platform);
+}
+
+function buildNicheSpecificHashtagPromptByPlatform(context, platform) {
   const platformLabel = formatPlatformLabel(platform);
 
   return `You are a social media hashtag analyst.
@@ -429,6 +573,56 @@ ${context.city ? `- Include up to 1-2 location-aware NICHE tags relevant to ${co
 Return the JSON array now:`;
 }
 
+function buildPlatformWideHashtagPromptByPlatform(platform) {
+  const platformKey = normalizePlatformValue(platform);
+  const platformLabel = formatPlatformLabel(platform);
+  const { month, year } = getCurrentMonthYear();
+  const platformSpecificGuidance = platformKey === 'tiktok'
+    ? `Include a mix of:
+- Discovery tags: #fyp, #foryou, #foryoupage, #viral, #trending
+- Format tags: #storytime, #pov, #transformation, #duet
+- Growth tags currently performing well on TikTok`
+    : platformKey === 'instagram'
+      ? `Include a mix of:
+- Reach tags: #reels, #explore, #viral, #trending
+- Discovery tags currently boosted by Instagram algorithm
+- Community tags with high engagement rates`
+      : platformKey === 'facebook'
+        ? 'Include tags that increase post distribution and shareability'
+        : platformKey === 'youtube'
+          ? 'Include search keywords and tags that boost video discovery'
+          : platformKey === 'linkedin'
+            ? 'Include tags that boost impressions on the LinkedIn feed'
+            : 'Include discovery hashtags and formats that amplify reach on X right now';
+
+  return `You are a social media hashtag analyst with real-time knowledge of viral content.
+
+Return a JSON array of 10 hashtags that are getting the most reach on ${platformLabel} right now in ${month} ${year}.
+
+These should be the hashtags a creator would use to reach the MAXIMUM number of people — not niche-specific tags.
+
+${platformSpecificGuidance}
+
+Each item must have exactly these fields:
+{
+  "tag": "#hashtag",
+  "volume": "HIGH" | "MEDIUM" | "NICHE",
+  "engagement": number between 1-100
+}
+
+Volume distribution:
+- 4-5 items: HIGH (massive reach tags like #fyp, #viral)
+- 3-4 items: MEDIUM (strong reach, less saturated)
+- 1-2 items: NICHE (targeted but growing fast)
+
+Rules:
+- Return ONLY the JSON array, no markdown
+- These are PLATFORM-WIDE reach tags, not niche tags
+- Include the platform's most powerful discovery hashtags
+
+Return the JSON array now:`;
+}
+
 function buildHashtagMessages(context, platform) {
   return [
     {
@@ -437,7 +631,9 @@ function buildHashtagMessages(context, platform) {
     },
     {
       role: 'user',
-      content: `${buildHashtagPromptByPlatform(context, platform)}
+      content: `${context.trendingMode === 'platform_wide'
+        ? buildPlatformWideHashtagPromptByPlatform(platform)
+        : buildNicheSpecificHashtagPromptByPlatform(context, platform)}
 
 Exclude any tag you cannot verify exists with real active volume.`,
     },
@@ -460,7 +656,7 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
             messages,
             cache: {
               key: cacheKey,
-              niche: context.niche,
+              niche: context.cacheNiche,
               platform: normalizePlatformValue(platform),
               city: context.city || DEFAULT_CITY,
               type,
@@ -924,6 +1120,7 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
   const context = buildDashboardBrandContext(brandProfile);
   console.log('[Dashboard] Brand Voice loaded:', {
     niche: context.niche,
+    trendingMode: context.trendingMode,
     platforms: context.selectedPlatforms,
     city: context.city || DEFAULT_CITY,
   });
@@ -980,6 +1177,9 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
         trending_fallback_message: trendingFallbackMessage,
         hashtags_fallback_message: hashtagsFallbackMessage,
         hashtags_from_previous_day: hashtagsFromPreviousDay,
+        trending_mode: context.trendingMode,
+        primary_platform_label: context.primaryPlatformLabel,
+        show_platform_wide_niche_nudge: context.showPlatformWideNicheNudge,
         show_brand_voice_nudge: context.showBrandVoiceNudge,
         brand_voice_nudge_copy: context.brandVoiceNudgeCopy,
       },
@@ -1003,6 +1203,9 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
         trending_fallback_message: 'Trends are refreshing — check back in a few minutes.',
         hashtags_fallback_message: 'Hashtags loading — refresh in a moment.',
         hashtags_from_previous_day: false,
+        trending_mode: context.trendingMode,
+        primary_platform_label: context.primaryPlatformLabel,
+        show_platform_wide_niche_nudge: context.showPlatformWideNicheNudge,
         show_brand_voice_nudge: context.showBrandVoiceNudge,
         brand_voice_nudge_copy: context.brandVoiceNudgeCopy,
       },
