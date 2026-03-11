@@ -12,7 +12,7 @@
  * SECURITY: All API calls now go through the server-side proxy to protect API keys
  */
 
-import { buildBrandContext, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
+import { buildBrandContext, buildPromptBrandSection, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
 import { supabase } from '../config/supabase';
 import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
 import { getCachedResult, setCacheResult } from '../utils/nicheCache';
@@ -677,8 +677,12 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
   try {
     const niche = brandData ? getNiche(brandData) : nicheQuery;
     const audience = brandData ? getTargetAudience(brandData) : 'general audience';
+    const now = new Date();
+    const currentMonth = now.toLocaleString('default', { month: 'long' });
+    const currentYear = now.getFullYear();
+    const currentDate = now.toISOString().slice(0, 10);
     
-    const cacheKey = buildCacheKey([niche, platform, 'niche_intel']);
+    const cacheKey = buildCacheKey([niche, platform, currentDate, 'niche_intel']);
     const cached = await getCachedResult(cacheKey);
     if (cached) {
       return { success: true, research: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
@@ -691,20 +695,26 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
       },
       {
         role: 'user',
-        content: `Research what content is currently performing best for: "${nicheQuery}"
+        content: `${buildPromptBrandSection(brandData, { niche, targetAudience: audience, platforms: [platform] })}
 
-Platform focus: ${platform}
-Niche: ${niche}
-Target audience: ${audience}
+Search for current social media trends and content strategies for ${niche} businesses on ${platform} as of ${currentMonth} ${currentYear}.
 
-Research and report on:
-1. What content themes are currently getting the most traction in this niche on ${platform}?
-2. What hook styles and formats are performing best right now?
-3. What topics or questions are audiences asking about but few creators are covering?
-4. What content formats (Reels, Carousels, Static posts, etc.) are generating the most engagement?
-5. Any notable competitor strategies or viral content patterns in this space?
+Focus on the last 30 days where possible. Research what is performing right now for: "${nicheQuery}".
 
-Be specific with examples and data points. This research will be used to generate original content ideas.`
+Find:
+1. What content formats are performing best right now (Reels vs carousels vs static posts, etc.)
+2. What topics/themes are getting the most engagement
+3. What hashtags top ${niche} accounts are using
+4. What posting frequency successful accounts use
+5. Any recent algorithm changes affecting ${niche} content
+6. Specific competitor content strategies or recurring patterns that are clearly working
+
+Requirements:
+- Keep the research specific to ${platform}
+- Focus on actionable, current findings rather than evergreen advice
+- Cite concrete examples where possible
+- Prioritize findings that matter to ${audience}
+- Do not generate content ideas yet; return research only`
       }
     ], 0.2);
 

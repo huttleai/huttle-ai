@@ -14,7 +14,6 @@ import {
   scoreContentQuality, 
   generateHashtags, 
   generateHooks, 
-  generateCTAs,
   generateStyledCTAs,
   generateVisualIdeas,
   generateVisualBrainstorm 
@@ -29,6 +28,14 @@ import AlgorithmChecker from '../components/AlgorithmChecker';
 
 function uniqueNonEmpty(items) {
   return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
+}
+
+function hasConfiguredNiche(brandData) {
+  if (Array.isArray(brandData?.niche)) {
+    return brandData.niche.some((value) => value?.trim());
+  }
+
+  return Boolean(brandData?.niche?.trim());
 }
 
 function buildCaptionFallbacks(topic, platformLabel, tone) {
@@ -46,7 +53,7 @@ function buildCaptionFallbacks(topic, platformLabel, tone) {
 
 export default function AITools() {
   const { addToast: showToast } = useToast();
-  const { brandData } = useContext(BrandContext);
+  const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { userTier, getFeatureLimit } = useSubscription();
   const { saveGeneratedContent } = useContent();
@@ -110,6 +117,7 @@ export default function AITools() {
 
   // Modal state
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
+  const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   // Initialize AI usage limits based on subscription tier
   useEffect(() => {
@@ -211,10 +219,13 @@ export default function AITools() {
         topic: captionInput,
         platform: captionPlatform,
         tone: applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : captionTone,
-        length: captionLength
+        length: captionLength,
       };
 
-      const result = await generateCaption(contentData, brandData);
+      const result = await generateCaption(contentData, {
+        ...(brandData || {}),
+        brandVoice: applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : captionTone,
+      });
 
       if (result.success && result.caption) {
         const parsedCaptions = uniqueNonEmpty(
@@ -416,21 +427,27 @@ export default function AITools() {
       const suggestionLines = text.match(/[-*•]\s*(.+)/g) || [];
       const suggestions = suggestionLines.map(s => s.replace(/^[-*•]\s*/, '').trim()).filter(s => s.length > 10).slice(0, 5);
       
-      if (overall || hook || cta) {
+      const audienceMatch = text.match(/audience(?: relevance)?[:\s]*(\d+)/i);
+      const clarityMatch = text.match(/clarity(?: of message)?[:\s]*(\d+)/i);
+      const platformFitMatch = text.match(/platform(?: fit)?[:\s]*(\d+)/i);
+      const rewriteMatch = text.match(/rewrite example[:\s]*(.+)/i);
+
+      if (overall || hook || cta || audienceMatch || clarityMatch || platformFitMatch) {
         return {
-          overall: overall || Math.round(((hook || 70) + (cta || 70) + (engagement || 70) + (hashtags || 70)) / 4),
+          overall: overall || Math.round(((hook || 50) + (cta || 45) + (parseInt(audienceMatch?.[1] || '50', 10)) + (parseInt(clarityMatch?.[1] || '55', 10)) + (parseInt(platformFitMatch?.[1] || '50', 10))) / 5),
           breakdown: {
-            hook: hook || 70,
-            engagement: engagement || 70,
-            cta: cta || 70,
-            readability: hashtags || 70,
+            hookStrength: hook || 0,
+            audienceRelevance: audienceMatch ? parseInt(audienceMatch[1], 10) : 0,
+            clarityOfMessage: clarityMatch ? parseInt(clarityMatch[1], 10) : 0,
+            callToAction: cta || 0,
+            platformFit: platformFitMatch ? parseInt(platformFitMatch[1], 10) : 0,
           },
           suggestions: suggestions.length > 0 ? suggestions : [
-            'Consider strengthening your opening hook',
-            'Add a clear call-to-action',
-            'Include platform-optimized hashtags',
-            'Review content length for your target platform',
+            'Rewrite the opening line to make the audience pain point clearer.',
+            'Tighten the middle so the main takeaway lands faster.',
+            'Add a clear CTA that tells the reader exactly what to do next.',
           ],
+          rewriteExample: rewriteMatch?.[1]?.trim() || '',
         };
       }
       return null;
@@ -459,6 +476,7 @@ export default function AITools() {
             overall: result.score.overall,
             breakdown: result.score.breakdown,
             suggestions: result.score.suggestions,
+            rewriteExample: result.score.weakestSection?.rewriteExample || '',
             rawAnalysis: result.analysis
           });
         } else if (result.analysis) {
@@ -472,19 +490,20 @@ export default function AITools() {
           } else {
             // Could not parse - use the raw analysis as suggestions
             setContentScore({
-              overall: 75,
+              overall: 54,
               breakdown: {
-                hook: 78,
-                engagement: 72,
-                cta: 74,
-                readability: 76
+                hookStrength: 10,
+                audienceRelevance: 12,
+                clarityOfMessage: 14,
+                callToAction: 8,
+                platformFit: 10
               },
               suggestions: [
-                'Add a stronger hook in the first sentence',
-                'Include 2-3 relevant emojis for visual appeal',
-                'Shorten paragraphs for better mobile readability',
-                'End with a clear call-to-action question'
+                'Add a sharper first line that calls out the audience problem immediately.',
+                'Make the body more specific to the audience and trim generic filler.',
+                'End with a CTA that tells the reader exactly what to do next.'
               ],
+              rewriteExample: 'Try opening with a more specific pain point and ending with one clear next step.',
               rawAnalysis: result.analysis
             });
           }
@@ -764,13 +783,18 @@ export default function AITools() {
 
               <button
                 onClick={handleGenerateCaptions}
-                disabled={isLoadingCaptions}
+                disabled={isLoadingCaptions || isBrandLoading}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50"
               >
                 {isLoadingCaptions ? <LoadingSpinner size="sm" /> : <Wand2 className="w-4 h-4" />}
-                <span>{isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
+                <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
                 {!isLoadingCaptions && <ChevronRight className="w-4 h-4" />}
               </button>
+              {!isBrandLoading && !isBrandVoiceComplete && (
+                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                  Add your Brand Voice for more personalized results →
+                </a>
+              )}
 
               {generatedCaptions.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
@@ -858,10 +882,15 @@ export default function AITools() {
                 )}
               </div>
 
-              <button onClick={handleGenerateHashtags} disabled={isLoadingHashtags} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+              <button onClick={handleGenerateHashtags} disabled={isLoadingHashtags || isBrandLoading} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHashtags ? <LoadingSpinner size="sm" /> : <Hash className="w-4 h-4" />}
-                <span>{isLoadingHashtags ? 'Finding...' : 'Generate Hashtags'}</span>
+                <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingHashtags ? 'Finding...' : 'Generate Hashtags'}</span>
               </button>
+              {!isBrandLoading && !isBrandVoiceComplete && (
+                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                  Add your Brand Voice for more personalized results →
+                </a>
+              )}
 
               {generatedHashtags.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
@@ -966,10 +995,15 @@ export default function AITools() {
                 )}
               </div>
 
-              <button onClick={handleGenerateHooks} disabled={isLoadingHooks} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+              <button onClick={handleGenerateHooks} disabled={isLoadingHooks || isBrandLoading} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHooks ? <LoadingSpinner size="sm" /> : <Type className="w-4 h-4" />}
-                <span>{isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
+                <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
               </button>
+              {!isBrandLoading && !isBrandVoiceComplete && (
+                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                  Add your Brand Voice for more personalized results →
+                </a>
+              )}
 
               {generatedHooks.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
@@ -1078,12 +1112,17 @@ export default function AITools() {
 
               <button
                 onClick={handleGenerateCTAs}
-                disabled={isLoadingCTAs || !ctaPromoting.trim() || !ctaGoalType}
+                disabled={isLoadingCTAs || !ctaPromoting.trim() || !ctaGoalType || isBrandLoading}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoadingCTAs ? <LoadingSpinner size="sm" /> : <Target className="w-4 h-4" />}
-                <span>{isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
+                <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
               </button>
+              {!isBrandLoading && !isBrandVoiceComplete && (
+                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                  Add your Brand Voice for more personalized results →
+                </a>
+              )}
 
               {/* Results — Styled CTAs */}
               {styledCTAs?.ctas && (
@@ -1101,11 +1140,11 @@ export default function AITools() {
                   <div className="space-y-2.5">
                     {styledCTAs.ctas.map((item, i) => {
                       const styleColors = {
-                        'Direct': 'bg-blue-50 border-blue-200 text-blue-700',
                         'Soft': 'bg-green-50 border-green-200 text-green-700',
-                        'Urgency': 'bg-red-50 border-red-200 text-red-700',
-                        'Question': 'bg-purple-50 border-purple-200 text-purple-700',
-                        'Story': 'bg-amber-50 border-amber-200 text-amber-700'
+                        'Engagement': 'bg-purple-50 border-purple-200 text-purple-700',
+                        'Traffic': 'bg-blue-50 border-blue-200 text-blue-700',
+                        'Lead': 'bg-amber-50 border-amber-200 text-amber-700',
+                        'Direct': 'bg-red-50 border-red-200 text-red-700'
                       };
                       return (
                         <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
@@ -1195,10 +1234,15 @@ export default function AITools() {
               {/* Quality Score sub-tab */}
               {scorerSubTab === 'quality' && (
                 <div className="space-y-4">
-                  <button onClick={handleScoreContent} disabled={isLoadingScore} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
+                  <button onClick={handleScoreContent} disabled={isLoadingScore || isBrandLoading} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                     {isLoadingScore ? <LoadingSpinner size="sm" /> : <BarChart3 className="w-4 h-4" />}
-                    <span>{isLoadingScore ? 'Analyzing...' : 'Score Content'}</span>
+                    <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingScore ? 'Analyzing...' : 'Score Content'}</span>
                   </button>
+                  {!isBrandLoading && !isBrandVoiceComplete && (
+                    <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                      Add your Brand Voice for more personalized results →
+                    </a>
+                  )}
 
                   {contentScore && (
                     <div className="pt-4 border-t border-gray-100 space-y-4">
@@ -1240,6 +1284,12 @@ export default function AITools() {
                           ))}
                         </ul>
                       </div>
+                      {contentScore.rewriteExample && (
+                        <div className="bg-white rounded-lg p-4 border border-gray-200">
+                          <h4 className="font-semibold text-gray-900 mb-2 text-sm">Rewrite Example</h4>
+                          <p className="text-sm text-gray-700">{contentScore.rewriteExample}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                   {contentScore && (
@@ -1394,12 +1444,17 @@ export default function AITools() {
 
               <button
                 onClick={handleGenerateVisualBrainstorm}
-                disabled={isLoadingVisualIdeas || !visualPrompt.trim() || !visualOutputType}
+                disabled={isLoadingVisualIdeas || !visualPrompt.trim() || !visualOutputType || isBrandLoading}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoadingVisualIdeas ? <LoadingSpinner size="sm" /> : <Lightbulb className="w-4 h-4" />}
-                <span>{isLoadingVisualIdeas ? 'Generating (10-15 sec)...' : 'Generate'}</span>
+                <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingVisualIdeas ? 'Generating (10-15 sec)...' : 'Generate'}</span>
               </button>
+              {!isBrandLoading && !isBrandVoiceComplete && (
+                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                  Add your Brand Voice for more personalized results →
+                </a>
+              )}
 
               {/* Results — AI Image Prompts */}
               {visualBrainstormResult?.type === 'ai-prompt' && visualBrainstormResult.prompts && (

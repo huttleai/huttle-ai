@@ -16,8 +16,7 @@ import HumanizerScore from '../components/HumanizerScore';
 import ScoreBadge from '../components/ScoreBadge';
 import UpgradeModal from '../components/UpgradeModal';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
-import { generateHooks, generateCaption, generateHashtags, generateStyledCTAs, scoreContentQuality } from '../services/grokAPI';
-import { callClaudeAPI } from '../services/claudeAPI';
+import { generateFullPostHooks, generateCaption, generateHashtags, generateStyledCTAs, scoreContentQuality } from '../services/grokAPI';
 import { saveContentLibraryItem } from '../config/supabase';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useSearchParams } from 'react-router-dom';
@@ -69,8 +68,16 @@ function parseHashtagsFromResponse(text) {
   return tags.map((tag) => ({ tag, score: 50, tier: 'mid', reason: '' }));
 }
 
+function hasConfiguredNiche(brandData) {
+  if (Array.isArray(brandData?.niche)) {
+    return brandData.niche.some((value) => value?.trim());
+  }
+
+  return Boolean(brandData?.niche?.trim());
+}
+
 export default function FullPostBuilder() {
-  const { brandData } = useContext(BrandContext);
+  const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess, userTier } = useSubscription();
   const { addToast } = useToast();
@@ -115,6 +122,7 @@ export default function FullPostBuilder() {
   const [loadingQuality, setLoadingQuality] = useState(false);
 
   const hasAccess = checkFeatureAccess('full-post-builder');
+  const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   // Pre-fill from URL query params (used by AI Plan Builder → Open in Post Builder)
   useEffect(() => {
@@ -175,22 +183,16 @@ export default function FullPostBuilder() {
     try {
       const usage = await trackFeatureUsage({ step: 'hooks' });
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingHooks(false); return; }
-      
-      let hooksText;
-      try {
-        const claudeRes = await callClaudeAPI([
-          { role: 'system', content: 'You are Hook Sniper — a scroll-stopping copywriter. Generate exactly 3 numbered hooks. Each hook must be under 15 words, use a different approach (question, bold claim, story open, statistic, controversy, or curiosity gap), and stop the scroll immediately. Output only the numbered hooks, no preamble.' },
-          { role: 'user', content: `Generate 3 scroll-stopping hooks for: "${topic}"\nPlatform: ${platform}\nGoal: ${GOALS.find(g => g.id === goal)?.label || goal}\nNumber them 1-3.` }
-        ], 0.8);
-        hooksText = claudeRes.content;
-      } catch (claudeErr) {
-        const res = await generateHooks(topic, brandData, 'question', platform);
-        if (res.success) hooksText = res.hooks;
-      }
-      
-      if (hooksText) {
-        const parsed = parseHooksFromText(hooksText);
-        setHooks(parsed.slice(0, 3));
+
+      const res = await generateFullPostHooks({
+        topic,
+        goal: GOALS.find(g => g.id === goal)?.label || goal,
+        platform,
+      }, brandData);
+
+      if (res.success && res.hooks) {
+        const parsed = parseHooksFromText(res.hooks);
+        setHooks(parsed.slice(0, HOOK_TYPES.length));
       } else {
         addToast('Failed to generate hooks', 'error');
       }
@@ -205,23 +207,18 @@ export default function FullPostBuilder() {
     try {
       const usage = await trackFeatureUsage({ step: 'caption' });
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingCaption(false); return; }
-      
+
       let captionText;
-      try {
-        const claudeRes = await callClaudeAPI([
-          { role: 'system', content: `You are Caption Architect — an elite social media copywriter. Write one compelling, publish-ready caption. Open with the provided hook. Build value in the body with short paragraphs and line breaks. End with one clear CTA. No hashtags in the body. No filler openers.` },
-          { role: 'user', content: `Write one caption for ${platform} about: "${topic}"\n\nUse this hook as the opening line: "${selectedHook}"\nGoal: ${GOALS.find(g => g.id === goal)?.label || goal}\n\nWrite only the caption, no numbering or alternatives.` }
-        ], 0.7);
-        captionText = claudeRes.content?.trim();
-      } catch (claudeErr) {
-        const res = await generateCaption({
-          topic: `${topic}\n\nUse this hook as the opening line: "${selectedHook}"\nGoal: ${GOALS.find(g => g.id === goal)?.label || goal}`,
-          platform,
-        }, brandData);
-        if (res.success && res.caption) {
-          const captions = res.caption.split(/\d+\.\s+/).filter(c => c.trim());
-          captionText = captions[0]?.trim() || res.caption.trim();
-        }
+      const res = await generateCaption({
+        topic,
+        platform,
+        selectedHook,
+        goal: GOALS.find(g => g.id === goal)?.label || goal,
+        tone: brandData?.brandVoice || '',
+      }, brandData);
+      if (res.success && res.caption) {
+        const captions = res.caption.split(/\d+\.\s+/).filter(c => c.trim());
+        captionText = captions[0]?.trim() || res.caption.trim();
       }
       
       if (captionText) {
@@ -254,10 +251,9 @@ export default function FullPostBuilder() {
     try {
       const usage = await trackFeatureUsage({ step: 'cta' });
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingCTAs(false); return; }
-      const goalLabel = GOALS.find(g => g.id === goal)?.label || goal;
       const res = await generateStyledCTAs({ promoting: topic, goalType: goal === 'sales' ? 'sales' : goal === 'leads' ? 'dms' : 'engagement' }, brandData, platform);
       if (res.success && res.ctas) {
-        setCtas(res.ctas.slice(0, 3));
+        setCtas(res.ctas.slice(0, 5));
       }
     } catch { addToast('CTA generation failed', 'error'); }
     finally { setLoadingCTAs(false); }
@@ -287,10 +283,14 @@ export default function FullPostBuilder() {
     try {
       const res = await scoreContentQuality(assembledPost, brandData);
       if (res.success) {
-        try {
-          const parsed = typeof res.analysis === 'string' ? JSON.parse(res.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}') : res.analysis;
-          setQualityScore(parsed.overallScore || parsed.overall || 0);
-        } catch { setQualityScore(null); }
+        if (res.score?.overall != null) {
+          setQualityScore(res.score.overall);
+        } else {
+          try {
+            const parsed = typeof res.analysis === 'string' ? JSON.parse(res.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}') : res.analysis;
+            setQualityScore(parsed.totalScore || parsed.overallScore || parsed.overall || 0);
+          } catch { setQualityScore(null); }
+        }
       }
     } catch { /* silent */ }
     finally { setLoadingQuality(false); }
@@ -478,6 +478,11 @@ export default function FullPostBuilder() {
                       <span className="text-xs text-blue-700">Brand voice: <strong>{brandData.brandVoice}</strong></span>
                     </div>
                   )}
+                  {!isBrandLoading && !isBrandVoiceComplete && (
+                    <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                      Add your Brand Voice for more personalized results →
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -662,6 +667,7 @@ export default function FullPostBuilder() {
                 <button
                   onClick={handleNext}
                   disabled={
+                    isBrandLoading ||
                     (currentStep === 0 && !topic.trim()) ||
                     (currentStep === 1 && !selectedHook) ||
                     (currentStep === 2 && !caption.trim()) ||
@@ -669,7 +675,7 @@ export default function FullPostBuilder() {
                   }
                   className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl font-medium text-sm hover:shadow-lg disabled:opacity-50 transition-all"
                 >
-                  {currentStep === 4 ? 'Finish' : 'Next'} <ChevronRight className="w-4 h-4" />
+                  {isBrandLoading ? 'Loading Brand Voice...' : currentStep === 4 ? 'Finish' : 'Next'} <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </motion.div>

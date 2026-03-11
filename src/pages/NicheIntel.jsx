@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
@@ -22,8 +22,16 @@ const MOMENTUM_COLORS = {
   Declining: 'bg-red-100 text-red-700',
 };
 
+function hasConfiguredNiche(brandData) {
+  if (Array.isArray(brandData?.niche)) {
+    return brandData.niche.some((value) => value?.trim());
+  }
+
+  return Boolean(brandData?.niche?.trim());
+}
+
 export default function NicheIntel() {
-  const { brandData } = useContext(BrandContext);
+  const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess, userTier, getFeatureLimit } = useSubscription();
   const { addToast } = useToast();
@@ -41,32 +49,42 @@ export default function NicheIntel() {
   const [analysis, setAnalysis] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   const hasAccess = checkFeatureAccess('niche-intel');
 
-  const handleAnalyze = async () => {
-    if (!nicheQuery.trim()) {
-      addToast('Enter your niche or competitor handles', 'warning');
+  useEffect(() => {
+    const niches = brandData?.niche;
+    if (nicheQuery.trim()) return;
+    if (Array.isArray(niches) && niches.length > 0) {
+      setNicheQuery(niches.join(', '));
       return;
     }
+    if (typeof niches === 'string' && niches.trim()) {
+      setNicheQuery(niches);
+    }
+  }, [brandData?.niche, nicheQuery]);
 
+  const handleAnalyze = async () => {
     if (!canGenerate) {
       addToast('Monthly analysis limit reached', 'warning');
       return;
     }
 
+    const resolvedQuery = nicheQuery.trim() || brandData?.niche || 'small business';
+
     setLoading(true);
     setAnalysis(null);
 
     try {
-      const usage = await trackFeatureUsage({ query: nicheQuery, platform });
+      const usage = await trackFeatureUsage({ query: resolvedQuery, platform });
       if (!usage.allowed) {
         addToast('Analysis limit reached for this month', 'warning');
         setLoading(false);
         return;
       }
 
-      const researchRes = await researchNicheContent(nicheQuery, platform, brandData);
+      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData);
       if (!researchRes.success) {
         addToast('Research failed. Try again.', 'error');
         setLoading(false);
@@ -194,15 +212,20 @@ export default function NicheIntel() {
               />
             </div>
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
+            {!isBrandLoading && !isBrandVoiceComplete && (
+              <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
+                Add your Brand Voice for more personalized results →
+              </a>
+            )}
             <button
               onClick={handleAnalyze}
-              disabled={loading || !nicheQuery.trim() || !canGenerate}
+              disabled={loading || !canGenerate || isBrandLoading}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-huttle-primary text-white rounded-xl font-medium text-sm hover:shadow-lg disabled:opacity-50 transition-all"
             >
               {loading ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing your niche...</>
               ) : (
-                <><Search className="w-4 h-4" /> Analyze Now</>
+                <><Search className="w-4 h-4" /> {isBrandLoading ? 'Loading Brand Voice...' : 'Analyze Now'}</>
               )}
             </button>
           </div>
@@ -318,8 +341,17 @@ export default function NicheIntel() {
                               {idea.format && (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{idea.format}</span>
                               )}
+                              {idea.momentum && (
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${MOMENTUM_COLORS[idea.momentum] || 'bg-gray-100 text-gray-600'}`}>
+                                  {idea.momentum}
+                                </span>
+                              )}
                             </div>
                             {idea.hook && <p className="text-xs text-gray-600 italic">&ldquo;{idea.hook}&rdquo;</p>}
+                            {idea.whyThisWorks && <p className="text-xs text-gray-500 mt-2">{idea.whyThisWorks}</p>}
+                            {Array.isArray(idea.hashtags) && idea.hashtags.length > 0 && (
+                              <p className="text-[10px] text-indigo-500 mt-2">{idea.hashtags.join(' ')}</p>
+                            )}
                             {idea.platformFit && <span className="text-[10px] text-gray-400 mt-1 inline-block">Best on {idea.platformFit}</span>}
                           </div>
                           <button

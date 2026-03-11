@@ -16,9 +16,9 @@ export const PLATFORMS = {
     icon: 'Instagram',
     charLimit: 2200,
     hashtags: {
-      count: '8-15',
+      count: '8-10',
       min: 8,
-      max: 15,
+      max: 10,
       style: 'Mix of popular (1M+ posts), medium (100K-1M), and niche (<100K) hashtags',
       tip: 'Place hashtags in caption or first comment. Use a mix of broad and niche tags.'
     },
@@ -42,9 +42,9 @@ export const PLATFORMS = {
     icon: 'Music',
     charLimit: 4000,
     hashtags: {
-      count: '3-5',
-      min: 3,
-      max: 5,
+      count: '5-7',
+      min: 5,
+      max: 7,
       style: 'Trending hashtags + niche-specific. Include #fyp sparingly.',
       tip: 'Less is more. Use trending sounds/hashtags for discoverability.'
     },
@@ -94,9 +94,9 @@ export const PLATFORMS = {
     icon: 'Facebook',
     charLimit: 63206,
     hashtags: {
-      count: '2-5',
-      min: 1,
-      max: 5,
+      count: '4-6',
+      min: 4,
+      max: 6,
       style: 'Minimal, relevant hashtags only',
       tip: 'Hashtags are less effective on Facebook. Focus on shareability.'
     },
@@ -120,9 +120,9 @@ export const PLATFORMS = {
     icon: 'Youtube',
     charLimit: 5000,
     hashtags: {
-      count: '3-5',
-      min: 2,
-      max: 5,
+      count: '5-7',
+      min: 5,
+      max: 7,
       style: 'Relevant keywords as hashtags in description',
       tip: 'Add hashtags above the title in description. First 3 show above title.'
     },
@@ -146,9 +146,9 @@ export const PLATFORMS = {
     icon: 'Linkedin',
     charLimit: 3000,
     hashtags: {
-      count: '3-5',
-      min: 3,
-      max: 5,
+      count: '4-6',
+      min: 4,
+      max: 6,
       style: 'Professional, industry-specific hashtags',
       tip: 'Use industry hashtags and follow trending professional topics.'
     },
