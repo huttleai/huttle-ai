@@ -113,11 +113,16 @@ function normalizeDashboardData(data) {
     ? hashtagSource
       .map((item) => {
         const hashtagValue = String(item?.hashtag || item?.tag || item || '').trim();
+        // Support new relevant_platforms array; fall back to singular relevant_platform for legacy rows
+        const rawPlatforms = Array.isArray(item?.relevant_platforms)
+          ? item.relevant_platforms
+          : (item?.relevant_platform ? [item.relevant_platform] : []);
         return {
           hashtag: hashtagValue.startsWith('#') ? hashtagValue : `#${hashtagValue.replace(/^#*/, '')}`,
           relevance: String(item?.relevance || item?.reason || 'Recommended for your audience').trim(),
           estimated_reach: String(item?.estimated_reach || item?.reach || 'medium').toLowerCase(),
-          type: String(item?.type || 'niche').toLowerCase()
+          type: String(item?.type || 'niche').toLowerCase(),
+          relevant_platforms: rawPlatforms.map(p => String(p).trim()).filter(Boolean)
         };
       })
       .filter((item) => item.hashtag.length > 1 && item.relevance)
@@ -170,7 +175,8 @@ function normalizeDashboardData(data) {
     hashtags_of_day: hashtagsOfDay.map((item) => ({
       ...item,
       estimated_reach: allowedReach.has(item.estimated_reach) ? item.estimated_reach : 'medium',
-      type: item.type === 'trending' ? 'trending' : 'niche'
+      type: item.type === 'trending' ? 'trending' : 'niche',
+      relevant_platforms: Array.isArray(item.relevant_platforms) ? item.relevant_platforms : []
     })),
     ai_insights: insights.map(i => ({
       ...i,
@@ -205,16 +211,16 @@ function buildFallbackDashboardData(brandProfile) {
       }
     ],
     hashtags_of_day: [
-      { hashtag: '#contentstrategy', relevance: `popular with ${audience.toLowerCase()}`, estimated_reach: 'high', type: 'niche' },
-      { hashtag: '#creatorgrowth', relevance: 'high-intent creator community', estimated_reach: 'medium', type: 'niche' },
-      { hashtag: '#nichecontent', relevance: `drives discovery for ${niche.toLowerCase()}`, estimated_reach: 'niche', type: 'niche' },
-      { hashtag: '#contentcreator', relevance: 'broad reach across your audience', estimated_reach: 'high', type: 'niche' },
-      { hashtag: '#digitalmarketing', relevance: 'strong engagement from marketers', estimated_reach: 'high', type: 'niche' },
-      { hashtag: '#socialmediatips', relevance: 'consistent discovery traffic', estimated_reach: 'high', type: 'niche' },
-      { hashtag: '#growthhacks', relevance: `growth tactics for ${niche.toLowerCase()}`, estimated_reach: 'medium', type: 'niche' },
-      { hashtag: '#fyp', relevance: 'universally trending on TikTok', estimated_reach: 'high', type: 'trending' },
-      { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending' },
-      { hashtag: '#viral', relevance: 'high-volume discovery tag across platforms', estimated_reach: 'high', type: 'trending' }
+      { hashtag: '#contentstrategy', relevance: `popular with ${audience.toLowerCase()}`, estimated_reach: 'high', type: 'niche', relevant_platforms: ['Instagram', 'LinkedIn'] },
+      { hashtag: '#creatorgrowth', relevance: 'high-intent creator community', estimated_reach: 'medium', type: 'niche', relevant_platforms: ['Instagram', 'TikTok'] },
+      { hashtag: '#nichecontent', relevance: `drives discovery for ${niche.toLowerCase()}`, estimated_reach: 'niche', type: 'niche', relevant_platforms: ['Instagram'] },
+      { hashtag: '#contentcreator', relevance: 'broad reach across your audience', estimated_reach: 'high', type: 'niche', relevant_platforms: ['Instagram', 'TikTok', 'YouTube'] },
+      { hashtag: '#digitalmarketing', relevance: 'strong engagement from marketers', estimated_reach: 'high', type: 'niche', relevant_platforms: ['LinkedIn', 'Instagram'] },
+      { hashtag: '#socialmediatips', relevance: 'consistent discovery traffic', estimated_reach: 'high', type: 'niche', relevant_platforms: ['Instagram', 'X'] },
+      { hashtag: '#growthhacks', relevance: `growth tactics for ${niche.toLowerCase()}`, estimated_reach: 'medium', type: 'niche', relevant_platforms: ['X', 'LinkedIn'] },
+      { hashtag: '#fyp', relevance: 'universally trending on TikTok', estimated_reach: 'high', type: 'trending', relevant_platforms: ['TikTok'] },
+      { hashtag: '#trending', relevance: 'universal discovery boost today', estimated_reach: 'high', type: 'trending', relevant_platforms: ['TikTok', 'Instagram', 'X'] },
+      { hashtag: '#viral', relevance: 'high-volume discovery tag across platforms', estimated_reach: 'high', type: 'trending', relevant_platforms: ['TikTok', 'Instagram', 'YouTube'] }
     ],
     ai_insights: [
       {
@@ -245,13 +251,18 @@ function buildDailyBriefingPrompt(brandProfile) {
   const niche = getNiche(brandProfile, 'general creator');
   const targetAudience = getTargetAudience(brandProfile, 'general audience');
   const platforms = getPlatformsString(brandProfile?.platforms);
+  const brandVoice = brandProfile?.brandVoice || '';
   const todayFormatted = getTodayDisplayString();
+
+  const platformList = Array.isArray(brandProfile?.platforms) && brandProfile.platforms.length > 0
+    ? brandProfile.platforms
+    : ['Instagram', 'TikTok', 'X'];
 
   return `You are a daily content intelligence briefing system for a social media professional.
 
 User's niche: ${niche.toLowerCase()}
 User's target audience: ${targetAudience.toLowerCase()}
-User's platforms: ${platforms}
+User's platforms: ${platforms}${brandVoice ? `\nUser's brand voice: ${brandVoice.toLowerCase()}` : ''}
 Today's date: ${todayFormatted}
 
 Generate a daily briefing. Return ONLY this exact JSON structure:
@@ -272,7 +283,8 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
       "hashtag": "#example",
       "relevance": "Why this hashtag matters (max 10 words, lowercase when mid-sentence)",
       "estimated_reach": "high" | "medium" | "niche",
-      "type": "niche" | "trending"
+      "type": "niche" | "trending",
+      "relevant_platforms": ["Platform1", "Platform2"]
     }
   ],
   "ai_insights": [
@@ -287,7 +299,7 @@ Generate a daily briefing. Return ONLY this exact JSON structure:
 RULES:
 - Return ONLY valid JSON, no markdown, no preamble, no backticks.
 - trending_topics: exactly 4 topics. All must be current as of ${todayFormatted}. Each must include a "description" (1-2 sentences on why it is trending) and "content_angles" (array of 2-3 specific, actionable content ideas).
-- hashtags_of_day: exactly 10 hashtags. 7 must be niche-specific based on the user's brand profile (type: "niche") and 3 must be universally trending hashtags like #fyp, #trending, etc. (type: "trending"). Always include the # symbol.
+- hashtags_of_day: exactly 10 hashtags. All 10 must be specifically chosen for this user's niche, audience, and brand voice — no generic filler tags. Always include the # symbol. For each hashtag, set "type" to "niche" for brand/audience-specific tags or "trending" for currently viral tags. For "relevant_platforms", pick 1-3 platforms from this list where this hashtag performs best: [${platformList.join(', ')}]. Use exact platform names from that list.
 - ai_insights: exactly 3 insight objects. One must be category "Timing" (best time to post today), one must be category "Content Type" (what format is working in their niche right now), one must be category "Audience" (what their audience is responding to this week).
 - Each ai_insight must be specific to their niche and actionable TODAY. No generic advice.
 - relevance text should be lowercase when it appears mid-sentence (e.g., "popular with ${targetAudience.toLowerCase()}" not "Popular with ${targetAudience}").

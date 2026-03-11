@@ -24,7 +24,8 @@ import {
   Image as ImageIcon,
   FolderOpen,
   Clock,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -38,6 +39,7 @@ import { getContentLibraryItems } from '../config/supabase';
 import {
   getDashboardCache,
   generateDashboardData,
+  deleteDashboardCache,
   trackDashboardGenerationUsage,
 } from '../services/dashboardCacheService';
 
@@ -71,6 +73,7 @@ export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [dashboardError, setDashboardError] = useState('');
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [isHashtagsRefreshing, setIsHashtagsRefreshing] = useState(false);
   const [dashboardAlerts, setDashboardAlerts] = useState([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
   const [recentVaultItems, setRecentVaultItems] = useState([]);
@@ -96,6 +99,29 @@ export default function Dashboard() {
       setTimeout(() => setCopiedVaultItem(null), 2000);
     } catch (err) {
       showToast('Failed to copy', 'error');
+    }
+  };
+
+  const refreshHashtags = async () => {
+    if (!user?.id || isHashtagsRefreshing) return;
+    setIsHashtagsRefreshing(true);
+    try {
+      await deleteDashboardCache(user.id);
+      const result = await generateDashboardData(user.id, brandProfile);
+      if (result.success) {
+        setDashboardData(result.data);
+        if (!result.isFallback) {
+          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
+        }
+        showToast('Hashtags refreshed!', 'success');
+      } else {
+        showToast('Could not refresh hashtags. Try again.', 'error');
+      }
+    } catch (err) {
+      console.error('[Dashboard] Failed to refresh hashtags:', err);
+      showToast('Could not refresh hashtags. Try again.', 'error');
+    } finally {
+      setIsHashtagsRefreshing(false);
     }
   };
 
@@ -596,10 +622,22 @@ export default function Dashboard() {
                 <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
                   <Hash className="w-5 h-5 text-huttle-primary" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
                   <p className="text-xs text-gray-500">Copy &amp; paste ready</p>
                 </div>
+                <button
+                  onClick={refreshHashtags}
+                  disabled={isHashtagsRefreshing || isDashboardLoading}
+                  title="Regenerate hashtags"
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  {isHashtagsRefreshing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                </button>
               </div>
 
               {isDashboardLoading ? (
@@ -620,6 +658,7 @@ export default function Dashboard() {
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-gray-100 text-gray-600';
                     const typeLabel = tag.type === 'trending' ? 'Trending' : 'Niche';
+                    const platforms = Array.isArray(tag.relevant_platforms) ? tag.relevant_platforms : [];
                     return (
                       <button
                         key={`${tag.hashtag}-${index}`}
@@ -627,6 +666,23 @@ export default function Dashboard() {
                         className="group w-full flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-huttle-primary/30 hover:bg-huttle-50/30 transition-all text-left"
                       >
                         <span className="font-semibold text-sm text-gray-900 truncate">{tag.hashtag}</span>
+                        {platforms.length > 0 && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {platforms.map((platform) => {
+                              const icon = getPlatformIcon(platform, 'w-3 h-3 text-gray-500');
+                              if (!icon) return null;
+                              return (
+                                <span
+                                  key={platform}
+                                  title={platform}
+                                  className="w-5 h-5 rounded-md bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0"
+                                >
+                                  {icon}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <span className={`ml-auto text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${reachColor}`}>
                           {tag.estimated_reach}
                         </span>
