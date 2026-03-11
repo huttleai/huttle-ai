@@ -16,7 +16,7 @@ import {
   Video,
   Youtube,
 } from 'lucide-react';
-import { saveUserPreferences, supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
 import { AuthContext } from '../context/AuthContext';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
@@ -115,7 +115,7 @@ export default function OnboardingQuiz({ onComplete }) {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { user } = useContext(AuthContext);
-  const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
+  const { brandData, refreshBrandData } = useContext(BrandContext);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(defaultFormData);
   const [isSaving, setIsSaving] = useState(false);
@@ -185,26 +185,19 @@ export default function OnboardingQuiz({ onComplete }) {
   };
 
   const handlePlatformToggle = (platformValue) => {
-    setFormData((prev) => {
-      const isSelected = prev.platforms.includes(platformValue);
+    const isSelected = formData.platforms.includes(platformValue);
 
-      if (isSelected) {
-        return {
-          ...prev,
-          platforms: prev.platforms.filter((value) => value !== platformValue),
-        };
-      }
+    if (!isSelected && formData.platforms.length >= MAX_PLATFORM_SELECTIONS) {
+      addToast(`Choose up to ${MAX_PLATFORM_SELECTIONS} platforms to stay focused.`, 'warning');
+      return;
+    }
 
-      if (prev.platforms.length >= MAX_PLATFORM_SELECTIONS) {
-        addToast(`Choose up to ${MAX_PLATFORM_SELECTIONS} platforms to stay focused.`, 'warning');
-        return prev;
-      }
-
-      return {
-        ...prev,
-        platforms: [...prev.platforms, platformValue],
-      };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      platforms: isSelected
+        ? prev.platforms.filter((value) => value !== platformValue)
+        : [...prev.platforms, platformValue],
+    }));
   };
 
   const handleSubmit = async ({ skipCity = false } = {}) => {
@@ -232,47 +225,42 @@ export default function OnboardingQuiz({ onComplete }) {
     setIsSuccessState(false);
 
     try {
-      const { error: profileError } = await supabase
-        .from('user_profile')
-        .upsert(
-          {
-            user_id: user.id,
-            first_name: firstName,
-            profile_type: profileType,
-            brand_name: brandData?.brandName?.trim() || null,
-            niche: nextFormData.niche,
-            target_audience: nextFormData.target_audience,
-            preferred_platforms: nextFormData.platforms,
-            city: nextCityValue || null,
-            has_completed_onboarding: true,
-            quiz_completed_at: nowIso,
-            onboarding_step: TOTAL_STEPS,
-            updated_at: nowIso,
-          },
-          {
-            onConflict: 'user_id',
-            ignoreDuplicates: false,
-          }
-        );
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (profileError) {
-        throw profileError;
+      if (!session?.access_token) {
+        throw new Error('Your session expired. Please log in again.');
       }
 
-      const preferencesResult = await saveUserPreferences(user.id, {
-        creator_type: nextFormData.creator_type,
-        content_focus: nextFormData.niche,
-        growth_stage: nextFormData.growth_stage,
-        target_audience: nextFormData.target_audience,
-        platforms: nextFormData.platforms,
-        city: nextCityValue || null,
+      const response = await fetch('/api/save-onboarding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          firstName,
+          profileType,
+          brandName: brandData?.brandName?.trim() || null,
+          creatorType: nextFormData.creator_type,
+          niche: nextFormData.niche,
+          growthStage: nextFormData.growth_stage,
+          targetAudience: nextFormData.target_audience,
+          platforms: nextFormData.platforms,
+          city: nextCityValue || null,
+          quizCompletedAt: nowIso,
+          onboardingStep: TOTAL_STEPS,
+        }),
       });
 
-      if (!preferencesResult?.success) {
-        throw new Error(preferencesResult?.error || 'Failed to save your onboarding answers.');
+      const result = await response.json();
+
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.error || 'Failed to save your onboarding answers.');
       }
 
-      updateBrandData({
+      localStorage.setItem('brandData', JSON.stringify({
         firstName: firstName || '',
         profileType,
         brandName: brandData?.brandName || '',
@@ -283,7 +271,7 @@ export default function OnboardingQuiz({ onComplete }) {
         targetAudience: nextFormData.target_audience,
         platforms: nextFormData.platforms,
         city: nextCityValue,
-      });
+      }));
 
       refreshBrandData?.();
       setIsSuccessState(true);
@@ -613,7 +601,7 @@ export default function OnboardingQuiz({ onComplete }) {
                   <button
                     type="button"
                     onClick={handleNext}
-                    disabled={isSaving}
+                    disabled={isSaving || (step === 1 && !formData.creator_type)}
                     className="flex-1 rounded-2xl bg-huttle-primary px-6 py-3 font-semibold text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="flex items-center justify-center gap-2">

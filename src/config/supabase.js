@@ -1086,17 +1086,11 @@ export async function getUserPreferences(userId) {
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-    // PGRST116 = no rows found, which is expected for new users
-    // 42P01 = table doesn't exist
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No preferences found, return defaults
-        return { success: true, data: defaultPreferences };
-      }
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
         console.warn('⚠️ user_preferences table does not exist, using defaults');
         return { success: true, data: defaultPreferences };
@@ -1110,8 +1104,8 @@ export async function getUserPreferences(userId) {
       data: data || defaultPreferences
     };
   } catch (error) {
-    console.error('Error getting user preferences:', error);
-    return { success: false, error: error.message };
+    console.warn('Error getting user preferences, using defaults:', error);
+    return { success: true, data: defaultPreferences };
   }
 }
 

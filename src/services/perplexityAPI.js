@@ -15,7 +15,6 @@
 import { buildBrandContext, buildPromptBrandSection, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
 import { supabase } from '../config/supabase';
 import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
-import { getCachedResult, setCacheResult } from '../utils/nicheCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -43,7 +42,7 @@ async function getAuthHeaders() {
 /**
  * Make a request to the Perplexity API via the secure proxy
  */
-async function callPerplexityAPI(messages, temperature = 0.2) {
+async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders();
   
   const response = await fetch(PERPLEXITY_PROXY_URL, {
@@ -53,6 +52,11 @@ async function callPerplexityAPI(messages, temperature = 0.2) {
       messages,
       temperature,
       model: 'sonar',
+      cache: options.cache,
+      personalized: options.personalized,
+      targetAudience: options.targetAudience,
+      brandContext: options.brandContext,
+      competitorHandles: options.competitorHandles,
       web_search_options: {
         search_context_size: 'low'
       }
@@ -159,12 +163,8 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
   try {
     const niche = getNiche(brandData, 'general creator');
     const audience = getTargetAudience(brandData, 'general audience');
-    
     const cacheKey = buildCacheKey([niche, platform, 'trending']);
-    const cached = await getCachedResult(cacheKey);
-    if (cached) {
-      return { success: true, scan: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
-    }
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
 
     const platformList = Array.isArray(brandData?.platforms) && brandData.platforms.length > 0
       ? brandData.platforms.join(', ')
@@ -209,7 +209,18 @@ RULES:
 - "why_trending" must reference a specific recent trigger (event, viral post, news, algorithm change).
 - Keep all text concise. No run-on sentences. Maximum 20 words per field.`
       }
-    ], 0.2);
+    ], 0.2, {
+      cache: {
+        key: cacheKey,
+        niche: normalizeNiche(niche),
+        platform,
+        type: 'trending',
+        ttlHours: 24,
+      },
+      personalized: Boolean(brandContext || brandData?.targetAudience),
+      targetAudience: brandData?.targetAudience || undefined,
+      brandContext: brandContext || undefined,
+    });
 
     const parsed = parseJsonFromText(data.content || '');
     const normalized = normalizeQuickScanData(parsed);
@@ -221,13 +232,13 @@ RULES:
       };
     }
 
-    setCacheResult(cacheKey, normalized, { niche: normalizeNiche(niche), platform, feature: 'trending' }, 24);
-    
     return {
       success: true,
       scan: normalized,
       citations: data.citations || [],
-      usage: data.usage
+      usage: data.usage,
+      cached: Boolean(data.cached),
+      generatedAt: data.generatedAt,
     };
   } catch (error) {
     console.error('Perplexity API Error:', error);
@@ -389,12 +400,7 @@ export async function getAudienceInsights(brandData, demographics = null) {
     const niche = getNiche(brandData);
     const audience = demographics || getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
-    
     const cacheKey = buildCacheKey([niche, 'all', 'audience']);
-    const cached = await getCachedResult(cacheKey);
-    if (cached) {
-      return { success: true, insights: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
-    }
 
     const data = await callPerplexityAPI([
       {
@@ -416,16 +422,27 @@ Include:
 - Topics they actively seek out
 - How to build trust with this audience`
       }
-    ], 0.2);
+    ], 0.2, {
+      cache: {
+        key: cacheKey,
+        niche: normalizeNiche(niche),
+        platform: 'all',
+        type: 'audience',
+        ttlHours: 24,
+      },
+      personalized: Boolean(brandContext || brandData?.targetAudience || demographics),
+      targetAudience: brandData?.targetAudience || demographics || undefined,
+      brandContext: brandContext || undefined,
+    });
 
     const insightsContent = data.content || '';
-    setCacheResult(cacheKey, insightsContent, { niche: normalizeNiche(niche), feature: 'audience' }, 24);
-    
     return {
       success: true,
       insights: insightsContent,
       citations: data.citations || [],
-      usage: data.usage
+      usage: data.usage,
+      cached: Boolean(data.cached),
+      generatedAt: data.generatedAt,
     };
   } catch (error) {
     console.error('Perplexity API Error:', error);
@@ -681,12 +698,12 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const currentMonth = now.toLocaleString('default', { month: 'long' });
     const currentYear = now.getFullYear();
     const currentDate = now.toISOString().slice(0, 10);
-    
     const cacheKey = buildCacheKey([niche, platform, currentDate, 'niche_intel']);
-    const cached = await getCachedResult(cacheKey);
-    if (cached) {
-      return { success: true, research: cached.data, citations: [], usage: { cached: true }, cached: true, generatedAt: cached.generatedAt };
-    }
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const competitorHandles = nicheQuery
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value.startsWith('@'));
 
     const data = await callPerplexityAPI([
       {
@@ -716,16 +733,28 @@ Requirements:
 - Prioritize findings that matter to ${audience}
 - Do not generate content ideas yet; return research only`
       }
-    ], 0.2);
+    ], 0.2, {
+      cache: {
+        key: cacheKey,
+        niche: normalizeNiche(niche),
+        platform,
+        type: 'niche_intel',
+        ttlHours: 24,
+      },
+      personalized: Boolean(brandContext || brandData?.targetAudience || competitorHandles.length > 0),
+      targetAudience: brandData?.targetAudience || undefined,
+      brandContext: brandContext || undefined,
+      competitorHandles: competitorHandles.length > 0 ? competitorHandles : undefined,
+    });
 
     const researchContent = data.content || '';
-    setCacheResult(cacheKey, researchContent, { niche: normalizeNiche(niche), platform, feature: 'niche_intel' }, 24);
-    
     return {
       success: true,
       research: researchContent,
       citations: data.citations || [],
-      usage: data.usage
+      usage: data.usage,
+      cached: Boolean(data.cached),
+      generatedAt: data.generatedAt,
     };
   } catch (error) {
     console.error('Perplexity niche research error:', error);

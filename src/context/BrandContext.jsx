@@ -119,7 +119,7 @@ export function BrandProvider({ children }) {
             contentFocus: userPreferences.content_focus
               ? formatEnumArray(userPreferences.content_focus)
               : (data.content_focus ? formatEnumArray(data.content_focus) : ''),
-            city: data.city || '',
+            city: userPreferences.city || data.city || '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
             growthStage: userPreferences.growth_stage
               ? normalizeOptionalEnum(userPreferences.growth_stage)
@@ -201,7 +201,6 @@ export function BrandProvider({ children }) {
           brand_name: updated.brandName || null,
           industry: updated.industry || null,
           niche: updated.niche,
-          city: updated.city || null,
           target_audience: updated.targetAudience,
           brand_voice_preference: updated.brandVoice,
           preferred_platforms: updated.platforms,
@@ -271,7 +270,6 @@ export function BrandProvider({ children }) {
           brand_name: null,
           industry: null,
           niche: null,
-          city: null,
           target_audience: null,
           brand_voice_preference: null,
           preferred_platforms: [],

@@ -874,7 +874,7 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              ) : dashboardHashtags.length > 0 ? (
+              ) : displayedDashboardHashtags.length > 0 ? (
                 <div className="space-y-1.5">
                   {hashtagsFromPreviousDay && (
                     <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
@@ -952,6 +952,7 @@ export default function Dashboard() {
                       const allTags = filteredDashboardHashtags.map(t => t.hashtag).join(' ');
                       navigator.clipboard.writeText(allTags).then(() => showToast('All hashtags copied!', 'success'));
                     }}
+                    disabled={filteredDashboardHashtags.length === 0}
                     className="mt-3 w-full py-2 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-xs"
                   >
                     <Copy className="w-3.5 h-3.5" /> Copy All Hashtags

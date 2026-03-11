@@ -3,6 +3,35 @@ import { supabase } from '../config/supabase';
 
 export const AuthContext = createContext();
 
+function getOnboardingCompletionKey(userId) {
+  return `has_completed_onboarding:${userId}`;
+}
+
+function readCachedOnboardingCompletion(userId) {
+  if (!userId) return false;
+
+  try {
+    return localStorage.getItem(getOnboardingCompletionKey(userId)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeCachedOnboardingCompletion(userId, hasCompletedOnboarding) {
+  if (!userId) return;
+
+  try {
+    if (hasCompletedOnboarding) {
+      localStorage.setItem(getOnboardingCompletionKey(userId), 'true');
+      return;
+    }
+
+    localStorage.removeItem(getOnboardingCompletionKey(userId));
+  } catch {
+    // Ignore storage failures and rely on Supabase as the source of truth.
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +49,8 @@ export function AuthProvider({ children }) {
   // Memoized checkUserProfile to prevent recreation on every render
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
   const checkUserProfile = useCallback(async (userId) => {
+    const hasCachedOnboardingCompletion = readCachedOnboardingCompletion(userId);
+
     // Create a timeout promise to prevent hanging queries
     const QUERY_TIMEOUT_MS = 15000; // 15 seconds
     const timeoutPromise = new Promise((_, reject) => {
@@ -39,6 +70,16 @@ export function AuthProvider({ children }) {
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
       if (error) {
+        if (hasCachedOnboardingCompletion) {
+          console.warn('⚠️ [Auth] Profile lookup failed, using cached onboarding completion state.');
+          setUserProfile(null);
+          setNeedsOnboarding(false);
+          setProfileChecked(true);
+          profileCheckedRef.current = true;
+          currentUserIdRef.current = userId;
+          return;
+        }
+
         console.error('❌ [Auth] Error checking user profile:', error);
         console.error('❌ [Auth] Error details:', {
           code: error.code,
@@ -52,7 +93,7 @@ export function AuthProvider({ children }) {
           console.error('❌ [Auth] The user_profile table does not exist! Please run the SQL schema in Supabase.');
           console.error('❌ [Auth] Run: docs/setup/supabase-user-profile-schema.sql');
         }
-        
+
         // On error, assume user needs onboarding to be safe
         setUserProfile(null);
         setNeedsOnboarding(true);
@@ -62,9 +103,12 @@ export function AuthProvider({ children }) {
       }
 
       const hasCompletedOnboarding = data?.has_completed_onboarding === true;
-
       if (hasCompletedOnboarding) {
-        setUserProfile(data);
+        writeCachedOnboardingCompletion(userId, true);
+      }
+
+      if (hasCompletedOnboarding || (!data && hasCachedOnboardingCompletion)) {
+        setUserProfile(data || null);
         setNeedsOnboarding(false);
       } else {
         // Missing profile rows or incomplete profiles should always see onboarding.
@@ -75,13 +119,23 @@ export function AuthProvider({ children }) {
       profileCheckedRef.current = true;
       currentUserIdRef.current = userId;
     } catch (error) {
+      if (hasCachedOnboardingCompletion) {
+        console.warn('⚠️ [Auth] Profile check timed out, using cached onboarding completion state.');
+        setUserProfile(null);
+        setNeedsOnboarding(false);
+        setProfileChecked(true);
+        profileCheckedRef.current = true;
+        currentUserIdRef.current = userId;
+        return;
+      }
+
       console.error('❌ [Auth] Error in checkUserProfile:', error);
       console.error('❌ [Auth] This may indicate:');
       console.error('   1. The user_profile table does not exist in Supabase');
       console.error('   2. RLS policies are blocking the query');
       console.error('   3. Network connectivity issues');
       console.error('❌ [Auth] Please run the SQL scripts in docs/setup/ in your Supabase SQL Editor');
-      
+
       // On error, force onboarding to be safe
       setUserProfile(null);
       setNeedsOnboarding(true);
@@ -334,13 +388,14 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const completeOnboarding = async (profileData) => {
+  const completeOnboarding = async () => {
     if (!user) return { success: false, error: 'Not authenticated' };
 
     // Signal to GuidedTour that onboarding just completed — tour should trigger.
     // Use a user-scoped key so the tour only appears once per account.
     const tourSignalKey = user?.id ? `show_guided_tour:${user.id}` : 'show_guided_tour';
     localStorage.setItem(tourSignalKey, 'pending');
+    writeCachedOnboardingCompletion(user.id, true);
     
     // First refresh the profile from database to get the complete data
     await checkUserProfile(user.id);

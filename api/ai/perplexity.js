@@ -82,13 +82,58 @@ async function incrementCacheHitCount(cacheRow) {
   }
 }
 
-async function getCachedPerplexityResult(cacheConfig) {
+function hasPersonalizationSignals(body = {}) {
+  const competitorHandles = Array.isArray(body.competitorHandles)
+    ? body.competitorHandles.filter(Boolean)
+    : [];
+  const competitorHandleText = typeof body.competitorHandles === 'string'
+    ? body.competitorHandles.trim()
+    : '';
+
+  return Boolean(
+    body.personalized
+    || body.targetAudience
+    || body.brandContext
+    || competitorHandles.length > 0
+    || competitorHandleText
+  );
+}
+
+function buildCacheAccessContext(requestBody = {}, userId = null) {
+  const isPersonalized = hasPersonalizationSignals(requestBody);
+  return {
+    isPersonalized,
+    userId: isPersonalized ? userId : null,
+  };
+}
+
+function applyCacheUserScope(query, cacheAccess) {
+  if (cacheAccess?.userId) {
+    return query.eq('user_id', cacheAccess.userId);
+  }
+
+  return query.is('user_id', null);
+}
+
+function formatCachedResponse(resultData) {
+  return {
+    content: typeof resultData === 'string'
+      ? resultData
+      : JSON.stringify(resultData),
+    structuredData: typeof resultData === 'string' ? null : resultData,
+  };
+}
+
+async function getCachedPerplexityResult(cacheConfig, cacheAccess) {
   if (!supabase || !cacheConfig?.key) return null;
 
-  const { data, error } = await supabase
-    .from('niche_content_cache')
-    .select('id, payload, generated_at, expires_at, hit_count')
-    .eq('cache_key', cacheConfig.key)
+  const { data, error } = await applyCacheUserScope(
+    supabase
+      .from('niche_content_cache')
+      .select('id, payload, generated_at, expires_at, hit_count')
+      .eq('cache_key', cacheConfig.key),
+    cacheAccess,
+  )
     .maybeSingle();
 
   if (error || !data) {
@@ -107,8 +152,8 @@ async function getCachedPerplexityResult(cacheConfig) {
   };
 }
 
-async function setCachedPerplexityResult(cacheConfig, structuredData) {
-  if (!cacheConfig?.key || !structuredData) return;
+async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess) {
+  if (!cacheConfig?.key || cachePayload == null) return;
   if (!supabase) {
     console.error('[Cache Write FAILED] Missing service-role Supabase client', cacheConfig.key);
     return;
@@ -117,28 +162,210 @@ async function setCachedPerplexityResult(cacheConfig, structuredData) {
   const now = new Date();
   const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
   const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+  const cacheRow = {
+    cache_key: cacheConfig.key,
+    niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
+    platform: cacheConfig.platform || 'instagram',
+    feature: cacheConfig.type || 'trending',
+    payload: cachePayload,
+    generated_at: now.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    hit_count: 0,
+    user_id: cacheAccess?.userId || null,
+  };
+
+  const scopedLookupQuery = applyCacheUserScope(
+    supabase
+      .from('niche_content_cache')
+      .select('id')
+      .eq('cache_key', cacheConfig.key),
+    cacheAccess,
+  );
+
+  const { data: existingRow, error: lookupError } = await scopedLookupQuery.maybeSingle();
+
+  if (lookupError && lookupError.code !== 'PGRST116') {
+    console.error('[Cache Write FAILED]', lookupError.message, cacheConfig.key);
+    return;
+  }
+
+  if (existingRow?.id) {
+    const { error } = await supabase
+      .from('niche_content_cache')
+      .update(cacheRow)
+      .eq('id', existingRow.id);
+
+    if (error) {
+      console.error('[Cache Write FAILED]', error.message, cacheConfig.key);
+      return;
+    }
+
+    console.log('[Cache Write SUCCESS]', cacheConfig.key);
+    return;
+  }
 
   const { error } = await supabase
     .from('niche_content_cache')
-    .upsert({
-      cache_key: cacheConfig.key,
-      niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
-      platform: cacheConfig.platform || 'instagram',
-      feature: cacheConfig.type || 'trending',
-      payload: structuredData,
-      generated_at: now.toISOString(),
-      expires_at: expiresAt.toISOString(),
-      hit_count: 0,
-    }, {
-      onConflict: 'cache_key',
-    });
+    .insert(cacheRow);
 
   if (error) {
+    if (error.code === '23505') {
+      const scopedRetryQuery = applyCacheUserScope(
+        supabase
+          .from('niche_content_cache')
+          .update(cacheRow)
+          .eq('cache_key', cacheConfig.key),
+        cacheAccess,
+      );
+
+      const { error: retryError } = await scopedRetryQuery;
+
+      if (retryError) {
+        console.error('[Cache Write FAILED]', retryError.message, cacheConfig.key);
+        return;
+      }
+
+      console.log('[Cache Write SUCCESS]', cacheConfig.key);
+      return;
+    }
+
     console.error('[Cache Write FAILED]', error.message, cacheConfig.key);
     return;
   }
 
   console.log('[Cache Write SUCCESS]', cacheConfig.key);
+}
+
+function toTitleCase(value) {
+  return String(value || '')
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function normalizeDashboardHashtagPayload(items, cacheConfig = {}) {
+  if (!Array.isArray(items)) return [];
+
+  const platform = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
+  const fallbackVolumeByIndex = ['High', 'High', 'Medium', 'Medium', 'Niche'];
+
+  return items
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (!trimmed) return null;
+
+        return {
+          tag: trimmed.startsWith('#') ? trimmed : `#${trimmed.replace(/^#*/, '')}`,
+          volume: fallbackVolumeByIndex[index] || 'Medium',
+          status: 'Trending',
+          platform,
+          type: 'hashtag',
+        };
+      }
+
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+
+      const rawTag = String(
+        item.tag
+        || item.hashtag
+        || item.keyword
+        || item.term
+        || item.name
+        || item.label
+        || ''
+      ).trim();
+
+      if (!rawTag) {
+        return null;
+      }
+
+      const normalizedType = String(item.type || item.result_type || item.kind || '').trim().toLowerCase();
+      const isSearchKeyword = normalizedType === 'search_keyword' || String(cacheConfig.platform || '').toLowerCase() === 'youtube';
+
+      return {
+        ...item,
+        tag: isSearchKeyword || rawTag.startsWith('#')
+          ? rawTag
+          : `#${rawTag.replace(/^#*/, '')}`,
+        volume: item.volume || item.estimated_reach || item.reach || fallbackVolumeByIndex[index] || 'Medium',
+        status: item.status || item.display_type_label || item.type_label || 'Trending',
+        platform: item.platform || platform,
+        type: normalizedType || (isSearchKeyword ? 'search_keyword' : 'hashtag'),
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildDashboardFallbackData(cacheConfig = {}) {
+  const niche = toTitleCase(cacheConfig.niche || 'Small Business');
+  const platform = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
+  const city = toTitleCase(cacheConfig.city || 'your city') || 'your city';
+
+  if (cacheConfig.type === 'hashtags') {
+    const nicheSlug = String(cacheConfig.niche || 'smallbusiness').replace(/[^a-zA-Z0-9]/g, '');
+
+    return [
+      { tag: `#${nicheSlug}`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: `#${nicheSlug}tips`, volume: 'Medium', status: 'Niche', platform, type: 'hashtag' },
+      { tag: `#${city.replace(/\s+/g, '')}`, volume: 'Medium', status: 'Local', platform, type: 'hashtag' },
+      { tag: `#${platform.replace(/\s+/g, '')}creator`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: `#${nicheSlug}community`, volume: 'Niche', status: 'Niche', platform, type: 'hashtag' },
+      { tag: `#${nicheSlug}ideas`, volume: 'Medium', status: 'Trending', platform, type: 'hashtag' },
+      { tag: `#${city.replace(/\s+/g, '')}${nicheSlug}`, volume: 'Niche', status: 'Local', platform, type: 'hashtag' },
+      { tag: `#${platform.replace(/\s+/g, '')}tips`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+    ];
+  }
+
+  return [
+    {
+      title: `${niche} myths people still believe`,
+      summary: `Educational explainers about ${niche.toLowerCase()} are performing well on ${platform}.`,
+      why_it_matters: `Audiences in ${city} are responding to clear, practical takes they can apply quickly.`,
+      momentum: 'rising',
+      platform,
+      content_idea: `Create a fast ${platform} post debunking one common ${niche.toLowerCase()} misconception.`,
+    },
+    {
+      title: `${city} audience questions this week`,
+      summary: `Localized question-led content is a reliable angle when live trend data is unavailable.`,
+      why_it_matters: `Grounding posts in ${city} helps your content feel more specific and relevant.`,
+      momentum: 'steady',
+      platform,
+      content_idea: `Answer one question your ${city} audience keeps asking about ${niche.toLowerCase()}.`,
+    },
+    {
+      title: `Behind-the-scenes ${niche.toLowerCase()} workflows`,
+      summary: `Process content continues to earn attention because it feels practical and authentic.`,
+      why_it_matters: `Showing your workflow builds trust while giving followers a reason to save the post.`,
+      momentum: 'rising',
+      platform,
+      content_idea: `Break your workflow into 3 quick steps and turn each step into a content beat.`,
+    },
+  ];
+}
+
+async function respondWithDashboardFallback(res, cacheConfig, sourceStatus) {
+  const structuredData = buildDashboardFallbackData(cacheConfig);
+
+  if (cacheConfig?.key) {
+    const cacheAccess = buildCacheAccessContext();
+    await setCachedPerplexityResult(cacheConfig, structuredData, cacheAccess);
+  }
+
+  return res.status(200).json({
+    success: true,
+    content: JSON.stringify(structuredData),
+    structuredData,
+    citations: [],
+    usage: { fallback: true, sourceStatus },
+    cached: false,
+    generatedAt: new Date().toISOString(),
+    fallback: true,
+  });
 }
 
 export default async function handler(req, res) {
@@ -224,19 +451,21 @@ export default async function handler(req, res) {
 
     // Extract request parameters
     const { messages, temperature = 0.2, cache } = req.body;
+    const cacheAccess = buildCacheAccessContext(req.body, userId);
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
     if (cache?.key && !cache?.forceRefresh) {
-      const cachedResult = await getCachedPerplexityResult(cache);
+      const cachedResult = await getCachedPerplexityResult(cache, cacheAccess);
 
       if (cachedResult) {
+        const cachedResponse = formatCachedResponse(cachedResult.resultData);
         return res.status(200).json({
           success: true,
-          content: JSON.stringify(cachedResult.resultData),
-          structuredData: cachedResult.resultData,
+          content: cachedResponse.content,
+          structuredData: cachedResponse.structuredData,
           citations: [],
           usage: { cached: true },
           cached: true,
@@ -284,6 +513,11 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       logError('perplexity.upstream_error', { status: response.status, errorText });
+
+      if (cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags')) {
+        return respondWithDashboardFallback(res, cache, response.status);
+      }
+
       return res.status(response.status).json({ 
         error: 'AI service error. Please try again.' 
       });
@@ -291,10 +525,30 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
-    const structuredData = cache?.key ? parseStructuredJson(content) : null;
+    let structuredData = cache?.key ? parseStructuredJson(content) : null;
 
-    if (cache?.key && structuredData) {
-      await setCachedPerplexityResult(cache, structuredData);
+    if (cache?.type === 'hashtags' && Array.isArray(structuredData)) {
+      structuredData = normalizeDashboardHashtagPayload(structuredData, cache);
+    }
+
+    if (
+      cache?.key
+      && (cache?.type === 'trending' || cache?.type === 'hashtags')
+      && !Array.isArray(structuredData)
+    ) {
+      logError('perplexity.unparseable_dashboard_payload', { cacheKey: cache.key });
+      return respondWithDashboardFallback(res, cache, 200);
+    }
+
+    if (cache?.type === 'hashtags' && Array.isArray(structuredData) && structuredData.length === 0) {
+      logError('perplexity.empty_dashboard_hashtag_payload', { cacheKey: cache.key });
+      return respondWithDashboardFallback(res, cache, 200);
+    }
+
+    const cachePayload = structuredData ?? content;
+
+    if (cache?.key && cachePayload) {
+      await setCachedPerplexityResult(cache, cachePayload, cacheAccess);
     }
     
     return res.status(200).json({

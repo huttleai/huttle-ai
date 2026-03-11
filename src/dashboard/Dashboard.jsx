@@ -26,6 +26,7 @@ import AITools from '../pages/AITools';
 import FullPostBuilder from '../pages/FullPostBuilder';
 import NicheIntel from '../pages/NicheIntel';
 import Login from '../pages/Login';
+import Signup from '../pages/Signup';
 import Security from '../pages/Security';
 import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
@@ -128,8 +129,8 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
           <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
           <Route path="/mockup-demo" element={<ProtectedRoute><IPhoneMockupDemo /></ProtectedRoute>} />
           <Route path="/mockup-showcase" element={<ProtectedRoute><MockupShowcase /></ProtectedRoute>} />
-          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/signup" element={<Navigate to="/dashboard" replace />} />
+          <Route path="login" element={<Navigate to="/dashboard" replace />} />
+          <Route path="signup" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </div>
@@ -137,11 +138,10 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   }
 
   // If user is not logged in, show auth pages
-  // Signup disabled for Founders Only launch - redirect to login
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Navigate to="/dashboard/login" replace />} />
+      <Route path="login" element={<Login />} />
+      <Route path="signup" element={<Signup />} />
       <Route path="*" element={<Navigate to="/dashboard/login" replace />} />
     </Routes>
   );

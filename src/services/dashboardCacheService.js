@@ -57,6 +57,16 @@ const TRENDING_FALLBACK = [
     category: 'promotion',
   },
 ];
+const HASHTAG_FALLBACK = [
+  { tag: '#contentcreator', volume: 'HIGH', status: 'Trending', type: 'hashtag' },
+  { tag: '#creatortips', volume: 'MEDIUM', status: 'Trending', type: 'hashtag' },
+  { tag: '#socialmediatips', volume: 'HIGH', status: 'Trending', type: 'hashtag' },
+  { tag: '#reelsstrategy', volume: 'MEDIUM', status: 'Niche', type: 'hashtag' },
+  { tag: '#audiencegrowth', volume: 'MEDIUM', status: 'Trending', type: 'hashtag' },
+  { tag: '#digitalcreator', volume: 'HIGH', status: 'Trending', type: 'hashtag' },
+  { tag: '#personalbrand', volume: 'MEDIUM', status: 'Niche', type: 'hashtag' },
+  { tag: '#creatorjourney', volume: 'NICHE', status: 'Niche', type: 'hashtag' },
+];
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -191,7 +201,7 @@ function parsePerplexityResponse(text) {
 
   if (!text || typeof text !== 'string') {
     if (text != null) {
-      console.error('[Perplexity] Response is not an array:', typeof text);
+      console.warn('[Perplexity] Response is not an array:', typeof text);
     }
     return null;
   }
@@ -206,13 +216,13 @@ function parsePerplexityResponse(text) {
 
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) {
-      console.error('[Perplexity] Response is not an array:', typeof parsed);
+      console.warn('[Perplexity] Response is not an array:', typeof parsed);
       return null;
     }
 
     return parsed;
   } catch (err) {
-    console.error(
+    console.warn(
       '[Perplexity] JSON parse failed:',
       err.message,
       '\nRaw text:',
@@ -259,13 +269,13 @@ function parseTrendingResponse(raw) {
       return [parsed];
     }
 
-    console.error('[Trending] Unparseable response shape:', typeof parsed);
+    console.warn('[Trending] Unparseable response shape:', typeof parsed);
     return null;
   } catch (err) {
     const rawPreview = typeof raw === 'string'
       ? raw.substring(0, 300)
       : JSON.stringify(raw ?? null)?.substring(0, 300);
-    console.error('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
+    console.warn('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
     return null;
   }
 }
@@ -283,7 +293,7 @@ async function getDashboardSession() {
     const { data: { session } } = await supabase.auth.getSession();
     return session || null;
   } catch (error) {
-    console.error('[Cache Read FAILED]', error.message, error.code, cacheKey);
+    console.warn('[Dashboard] Session lookup failed, skipping cache read:', error.message);
     return null;
   }
 }
@@ -348,7 +358,7 @@ async function getWarmPlatformCache(cacheKey, platform, type) {
       .maybeSingle();
 
     if (error) {
-      console.error('[Cache Read FAILED]', error.message, error.code, cacheKey);
+      console.warn('[Cache Read Skipped]', error.message, error.code, cacheKey);
       return null;
     }
 
@@ -374,7 +384,7 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
   try {
     const currentPlatform = normalizePlatformValue(platform);
     const currentDateStart = new Date(`${generatedDate}T00:00:00.000Z`).toISOString();
-    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__%__${type}`;
+    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
       .select('cache_key, payload, generated_at')
@@ -689,10 +699,10 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
         continue;
       }
 
-      console.error('[Perplexity] Non-429 error:', response.status, platform, type);
+      console.warn('[Perplexity] Non-429 response, using fallback:', response.status, platform, type);
       return null;
     } catch (error) {
-      console.error('[Perplexity] Non-429 error:', error, platform, type);
+      console.warn('[Perplexity] Request failed, using fallback:', error, platform, type);
       return null;
     }
   }
@@ -709,6 +719,15 @@ function mapHashtagVolume(volume) {
   const value = normalizeTextValue(volume).toLowerCase();
   if (REACH_VALUES.has(value)) return value;
   return 'medium';
+}
+
+function buildHashtagFallbackItems(platform) {
+  const platformLabel = formatPlatformLabel(platform);
+
+  return HASHTAG_FALLBACK.map((item) => ({
+    ...item,
+    platform: platformLabel,
+  }));
 }
 
 function normalizeTrendItem(item, platform, fromCache = false, generatedAt = null) {
@@ -735,9 +754,25 @@ function normalizeTrendItem(item, platform, fromCache = false, generatedAt = nul
 }
 
 function normalizeHashtagItem(item, platform, fromCache = false, generatedAt = null, fromYesterday = false) {
-  const rawType = normalizeTextValue(item?.type).toLowerCase();
+  const isStringItem = typeof item === 'string';
+  const rawType = normalizeTextValue(
+    isStringItem
+      ? ''
+      : (item?.type || item?.result_type || item?.kind)
+  ).toLowerCase();
   const isSearchKeyword = rawType === 'search_keyword' || normalizePlatformValue(platform) === 'youtube';
-  const rawTag = normalizeTextValue(item?.tag);
+  const rawTag = normalizeTextValue(
+    isStringItem
+      ? item
+      : (
+        item?.tag
+        || item?.hashtag
+        || item?.keyword
+        || item?.term
+        || item?.name
+        || item?.label
+      )
+  );
 
   if (!rawTag) {
     return null;
@@ -746,13 +781,21 @@ function normalizeHashtagItem(item, platform, fromCache = false, generatedAt = n
   const tagValue = isSearchKeyword
     ? rawTag.replace(/^#/, '')
     : (rawTag.startsWith('#') ? rawTag : `#${rawTag.replace(/^#*/, '')}`);
-  const status = normalizeTextValue(item?.status) || 'Niche';
-  const platformLabel = formatPlatformLabel(item?.platform || platform);
+  const status = normalizeTextValue(
+    isStringItem
+      ? ''
+      : (item?.status || item?.display_type_label || item?.type_label)
+  ) || 'Niche';
+  const platformLabel = formatPlatformLabel((isStringItem ? '' : item?.platform) || platform);
 
   return {
     hashtag: tagValue,
     relevance: `${platformLabel} discovery term for ${platform === 'youtube' ? 'searchers' : 'active content discovery'}`,
-    estimated_reach: mapHashtagVolume(item?.volume),
+    estimated_reach: mapHashtagVolume(
+      isStringItem
+        ? ''
+        : (item?.volume || item?.estimated_reach || item?.reach)
+    ),
     type: status.toLowerCase() === 'trending' ? 'trending' : 'niche',
     relevant_platforms: [platformLabel],
     platform: platformLabel,
@@ -854,22 +897,26 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
       : Array.isArray(payload?.structuredData)
         ? payload.structuredData
         : payload?.structuredData
-          ? (console.error('[Perplexity] Response is not an array:', typeof payload.structuredData), null)
+          ? (console.warn('[Perplexity] Response is not an array, using parser fallback:', typeof payload.structuredData), null)
           : parsePerplexityResponse(payload?.content || '');
 
     if (!Array.isArray(parsed)) {
       throw new Error(`Perplexity ${type} response was not a valid JSON array.`);
     }
 
+    const items = type === 'hashtags' && parsed.length === 0
+      ? buildHashtagFallbackItems(platform)
+      : parsed;
+
     return {
-      items: parsed,
+      items,
       fromCache: Boolean(payload?.cached),
       fromYesterday: false,
       generatedAt: payload?.generatedAt || new Date().toISOString(),
       fallbackMessage: '',
     };
   } catch (error) {
-    console.error(`[Dashboard] Failed to load ${type} for ${platform}:`, error);
+    console.warn(`[Dashboard] Failed to load ${type} for ${platform}, using fallback:`, error);
 
     if (type === 'hashtags') {
       const previousDayCache = await getPreviousDayPlatformCache(context, platform, type, generatedDate);
@@ -885,7 +932,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
     }
 
     return {
-      items: [],
+      items: type === 'hashtags' ? buildHashtagFallbackItems(platform) : [],
       fromCache: false,
       fromYesterday: false,
       generatedAt: null,
@@ -913,7 +960,7 @@ async function fetchAllPlatformWidgets(platforms, context, headers, options = {}
         hashtagResult,
       });
     } catch (error) {
-      console.error(`[Dashboard] Failed to load ${platform}:`, error);
+      console.warn(`[Dashboard] Failed to load ${platform}, using fallback widgets:`, error);
       results.push({
         platform,
         trendingResult: {
@@ -1007,7 +1054,7 @@ async function getCachedAIInsights(userId, generatedDate) {
     .maybeSingle();
 
   if (error) {
-    console.error('Error reading cached AI insights:', error);
+    console.warn('Error reading cached AI insights, using fallback generation:', error);
     return null;
   }
 
@@ -1076,7 +1123,7 @@ async function generateAIInsights(userId, context, headers, generatedDate) {
       });
 
     if (upsertError) {
-      console.error('Error upserting AI insights cache:', upsertError);
+      console.warn('Error upserting AI insights cache:', upsertError);
     }
 
     return {
@@ -1086,7 +1133,7 @@ async function generateAIInsights(userId, context, headers, generatedDate) {
       usedFallback: normalizedInsights.length === 0,
     };
   } catch (error) {
-    console.error('Error generating AI insights:', error);
+    console.warn('Error generating AI insights, using fallback insights:', error);
     return {
       insights: fallbackInsights,
       createdAt: new Date().toISOString(),
@@ -1135,17 +1182,20 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
         .filter(Boolean)
     );
 
-    const hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) =>
+    let hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) =>
       ensureArray(hashtagResult.items)
         .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday))
         .filter(Boolean)
     );
+    if (hashtagsOfDay.length === 0) {
+      hashtagsOfDay = buildHashtagFallbackItems(context.primaryPlatform).map((item) =>
+        normalizeHashtagItem(item, context.primaryPlatform, false, new Date().toISOString(), false)
+      ).filter(Boolean);
+    }
     const trendingFallbackMessage = trendingTopics.length === 0
       ? platformResults.find(({ trendingResult }) => trendingResult.fallbackMessage)?.trendingResult?.fallbackMessage || 'Trends are refreshing — check back in a few minutes.'
       : '';
-    const hashtagsFallbackMessage = hashtagsOfDay.length === 0
-      ? platformResults.find(({ hashtagResult }) => hashtagResult.fallbackMessage)?.hashtagResult?.fallbackMessage || 'Hashtags loading — refresh in a moment.'
-      : '';
+    const hashtagsFallbackMessage = platformResults.find(({ hashtagResult }) => hashtagResult.fallbackMessage)?.hashtagResult?.fallbackMessage || 'Hashtags loading — refresh in a moment.';
     const hashtagsFromPreviousDay = hashtagsOfDay.some((item) => item.from_yesterday);
 
     const createdAt = [

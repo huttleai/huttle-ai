@@ -2,7 +2,6 @@ import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { createCheckoutSession } from '../services/stripeAPI';
 import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, Eye, EyeOff } from 'lucide-react';
 
 export default function Signup() {
@@ -164,6 +163,14 @@ export default function Signup() {
     return formatOk && (isUniqueCheckComplete ? isPasswordUnique : false);
   }, [password, isUniqueCheckComplete, isPasswordUnique]);
 
+  const deriveFirstNameFromEmail = (emailValue) => {
+    const localPart = emailValue.split('@')[0] || '';
+    const firstSegment = localPart.split(/[.+_-]/).find(Boolean) || localPart;
+    if (!firstSegment) return '';
+
+    return firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -190,23 +197,16 @@ export default function Signup() {
     }
 
     setLoading(true);
-    const result = await signup(email, password);
+    const firstName = deriveFirstNameFromEmail(email);
+    const result = await signup(email, password, {
+      first_name: firstName || undefined,
+      full_name: firstName || undefined,
+    });
     setLoading(false);
 
     if (result.success) {
-      addToast('Account created! Redirecting to payment...', 'success');
-      // Redirect to Stripe Checkout for Founders Club payment
-      try {
-        const checkoutResult = await createCheckoutSession('founder', 'annual');
-        if (checkoutResult.success && checkoutResult.url) {
-          window.location.href = checkoutResult.url;
-          return;
-        }
-      } catch (stripeError) {
-        console.error('Stripe checkout error:', stripeError);
-      }
-      // Fallback: send to subscription page if Stripe redirect fails
-      navigate('/dashboard/subscription');
+      addToast('Account created! Let’s personalize your dashboard.', 'success');
+      navigate('/onboarding');
     } else {
       const errorMessage = result.error || 'Failed to create account';
 
