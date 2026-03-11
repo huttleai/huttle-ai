@@ -814,7 +814,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "What happens when the Founding Member offer ends?",
-      answer: "On March 15, the price becomes $249/yr (Builders Club) for 16 days. After March 30, regular Pro pricing is $357/yr. Your founding rate stays locked forever — it never increases, no matter what."
+      answer: "After the launch window closes, public pricing shifts to Essentials at $15/month (or $153/year) and Pro at $39/month (or $397.80/year). Founders and Builders keep their launch pricing while their subscriptions stay active."
     },
     {
       question: "Can we cancel anytime?",
@@ -822,7 +822,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "Is there a money-back guarantee?",
-      answer: "Yes. Founders Club and Builders Club annual plans include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund. Essentials and Pro monthly plans are not refundable, but they include a 7-day free trial before any charge."
+      answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
     },
     {
       question: "What platforms does Huttle AI support?",
@@ -888,7 +888,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             Start creating. Pick your path.
           </h2>
           <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
-            Every plan includes full access to all AI tools. The only question is when you join.
+            Huttle AI is currently paid-only. Founders Club and Builders Club both include full Pro feature access during the launch window.
           </p>
         </motion.div>
 
@@ -977,7 +977,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                COMING MARCH 15
+                AVAILABLE NOW
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
@@ -994,8 +994,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 </div>
               </div>
 
-              <p className="text-sm text-slate-600 mb-2">For the builders who move fast.</p>
-              <p className="text-xs text-slate-500 mb-5 font-medium">Available March 15–30 only</p>
+              <p className="text-sm text-slate-600 mb-2">Launch pricing for creators who want Pro access at a lower annual rate.</p>
+              <p className="text-xs text-slate-500 mb-5 font-medium">Paid-only launch plan with full Pro feature access</p>
 
               <ul className="space-y-2.5 mb-6">
                 {[
@@ -1011,17 +1011,17 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              <button 
-                disabled 
-                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
+              <button
+                onClick={() => { window.location.href = '/dashboard/signup'; }}
+                className="w-full h-12 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-colors"
               >
-                Available March 15
+                Sign Up To Choose Builders
               </button>
-              <p className="text-center text-xs text-slate-500 mt-3">Save $108/yr vs regular pricing</p>
+              <p className="text-center text-xs text-slate-500 mt-3">Save $148.80/yr vs future Pro annual pricing</p>
             </div>
           </motion.div>
 
-          {/* CARD 3: REGULAR PRO */}
+          {/* CARD 3: FUTURE PUBLIC PRICING */}
           <motion.div 
             className="order-3"
             initial={{ opacity: 0, y: 30 }}
@@ -1031,30 +1031,29 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                STARTING MARCH 31
+                AFTER LAUNCH WINDOW
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Public Pricing</h3>
               
               <div className="mb-1">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-slate-900">$357</span>
-                  <span className="text-sm text-slate-500">/year</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">$29.75/mo billed annually</p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>7-day free trial - card required, cancel anytime</span>
-                </div>
+                <p className="text-sm text-slate-500 mt-1">Essentials</p>
+                <div className="text-3xl md:text-4xl font-black text-slate-900">$15<span className="text-sm font-medium text-slate-500">/month</span></div>
+                <p className="text-xs text-slate-500">or $153/year with 15% annual savings</p>
               </div>
 
-              <p className="text-sm text-slate-600 mb-5">Or $35/month billed monthly</p>
+              <div className="mb-5 mt-4">
+                <p className="text-sm text-slate-500">Pro</p>
+                <div className="text-3xl md:text-4xl font-black text-slate-900">$39<span className="text-sm font-medium text-slate-500">/month</span></div>
+                <p className="text-xs text-slate-500">or $397.80/year with 15% annual savings</p>
+              </div>
 
               <ul className="space-y-2.5 mb-6">
                 {[
-                  'All features included',
-                  'Highest AI generation limits',
-                  'Full Trend Lab access',
+                  'Essentials includes 150 AI generations/month',
+                  'Pro includes 600 AI generations/month',
+                  'Founders and Builders include 800 AI generations/month',
+                  'Launch members keep the better launch pricing',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
@@ -1063,11 +1062,8 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              <button 
-                disabled 
-                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
-              >
-                Starting March 31
+              <button disabled className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed">
+                Available After Launch
               </button>
             </div>
           </motion.div>
@@ -1105,7 +1101,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </p>
           <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
             <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Price increases March 15.
+              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Builders Club is also live during the launch window.
             </p>
           </div>
           
@@ -1283,7 +1279,7 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">5. Refund Policy</h3>
         <p className="text-sm text-slate-600 leading-relaxed">
-          Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Essentials and Pro monthly plans are not eligible for refunds, but include a 7-day free trial before any charge. See our{' '}
+          Founders Club and Builders Club include a 14-day money-back guarantee. Future Essentials and Pro plans follow the pricing shown on this page after the launch window. See our{' '}
           <Link to="/refund-policy" className="text-huttle-primary hover:underline" onClick={onClose}>
             Refund Policy
           </Link>{' '}
@@ -1409,7 +1405,7 @@ export default function LandingPage() {
       metaDescription.name = "description";
       document.head.appendChild(metaDescription);
     }
-    metaDescription.content = "We built the ultimate web application for creators who hate the content grind. Lock in your $199/yr Founders Club spot today.";
+    metaDescription.content = "Huttle AI is currently paid-only with Founders Club and Builders Club launch pricing, followed by Essentials and Pro public plans.";
   }, []);
 
   return (

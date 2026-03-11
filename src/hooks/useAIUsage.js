@@ -31,9 +31,9 @@ export default function useAIUsage(featureName = null) {
   const mountedRef = useRef(true);
 
   // Get limits from tier config instead of hardcoding
-  const tierLimits = TIER_LIMITS[userTier] || TIER_LIMITS[TIERS.FREE] || {};
+  const tierLimits = (userTier && TIER_LIMITS[userTier]) || {};
   const featureLimit = featureName ? (tierLimits[featureName] ?? null) : null;
-  const overallLimit = tierLimits.aiGenerations || 800;
+  const overallLimit = tierLimits.aiGenerations ?? 0;
 
   const isOverallLimitReached = overallUsed >= overallLimit;
   const isFeatureLimitReached = featureLimit !== null && featureUsed >= featureLimit;

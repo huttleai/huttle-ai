@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
-import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
+import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, supabase, TABLES, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 
@@ -9,18 +9,40 @@ export const SubscriptionContext = createContext();
 const DEMO_TIER_KEY = 'demo_subscription_tier';
 const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
+async function getDatabaseSubscription(userId) {
+  const { data, error } = await supabase
+    .from(TABLES.SUBSCRIPTIONS)
+    .select('id, user_id, tier, status')
+    .eq('user_id', userId)
+    .in('status', Array.from(ACTIVE_ACCESS_STATUSES))
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return { success: true, subscription: null };
+    }
+
+    return { success: false, error, subscription: null };
+  }
+
+  return { success: true, subscription: data ?? null };
+}
+
 function normalizeTier(plan) {
-  if (!plan) return TIERS.FREE;
+  if (!plan) return null;
 
   const normalizedPlan = String(plan).toLowerCase();
-  if (normalizedPlan === 'freemium' || normalizedPlan === 'free') return TIERS.FREE;
   if (normalizedPlan === 'essentials') return TIERS.ESSENTIALS;
   if (normalizedPlan === 'pro') return TIERS.PRO;
+  if (normalizedPlan === 'builder' || normalizedPlan === 'builders' || normalizedPlan === 'builders_club') {
+    return TIERS.BUILDER;
+  }
   if (normalizedPlan === 'founders' || normalizedPlan === 'founder' || normalizedPlan === 'founders_club') {
     return TIERS.FOUNDER;
   }
 
-  return TIERS.FREE;
+  return null;
 }
 
 export function SubscriptionProvider({ children }) {
@@ -34,7 +56,7 @@ export function SubscriptionProvider({ children }) {
   // Check if in demo mode (Stripe not configured)
   const demoMode = isDemoMode();
 
-  const [userTier, setUserTier] = useState(TIERS.FREE);
+  const [userTier, setUserTier] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
   const [usage, setUsage] = useState({});
@@ -85,7 +107,7 @@ export function SubscriptionProvider({ children }) {
     }
 
     if (!userId) {
-      setUserTier(TIERS.FREE);
+      setUserTier(null);
       setSubscription(null);
       setSubscriptionStatus('inactive');
       setLoading(false);
@@ -94,12 +116,43 @@ export function SubscriptionProvider({ children }) {
 
     setLoading(true);
     try {
-      const result = await getSubscriptionStatus();
-      const nextSubscription = result.success ? result.subscription : null;
-      const nextStatus = nextSubscription?.status || result.status || 'inactive';
-      const nextTier = nextSubscription && ACTIVE_ACCESS_STATUSES.has(nextStatus)
-        ? normalizeTier(nextSubscription.plan || result.plan)
-        : TIERS.FREE;
+      const [databaseResult, stripeResult] = await Promise.all([
+        getDatabaseSubscription(userId),
+        getSubscriptionStatus(),
+      ]);
+
+      if (!databaseResult.success) {
+        console.error('Error loading subscription from database:', databaseResult.error);
+      }
+
+      const databaseSubscription = databaseResult.subscription;
+      const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
+      const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
+      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
+      const nextTier = databaseTier
+        || (stripeSubscription && ACTIVE_ACCESS_STATUSES.has(nextStatus)
+          ? normalizeTier(stripeSubscription.plan || stripeResult.plan)
+          : null);
+      const nextSubscription = stripeSubscription
+        ? {
+            ...stripeSubscription,
+            ...(databaseSubscription
+              ? {
+                  id: databaseSubscription.id,
+                  user_id: databaseSubscription.user_id,
+                  plan: databaseTier,
+                  tier: databaseTier,
+                  status: databaseSubscription.status,
+                }
+              : {}),
+          }
+        : (databaseSubscription
+          ? {
+              ...databaseSubscription,
+              plan: databaseTier,
+              tier: databaseTier,
+            }
+          : null);
 
       setSubscription(nextSubscription);
       setSubscriptionStatus(nextStatus);
@@ -108,7 +161,7 @@ export function SubscriptionProvider({ children }) {
       console.error('Error loading subscription:', error);
       setSubscription(null);
       setSubscriptionStatus('inactive');
-      setUserTier(TIERS.FREE);
+      setUserTier(null);
     } finally {
       setLoading(false);
     }
@@ -156,7 +209,7 @@ export function SubscriptionProvider({ children }) {
     const remainingMs = trialEndsAt.getTime() - Date.now();
     return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
   }, [trialEndsAt]);
-  const hasPaidAccess = ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
+  const hasPaidAccess = Boolean(userTier) && ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
 
   const checkFeatureAccess = useCallback((feature) => {
     return hasFeatureAccess(userTier, feature) || canTierAccessFeature(feature, userTier);
@@ -228,19 +281,19 @@ export function SubscriptionProvider({ children }) {
 
   const getTierDisplayName = (tier) => {
     const names = {
-      [TIERS.FREE]: 'Free',
       [TIERS.ESSENTIALS]: 'Essentials',
       [TIERS.PRO]: 'Pro',
+      [TIERS.BUILDER]: 'Builders Club',
       [TIERS.FOUNDER]: 'Founders Club',
     };
-    return names[tier] || 'Free';
+    return names[tier] || 'No Active Plan';
   };
 
   const getTierColor = (tier) => {
     const colors = {
-      [TIERS.FREE]: 'text-gray-600',
       [TIERS.ESSENTIALS]: 'text-huttle-primary',
       [TIERS.PRO]: 'text-purple-600',
+      [TIERS.BUILDER]: 'text-sky-600',
       [TIERS.FOUNDER]: 'text-amber-600',
     };
     return colors[tier] || 'text-gray-600';
@@ -248,9 +301,9 @@ export function SubscriptionProvider({ children }) {
 
   const getStorageLimit = () => {
     if (skipAuth) {
-      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 25 * 1024 * 1024 * 1024;
+      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 50 * 1024 * 1024 * 1024;
     }
-    return TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
+    return TIER_LIMITS[userTier]?.storageLimit ?? 0;
   };
 
   const getStorageUsage = () => {
@@ -269,11 +322,11 @@ export function SubscriptionProvider({ children }) {
     }
 
     if (subscriptionStatus === 'canceled') {
-      return 'Your trial has ended. Upgrade anytime to get back to creating content.';
+      return 'Your subscription has ended. Choose a plan to get back to creating content.';
     }
 
-    if (userTier === TIERS.FREE) {
-      return 'Start your 7-day free trial to unlock full Pro access.';
+    if (!userTier) {
+      return 'Choose a plan to unlock Huttle AI.';
     }
 
     return '';

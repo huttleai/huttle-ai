@@ -62,43 +62,21 @@ async function getAuthHeaders() {
 }
 
 export const SUBSCRIPTION_PLANS = {
-  FREEMIUM: {
-    id: 'freemium',
-    name: 'Freemium',
-    monthlyPrice: 0,
-    annualPrice: 0,
-    priceId: null, // No Stripe price ID for free tier
-    annualPriceId: null,
-    features: {
-      aiGenerations: 20,
-      storageGB: 0.25, // 250MB
-      features: [
-        'AI Power Tools',
-        'Content Library (250MB)',
-        'Trending Now',
-        'Hashtags of the Day',
-        'All AI Power Tools',
-        'Daily Alerts',
-        'AI-Powered Insights',
-        'AI Plan Builder (7 days)'
-      ]
-    }
-  },
   ESSENTIALS: {
     id: 'essentials',
     name: 'Essentials',
     monthlyPrice: 15,
-    annualPrice: 150,
+    annualPrice: 153,
     priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || '',
     features: {
-      aiGenerations: 200,
+      aiGenerations: 150,
       storageGB: 5,
       features: [
-        'Everything in Freemium',
-        '200 AI generations/month',
+        'All core Huttle AI tools',
+        '150 AI generations/month',
         '5GB storage',
-        'AI Plan Builder (7 & 14 days)',
+        'AI Plan Builder',
         'Full Trend Lab access',
         'Email Support'
       ]
@@ -107,21 +85,41 @@ export const SUBSCRIPTION_PLANS = {
   PRO: {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 35,
-    annualPrice: 350,
+    monthlyPrice: 39,
+    annualPrice: 397.8,
     priceId: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {
-      aiGenerations: 800,
-      storageGB: 25,
+      aiGenerations: 600,
+      storageGB: 50,
       features: [
         'Everything in Essentials',
-        '800 AI generations/month',
-        '25GB storage',
+        '600 AI generations/month',
+        '50GB storage',
         'Content Repurposer',
         'Trend Forecaster',
-        'Huttle Agent (Coming Soon)',
+        'Huttle Agent',
         'Priority Email Support'
+      ]
+    }
+  },
+  BUILDER: {
+    id: 'builder',
+    name: 'Builders Club',
+    monthlyPrice: null,
+    annualPrice: 249,
+    priceId: null,
+    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL || '',
+    features: {
+      aiGenerations: 800,
+      storageGB: 50,
+      features: [
+        'Everything in Pro',
+        '800 AI generations/month',
+        '50GB storage',
+        'Locked-in Builders pricing',
+        'All future Pro features included',
+        'Priority support'
       ]
     }
   },
@@ -134,11 +132,11 @@ export const SUBSCRIPTION_PLANS = {
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || '',
     features: {
       aiGenerations: 800,
-      storageGB: 25,
+      storageGB: 50,
       features: [
         'Everything in Pro',
         '800 AI generations/month',
-        '25GB storage',
+        '50GB storage',
         'Locked-in Founders pricing forever',
         'All future features included',
         'Priority support',
@@ -292,11 +290,10 @@ export async function getSubscriptionStatus() {
     });
 
     if (!response.ok) {
-      // Return default free status if endpoint not available
       return {
         success: true,
         subscription: null,
-        plan: 'free',
+        plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
@@ -317,11 +314,10 @@ export async function getSubscriptionStatus() {
     };
   } catch (error) {
     console.error('Subscription Status Error:', error);
-    // Return default free status on error
     return {
       success: true,
       subscription: null,
-      plan: 'free',
+      plan: null,
       status: 'inactive',
       currentPeriodEnd: null,
       trialEnd: null,
@@ -363,8 +359,9 @@ export function getAIGenerationCount() {
 /**
  * Check if user can generate more content based on plan
  */
-export function canGenerateContent(currentPlan = 'freemium') {
-  const plan = SUBSCRIPTION_PLANS[currentPlan.toUpperCase()];
+export function canGenerateContent(currentPlan = null) {
+  const normalizedPlan = String(currentPlan || '').toUpperCase();
+  const plan = SUBSCRIPTION_PLANS[normalizedPlan];
   const currentUsage = getAIGenerationCount();
   
   if (!plan) {
@@ -385,7 +382,7 @@ export function canGenerateContent(currentPlan = 'freemium') {
  * Get plan by ID
  */
 export function getPlanById(planId) {
-  return Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId) || SUBSCRIPTION_PLANS.FREEMIUM;
+  return Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId) || null;
 }
 
 /**

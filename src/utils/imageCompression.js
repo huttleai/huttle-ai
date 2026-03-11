@@ -6,11 +6,6 @@ import { TIER_LIMITS, TIERS } from '../config/supabase';
  */
 export function getCompressionSettings(userTier) {
   const settings = {
-    [TIERS.FREE]: {
-      maxSizeMB: 0.5, // 500KB max
-      maxWidthOrHeight: 1280,
-      useWebWorker: true,
-    },
     [TIERS.ESSENTIALS]: {
       maxSizeMB: 1, // 1MB max
       maxWidthOrHeight: 1920,
@@ -21,9 +16,19 @@ export function getCompressionSettings(userTier) {
       maxWidthOrHeight: 2560,
       useWebWorker: true,
     },
+    [TIERS.FOUNDER]: {
+      maxSizeMB: 2,
+      maxWidthOrHeight: 2560,
+      useWebWorker: true,
+    },
+    [TIERS.BUILDER]: {
+      maxSizeMB: 2,
+      maxWidthOrHeight: 2560,
+      useWebWorker: true,
+    },
   };
 
-  return settings[userTier] || settings[TIERS.FREE];
+  return settings[userTier] || settings[TIERS.ESSENTIALS];
 }
 
 /**
@@ -84,12 +89,13 @@ export async function compressImage(file, userTier) {
  */
 export function getMaxFileSizeDisplay(userTier) {
   const limits = {
-    [TIERS.FREE]: '500KB',
     [TIERS.ESSENTIALS]: '1MB',
     [TIERS.PRO]: '2MB',
+    [TIERS.FOUNDER]: '2MB',
+    [TIERS.BUILDER]: '2MB',
   };
 
-  return limits[userTier] || limits[TIERS.FREE];
+  return limits[userTier] || limits[TIERS.ESSENTIALS];
 }
 
 /**

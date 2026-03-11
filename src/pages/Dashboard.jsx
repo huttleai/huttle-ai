@@ -249,7 +249,7 @@ export default function Dashboard() {
     };
 
     if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'inactive')) {
-      showToast('Your trial has ended. Upgrade anytime to get back to creating content.', 'info', 6000);
+      showToast('Your subscription access has ended. Choose a plan to get back to creating content.', 'info', 6000);
     }
 
     localStorage.setItem(snapshotKey, JSON.stringify(currentSnapshot));

@@ -31,13 +31,14 @@ export default function AIFeatureLock({ used, limit }) {
         <div className="bg-gradient-to-r from-huttle-primary to-purple-600 rounded-xl p-4 mb-6 text-white shadow-lg">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-5 h-5" />
-            <span className="font-bold">Upgrade to Pro</span>
+            <span className="font-bold">Choose a paid plan</span>
           </div>
           <ul className="text-sm space-y-1 opacity-90">
-            <li>• Unlimited AI generations</li>
-            <li>• Priority AI processing</li>
-            <li>• Advanced AI features</li>
-            <li>• 24/7 priority support</li>
+            <li>• Essentials: 150 AI generations/month</li>
+            <li>• Pro: 600 AI generations/month</li>
+            <li>• Founders/Builders: 800 AI generations/month</li>
+            <li>• Advanced AI features and higher storage limits</li>
+            <li>• Priority support on Pro-tier plans</li>
           </ul>
         </div>
         
@@ -45,7 +46,7 @@ export default function AIFeatureLock({ used, limit }) {
           onClick={() => navigate('/dashboard/subscription')}
           className="w-full px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 group btn-upgrade-glow"
         >
-          <span>Start Free Trial - No charge for 7 days</span>
+          <span>View Plans</span>
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         

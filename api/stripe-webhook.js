@@ -263,8 +263,8 @@ export default async function handler(req, res) {
                   onConflict: 'user_id',
                 });
 
-              // Add to Mailchimp Founders Club (for Pro/Founder tier members)
-              if (plan === 'pro' || plan === 'founder') {
+              // Add launch and paid members to the founding audience workflow.
+              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
                 await addToFoundersClub(customerEmail, firstName, lastName);
               }
             }
@@ -339,11 +339,10 @@ export default async function handler(req, res) {
           .maybeSingle();
 
         if (profile) {
-          // Update subscription to canceled/free tier
+          // Preserve the last paid tier for history, but remove active access.
           await supabase
             .from('subscriptions')
             .update({
-              tier: 'free',
               status: 'canceled',
               cancel_at_period_end: false,
               updated_at: new Date().toISOString(),

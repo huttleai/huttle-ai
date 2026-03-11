@@ -1,4 +1,4 @@
-const FOUNDER_PRICE_IDS = [
+const LAUNCH_PRICE_IDS = [
   process.env.STRIPE_PRICE_FOUNDER_ANNUAL,
   process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL,
   process.env.STRIPE_PRICE_BUILDERS_ANNUAL,
@@ -8,28 +8,30 @@ const FOUNDER_PRICE_IDS = [
 ].filter(Boolean);
 
 const PLAN_ALIASES = {
-  free: 'free',
-  freemium: 'free',
   essentials: 'essentials',
   essentials_monthly: 'essentials',
   essentials_annual: 'essentials',
   pro: 'pro',
   pro_monthly: 'pro',
   pro_annual: 'pro',
+  builder: 'builder',
+  builders: 'builder',
+  builder_annual: 'builder',
+  builders_annual: 'builder',
+  builders_club: 'builder',
   founder: 'founder',
   founders_club: 'founder',
-  builders_club: 'founder',
 };
 
 export function normalizePlanId(planId) {
-  if (!planId) return 'free';
+  if (!planId) return null;
 
   const normalizedPlanId = String(planId).trim().toLowerCase();
-  return PLAN_ALIASES[normalizedPlanId] || normalizedPlanId;
+  return PLAN_ALIASES[normalizedPlanId] || null;
 }
 
 export function getPlanFromPriceId(priceId) {
-  if (!priceId) return 'free';
+  if (!priceId) return null;
 
   const priceMap = {
     [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
@@ -42,38 +44,38 @@ export function getPlanFromPriceId(priceId) {
     [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
     [process.env.STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
     [process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
-    [process.env.STRIPE_PRICE_BUILDERS_ANNUAL]: 'founder',
-    [process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL]: 'founder',
-    [process.env.STRIPE_PRICE_BUILDER_ANNUAL]: 'founder',
-    [process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]: 'founder',
+    [process.env.STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
+    [process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
+    [process.env.STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
+    [process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
   };
 
-  return priceMap[priceId] || 'free';
+  return priceMap[priceId] || null;
 }
 
 export function resolvePlanId({ planId, metadataPlanId, priceId }) {
   const normalizedPlanId = normalizePlanId(planId || metadataPlanId);
-  if (normalizedPlanId !== 'free') {
+  if (normalizedPlanId) {
     return normalizedPlanId;
   }
 
   return getPlanFromPriceId(priceId);
 }
 
-export function isFounderStylePlan({ planId, metadataPlanId, priceId }) {
+export function isLaunchPlan({ planId, metadataPlanId, priceId }) {
   const normalizedPlanId = normalizePlanId(planId || metadataPlanId);
-  return normalizedPlanId === 'founder' || FOUNDER_PRICE_IDS.includes(priceId);
+  return normalizedPlanId === 'founder' || normalizedPlanId === 'builder' || LAUNCH_PRICE_IDS.includes(priceId);
 }
 
 export function getPlanDisplayName(planId) {
   const normalizedPlanId = normalizePlanId(planId);
 
   const labels = {
-    free: 'Free',
     essentials: 'Essentials',
     pro: 'Pro',
+    builder: 'Builders Club',
     founder: 'Founders Club',
   };
 
-  return labels[normalizedPlanId] || 'Pro';
+  return labels[normalizedPlanId] || 'Subscription';
 }

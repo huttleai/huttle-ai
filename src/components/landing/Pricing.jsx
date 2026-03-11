@@ -185,7 +185,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 <p className="text-sm text-slate-500 mt-1">$29.75/mo billed annually</p>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
                   <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>7-day free trial - card required, cancel anytime</span>
+                  <span>Public pricing begins after the launch window closes</span>
                 </div>
               </div>
 

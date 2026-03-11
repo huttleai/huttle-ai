@@ -382,7 +382,7 @@ export const PolicyModal = ({ isOpen, onClose, type }) => {
 
         <section>
           <h3 className="text-lg font-bold text-zinc-900 mb-3">4. Refund Policy</h3>
-          <p className="text-sm leading-relaxed font-medium">Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not eligible for refunds, but they include a 7-day free trial before any charge. For questions, contact hello@huttleai.com.</p>
+          <p className="text-sm leading-relaxed font-medium">Founders Club and Builders Club include a 14-day money-back guarantee. Future Essentials and Pro pricing will be available after the launch window closes. For questions, contact hello@huttleai.com.</p>
         </section>
 
         <section>

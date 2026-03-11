@@ -181,7 +181,7 @@ export const FAQSection = () => {
     },
     {
       question: "Is there a money-back guarantee?",
-      answer: "Yes. Founders Club and Builders Club annual plans include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund. Essentials and Pro monthly plans are not refundable, but they include a 7-day free trial before any charge."
+      answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
     },
     {
       question: "What platforms does Huttle AI support?",

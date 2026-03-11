@@ -34,7 +34,7 @@ export default function CancelSubscriptionModal({
           name: 'Essentials',
           price: '$15/mo',
           icon: Zap,
-          features: ['200 AI generations/month', '5GB storage', 'Email Support'],
+          features: ['150 AI generations/month', '5GB storage', 'Email Support'],
           gradient: 'from-huttle-primary to-cyan-400'
         }
       ];

@@ -71,12 +71,12 @@ export default async function handler(req, res) {
     // Get user from Authorization header
     const authHeader = req.headers.authorization;
     
-    // If Stripe is not configured, return free tier (graceful degradation)
+    // If Stripe is not configured, return inactive state gracefully.
     if (!stripe) {
-      console.warn('Stripe not configured - returning freemium status');
+      console.warn('Stripe not configured - returning inactive subscription status');
       return res.status(200).json({
         subscription: null,
-        plan: 'free',
+        plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     if (!profile?.stripe_customer_id) {
       return res.status(200).json({
         subscription: null,
-        plan: 'free',
+        plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
     if (!subscription || subscription.status === 'incomplete_expired' || subscription.status === 'unpaid') {
       return res.status(200).json({
         subscription: null,
-        plan: 'free',
+        plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,

@@ -94,41 +94,25 @@ export const TABLES = {
 
 // Subscription tiers
 export const TIERS = {
-  FREE: 'free',
   ESSENTIALS: 'essentials',
   PRO: 'pro',
   FOUNDER: 'founder',
+  BUILDER: 'builder',
 };
 
-// Tier limits based on Huttle AI Plans
-// Freemium: $0 - 20 AI gens, 250MB storage
-// Essentials: $9/mo ($90/yr) - 200 AI gens, 5GB storage
-// Pro: $19/mo ($190/yr) - 800 AI gens, 50GB storage
+const PRO_ACCESS_TIERS = [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER];
+
+export function getTierAccessLevel(userTier) {
+  if (!userTier) return null;
+  if (userTier === TIERS.ESSENTIALS) return TIERS.ESSENTIALS;
+  if (PRO_ACCESS_TIERS.includes(userTier)) return TIERS.PRO;
+  return null;
+}
+
+// Tier limits based on Huttle AI's paid-only plans.
 export const TIER_LIMITS = {
-  [TIERS.FREE]: {
-    aiGenerations: 20,
-    captionGenerator: true,
-    hashtagGenerator: true,
-    hookBuilder: true,
-    ctaSuggester: true,
-    qualityScorer: true,
-    visualBrainstormer: true,
-    contentRepurposer: false, // Pro only
-    huttleAgent: false, // Pro only
-    trendForecaster: false, // Pro only
-    trendLab: false, // Essentials+ only
-    viralBlueprint: false, // Essentials+ only
-    fullPostBuilder: false, // Essentials+ only
-    humanizerScore: true, // All tiers
-    performancePrediction: false, // Essentials+ only
-    algorithmChecker: false, // Essentials+ only
-    nicheIntel: 0, // Pro+ only
-    aiPlanBuilderDays: 7, // 7 days only for free
-    storageLimit: 250 * 1024 * 1024, // 250MB in bytes
-    scheduledPostsLimit: 10,
-  },
   [TIERS.ESSENTIALS]: {
-    aiGenerations: 200,
+    aiGenerations: 150,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -150,7 +134,7 @@ export const TIER_LIMITS = {
     scheduledPostsLimit: 50,
   },
   [TIERS.PRO]: {
-    aiGenerations: 800,
+    aiGenerations: 600,
     // Per-feature monthly limits
     trendQuickScan: 200,
     trendDeepDive: 50,
@@ -176,7 +160,7 @@ export const TIER_LIMITS = {
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
-  // Founders Club: $199/year - same as Pro with lifetime benefits
+  // Founders Club: launch pricing with Pro feature access.
   [TIERS.FOUNDER]: {
     aiGenerations: 800,
     // Per-feature monthly limits
@@ -204,34 +188,62 @@ export const TIER_LIMITS = {
     storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
+  // Builders Club: launch pricing with Pro feature access.
+  [TIERS.BUILDER]: {
+    aiGenerations: 800,
+    trendQuickScan: 200,
+    trendDeepDive: 50,
+    contentRemix: 75,
+    viralBlueprint: 60,
+    planBuilder: 20,
+    captionGenerator: true,
+    hashtagGenerator: true,
+    hookBuilder: true,
+    ctaSuggester: true,
+    qualityScorer: true,
+    visualBrainstormer: true,
+    contentRepurposer: true,
+    huttleAgent: true,
+    trendForecaster: true,
+    trendLab: true,
+    fullPostBuilder: true,
+    humanizerScore: true,
+    performancePrediction: true,
+    algorithmChecker: true,
+    nicheIntel: 10,
+    aiPlanBuilderDays: 14,
+    storageLimit: 50 * 1024 * 1024 * 1024,
+    scheduledPostsLimit: -1,
+  },
 };
 
 // Feature access mapping
 export const FEATURES = {
-  'caption-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'hashtag-generator': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'hook-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'cta-suggester': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'quality-scorer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'visual-brainstormer': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'content-repurposer': [TIERS.PRO, TIERS.FOUNDER],
-  'huttle-agent': [TIERS.PRO, TIERS.FOUNDER],
-  'trend-forecaster': [TIERS.PRO, TIERS.FOUNDER],
-  'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // Essentials: 15/month, Pro/Founder: 60/month
-  'ai-plan-builder': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER], // All tiers, but different day limits
-  'full-post-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'humanizer-score': [TIERS.FREE, TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'performance-prediction': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'algorithm-checker': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER],
-  'niche-intel': [TIERS.PRO, TIERS.FOUNDER],
+  'caption-generator': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'hashtag-generator': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'hook-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'cta-suggester': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'quality-scorer': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'visual-brainstormer': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'content-repurposer': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'huttle-agent': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'trend-forecaster': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'ai-plan-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'full-post-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'humanizer-score': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'performance-prediction': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'algorithm-checker': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'niche-intel': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
 };
 
 /**
  * Check if user has access to a feature based on tier
  */
 export function hasFeatureAccess(userTier, feature) {
-  const tier = userTier || TIERS.FREE;
+  if (!userTier) return false;
+  const tier = userTier;
   const limit = TIER_LIMITS[tier]?.[feature];
   
   if (limit === undefined) return false;
@@ -246,7 +258,8 @@ export function hasFeatureAccess(userTier, feature) {
  * Check if user tier can access a feature by feature name
  */
 export function canAccessFeature(featureName, userTier) {
-  const tier = userTier || TIERS.FREE;
+  if (!userTier) return false;
+  const tier = userTier;
   const allowedTiers = FEATURES[featureName];
   
   if (!allowedTiers) return false;
@@ -257,7 +270,8 @@ export function canAccessFeature(featureName, userTier) {
  * Get remaining usage for a feature
  */
 export async function getRemainingUsage(userId, feature, userTier) {
-  const tier = userTier || TIERS.FREE;
+  if (!userTier) return 0;
+  const tier = userTier;
   const limit = TIER_LIMITS[tier]?.[feature];
   
   if (limit === -1) return Infinity; // Unlimited
@@ -503,14 +517,14 @@ export async function getUserTier(userId) {
       .single();
     
     if (error) {
-      if (error.code === 'PGRST116') return { success: true, tier: TIERS.FREE }; // No subscription
+      if (error.code === 'PGRST116') return { success: true, tier: null }; // No subscription
       throw error;
     }
     
     return { success: true, tier: data.tier };
   } catch (error) {
     console.error('Error getting tier:', error);
-    return { success: true, tier: TIERS.FREE }; // Default to free on error
+    return { success: true, tier: null };
   }
 }
 
@@ -771,7 +785,7 @@ export async function checkStorageLimit(userId, additionalBytes, userTier) {
     const { success, usageBytes } = await getStorageUsage(userId);
     if (!success) return { allowed: false, reason: 'error' };
 
-    const tierLimit = TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
+    const tierLimit = TIER_LIMITS[userTier]?.storageLimit ?? 0;
     const newTotal = usageBytes + additionalBytes;
 
     return {

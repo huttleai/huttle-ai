@@ -6,80 +6,81 @@ const ALL_FEATURES = [
   {
     name: 'AI Caption Generator',
     key: 'caption-generator',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Create engaging captions with AI'
   },
   {
     name: 'Hashtag Generator',
     key: 'hashtag-generator',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Find trending hashtags'
   },
   {
     name: 'Hook Builder',
     key: 'hook-builder',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Craft attention-grabbing openers'
   },
   {
     name: 'CTA Suggester',
     key: 'cta-suggester',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Generate call-to-action phrases'
   },
   {
     name: 'Content Quality Scorer',
     key: 'quality-scorer',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Score and improve your content'
   },
   {
     name: 'AI Visual Brainstormer',
     key: 'visual-brainstormer',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Generate visual content concepts'
   },
   {
     name: 'Content Repurposer',
     key: 'content-repurposer',
-    tiers: ['pro'],
+    tiers: ['pro', 'founder', 'builder'],
     description: 'Transform content across formats',
     proBadge: true
   },
   {
     name: 'Huttle Agent Chat',
     key: 'huttle-agent',
-    tiers: ['pro'],
+    tiers: ['pro', 'founder', 'builder'],
     description: 'AI content strategist assistant',
     proBadge: true
   },
   {
     name: 'AI Plan Builder',
     key: 'plan-builder',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Create content strategies'
   },
   {
     name: 'Trend Lab',
     key: 'trend-lab',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Discover trending topics'
   },
   {
     name: 'Content Library',
     key: 'content-library',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Store and organize your content',
     limits: {
-      free: '250MB',
       essentials: '5GB',
-      pro: '25GB'
+      pro: '50GB',
+      founder: '50GB',
+      builder: '50GB'
     }
   },
   {
     name: 'AI Power Tools',
     key: 'ai-power-tools',
-    tiers: ['free', 'essentials', 'pro'],
+    tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Full suite of AI creation tools'
   }
 ];
@@ -88,7 +89,7 @@ export default function FeatureAccessList({ compact = false }) {
   const { userTier, TIERS } = useSubscription();
   const navigate = useNavigate();
 
-  const currentTier = userTier?.toLowerCase() || 'free';
+  const currentTier = userTier?.toLowerCase() || '';
 
   const canAccess = (feature) => {
     return feature.tiers.includes(currentTier);
@@ -157,7 +158,7 @@ export default function FeatureAccessList({ compact = false }) {
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-huttle-primary mb-2">Essentials</h3>
           <p className="text-3xl font-bold text-gray-900 mb-1">$15</p>
-          <p className="text-sm text-gray-600">200 AI generations/month</p>
+          <p className="text-sm text-gray-600">150 AI generations/month</p>
         </div>
         
         <ul className="space-y-3 mb-6">
@@ -193,7 +194,7 @@ export default function FeatureAccessList({ compact = false }) {
             onClick={handleUpgrade}
             className="w-full py-2 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-semibold"
           >
-            {currentTier === 'pro' ? 'Downgrade' : 'Upgrade'}
+            {['pro', 'founder', 'builder'].includes(currentTier) ? 'Downgrade' : 'Upgrade'}
           </button>
         )}
       </div>
@@ -210,7 +211,7 @@ export default function FeatureAccessList({ compact = false }) {
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
           <p className="text-3xl font-bold text-white mb-1">$39</p>
-          <p className="text-sm text-white/80">800 AI generations/month</p>
+          <p className="text-sm text-white/80">600 AI generations/month</p>
         </div>
         
         <ul className="space-y-3 mb-6">
@@ -227,7 +228,7 @@ export default function FeatureAccessList({ compact = false }) {
           ))}
         </ul>
         
-        {currentTier === 'pro' ? (
+        {['pro', 'founder', 'builder'].includes(currentTier) ? (
           <button
             disabled
             className="w-full py-2 bg-white/20 text-white rounded-lg font-semibold cursor-default"

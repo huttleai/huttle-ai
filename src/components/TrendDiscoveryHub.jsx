@@ -97,7 +97,7 @@ export default function TrendDiscoveryHub() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const navigate = useNavigate();
-  const { TIERS, userTier } = useSubscription();
+  const { getFeatureLimit, userTier } = useSubscription();
   const quickScanUsage = useAIUsage('trendQuickScan');
   const deepDiveUsage = useAIUsage('trendDeepDive');
   
@@ -115,7 +115,7 @@ export default function TrendDiscoveryHub() {
   const [deepDiveLoadingSeconds, setDeepDiveLoadingSeconds] = useState(0);
   const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
   
-  const canAccessDeepDive = userTier !== TIERS.FREE;
+  const canAccessDeepDive = getFeatureLimit('trendDeepDive') > 0;
 
   // Simulate scan progress
   useEffect(() => {

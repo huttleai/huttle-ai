@@ -75,7 +75,7 @@ export default function ContentRepurposer() {
   const { addToast } = useToast();
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { userTier } = useSubscription();
+  const { checkFeatureAccess } = useSubscription();
   const { saveGeneratedContent, setDraft } = useContent();
   const navigate = useNavigate();
 
@@ -89,7 +89,7 @@ export default function ContentRepurposer() {
   const [saved, setSaved] = useState(false);
   const [scheduled, setScheduled] = useState(false);
 
-  const isPro = userTier === 'Pro' || userTier === 'pro';
+  const isPro = checkFeatureAccess('contentRepurposer');
 
   const handleRepurpose = async () => {
     if (!isPro) {

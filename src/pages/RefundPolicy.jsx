@@ -55,7 +55,7 @@ export default function RefundPolicy() {
                 account settings and you will not be charged for the next billing cycle. You retain
                 access until the end of your current paid period.
               </p>
-              <p>Your 7-day free trial gives you full access before any charge - no surprises.</p>
+              <p>Essentials and Pro monthly/annual pricing will become available after the current Founders and Builders launch window closes.</p>
             </div>
           </section>
 

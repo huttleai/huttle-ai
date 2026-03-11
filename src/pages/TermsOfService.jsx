@@ -52,7 +52,7 @@ export default function TermsOfService() {
           <section className="mb-8">
             <h2 className="text-lg font-bold text-slate-900 mb-3">5. Refund Policy</h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not eligible for refunds, but they include a 7-day free trial before any charge. See our{' '}
+              Founders Club and Builders Club include a 14-day money-back guarantee. Future Essentials and Pro plans follow the pricing shown on our pricing page after the launch window closes. See our{' '}
               <Link to="/refund-policy" className="text-huttle-primary hover:underline">
                 Refund Policy
               </Link>{' '}

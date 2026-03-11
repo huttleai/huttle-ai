@@ -85,11 +85,11 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
       description: 'Unlock premium features to supercharge your content strategy.',
       preview: 'Get access to advanced AI tools and insights',
       benefits: [
-        '800 AI generations per month',
+        '600 AI generations per month',
         'Advanced trend forecasting',
         'Content Repurposer',
         'Huttle Agent',
-        '25 GB storage'
+        '50 GB storage'
       ],
       tier: 'Pro'
     }
@@ -178,12 +178,12 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
               className="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 btn-upgrade-glow"
             >
               <Sparkles className="w-5 h-5" />
-              {demoMode ? `Demo: Start ${config.tier} trial` : 'Start 7-day free trial'}
+              {demoMode ? `Demo: Unlock ${config.tier}` : 'View Plans'}
             </button>
 
             {/* Footer */}
             <p className="text-xs text-center text-gray-500 mt-4">
-              7-day free trial - card required, cancel anytime
+              Current launch pricing includes Founders Club and Builders Club.
             </p>
           </div>
         </div>

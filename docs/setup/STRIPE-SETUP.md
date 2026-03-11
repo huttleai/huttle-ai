@@ -16,17 +16,17 @@ This guide walks you through setting up Stripe for Huttle AI subscriptions.
 
 2. **Create Essentials Plan:**
    - Name: `Huttle AI Essentials`
-   - Description: `200 AI generations/month, 5GB storage, Full Trend Lab access`
+   - Description: `150 AI generations/month, 5GB storage, Full Trend Lab access`
    - Create two prices:
-     - **Monthly**: $9/month (recurring)
-     - **Annual**: $90/year (recurring) - Note the discount!
+     - **Monthly**: $15/month (recurring)
+     - **Annual**: $153/year (recurring) - 15% annual savings
 
 3. **Create Pro Plan:**
    - Name: `Huttle AI Pro`
-   - Description: `800 AI generations/month, 25GB storage, Content Repurposer, Trend Forecaster, Huttle Agent`
+   - Description: `600 AI generations/month, 50GB storage, Content Repurposer, Trend Forecaster, Huttle Agent`
    - Create two prices:
-     - **Monthly**: $19/month (recurring)
-     - **Annual**: $190/year (recurring)
+     - **Monthly**: $39/month (recurring)
+     - **Annual**: $397.80/year (recurring) - 15% annual savings
 
 4. Copy the **Price IDs** for each (they look like `price_1234567890`)
 

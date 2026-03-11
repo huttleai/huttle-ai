@@ -1,12 +1,13 @@
 import { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function ProtectedRoute({ children }) {
   const authContext = useContext(AuthContext);
-  const { loading: subLoading } = useSubscription();
+  const location = useLocation();
+  const { loading: subLoading, hasPaidAccess } = useSubscription();
 
   // Safety check
   if (!authContext) {
@@ -27,8 +28,9 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/dashboard/login" replace />;
   }
 
-  // Founders Only: All authenticated users have full access — no tier checks needed.
-  // Subscription gating will be re-introduced when monthly plans launch.
+  if (!hasPaidAccess && location.pathname !== '/dashboard/subscription') {
+    return <Navigate to="/dashboard/subscription" replace />;
+  }
 
   return children;
 }

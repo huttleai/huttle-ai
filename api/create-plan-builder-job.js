@@ -59,7 +59,14 @@ export default async function handler(req, res) {
       .eq('user_id', userId)
       .maybeSingle();
 
-    const userTier = subscription?.tier || 'free';
+    const userTier = subscription?.tier || null;
+
+    if (!userTier) {
+      return res.status(403).json({
+        error: 'Active subscription required',
+        message: 'Choose a plan to use AI Plan Builder.',
+      });
+    }
 
     // 3. Check AI usage limits before accepting job
     // Count user_activity rows for this feature in current month
@@ -78,12 +85,13 @@ export default async function handler(req, res) {
     
     // Define limits per tier
     const limits = {
-      free: 3, // 3 plan generations per month
       essentials: 20,
-      pro: Infinity
+      pro: Infinity,
+      founder: Infinity,
+      builder: Infinity,
     };
 
-    const limit = limits[userTier] || limits.free;
+    const limit = limits[userTier] ?? 0;
 
     if (currentUsage >= limit && limit !== Infinity) {
       return res.status(429).json({ 

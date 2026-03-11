@@ -12,7 +12,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { isFounderStylePlan } from './_utils/stripePlans.js';
+import { isLaunchPlan } from './_utils/stripePlans.js';
 
 // Validate Stripe key exists
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -95,17 +95,17 @@ export default async function handler(req, res) {
       }
     }
 
-    const isFounderPlan = isFounderStylePlan({ planId, priceId });
+    const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
     const baseMetadata = {
       planId,
       billingCycle,
-      source: isFounderPlan ? 'founders_club' : 'app_checkout',
+      source: planId === 'founder' ? 'founders_club' : planId === 'builder' ? 'builders_club' : 'app_checkout',
       ...(userId && { supabase_user_id: userId }),
     };
 
     const subscriptionData = {
       metadata: baseMetadata,
-      ...(isFounderPlan
+      ...(isLaunchPricingPlan
         ? {}
         : {
             trial_period_days: 7,
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/dashboard?${isFounderPlan ? 'success=true' : 'trial=started'}`,
+      success_url: `${appUrl}/dashboard?${isLaunchPricingPlan ? 'success=true' : 'trial=started'}`,
       cancel_url: `${appUrl}/dashboard?canceled=true`,
       metadata: baseMetadata,
       subscription_data: subscriptionData,
@@ -143,8 +143,10 @@ export default async function handler(req, res) {
       // Custom text for the checkout page
       custom_text: {
         submit: {
-          message: isFounderPlan
-            ? 'Welcome to the Huttle AI Founders Club! Your membership will be activated immediately after payment.'
+          message: isLaunchPricingPlan
+            ? planId === 'founder'
+              ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
+              : 'Welcome to Builders Club. Your membership will be activated immediately after payment.'
             : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',
         },
       },
