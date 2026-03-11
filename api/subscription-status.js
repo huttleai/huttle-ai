@@ -10,6 +10,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { normalizePlanId, resolvePlanId } from './_utils/stripePlans.js';
 
 // Validate and initialize Stripe
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -22,6 +23,38 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const STATUS_PRIORITY = {
+  trialing: 5,
+  active: 4,
+  past_due: 3,
+  canceled: 2,
+  incomplete: 1,
+  incomplete_expired: 0,
+  unpaid: 0,
+};
+
+function toIsoDate(unixSeconds) {
+  if (!unixSeconds) return null;
+  return new Date(unixSeconds * 1000).toISOString();
+}
+
+function selectBestSubscription(subscriptions = []) {
+  if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+    return null;
+  }
+
+  return [...subscriptions].sort((first, second) => {
+    const firstPriority = STATUS_PRIORITY[first.status] ?? -1;
+    const secondPriority = STATUS_PRIORITY[second.status] ?? -1;
+
+    if (firstPriority !== secondPriority) {
+      return secondPriority - firstPriority;
+    }
+
+    return (second.created ?? 0) - (first.created ?? 0);
+  })[0];
+}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -43,9 +76,10 @@ export default async function handler(req, res) {
       console.warn('Stripe not configured - returning freemium status');
       return res.status(200).json({
         subscription: null,
-        plan: 'freemium',
-        status: 'active',
+        plan: 'free',
+        status: 'inactive',
         currentPeriodEnd: null,
+        trialEnd: null,
         _warning: 'Stripe not configured'
       });
     }
@@ -81,52 +115,58 @@ export default async function handler(req, res) {
     if (!profile?.stripe_customer_id) {
       return res.status(200).json({
         subscription: null,
-        plan: 'freemium',
-        status: 'active',
+        plan: 'free',
+        status: 'inactive',
         currentPeriodEnd: null,
+        trialEnd: null,
       });
     }
 
-    // Get active subscriptions from Stripe
+    // Get all subscriptions from Stripe so trialing, past_due, and canceled
+    // states are surfaced consistently in the app.
     const subscriptions = await stripe.subscriptions.list({
       customer: profile.stripe_customer_id,
-      status: 'active',
-      limit: 1,
+      status: 'all',
+      limit: 10,
     });
 
-    if (subscriptions.data.length === 0) {
-      // Check for canceled subscriptions that are still active
-      const canceledSubs = await stripe.subscriptions.list({
-        customer: profile.stripe_customer_id,
-        status: 'canceled',
-        limit: 1,
-      });
+    const subscription = selectBestSubscription(subscriptions.data);
 
-      if (canceledSubs.data.length > 0) {
-        const sub = canceledSubs.data[0];
-        return res.status(200).json({
-          subscription: sub.id,
-          plan: sub.metadata?.planId || 'freemium',
-          status: 'canceled',
-          currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
-        });
-      }
-
+    if (!subscription || subscription.status === 'incomplete_expired' || subscription.status === 'unpaid') {
       return res.status(200).json({
         subscription: null,
-        plan: 'freemium',
-        status: 'active',
+        plan: 'free',
+        status: 'inactive',
         currentPeriodEnd: null,
+        trialEnd: null,
       });
     }
 
-    const subscription = subscriptions.data[0];
-    
+    const priceId = subscription.items.data[0]?.price?.id;
+    const resolvedPlan = normalizePlanId(
+      resolvePlanId({
+        planId: subscription.metadata?.planId,
+        metadataPlanId: subscription.metadata?.plan,
+        priceId,
+      })
+    );
+
     return res.status(200).json({
-      subscription: subscription.id,
-      plan: subscription.metadata?.planId || 'freemium',
+      subscription: {
+        id: subscription.id,
+        customerId: subscription.customer,
+        status: subscription.status,
+        plan: resolvedPlan,
+        currentPeriodStart: toIsoDate(subscription.current_period_start),
+        currentPeriodEnd: toIsoDate(subscription.current_period_end),
+        trialStart: toIsoDate(subscription.trial_start),
+        trialEnd: toIsoDate(subscription.trial_end),
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      },
+      plan: resolvedPlan,
       status: subscription.status,
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      currentPeriodEnd: toIsoDate(subscription.current_period_end),
+      trialEnd: toIsoDate(subscription.trial_end),
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
     });
   } catch (error) {

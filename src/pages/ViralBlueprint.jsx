@@ -4,7 +4,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Zap, 
   Sparkles, 
@@ -41,7 +41,8 @@ import {
 } from '../components/SocialIcons';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
-import { supabase } from '../config/supabase';
+import { saveContentLibraryItem, supabase } from '../config/supabase';
+import { buildContentVaultPayload } from '../utils/contentVault';
 import ViralScoreGauge from '../components/ViralScoreGauge';
 import PremiumScriptRenderer from '../components/PremiumScriptRenderer';
 import SkeletonLoader from '../components/SkeletonLoader';
@@ -445,6 +446,7 @@ export default function ViralBlueprint() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const blueprintUsage = useAIUsage('viralBlueprint');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Filter the hardcoded PLATFORMS to only show user's Brand Voice platforms
   const availablePlatforms = hasPlatformsConfigured
@@ -471,6 +473,7 @@ export default function ViralBlueprint() {
   const [showAllVisualKeywords, setShowAllVisualKeywords] = useState(false);
   const [showAllCaptionKeywords, setShowAllCaptionKeywords] = useState(false);
   const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
+  const [savedBlueprint, setSavedBlueprint] = useState(false);
   
   // View state - Start with input form
   const [currentView, setCurrentView] = useState('input'); // 'input' | 'results'
@@ -490,6 +493,43 @@ export default function ViralBlueprint() {
       setUsageCount(parseInt(savedUsage, 10));
     }
   }, [userTier, getFeatureLimit]);
+
+  useEffect(() => {
+    const topicParam = searchParams.get('topic');
+    const platformParam = searchParams.get('platform');
+    const postTypeParam = searchParams.get('postType');
+    const audienceParam = searchParams.get('audience');
+    let didPrefill = false;
+
+    if (topicParam) {
+      setTopic(topicParam);
+      didPrefill = true;
+    }
+
+    if (platformParam) {
+      setSelectedPlatform(platformParam);
+      didPrefill = true;
+    }
+
+    if (postTypeParam) {
+      setSelectedPostType(postTypeParam);
+      didPrefill = true;
+    }
+
+    if (audienceParam) {
+      setTargetAudience(audienceParam);
+      didPrefill = true;
+    }
+
+    if (didPrefill) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('topic');
+      nextParams.delete('platform');
+      nextParams.delete('postType');
+      nextParams.delete('audience');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Stepped loading animation - cycles through messages every 12 seconds
   useEffect(() => {
@@ -864,6 +904,51 @@ Make the content specific, actionable, and optimized for ${selectedPlatform}. No
     setCopiedSection(section);
     showToast('Copied to clipboard!', 'success');
     setTimeout(() => setCopiedSection(null), 2000);
+  };
+
+  const handleSaveBlueprint = async () => {
+    if (!user?.id || !generatedBlueprint) {
+      showToast('Generate a blueprint first', 'warning');
+      return;
+    }
+
+    try {
+      const blueprintText = [
+        generatedBlueprint.hooks?.length ? `Hooks:\n${generatedBlueprint.hooks.join('\n')}` : '',
+        generatedBlueprint.directorsCut?.map((item) => `${item.title}\n${item.script || item.text || ''}`).join('\n\n') || '',
+        generatedBlueprint.seoStrategy?.captionKeywords?.length ? `Hashtags:\n${generatedBlueprint.seoStrategy.captionKeywords.join(' ')}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+        name: `Blueprint - ${topic.slice(0, 50) || selectedPlatform || 'Content'}`,
+        contentText: blueprintText,
+        contentType: 'blueprint',
+        toolSource: 'viral_blueprint',
+        toolLabel: 'Viral Blueprint',
+        topic,
+        platform: selectedPlatform,
+        description: `Viral Blueprint | ${selectedPlatform} | ${selectedPostType || 'Content'}`,
+        metadata: {
+          goal: objective,
+          target_audience: targetAudience,
+          post_type: selectedPostType,
+          platform_display: selectedPlatform,
+          hooks: generatedBlueprint.hooks || [],
+          seo_keywords: generatedBlueprint.seoStrategy?.visualKeywords || [],
+        },
+      }));
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save');
+      }
+
+      setSavedBlueprint(true);
+      setTimeout(() => setSavedBlueprint(false), 2000);
+      showToast('Saved to Content Vault!', 'success');
+    } catch (error) {
+      console.error('Failed to save blueprint:', error);
+      showToast('Failed to save blueprint', 'error');
+    }
   };
 
   const toggleBlueprintStep = (stepIndex) => {
@@ -1251,14 +1336,22 @@ Make the content specific, actionable, and optimized for ${selectedPlatform}. No
                   </div>
                 </div>
                 
-                {/* Create New Blueprint Button */}
-                <button
-                  onClick={handleReset}
-                  className="group flex items-center gap-3 px-6 py-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
-                >
-                  <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                  <span>Create New Blueprint</span>
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handleSaveBlueprint}
+                    className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
+                  >
+                    {savedBlueprint ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
+                    <span>{savedBlueprint ? 'Saved!' : 'Save to Vault'}</span>
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl"
+                  >
+                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                    <span>Create New Blueprint</span>
+                  </button>
+                </div>
               </div>
             </div>
 

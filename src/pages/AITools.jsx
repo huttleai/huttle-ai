@@ -25,6 +25,7 @@ import { saveContentLibraryItem } from '../config/supabase';
 import HumanizerScore from '../components/HumanizerScore';
 import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
+import { buildContentVaultPayload } from '../utils/contentVault';
 
 function uniqueNonEmpty(items) {
   return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
@@ -180,6 +181,8 @@ export default function AITools() {
   useEffect(() => {
     const topicParam = searchParams.get('topic');
     const toolParam = searchParams.get('tool');
+    const inputParam = searchParams.get('input');
+    const platformParam = searchParams.get('platform');
     const validTools = new Set(['caption', 'hashtags', 'hooks', 'cta', 'scorer', 'visual-brainstorm']);
 
     let didPrefill = false;
@@ -195,10 +198,30 @@ export default function AITools() {
       didPrefill = true;
     }
 
+    if (inputParam && toolParam && validTools.has(toolParam)) {
+      if (toolParam === 'caption') setCaptionInput(inputParam);
+      if (toolParam === 'hashtags') setHashtagInput(inputParam);
+      if (toolParam === 'hooks') setHookInput(inputParam);
+      if (toolParam === 'cta') setCtaPromoting(inputParam);
+      if (toolParam === 'visual-brainstorm') setVisualPrompt(inputParam);
+      didPrefill = true;
+    }
+
+    if (platformParam && toolParam && validTools.has(toolParam)) {
+      if (toolParam === 'caption') setCaptionPlatform(platformParam);
+      if (toolParam === 'hashtags') setHashtagPlatform(platformParam);
+      if (toolParam === 'hooks') setHookPlatform(platformParam);
+      if (toolParam === 'cta') setCtaPlatform(platformParam);
+      if (toolParam === 'visual-brainstorm') setVisualPlatform(platformParam);
+      didPrefill = true;
+    }
+
     if (didPrefill) {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('tool');
       nextParams.delete('topic');
+      nextParams.delete('input');
+      nextParams.delete('platform');
       setSearchParams(nextParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -580,25 +603,56 @@ export default function AITools() {
     try {
       const toolNames = {
         caption: 'Caption',
-        hashtags: 'Hashtags',
+        hashtags: 'Hashtag',
         hooks: 'Hook',
         cta: 'CTA',
-        'visual-brainstorm': 'Visual Idea'
+        'visual-brainstorm': 'Visual Brainstorm'
+      };
+
+      const toolSources = {
+        caption: 'caption_generator',
+        hashtags: 'hashtag_generator',
+        hooks: 'hook_builder',
+        cta: 'cta_suggester',
+        'visual-brainstorm': 'visual_brainstorm',
+      };
+
+      const contentTypeMap = {
+        caption: 'caption',
+        hashtag: 'hashtag',
+        hook: 'hook',
+        cta: 'cta',
+        'visual-prompt': 'blueprint',
+        'shoot-guide': 'blueprint',
       };
       
       const baseName = toolNames[activeTool] || 'Content';
-      const inputText = metadata.input || captionInput || hashtagInput || hookInput || ctaGoal || visualPrompt || '';
+      const inputText = metadata.input || captionInput || hashtagInput || hookInput || ctaPromoting || visualPrompt || '';
       const name = inputText 
         ? `${baseName} - ${inputText.substring(0, 30)}${inputText.length > 30 ? '...' : ''}`
         : `${baseName} - ${new Date().toLocaleDateString()}`;
 
-      const itemData = {
+      const platformValue = metadata.platform
+        || (activeTool === 'caption' ? captionPlatform : '')
+        || (activeTool === 'hashtags' ? hashtagPlatform : '')
+        || (activeTool === 'hooks' ? hookPlatform : '')
+        || (activeTool === 'cta' ? ctaPlatform : '')
+        || (activeTool === 'visual-brainstorm' ? visualPlatform : '');
+
+      const itemData = buildContentVaultPayload({
         name,
-        type: 'text',
-        content: typeof content === 'string' ? content : JSON.stringify(content),
-        size_bytes: 0,
+        contentText: typeof content === 'string' ? content : JSON.stringify(content),
+        contentType: contentTypeMap[contentType] || 'legacy',
+        toolSource: toolSources[activeTool] || 'ai_tools',
+        toolLabel: toolNames[activeTool] || 'AI Tools',
+        topic: inputText,
+        platform: platformValue,
         description: `Generated from ${toolNames[activeTool] || 'AI Tools'}`,
-      };
+        metadata: {
+          ...metadata,
+          style: metadata.style || '',
+        },
+      });
 
       const result = await saveContentLibraryItem(user.id, itemData);
 

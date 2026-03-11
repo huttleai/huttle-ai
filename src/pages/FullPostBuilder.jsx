@@ -20,6 +20,7 @@ import { generateFullPostHooks, generateCaption, generateHashtags, generateStyle
 import { saveContentLibraryItem } from '../config/supabase';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useSearchParams } from 'react-router-dom';
+import { buildContentVaultPayload } from '../utils/contentVault';
 
 const STORAGE_KEY = 'fullPostBuilderDraft';
 
@@ -128,8 +129,10 @@ export default function FullPostBuilder() {
   useEffect(() => {
     const prefillTopic = searchParams.get('topic');
     const prefillPlatform = searchParams.get('platform');
+    const prefillGoal = searchParams.get('goal');
     if (prefillTopic) setTopic(prefillTopic);
     if (prefillPlatform) setPlatform(prefillPlatform);
+    if (prefillGoal) setGoal(prefillGoal);
   }, [searchParams]);
 
   // Load draft from localStorage
@@ -308,14 +311,19 @@ export default function FullPostBuilder() {
   const handleSaveToVault = async () => {
     if (!user?.id) return;
     try {
-      const result = await saveContentLibraryItem({
-        user_id: user.id,
-        name: `Post — ${topic.slice(0, 50)}`,
-        type: 'text',
-        content: assembledPost,
-        size_bytes: new Blob([assembledPost]).size,
+      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+        name: `Post - ${topic.slice(0, 50)}`,
+        contentText: assembledPost,
+        contentType: 'full_post',
+        toolSource: 'full_post_builder',
+        toolLabel: 'Full Post Builder',
+        topic,
+        platform,
         description: `Full Post Builder | ${platformData?.name || platform} | ${GOALS.find(g => g.id === goal)?.label || goal}`,
-      });
+        metadata: {
+          goal,
+        },
+      }));
       if (result.success) {
         setSaved(true);
         addToast('Saved to Content Vault!', 'success');
@@ -339,13 +347,13 @@ export default function FullPostBuilder() {
     return (
       <div className="flex-1 ml-0 md:ml-64 pt-16 md:pt-20 p-4 md:p-8">
         <div className="max-w-2xl mx-auto text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center mx-auto mb-6">
-            <Zap className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-teal-500/20">
+            <PenLine className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Full Post Builder</h2>
           <p className="text-gray-600 mb-2">A guided 5-step AI workflow that chains your topic into a complete, publish-ready post — hook, caption, hashtags, and CTA assembled seamlessly.</p>
           <p className="text-sm text-gray-500 mb-6">Available on Essentials, Pro, and Founders Club plans.</p>
-          <button onClick={() => setShowUpgradeModal(true)} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg transition-all">
+          <button onClick={() => setShowUpgradeModal(true)} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-teal-500/20 transition-all">
             Upgrade to Unlock
           </button>
           <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} feature="fullPostBuilder" featureName="Full Post Builder" />
@@ -366,8 +374,8 @@ export default function FullPostBuilder() {
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
-              <PenLine className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-teal-500/20">
+              <PenLine className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
             </div>
             <div>
               <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">Full Post Builder</h1>

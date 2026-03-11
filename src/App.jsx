@@ -6,6 +6,7 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import FoundersPage from './pages/FoundersPage';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import RefundPolicy from './pages/RefundPolicy';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 
 /**
@@ -46,6 +47,7 @@ function App() {
         {/* Legal Pages (public, no auth) */}
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
         
         {/* Payment Success Page */}
         <Route path="/payment-success" element={<PaymentSuccess />} />

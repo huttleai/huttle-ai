@@ -52,7 +52,11 @@ export default function TermsOfService() {
           <section className="mb-8">
             <h2 className="text-lg font-bold text-slate-900 mb-3">5. Refund Policy</h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com
+              Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not eligible for refunds, but they include a 7-day free trial before any charge. See our{' '}
+              <Link to="/refund-policy" className="text-huttle-primary hover:underline">
+                Refund Policy
+              </Link>{' '}
+              for full details, or contact <a href="mailto:hello@huttleai.com" className="text-huttle-primary hover:underline">hello@huttleai.com</a>.
             </p>
           </section>
 
@@ -134,7 +138,10 @@ export default function TermsOfService() {
 
         <div className="mt-12 pt-8 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
           <span>&copy; 2026 Huttle AI</span>
-          <Link to="/privacy" className="hover:text-huttle-primary transition-colors">Privacy Policy</Link>
+          <div className="flex items-center gap-4">
+            <Link to="/privacy" className="hover:text-huttle-primary transition-colors">Privacy Policy</Link>
+            <Link to="/refund-policy" className="hover:text-huttle-primary transition-colors">Refund Policy</Link>
+          </div>
         </div>
       </div>
     </div>

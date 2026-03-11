@@ -22,6 +22,7 @@ import {
 import { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 import useAIUsage from '../hooks/useAIUsage';
 
 function toTestId(value) {
@@ -36,11 +37,18 @@ export default function Sidebar() {
   const { logout } = useContext(AuthContext);
   const { userTier, TIERS } = useSubscription();
   const { overallUsed: aiUsed, overallLimit: aiLimit } = useAIUsage();
+  const isCompactViewport = useIsMobile(1024);
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      setIsMobileOpen(false);
+    }
+  }, [isCompactViewport]);
 
   const handleLogout = async () => {
     try {
@@ -119,16 +127,16 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-14 left-4 z-50 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:bg-white hover:shadow-lg transition-all duration-200"
+        className={`${isCompactViewport ? 'fixed' : 'hidden'} top-14 left-4 z-50 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-gray-200/50 bg-white/90 p-3 backdrop-blur-sm transition-all duration-200 hover:bg-white hover:shadow-lg`}
         aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
         data-testid="sidebar-mobile-toggle"
       >
         {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
       </button>
 
-      {isMobileOpen && (
+      {isCompactViewport && isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30 animate-fadeIn"
+          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm animate-fadeIn"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -140,7 +148,7 @@ export default function Sidebar() {
           border-r border-gray-100/80
           flex flex-col overflow-hidden z-40 
           transition-transform duration-300 ease-out
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${isCompactViewport ? (isMobileOpen ? 'translate-x-0' : '-translate-x-full') : 'translate-x-0'}
         `}
         onTouchStart={handleSidebarTouchStart}
         onTouchEnd={handleSidebarTouchEnd}
@@ -165,7 +173,7 @@ export default function Sidebar() {
             </div>
             <button
               onClick={() => setIsMobileOpen(false)}
-              className="lg:hidden p-3 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors text-gray-500"
+              className={`${isCompactViewport ? 'flex' : 'hidden'} min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-3 text-gray-500 transition-colors hover:bg-gray-100`}
               aria-label="Close navigation"
             >
               <X className="w-5 h-5" />

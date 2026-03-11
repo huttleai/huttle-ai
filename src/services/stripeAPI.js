@@ -54,7 +54,7 @@ async function getAuthHeaders() {
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
     }
-  } catch (e) {
+  } catch {
     console.warn('Could not get auth session for Stripe request');
   }
   
@@ -196,7 +196,7 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
       try {
         const errorText = await response.text();
         errorData = JSON.parse(errorText);
-      } catch (parseError) {
+      } catch {
         // Response wasn't JSON - use default error
       }
       throw new Error(errorData.error || `Failed to create checkout session (${response.status})`);
@@ -206,7 +206,7 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     try {
       const responseText = await response.text();
       data = JSON.parse(responseText);
-    } catch (parseError) {
+    } catch {
       throw new Error('Invalid response from server');
     }
     
@@ -296,9 +296,11 @@ export async function getSubscriptionStatus() {
       return {
         success: true,
         subscription: null,
-        plan: 'freemium',
-        status: 'active',
-        currentPeriodEnd: null
+        plan: 'free',
+        status: 'inactive',
+        currentPeriodEnd: null,
+        trialEnd: null,
+        cancelAtPeriodEnd: false,
       };
     }
 
@@ -309,7 +311,9 @@ export async function getSubscriptionStatus() {
       subscription: data.subscription,
       plan: data.plan,
       status: data.status,
-      currentPeriodEnd: data.currentPeriodEnd
+      currentPeriodEnd: data.currentPeriodEnd,
+      trialEnd: data.trialEnd,
+      cancelAtPeriodEnd: data.cancelAtPeriodEnd,
     };
   } catch (error) {
     console.error('Subscription Status Error:', error);
@@ -317,9 +321,11 @@ export async function getSubscriptionStatus() {
     return {
       success: true,
       subscription: null,
-      plan: 'freemium',
-      status: 'active',
-      currentPeriodEnd: null
+      plan: 'free',
+      status: 'inactive',
+      currentPeriodEnd: null,
+      trialEnd: null,
+      cancelAtPeriodEnd: false,
     };
   }
 }

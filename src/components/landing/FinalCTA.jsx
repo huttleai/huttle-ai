@@ -60,7 +60,7 @@ export const FinalCTA = ({ onOpenFoundersModal }) => {
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-10 text-sm font-medium text-slate-300">
             <span className="flex items-center gap-2">
               <div className="bg-[#01BAD2]/20 rounded-full p-1"><Check size={14} className="text-[#01BAD2]" /></div> 
-              7-day happiness guarantee
+              14-day money-back guarantee
             </span>
             <span className="flex items-center gap-2">
               <div className="bg-[#01BAD2]/20 rounded-full p-1"><Check size={14} className="text-[#01BAD2]" /></div> 

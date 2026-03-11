@@ -9,7 +9,18 @@ import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import { supabase } from '../config/supabase';
 
 export default function Subscription() {
-  const { userTier, TIERS, setDemoTier, isDemoMode: contextDemoMode } = useSubscription();
+  const {
+    userTier,
+    TIERS,
+    setDemoTier,
+    isDemoMode: contextDemoMode,
+    subscription,
+    isTrialing,
+    trialEndsAt,
+    trialDaysRemaining,
+    isPastDue,
+    refreshSubscription,
+  } = useSubscription();
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
   const [loading, setLoading] = useState(null);
@@ -26,12 +37,18 @@ export default function Subscription() {
       if (user) {
         const result = await getSubscriptionStatus();
         if (result.success) {
-          setSubscriptionInfo(result);
+          setSubscriptionInfo(result.subscription || null);
         }
       }
     };
     fetchSubscriptionInfo();
   }, [user]);
+
+  useEffect(() => {
+    if (user?.id) {
+      refreshSubscription();
+    }
+  }, [user?.id, refreshSubscription]);
 
   const plans = [
     {
@@ -144,6 +161,11 @@ export default function Subscription() {
   };
 
   const handleCancelSubscription = () => {
+    if (isTrialing) {
+      handleManagePayment();
+      return;
+    }
+
     setShowCancelModal(true);
   };
 
@@ -234,7 +256,7 @@ export default function Subscription() {
     
     const tierOrder = { [TIERS.FREE]: 0, [TIERS.ESSENTIALS]: 1, [TIERS.PRO]: 2 };
     if (tierOrder[plan.tier] > tierOrder[userTier]) {
-      return 'Upgrade Now';
+      return userTier === TIERS.FREE ? 'Start Free Trial - No charge for 7 days' : 'Upgrade Now';
     }
     
     return 'Change Plan';
@@ -267,6 +289,18 @@ export default function Subscription() {
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="max-w-7xl mx-auto">
+        {isPastDue && (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900">Your payment needs attention</p>
+              <p className="text-sm text-amber-800">
+                Your subscription is past due. Update your card details to keep uninterrupted access to paid features.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Demo Mode Banner */}
         {showDemoControls && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
@@ -464,9 +498,21 @@ export default function Subscription() {
                   <h2 className="text-xl font-bold text-gray-900">
                     {userTier === TIERS.PRO ? 'Pro' : 'Essentials'} Plan
                   </h2>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    Active
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full ${
+                    isTrialing
+                      ? 'bg-cyan-100 text-cyan-700'
+                      : isPastDue
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-green-100 text-green-700'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      isTrialing
+                        ? 'bg-cyan-500'
+                        : isPastDue
+                          ? 'bg-amber-500'
+                          : 'bg-green-500'
+                    }`} />
+                    {isTrialing ? 'Trialing' : isPastDue ? 'Past Due' : 'Active'}
                   </span>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">
@@ -475,19 +521,36 @@ export default function Subscription() {
                     : '200 AI generations/month, 5GB storage, Trend Lab & Plan Builder'}
                 </p>
 
-                {subscriptionInfo?.currentPeriodEnd && (
+                {(subscription?.currentPeriodEnd || subscriptionInfo?.currentPeriodEnd) && (
                   <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
                     <CalendarCheck className="w-4 h-4 text-gray-400" />
                     <span>
-                      Next billing date:{' '}
+                      {isTrialing ? 'Trial ends on:' : 'Next billing date:'}{' '}
                       <span className="font-semibold text-gray-900">
-                        {new Date(subscriptionInfo.currentPeriodEnd).toLocaleDateString('en-US', {
+                        {new Date(subscription?.currentPeriodEnd || subscriptionInfo?.currentPeriodEnd).toLocaleDateString('en-US', {
                           month: 'long',
                           day: 'numeric',
                           year: 'numeric'
                         })}
                       </span>
                     </span>
+                  </div>
+                )}
+
+                {isTrialing && (
+                  <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-cyan-900">
+                      {trialDaysRemaining === 0
+                        ? 'Your trial ends today. Your card will be charged tonight unless you cancel first.'
+                        : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your free trial.`}
+                    </p>
+                    <p className="text-sm text-cyan-800 mt-1">
+                      Cancel anytime before {trialEndsAt?.toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })} and you will not be charged.
+                    </p>
                   </div>
                 )}
 
@@ -515,7 +578,7 @@ export default function Subscription() {
                     disabled={loading === 'portal' || loading === 'cancel'}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
-                    {loading === 'cancel' ? (
+                    {loading === 'cancel' || (isTrialing && loading === 'portal') ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Opening...
@@ -523,7 +586,7 @@ export default function Subscription() {
                     ) : (
                       <>
                         <AlertCircle className="w-4 h-4" />
-                        Cancel Subscription
+                        {isTrialing ? "Cancel trial - you won't be charged" : 'Cancel Subscription'}
                       </>
                     )}
                   </button>
@@ -538,11 +601,15 @@ export default function Subscription() {
             <div className="space-y-6">
               <div className="pb-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-                <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund — no questions asked. After 7 days, all sales are final.</p>
+                <p className="text-gray-600 text-sm">Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not refundable, but your 7-day free trial gives you full access before any charge.</p>
               </div>
               <div className="pb-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
-                <p className="text-gray-600 text-sm">Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.</p>
+                <p className="text-gray-600 text-sm">
+                  {isTrialing
+                    ? 'Yes. During your trial you can cancel anytime from the billing portal and you will not be charged.'
+                    : "Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period."}
+                </p>
               </div>
               <div className="pb-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900 mb-2">How do I update my payment method?</h3>
@@ -571,6 +638,13 @@ export default function Subscription() {
               Unlock the full power of AI-driven content creation
             </p>
           </div>
+        </div>
+
+        <div className="max-w-3xl mx-auto mb-8 rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-center">
+          <p className="font-semibold text-cyan-900">Start Free Trial - No charge for 7 days</p>
+          <p className="text-sm text-cyan-800 mt-1">
+            Enter your card to start. Cancel anytime before day 7 and you will not be charged.
+          </p>
         </div>
 
         {/* Billing Cycle Toggle */}
@@ -666,10 +740,10 @@ export default function Subscription() {
                 {getButtonText(plan)}
               </button>
 
-              {/* 7-Day Happiness Guarantee */}
+              {/* Trial disclosure */}
               <div className="flex items-center justify-center gap-1.5 mt-3">
                 <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs text-gray-400">7-day money-back guarantee</span>
+                <span className="text-xs text-gray-400">Card required. No charge for 7 days.</span>
               </div>
             </div>
           ))}
@@ -693,7 +767,7 @@ export default function Subscription() {
           <div className="space-y-6">
             <div className="pb-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-              <p className="text-gray-600 text-sm">We offer a 7-day happiness guarantee on all subscriptions. If you're not completely satisfied within the first 7 days, contact us at support@huttleai.com for a full refund — no questions asked. After 7 days, all sales are final.</p>
+              <p className="text-gray-600 text-sm">Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not refundable, but your 7-day free trial gives you full access before any charge.</p>
             </div>
             <div className="pb-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>

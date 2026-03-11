@@ -8,7 +8,7 @@ import { useToast } from '../context/ToastContext';
  * UpgradeModal Component
  * Simple modal for upgrading subscription tiers
  */
-export default function UpgradeModal({ isOpen, onClose, feature, featureName }) {
+export default function UpgradeModal({ isOpen, onClose, feature }) {
   const navigate = useNavigate();
   const { setDemoTier, TIERS } = useSubscription();
   const { addToast } = useToast();
@@ -178,12 +178,12 @@ export default function UpgradeModal({ isOpen, onClose, feature, featureName }) 
               className="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 btn-upgrade-glow"
             >
               <Sparkles className="w-5 h-5" />
-              {demoMode ? `Demo: Unlock ${config.tier}` : `Upgrade to ${config.tier}`}
+              {demoMode ? `Demo: Start ${config.tier} trial` : 'Start 7-day free trial'}
             </button>
 
             {/* Footer */}
             <p className="text-xs text-center text-gray-500 mt-4">
-              Cancel anytime
+              7-day free trial - card required, cancel anytime
             </p>
           </div>
         </div>

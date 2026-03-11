@@ -369,6 +369,10 @@ export default function FoundersPage() {
                     Save $158
                   </span>
                 </div>
+                <div className="mt-3 flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>14-day money-back guarantee</span>
+                </div>
               </div>
 
               {/* CTA Buttons - Large touch targets for mobile */}
@@ -414,7 +418,7 @@ export default function FoundersPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-[#01bad2]" />
-                  <span>7-Day Price Guarantee</span>
+                  <span>14-day money-back guarantee</span>
                 </div>
               </div>
             </motion.div>

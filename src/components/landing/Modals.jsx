@@ -230,7 +230,7 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "7 Day Happiness Guarantee", desc: "Not satisfied? We will refund you within 7 days, no questions asked" },
+                { title: "14-Day Money-Back Guarantee", desc: "Not satisfied? Email hello@huttleai.com within 14 days for a full refund" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="mt-0.5 p-0.5 rounded-full bg-green-100 text-green-600 flex-shrink-0">
@@ -382,7 +382,7 @@ export const PolicyModal = ({ isOpen, onClose, type }) => {
 
         <section>
           <h3 className="text-lg font-bold text-zinc-900 mb-3">4. Refund Policy</h3>
-          <p className="text-sm leading-relaxed font-medium">All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com</p>
+          <p className="text-sm leading-relaxed font-medium">Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Monthly Essentials and Pro plans are not eligible for refunds, but they include a 7-day free trial before any charge. For questions, contact hello@huttleai.com.</p>
         </section>
 
         <section>

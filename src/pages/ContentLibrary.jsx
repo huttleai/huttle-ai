@@ -1,1848 +1,1054 @@
-import { useState, useContext, useEffect, useMemo, useRef } from 'react';
-import { FolderOpen, Upload, Search, Grid, List, Image, Video, FileText, Plus, Check, HardDrive, Download, Edit, X, Folder, Edit2, Trash2, FolderPlus, Play, Sparkles, ArrowUpRight, CloudUpload, Copy } from 'lucide-react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  Check,
+  Copy,
+  Edit3,
+  FolderPlus,
+  Loader2,
+  Search,
+  Sparkles,
+  Star,
+  Trash2,
+  Wand2,
+  X,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useSubscription } from '../context/SubscriptionContext';
-import UpgradeModal from '../components/UpgradeModal';
-import CreateProjectModal from '../components/CreateProjectModal';
+import { useIsMobile } from '../hooks/useIsMobile';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
-import { getContentLibraryItems, getStorageUsage, checkStorageLimit, uploadFileToStorage, saveContentLibraryItem, updateContentLibraryItem, deleteContentLibraryItem, getSignedUrl, getProjects, createProject, updateProject, deleteProject, TIERS } from '../config/supabase';
-import { compressImage, formatFileSize } from '../utils/imageCompression';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  addItemsToCollection,
+  createContentCollection,
+  deleteContentLibraryItem,
+  getContentCollectionItems,
+  getContentCollections,
+  getContentLibraryItems,
+  setContentItemCollections,
+  updateContentLibraryItem,
+} from '../config/supabase';
+import {
+  buildUseAgainTarget,
+  CONTENT_TYPE_CONFIG,
+  CONTENT_TYPE_FILTERS,
+  countCopiesThisWeek,
+  getPlatformOption,
+  humanizeToolSource,
+  isVaultRow,
+  mapContentRowToVaultItem,
+  PLATFORM_OPTIONS,
+} from '../utils/contentVault';
+
+function formatDate(value) {
+  if (!value) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function getPreviewText(item, isExpanded) {
+  if (!item.contentText) return '';
+  if (item.contentText.length <= 300 || isExpanded) return item.contentText;
+  return `${item.contentText.slice(0, 200).trim()}...`;
+}
+
+function getCollectionIdsByItem(links) {
+  return links.reduce((accumulator, link) => {
+    if (!accumulator[link.content_item_id]) {
+      accumulator[link.content_item_id] = [];
+    }
+
+    accumulator[link.content_item_id].push(link.collection_id);
+    return accumulator;
+  }, {});
+}
+
+function CollectionManager({
+  collections,
+  isOpen,
+  isSaving,
+  mode,
+  selectedCollectionIds,
+  newCollectionName,
+  onClose,
+  onToggleCollection,
+  onNewCollectionNameChange,
+  onSave,
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {mode === 'bulk' ? 'Add to Collection' : 'Save to Collection'}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Organize your saved content into campaign-ready groups.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+          {collections.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+              No collections yet. Create one below.
+            </div>
+          )}
+
+          {collections.map((collection) => {
+            const isSelected = selectedCollectionIds.includes(collection.id);
+
+            return (
+              <button
+                key={collection.id}
+                type="button"
+                onClick={() => onToggleCollection(collection.id)}
+                className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all ${
+                  isSelected
+                    ? 'border-huttle-primary bg-huttle-primary/5 text-huttle-primary'
+                    : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div>
+                  <p className="font-medium">{collection.name}</p>
+                  <p className="text-xs text-gray-400">{collection.count} items</p>
+                </div>
+                <span className={`flex h-5 w-5 items-center justify-center rounded border ${isSelected ? 'border-huttle-primary bg-huttle-primary text-white' : 'border-gray-300 bg-white'}`}>
+                  {isSelected && <Check className="h-3 w-3" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 border-t border-gray-100 pt-5">
+          <label className="mb-2 block text-sm font-medium text-gray-700">Create new collection</label>
+          <input
+            value={newCollectionName}
+            onChange={(event) => onNewCollectionNameChange(event.target.value)}
+            placeholder="March Campaign"
+            className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+          />
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ hasContent, onClearFilters, onCreate }) {
+  return (
+    <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-huttle-primary/10 text-huttle-primary">
+        {hasContent ? <Search className="h-7 w-7" /> : <Wand2 className="h-7 w-7" />}
+      </div>
+      <h3 className="text-2xl font-semibold text-gray-900">
+        {hasContent ? 'No matches found' : 'Your vault is empty'}
+      </h3>
+      <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
+        {hasContent
+          ? 'Try a different search or clear your filters.'
+          : "Save content from any AI tool and it'll appear here, ready to copy and post."}
+      </p>
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={hasContent ? onClearFilters : onCreate}
+          className="inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
+        >
+          {hasContent ? 'Clear Filters' : 'Create Your First Content'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function ContentLibrary() {
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
-  const { userTier, getStorageLimit, getTierDisplayName } = useSubscription();
   const navigate = useNavigate();
-  const skipAuth =
-    import.meta.env.VITE_SKIP_AUTH === 'true' ||
-    import.meta.env.VITE_SKIP_AUTH === 'true';
+  const isMobile = useIsMobile();
 
-  // UI state
-  const [viewMode, setViewMode] = useState('grid');
-  const [activeTab, setActiveTab] = useState('all');
-  const [activeProject, setActiveProject] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showAddToProjectModal, setShowAddToProjectModal] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [editingProject, setEditingProject] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editContent, setEditContent] = useState('');
-  const [uploadType, setUploadType] = useState('image');
-  const [uploadProject, setUploadProject] = useState('all');
-  
-  // Data state
-  const [contentItems, setContentItems] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [storageUsed, setStorageUsed] = useState(0);
+  const [items, setItems] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [collectionLinks, setCollectionLinks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState('all');
+  const [selectedPlatform, setSelectedPlatform] = useState('all');
+  const [selectedSort, setSelectedSort] = useState('newest');
+  const [activeCollectionId, setActiveCollectionId] = useState('all');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [expandedIds, setExpandedIds] = useState([]);
+  const [activeItemId, setActiveItemId] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedText, setEditedText] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [signedUrlCache, setSignedUrlCache] = useState({});
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedFilePreview, setSelectedFilePreview] = useState(null);
-  const isUploadSubmittingRef = useRef(false);
-  const safeProjects = projects || [];
-  const safeContentItems = contentItems || [];
+  const [showCreateCollectionField, setShowCreateCollectionField] = useState(false);
+  const [createCollectionName, setCreateCollectionName] = useState('');
+  const [collectionManager, setCollectionManager] = useState({
+    isOpen: false,
+    mode: 'single',
+    itemIds: [],
+    selectedCollectionIds: [],
+    newCollectionName: '',
+    isSaving: false,
+  });
 
-  // Calculate storage values
-  const storageLimit = getStorageLimit();
-  const safeStorageUsed = Number(storageUsed || 0);
-  const safeStorageLimit = Number(storageLimit || 0);
-  const storageLimitMB = safeStorageLimit / (1024 * 1024);
-  const storageLimitDisplay = storageLimitMB >= 1024 
-    ? `${(storageLimitMB / 1024).toFixed(storageLimitMB >= 10240 ? 0 : 1)} GB`
-    : `${storageLimitMB.toFixed(0)} MB`;
-  const storageUsedDisplay = safeStorageUsed >= 1024 
-    ? `${(safeStorageUsed / 1024).toFixed(2)} GB`
-    : `${safeStorageUsed.toFixed(1)} MB`;
-  const storagePercent = safeStorageLimit > 0 ? ((safeStorageUsed * 1024 * 1024) / safeStorageLimit) * 100 : 0;
-
-  // Content type counts for sidebar
-  const contentCounts = useMemo(() => {
-    const counts = { images: 0, videos: 0, text: 0 };
-    safeContentItems.forEach(item => {
-      if (item.type === 'image') counts.images++;
-      else if (item.type === 'video') counts.videos++;
-      else if (item.type === 'text') counts.text++;
-    });
-    return counts;
-  }, [safeContentItems]);
-
-  // Tier storage info for upgrade CTA - Always suggest Pro for best value
-  const tierStorageInfo = {
-    [TIERS.FREE]: { limit: '250 MB', next: 'Pro', nextLimit: '25 GB' },
-    [TIERS.ESSENTIALS]: { limit: '5 GB', next: 'Pro', nextLimit: '25 GB' },
-    [TIERS.PRO]: { limit: '25 GB', next: null, nextLimit: null },
-    [TIERS.FOUNDER]: { limit: '25 GB', next: null, nextLimit: null },
-  };
-
-  // Load data on mount and when user changes
   useEffect(() => {
-    if (skipAuth) {
-      seedDevModeData();
+    const timeoutId = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  const loadCollections = useCallback(async (currentUserId) => {
+    const collectionsResult = await getContentCollections(currentUserId);
+
+    if (!collectionsResult.success) {
+      addToast('Failed to load collections', 'error');
       return;
     }
 
-    if (user?.id) {
-      loadProjects();
-      loadContent();
-      loadStorageUsage();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+    const collectionRows = collectionsResult.data || [];
+    const collectionIds = collectionRows.map((collection) => collection.id);
+    const linksResult = await getContentCollectionItems(collectionIds);
 
-  // Load projects from Supabase
-  const loadProjects = async () => {
-    if (skipAuth) return;
-    if (!user?.id) {
-      setProjects([{ id: 'all', name: 'All Content', count: 0, color: '#6366f1' }]);
+    if (!linksResult.success) {
+      addToast('Failed to load collection items', 'error');
       return;
     }
 
-    const isDevUser = user.id === 'dev-user-123' || user.email === 'dev@huttle.ai';
+    const counts = (linksResult.data || []).reduce((accumulator, link) => {
+      accumulator[link.collection_id] = (accumulator[link.collection_id] || 0) + 1;
+      return accumulator;
+    }, {});
 
-    try {
-      const result = await getProjects(user.id);
-      
-      if (result.success) {
-        const allProjects = [
-          { id: 'all', name: 'All Content', count: 0, color: '#6366f1' },
-          ...result.data
-        ];
-        setProjects(allProjects);
-      } else {
-        console.warn('Failed to load projects:', result.error);
-        setProjects([{ id: 'all', name: 'All Content', count: 0, color: '#6366f1' }]);
-      }
-    } catch (error) {
-      console.error('Error loading projects:', error);
-      setProjects([{ id: 'all', name: 'All Content', count: 0, color: '#6366f1' }]);
-    }
-  };
+    setCollections(collectionRows.map((collection) => ({
+      ...collection,
+      count: counts[collection.id] || 0,
+    })));
+    setCollectionLinks(linksResult.data || []);
+  }, [addToast]);
 
-  // Load content from Supabase
-  const loadContent = async () => {
-    if (skipAuth) return;
+  const loadVault = useCallback(async () => {
     if (!user?.id) {
+      setItems([]);
+      setCollections([]);
+      setCollectionLinks([]);
       setLoading(false);
       return;
     }
 
-    const isDevUser = user.id === 'dev-user-123' || user.email === 'dev@huttle.ai';
+    setLoading(true);
 
     try {
-      setLoading(true);
-      const result = await getContentLibraryItems(user.id);
+      const itemsResult = await getContentLibraryItems(user.id, { limit: 500 });
 
-      if (result.success) {
-        const transformedItems = result.data.map(item => ({
-          id: item.id,
-          type: item.type,
-          name: item.name,
-          url: item.url,
-          storage_path: item.storage_path,
-          content: item.content,
-          date: new Date(item.created_at).toISOString().split('T')[0],
-          size: item.size_bytes > 0 ? formatFileSize(item.size_bytes) : null,
-          sizeBytes: item.size_bytes || 0,
-          project: item.project_id,
-          description: item.description,
-        }));
-
-        setContentItems(transformedItems);
-
-        updateProjectCounts(transformedItems);
-      } else {
-        console.warn('Supabase query failed for content library:', result.error);
-        setContentItems([]);
-        if (!isDevUser && !result.error?.includes('JWT') && !result.error?.includes('auth')) {
-          handleSupabaseError(result.error, 'load content');
-        }
+      if (!itemsResult.success) {
+        throw new Error(itemsResult.error || 'Failed to load content');
       }
+
+      setItems(itemsResult.data || []);
+      await loadCollections(user.id);
     } catch (error) {
-      console.error('Error loading content:', error);
-      setContentItems([]);
+      console.error('Error loading content vault:', error);
+      addToast('Failed to load Content Vault', 'error');
+      setItems([]);
+      setCollections([]);
+      setCollectionLinks([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [addToast, loadCollections, user?.id]);
 
-  // Load storage usage from Supabase
-  const loadStorageUsage = async () => {
-    if (skipAuth) return;
-    if (!user?.id) return;
+  useEffect(() => {
+    loadVault();
+  }, [loadVault]);
 
-    try {
-      const result = await getStorageUsage(user.id);
-      if (result.success) {
-        setStorageUsed(result.usageBytes / (1024 * 1024));
-      }
-    } catch (error) {
-      console.error('Error loading storage usage:', error);
-    }
-  };
+  const collectionIdsByItem = useMemo(() => getCollectionIdsByItem(collectionLinks), [collectionLinks]);
 
-  // Update project counts
-  const updateProjectCounts = (items) => {
-    const projectCounts = { all: items.length };
-    items.forEach(item => {
-      if (item.project) {
-        projectCounts[item.project] = (projectCounts[item.project] || 0) + 1;
-      }
-    });
-    setProjects(prev => prev.map(project => ({
-      ...project,
-      count: projectCounts[project.id] || 0
-    })));
-  };
+  const vaultItems = useMemo(() => {
+    return items
+      .filter(isVaultRow)
+      .map((item) => mapContentRowToVaultItem(item, collectionIdsByItem[item.id] || []));
+  }, [collectionIdsByItem, items]);
 
-  // Get signed URL for private bucket files
-  const getFileUrl = async (item) => {
-    if (item.type === 'text' || !item.storage_path) {
-      return item.url || null;
-    }
+  const activeItem = useMemo(() => {
+    return vaultItems.find((item) => item.id === activeItemId) || null;
+  }, [activeItemId, vaultItems]);
 
-    const cached = signedUrlCache[item.storage_path];
-    if (cached && cached.expiresAt > new Date()) {
-      return cached.url;
-    }
+  const selectedItems = useMemo(() => {
+    return vaultItems.filter((item) => selectedIds.includes(item.id));
+  }, [selectedIds, vaultItems]);
 
-    try {
-      const result = await getSignedUrl(item.storage_path, 3600);
-      if (result.success) {
-        setSignedUrlCache(prev => ({
-          ...prev,
-          [item.storage_path]: {
-            url: result.signedUrl,
-            expiresAt: result.expiresAt
-          }
-        }));
-        return result.signedUrl;
-      }
-    } catch (error) {
-      console.error('Error generating signed URL:', error);
-    }
-    return null;
-  };
+  useEffect(() => {
+    setEditedText(activeItem?.contentText || '');
+    setIsEditing(false);
+  }, [activeItem]);
 
-  // Get display URL for an item
-  const getDisplayUrl = (item) => {
-    if (item.type === 'text') return null;
-    if (item.url) return item.url;
-
-    if (item.storage_path) {
-      const cached = signedUrlCache[item.storage_path];
-      if (cached && cached.expiresAt > new Date()) {
-        return cached.url;
-      }
-      getFileUrl(item);
-    }
-    return null;
-  };
-
-  // Handle Supabase errors
-  const handleSupabaseError = (error, action) => {
-    console.error(`Supabase error during ${action}:`, error);
-    let message = `Failed to ${action}. Please try again.`;
-
-    if (typeof error === 'string') {
-      if (error.includes('JWT') || error.includes('auth')) {
-        message = 'Authentication error. Please log in again.';
-      } else if (error.includes('storage') || error.includes('quota')) {
-        message = 'Storage limit exceeded. Consider upgrading your plan.';
-      }
-    }
-    addToast(message, 'error');
-  };
-
-  // Seed dev mode data - Iron Peak Fitness
-  const seedDevModeData = () => {
-    const demoProjects = [
-      { id: 'all', name: 'All Content', count: 7, color: '#6366f1' },
-      { id: 'proj-1', name: 'Transformation Challenge', count: 3, color: '#EC4899' },
-      { id: 'proj-2', name: 'Workout Tips', count: 2, color: '#10B981' },
-      { id: 'proj-3', name: 'Nutrition Content', count: 2, color: '#F59E0B' },
-    ];
-
-    const demoItems = [
-      {
-        id: 'demo-1',
-        type: 'image',
-        name: 'Before/After Transformation',
-        url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop',
-        storage_path: '',
-        content: 'Member transformation photo carousel - Marcus lost 45 lbs in 6 months. Perfect for testimonial posts.',
-        date: '2026-01-15',
-        size: '3.2 MB',
-        sizeBytes: 3355443,
-        project: 'proj-1',
-        description: 'High-performing transformation content for IG carousel.',
-      },
-      {
-        id: 'demo-2',
-        type: 'video',
-        name: 'HIIT Class Highlight Reel',
-        url: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&h=300&fit=crop',
-        storage_path: '',
-        content: '45-second highlight reel of our HIIT class with energetic music. Shows trainer leading group through high-intensity intervals.',
-        date: '2026-01-12',
-        size: '24.5 MB',
-        sizeBytes: 25690112,
-        project: 'proj-1',
-        description: 'Use for TikTok and IG Reels to promote classes.',
-      },
-      {
-        id: 'demo-3',
-        type: 'text',
-        name: 'Workout Motivation Hooks',
-        url: null,
-        storage_path: '',
-        content: 'Three powerful hooks for workout motivation posts:\n\n1. "The only bad workout is the one that didn\'t happen..."\n2. "6 months from now, you\'ll wish you started today"\n3. "Your body can stand almost anything. It\'s your mind you have to convince."',
-        date: '2026-01-10',
-        size: null,
-        sizeBytes: 0,
-        project: 'proj-2',
-        description: 'Motivational copy for Monday posts.',
-      },
-      {
-        id: 'demo-4',
-        type: 'image',
-        name: 'New Equipment Announcement',
-        url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop',
-        storage_path: '',
-        content: 'Photo of new Rogue power racks and Eleiko competition plates. Announcement graphic with Iron Peak branding.',
-        date: '2026-01-08',
-        size: '4.1 MB',
-        sizeBytes: 4299161,
-        project: 'proj-1',
-        description: 'Equipment upgrade announcement content.',
-      },
-      {
-        id: 'demo-5',
-        type: 'text',
-        name: 'Leg Day Workout Plan',
-        url: null,
-        storage_path: '',
-        content: 'LEG DAY DESTROYER 🦵\n\n4x12 Barbell Squats\n4x10 Romanian Deadlifts\n3x15 Leg Press\n3x12 Walking Lunges\n4x15 Leg Curls\n3x20 Calf Raises\n\nRest 2-3 min between heavy compound sets. Tag your workout partner!',
-        date: '2026-01-05',
-        size: null,
-        sizeBytes: 0,
-        project: 'proj-2',
-        description: 'Reusable workout template for leg day posts.',
-      },
-      {
-        id: 'demo-6',
-        type: 'video',
-        name: 'Protein Shake Recipe',
-        url: 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?w=400&h=300&fit=crop',
-        storage_path: '',
-        content: 'Quick recipe video: chocolate protein, banana, peanut butter, almond milk. 30-second TikTok format with text overlays.',
-        date: '2026-01-03',
-        size: '12.8 MB',
-        sizeBytes: 13421773,
-        project: 'proj-3',
-        description: 'Nutrition content for post-workout fuel.',
-      },
-      {
-        id: 'demo-7',
-        type: 'image',
-        name: 'Meal Prep Guide Carousel',
-        url: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&h=300&fit=crop',
-        storage_path: '',
-        content: '8-slide carousel covering weekly meal prep basics: shopping list, protein sources, carb timing, and storage tips.',
-        date: '2026-01-01',
-        size: '5.6 MB',
-        sizeBytes: 5872026,
-        project: 'proj-3',
-        description: 'Nutrition education carousel for Instagram.',
-      },
-    ];
-
-    setProjects(demoProjects);
-    setContentItems(demoItems);
-    setStorageUsed(56);
-    setLoading(false);
-  };
-
-  // Filter items based on search, tab, and project
   const filteredItems = useMemo(() => {
-    return safeContentItems.filter(item => {
-      const matchesTab = activeTab === 'all' || item.type === activeTab;
-      const matchesProject = activeProject === 'all' || item.project === activeProject;
-      const matchesSearch = !searchQuery || 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.content && item.content.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchesTab && matchesProject && matchesSearch;
+    const normalizedQuery = searchQuery.toLowerCase();
+
+    const nextItems = vaultItems.filter((item) => {
+      const matchesType = selectedType === 'all' || item.contentType === selectedType;
+      const matchesPlatform = selectedPlatform === 'all' || item.platform === selectedPlatform;
+      const matchesCollection = activeCollectionId === 'all' || item.collectionIds.includes(activeCollectionId);
+      const matchesSearch = !normalizedQuery || [
+        item.contentText,
+        item.topic,
+        item.platform,
+        item.name,
+      ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
+
+      return matchesType && matchesPlatform && matchesCollection && matchesSearch;
     });
-  }, [safeContentItems, activeTab, activeProject, searchQuery]);
 
-  const handleItemClick = async (item) => {
-    setSelectedItem(item);
-    setEditContent(item.content || '');
-    setShowDetailModal(true);
-    setEditMode(false);
-    
-    if (item.type !== 'text' && item.storage_path) {
-      await getFileUrl(item);
+    if (selectedSort === 'oldest') {
+      return nextItems.toSorted((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+    }
+
+    if (selectedSort === 'most_used') {
+      return nextItems.toSorted((left, right) => right.copyCount - left.copyCount || new Date(right.createdAt) - new Date(left.createdAt));
+    }
+
+    return nextItems.toSorted((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  }, [activeCollectionId, searchQuery, selectedPlatform, selectedSort, selectedType, vaultItems]);
+
+  const stats = useMemo(() => {
+    return {
+      savedCount: vaultItems.length,
+      copiedThisWeek: countCopiesThisWeek(vaultItems),
+      inCollections: vaultItems.filter((item) => item.collectionIds.length > 0).length,
+    };
+  }, [vaultItems]);
+
+  const updateLocalItem = (itemId, updater) => {
+    setItems((currentItems) => currentItems.map((item) => (
+      item.id === itemId ? updater(item) : item
+    )));
+  };
+
+  const resetFilters = () => {
+    setSearchInput('');
+    setSearchQuery('');
+    setSelectedType('all');
+    setSelectedPlatform('all');
+    setSelectedSort('newest');
+    setActiveCollectionId('all');
+  };
+
+  const toggleSelected = (itemId) => {
+    setSelectedIds((currentIds) => (
+      currentIds.includes(itemId)
+        ? currentIds.filter((id) => id !== itemId)
+        : [...currentIds, itemId]
+    ));
+  };
+
+  const toggleExpanded = (itemId) => {
+    setExpandedIds((currentIds) => (
+      currentIds.includes(itemId)
+        ? currentIds.filter((id) => id !== itemId)
+        : [...currentIds, itemId]
+    ));
+  };
+
+  const copyOne = async (item, options = {}) => {
+    try {
+      if (!options.skipClipboardWrite) {
+        await navigator.clipboard.writeText(item.contentText || '');
+      }
+
+      const nextCopyHistory = [new Date().toISOString(), ...(item.copyHistory || [])].slice(0, 20);
+      const nextMetadata = {
+        ...item.metadata,
+        copy_count: item.copyCount + 1,
+        copy_history: nextCopyHistory,
+      };
+
+      updateLocalItem(item.id, (currentItem) => ({
+        ...currentItem,
+        metadata: nextMetadata,
+      }));
+
+      await updateContentLibraryItem(item.id, { metadata: nextMetadata }, user.id);
+
+      if (options.toastMessage) {
+        addToast(options.toastMessage, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to copy content:', error);
+      addToast('Failed to copy content', 'error');
     }
   };
 
-  const handleSelectItem = (id, e) => {
-    e.stopPropagation();
-    setSelectedItems(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const handleCopyItem = async (item) => {
+    await copyOne(item, { toastMessage: 'Copied to clipboard ✓' });
   };
 
-  const handleCopyToClipboard = async () => {
-    if (!selectedItem || !selectedItem.content) return;
-    try {
-      await navigator.clipboard.writeText(selectedItem.content);
-      addToast('Copied to clipboard!', 'success');
-    } catch (error) {
-      console.error('Copy failed:', error);
-      addToast('Failed to copy to clipboard', 'error');
-    }
-  };
+  const handleCopySelected = async () => {
+    if (selectedItems.length === 0) return;
 
-  const handleDownloadText = () => {
-    if (!selectedItem) return;
-    const blob = new Blob([selectedItem.content || ''], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedItem.name}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    addToast('Download started!', 'success');
-  };
-
-  const handleDownload = async () => {
-    if (!selectedItem) return;
+    const combinedText = selectedItems.map((item) => item.contentText).filter(Boolean).join('\n\n');
 
     try {
-      if (selectedItem.type === 'text') {
-        handleDownloadText();
-        return;
-      }
-
-      const fileUrl = await getFileUrl(selectedItem);
-      if (!fileUrl) {
-        addToast('Failed to generate download link', 'error');
-        return;
-      }
-
-      const a = document.createElement('a');
-      a.href = fileUrl;
-      a.download = selectedItem.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      addToast('Download started!', 'success');
+      await navigator.clipboard.writeText(combinedText);
+      await Promise.all(selectedItems.map((item) => copyOne(item, { skipClipboardWrite: true })));
+      addToast('Copied!', 'success');
     } catch (error) {
-      console.error('Download error:', error);
-      addToast('Download failed', 'error');
+      console.error('Failed to copy selected items:', error);
+      addToast('Failed to copy selected items', 'error');
     }
   };
 
   const handleSaveEdit = async () => {
-    if (!user?.id || !selectedItem) {
-      addToast('Please log in to save changes', 'error');
-      return;
-    }
+    if (!activeItem || !user?.id) return;
 
     try {
-      const updates = {
-        content: editContent,
+      const trimmedContent = editedText.trim();
+      const result = await updateContentLibraryItem(activeItem.id, {
+        content: trimmedContent,
         updated_at: new Date().toISOString(),
-      };
+      }, user.id);
 
-      const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
-
-      if (result.success) {
-        setContentItems(prev => prev.map(item =>
-          item.id === selectedItem.id ? { ...item, content: editContent } : item
-        ));
-        addToast('Content saved successfully!', 'success');
-        setEditMode(false);
-      } else {
-        handleSupabaseError(result.error, 'save content changes');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save');
       }
+
+      updateLocalItem(activeItem.id, (currentItem) => ({
+        ...currentItem,
+        content: trimmedContent,
+        updated_at: new Date().toISOString(),
+      }));
+      addToast('Changes saved', 'success');
+      setIsEditing(false);
     } catch (error) {
-      console.error('Error saving content:', error);
-      handleSupabaseError(error, 'save content changes');
+      console.error('Failed to update vault item:', error);
+      addToast('Failed to save changes', 'error');
     }
   };
 
-  // Handle file selection from the input
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setSelectedFile(file);
-    
-    // Generate a preview for images
-    if (file.type.startsWith('image/')) {
-      const previewUrl = URL.createObjectURL(file);
-      setSelectedFilePreview(previewUrl);
-    } else {
-      setSelectedFilePreview(null);
-    }
-  };
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    
-    if (!user?.id) {
-      addToast('Please log in to upload content', 'error');
-      return;
-    }
-
-    if (isUploadSubmittingRef.current || uploading) {
-      return;
-    }
-
-    isUploadSubmittingRef.current = true;
-    setUploading(true);
-    setUploadProgress('Preparing...');
-
-    try {
-      const formData = new FormData(e.target);
-      const name = formData.get('name');
-      const textContent = formData.get('content');
-
-      const contentName = name || `New ${uploadType}`;
-    
-      if (uploadType === 'text') {
-        setUploadProgress('Saving text...');
-        await handleTextUpload(contentName, textContent);
-      } else {
-        // Use the selectedFile state instead of form data (more reliable)
-        const fileInput = selectedFile || formData.get('file');
-        
-        if (!fileInput || !(fileInput instanceof File) || fileInput.size === 0) {
-          addToast('Please select a file to upload', 'error');
-          setUploading(false);
-          setUploadProgress('');
-          return;
-        }
-        
-        setUploadProgress('Uploading file...');
-        await handleFileUpload(fileInput, contentName);
-      }
-
-      setUploadProgress('Refreshing library...');
-      await loadContent();
-      await loadStorageUsage();
-    
-      addToast('Content uploaded successfully!', 'success');
-      setShowUploadModal(false);
-      setSelectedFile(null);
-      setSelectedFilePreview(null);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
-        addToast('Database setup error. Please contact support.', 'error');
-        console.error('Foreign key constraint error - likely missing user record in public.users table');
-      } else if (error.message?.includes('Bucket not found')) {
-        addToast('Storage not configured. The content-library bucket needs to be created in Supabase Storage.', 'error');
-      } else if (error.message?.includes('policy') || error.message?.includes('permission')) {
-        addToast('Upload permission denied. Please check storage RLS policies.', 'error');
-      } else {
-        handleSupabaseError(error, 'upload file');
-      }
-    } finally {
-      setUploading(false);
-      setUploadProgress('');
-      isUploadSubmittingRef.current = false;
-    }
-  };
-
-  const handleTextUpload = async (name, content) => {
-    const itemData = {
-      name,
-      type: 'text',
-      content: content || '',
-      size_bytes: 0,
-      project_id: uploadProject === 'all' ? null : uploadProject,
-    };
-
-    const result = await saveContentLibraryItem(user.id, itemData);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
-  };
-
-  const handleFileUpload = async (file, name) => {
-    let processedFile = file;
-    let compressionResult = null;
-
-    if (uploadType === 'image') {
-      setUploadProgress('Compressing image...');
-      const compression = await compressImage(file, userTier);
-      processedFile = compression.compressedFile;
-      compressionResult = compression;
-    }
-
-    const storageCheck = await checkStorageLimit(user.id, processedFile.size, userTier);
-    if (!storageCheck.allowed) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
-    setUploadProgress('Uploading file...');
-
-    const uploadResult = await uploadFileToStorage(user.id, processedFile, uploadType);
-    if (!uploadResult.success) {
-      throw new Error(uploadResult.error);
-    }
-
-    const itemData = {
-      name,
-      type: uploadType,
-      storage_path: uploadResult.storagePath,
-      url: null,
-      size_bytes: uploadResult.sizeBytes,
-      project_id: uploadProject === 'all' ? null : uploadProject,
-      description: `Uploaded ${uploadType}`,
-      metadata: compressionResult ? {
-        originalSize: compressionResult.originalSize,
-        compressedSize: compressionResult.compressedSize,
-        savingsMB: compressionResult.savingsMB,
-        savingsPercent: compressionResult.savingsPercent,
-      } : null,
-    };
-
-    const saveResult = await saveContentLibraryItem(user.id, itemData);
-    if (!saveResult.success) {
-      throw new Error(saveResult.error);
-    }
-  };
-
-  const handleDeleteContent = async () => {
-    if (!user?.id || !deleteTarget) {
-      addToast('Please log in to delete content', 'error');
-      return;
-    }
+  const handleDeleteItem = async () => {
+    if (!deleteTarget || !user?.id) return;
 
     setIsDeleting(true);
 
     try {
-      const result = await deleteContentLibraryItem(deleteTarget.id, user.id);
+      const idsToDelete = deleteTarget.bulk ? [...selectedIds] : [deleteTarget.id];
 
-      if (result.success) {
-        await loadContent();
-        await loadStorageUsage();
-        addToast('Content deleted successfully', 'success');
-        setShowDetailModal(false);
-        setShowDeleteConfirmation(false);
-        setDeleteTarget(null);
-      } else {
-        handleSupabaseError(result.error, 'delete content');
+      await Promise.all(idsToDelete.map(async (itemId) => {
+        const result = await deleteContentLibraryItem(itemId, user.id);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to delete');
+        }
+      }));
+
+      setItems((currentItems) => currentItems.filter((item) => !idsToDelete.includes(item.id)));
+      setSelectedIds((currentIds) => currentIds.filter((id) => !idsToDelete.includes(id)));
+      if (idsToDelete.includes(activeItemId)) {
+        setActiveItemId(null);
       }
+      setDeleteTarget(null);
+      addToast('Content deleted', 'success');
     } catch (error) {
-      console.error('Error deleting content:', error);
-      handleSupabaseError(error, 'delete content');
+      console.error('Failed to delete content:', error);
+      addToast('Failed to delete content', 'error');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleDeleteProject = async () => {
-    if (!user?.id || !deleteTarget || deleteTarget.type !== 'project') return;
-    if (deleteTarget.id === 'all') return;
+  const openCollectionManager = (itemIds, mode = 'single') => {
+    const firstItem = vaultItems.find((item) => item.id === itemIds[0]);
 
-    setIsDeleting(true);
+    setCollectionManager({
+      isOpen: true,
+      mode,
+      itemIds,
+      selectedCollectionIds: mode === 'single' ? [...(firstItem?.collectionIds || [])] : [],
+      newCollectionName: '',
+      isSaving: false,
+    });
+  };
+
+  const closeCollectionManager = () => {
+    setCollectionManager({
+      isOpen: false,
+      mode: 'single',
+      itemIds: [],
+      selectedCollectionIds: [],
+      newCollectionName: '',
+      isSaving: false,
+    });
+  };
+
+  const handleSaveCollections = async () => {
+    if (!user?.id) return;
+
+    setCollectionManager((currentState) => ({ ...currentState, isSaving: true }));
 
     try {
-      const result = await deleteProject(deleteTarget.id, user.id);
+      let nextCollectionIds = [...collectionManager.selectedCollectionIds];
 
-      if (result.success) {
-        await loadProjects();
-        await loadContent();
+      if (collectionManager.newCollectionName.trim()) {
+        const createdCollection = await createContentCollection(user.id, collectionManager.newCollectionName.trim());
 
-        if (activeProject === deleteTarget.id) {
-          setActiveProject('all');
+        if (!createdCollection.success) {
+          throw new Error(createdCollection.error || 'Failed to create collection');
         }
 
-        addToast('Project deleted successfully', 'success');
-        setShowDeleteConfirmation(false);
-        setDeleteTarget(null);
-      } else {
-        handleSupabaseError(result.error, 'delete project');
+        nextCollectionIds = [...nextCollectionIds, createdCollection.data.id];
       }
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      handleSupabaseError(error, 'delete project');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
-  const handleAddToProject = async (projectId) => {
-    if (!user?.id || !selectedItem) {
-      addToast('Please log in to update project assignment', 'error');
-      return;
-    }
+      if (collectionManager.mode === 'single') {
+        const [itemId] = collectionManager.itemIds;
+        const result = await setContentItemCollections(user.id, itemId, nextCollectionIds);
 
-    try {
-      const updates = {
-        project_id: projectId === 'remove' ? null : projectId,
-        updated_at: new Date().toISOString(),
-      };
-
-      const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
-
-      if (result.success) {
-        setContentItems(prev => prev.map(item =>
-          item.id === selectedItem.id ? { ...item, project: projectId === 'remove' ? null : projectId } : item
-        ));
-
-        updateProjectCounts(contentItems.map(item =>
-          item.id === selectedItem.id ? { ...item, project: projectId === 'remove' ? null : projectId } : item
-        ));
-
-        const projectName = projectId === 'remove'
-          ? 'no project'
-          : projects.find(p => p.id === projectId)?.name || 'project';
-
-        addToast(`Added to ${projectName}`, 'success');
-        setShowAddToProjectModal(false);
-      } else {
-        handleSupabaseError(result.error, 'update project assignment');
-      }
-    } catch (error) {
-      console.error('Error updating project:', error);
-      handleSupabaseError(error, 'update project assignment');
-    }
-  };
-
-  const handleRemoveFromProject = async () => {
-    if (!user?.id || !selectedItem) {
-      addToast('Please log in to update project assignment', 'error');
-      return;
-    }
-
-    try {
-      const updates = {
-        project_id: null,
-        updated_at: new Date().toISOString(),
-      };
-
-      const result = await updateContentLibraryItem(selectedItem.id, updates, user.id);
-
-      if (result.success) {
-        setContentItems(prev => prev.map(item =>
-          item.id === selectedItem.id ? { ...item, project: null } : item
-        ));
-        await loadContent();
-        addToast('Removed from project', 'success');
-      } else {
-        handleSupabaseError(result.error, 'remove from project');
-      }
-    } catch (error) {
-      console.error('Error removing from project:', error);
-      handleSupabaseError(error, 'remove from project');
-    }
-  };
-
-  const handleCreateOrUpdateProject = async (projectData) => {
-    if (!user?.id) {
-      addToast('Please log in to manage projects', 'error');
-      return;
-    }
-
-    try {
-      if (editingProject) {
-        const result = await updateProject(editingProject.id, projectData, user.id);
-        
-        if (result.success) {
-          await loadProjects();
-          addToast('Project updated successfully', 'success');
-          setEditingProject(null);
-        } else {
-          handleSupabaseError(result.error, 'update project');
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to update collections');
         }
-      } else {
-        const result = await createProject(user.id, projectData);
-        
-        if (result.success) {
-          await loadProjects();
-          addToast('Project created successfully', 'success');
-          
-          if (showUploadModal && result.data?.id) {
-            setUploadProject(result.data.id);
+      } else if (nextCollectionIds.length > 0) {
+        await Promise.all(nextCollectionIds.map(async (collectionId) => {
+          const result = await addItemsToCollection(user.id, collectionId, collectionManager.itemIds);
+
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to add items to collection');
           }
-        } else {
-          handleSupabaseError(result.error, 'create project');
-        }
+        }));
       }
+
+      await loadCollections(user.id);
+      closeCollectionManager();
+      addToast('Collections updated', 'success');
     } catch (error) {
-      console.error('Error saving project:', error);
-      handleSupabaseError(error, 'save project');
+      console.error('Failed to save collections:', error);
+      addToast('Failed to update collections', 'error');
+      setCollectionManager((currentState) => ({ ...currentState, isSaving: false }));
     }
   };
 
-  const handleEditProject = (project) => {
-    setEditingProject(project);
-    setShowCreateProjectModal(true);
-  };
+  const handleCreateCollectionChip = async () => {
+    if (!user?.id || !createCollectionName.trim()) return;
 
-  const handleCloseProjectModal = () => {
-    setShowCreateProjectModal(false);
-    setEditingProject(null);
-  };
+    try {
+      const result = await createContentCollection(user.id, createCollectionName.trim());
 
-  const confirmDeleteContent = (item) => {
-    setDeleteTarget({ type: 'content', id: item.id, name: item.name });
-    setShowDeleteConfirmation(true);
-  };
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create collection');
+      }
 
-  const confirmDeleteProject = (project) => {
-    setDeleteTarget({ type: 'project', id: project.id, name: project.name });
-    setShowDeleteConfirmation(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (deleteTarget?.type === 'content') {
-      handleDeleteContent();
-    } else if (deleteTarget?.type === 'project') {
-      handleDeleteProject();
+      setCreateCollectionName('');
+      setShowCreateCollectionField(false);
+      await loadCollections(user.id);
+      addToast('Collection created', 'success');
+    } catch (error) {
+      console.error('Failed to create collection:', error);
+      addToast('Failed to create collection', 'error');
     }
   };
 
-  // Render thumbnail based on content type
-  const renderThumbnail = (item, size = 'normal') => {
-    const heightClass = size === 'large' ? 'h-44' : 'h-36';
-    
-    if (item.type === 'text') {
-      return (
-        <div className={`${heightClass} bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 p-3 rounded-t-xl overflow-hidden relative`}>
-          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200/80 flex items-center justify-center">
-            <FileText className="w-3.5 h-3.5 text-slate-500" />
-          </div>
-          <p className="text-xs text-gray-600 leading-relaxed line-clamp-5 font-mono">
-            {item.content?.slice(0, 150) || 'No content preview available'}
-            {item.content?.length > 150 && '...'}
-          </p>
-        </div>
-      );
-    }
-
-    if (item.type === 'video') {
-      const videoUrl = getDisplayUrl(item);
-      return (
-        <div className={`${heightClass} relative bg-gray-900 rounded-t-xl overflow-hidden`}>
-          {videoUrl ? (
-            <img 
-              src={videoUrl} 
-              alt={item.name}
-              className="w-full h-full object-cover opacity-90"
-              onError={(e) => {
-                if (item.storage_path) {
-                  getFileUrl(item).then(url => {
-                    if (url) e.target.src = url;
-                  });
-                }
-              }}
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-              <Video className="w-10 h-10 text-gray-600" />
-            </div>
-          )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-            <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-              <Play className="w-5 h-5 text-gray-900 ml-0.5" />
-            </div>
-          </div>
-          {item.size && (
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-xs rounded font-medium">
-              {item.size}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Image type
-    const imageUrl = getDisplayUrl(item);
-    return (
-      <div className={`${heightClass} relative bg-gray-100 rounded-t-xl overflow-hidden`}>
-        {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt={item.name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              if (item.storage_path) {
-                getFileUrl(item).then(url => {
-                  if (url) e.target.src = url;
-                });
-              }
-            }}
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-            <Image className="w-10 h-10 text-gray-400" />
-          </div>
-        )}
-      </div>
-    );
-  };
+  const hasNoVaultItems = !loading && vaultItems.length === 0;
+  const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-2 sm:px-4 md:px-8 pb-20 lg:pb-8 overflow-x-hidden w-full max-w-full">
-      <div className="max-w-full">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <FolderOpen className="w-6 h-6 text-huttle-primary" />
-            </div>
+    <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pb-10 pt-24 sm:px-6 lg:ml-64 lg:px-8 lg:pt-20">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Content Vault
-              </h1>
-              <p className="text-gray-500">
-                Everything you've created, organized and ready to use.
-              </p>
+              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Content Vault</h1>
+              <p className="mt-1 text-sm text-gray-500">Your saved AI content</p>
+            </div>
+
+            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+              <div className="relative w-full sm:min-w-[340px]">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder="Search captions, hooks, topics, or platforms..."
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-11 py-3 text-sm outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopySelected}
+                disabled={selectedItems.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+                Copy All
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Main Layout: Content + Sidebar */}
-        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 w-full max-w-full">
-          {/* Main Content Area */}
-          <div className="flex-1 min-w-0 w-full max-w-full">
-            {/* Search Bar */}
-            <div className="mb-6">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400 group-focus-within:text-huttle-primary transition-colors" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search your content..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary transition-all shadow-sm hover:shadow-md"
-              />
-              {searchQuery && (
+        <div className="sticky top-[72px] z-20 mb-4 rounded-[28px] border border-gray-200 bg-white/90 px-5 py-4 shadow-sm backdrop-blur sm:top-20 sm:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {CONTENT_TYPE_FILTERS.map((filter) => (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setSelectedType(filter.id)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                    selectedType === filter.id
+                      ? 'bg-huttle-primary text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
-                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  {filter.label}
                 </button>
-              )}
-            </div>
-          </div>
-
-            {/* Projects Filter */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-              <button
-                onClick={() => setShowCreateProjectModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm bg-white border border-dashed border-gray-300 text-gray-600 hover:border-huttle-primary hover:text-huttle-primary hover:bg-huttle-primary/5"
-              >
-                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-white transition-colors">
-                  <Plus className="w-4 h-4" />
-                </div>
-                New Project
-              </button>
-
-              {safeProjects.map((project) => (
-                <div key={project.id} className="relative group">
-                  <button
-                    onClick={() => setActiveProject(project.id)}
-                    className={`flex items-center gap-3 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm border ${
-                      activeProject === project.id
-                        ? 'bg-white border-huttle-primary text-huttle-primary shadow-sm ring-1 ring-huttle-primary/20'
-                        : 'bg-white border-gray-100 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div 
-                      className="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm"
-                      style={{ 
-                        backgroundColor: activeProject === project.id ? project.color : '#f3f4f6',
-                        color: activeProject === project.id ? '#fff' : '#6b7280'
-                      }}
-                    >
-                      <Folder className="w-3.5 h-3.5" />
-                    </div>
-                    <span>{project.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      activeProject === project.id ? 'bg-huttle-primary/10 text-huttle-primary' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {project.count}
-                    </span>
-                  </button>
-                  {project.id !== 'all' && (
-                    <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 scale-90">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
-                        className="w-9 h-9 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-huttle-primary hover:border-huttle-primary shadow-sm"
-                        title="Edit project"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); confirmDeleteProject(project); }}
-                        className="w-9 h-9 bg-white text-gray-500 border border-gray-200 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-500 shadow-sm"
-                        title="Delete project"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
               ))}
             </div>
 
-            <div className="flex flex-col gap-2 sm:gap-3 mb-6">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                {[
-                  { key: 'all', label: 'All', icon: FolderOpen },
-                  { key: 'image', label: 'Images', icon: Image },
-                  { key: 'video', label: 'Videos', icon: Video },
-                  { key: 'text', label: 'Text', icon: FileText }
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap text-sm ${
-                      activeTab === tab.key
-                        ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/20'
-                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <select
+                value={selectedPlatform}
+                onChange={(event) => setSelectedPlatform(event.target.value)}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+              >
+                {PLATFORM_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
                 ))}
-              </div>
-              
-              <div className="flex gap-3">
-                <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gray-100 text-huttle-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
-                  >
-                    <Grid className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gray-100 text-huttle-primary' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
-                  >
-                    <List className="w-5 h-5" />
-                  </button>
-                </div>
-                <button 
-                  onClick={() => setShowUploadModal(true)}
-                  disabled={storagePercent >= 100}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl transition-all shadow-md text-sm font-medium ${
-                    storagePercent >= 100
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-huttle-gradient text-white hover:shadow-lg hover:shadow-huttle-primary/20'
-                  }`}
-                >
-                  <Upload className="w-4 h-4" />
-                  {storagePercent >= 100 ? 'Storage Full' : 'Upload Content'}
-                </button>
-              </div>
-            </div>
+              </select>
 
-          {/* Selected Items Actions */}
-          {selectedItems.length > 0 && (
-            <div className="bg-huttle-gradient text-white rounded-xl p-3 mb-4 flex items-center justify-between text-sm">
-              <span className="font-medium">{selectedItems.length} item(s) selected</span>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    addToast('Media added to post! Open Create Post modal to see them.', 'success');
-                    setSelectedItems([]);
-                  }}
-                  className="px-3 py-1.5 bg-white text-huttle-primary rounded-lg hover:bg-gray-100 transition-all font-medium text-sm"
-                >
-                  Use Content
+              <select
+                value={selectedSort}
+                onChange={(event) => setSelectedSort(event.target.value)}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="most_used">Most Used</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-5 flex flex-wrap gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
+            <Sparkles className="h-4 w-4 text-huttle-primary" />
+            <span>{stats.savedCount} items saved</span>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
+            <Copy className="h-4 w-4 text-huttle-primary" />
+            <span>{stats.copiedThisWeek} copied this week</span>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
+            <Star className="h-4 w-4 text-huttle-primary" />
+            <span>{stats.inCollections} in collections</span>
+          </div>
+        </div>
+
+        <div className="mb-6 overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCreateCollectionField((currentValue) => !currentValue)}
+              className="rounded-full border border-dashed border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-huttle-primary hover:text-huttle-primary"
+            >
+              + New Collection
+            </button>
+
+            {showCreateCollectionField && (
+              <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 shadow-sm">
+                <input
+                  value={createCollectionName}
+                  onChange={(event) => setCreateCollectionName(event.target.value)}
+                  placeholder="Collection name"
+                  className="bg-transparent text-sm outline-none"
+                />
+                <button type="button" onClick={handleCreateCollectionChip} className="text-sm font-medium text-huttle-primary">
+                  Save
                 </button>
-                <button 
-                  onClick={() => {
-                    if (window.confirm(`Delete ${selectedItems.length} item(s)?`)) {
-                      setContentItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
-                      addToast(`${selectedItems.length} item(s) deleted`, 'success');
-                      setSelectedItems([]);
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setActiveCollectionId('all')}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                activeCollectionId === 'all'
+                  ? 'bg-gray-900 text-white'
+                  : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              All Collections
+            </button>
+
+            {collections.map((collection) => (
+              <button
+                key={collection.id}
+                type="button"
+                onClick={() => setActiveCollectionId(collection.id)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                  activeCollectionId === collection.id
+                    ? 'bg-huttle-primary text-white'
+                    : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {collection.name} {collection.count}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {selectedIds.length > 0 && (
+          <div className="mb-5 flex flex-col gap-3 rounded-[24px] bg-gray-900 px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium">{selectedIds.length} items selected</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleCopySelected}
+                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-900 transition-all hover:bg-gray-100"
+              >
+                Copy All Selected
+              </button>
+              <button
+                type="button"
+                onClick={() => openCollectionManager(selectedIds, 'bulk')}
+                className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
+              >
+                Add to Collection
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget({ id: selectedIds[0], name: `${selectedIds.length} selected items`, bulk: true })}
+                className="rounded-full border border-red-400/30 px-4 py-2 text-sm font-medium text-red-200 transition-all hover:bg-red-500/10"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center rounded-[28px] border border-gray-200 bg-white px-6 py-24 shadow-sm">
+            <div className="text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-huttle-primary" />
+              <p className="mt-4 text-sm text-gray-500">Loading your saved content...</p>
+            </div>
+          </div>
+        )}
+
+        {hasNoVaultItems && (
+          <EmptyState hasContent={false} onClearFilters={resetFilters} onCreate={() => navigate('/dashboard/ai-tools')} />
+        )}
+
+        {hasNoResults && (
+          <EmptyState hasContent onClearFilters={resetFilters} onCreate={() => navigate('/dashboard/ai-tools')} />
+        )}
+
+        {!loading && filteredItems.length > 0 && (
+          <div className="columns-1 gap-5 md:columns-2">
+            {filteredItems.map((item) => {
+              const contentConfig = CONTENT_TYPE_CONFIG[item.contentType] || CONTENT_TYPE_CONFIG.legacy;
+              const platformOption = getPlatformOption(item.platform);
+              const PlatformIcon = platformOption?.icon;
+              const isExpanded = expandedIds.includes(item.id);
+              const isSelected = selectedIds.includes(item.id);
+
+              return (
+                <article
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setActiveItemId(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setActiveItemId(item.id);
                     }
                   }}
-                  className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-medium text-sm"
+                  className={`group mb-5 break-inside-avoid rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl ${isSelected ? 'ring-2 ring-huttle-primary/30' : ''}`}
                 >
-                  Delete
-                </button>
-                <button 
-                  onClick={() => setSelectedItems([])}
-                  className="px-3 py-1.5 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all font-medium text-sm"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
+                  <div className={`mb-4 flex items-start justify-between gap-3 border-l-4 pl-4 ${contentConfig.accentClass}`}>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleSelected(item.id);
+                        }}
+                        className={`flex h-6 w-6 items-center justify-center rounded border transition-all ${
+                          isSelected
+                            ? 'border-huttle-primary bg-huttle-primary text-white'
+                            : 'border-gray-300 bg-white text-transparent opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${contentConfig.badgeClass}`}>
+                        {contentConfig.singular}
+                      </span>
+                    </div>
 
-          {/* Content Loading State */}
-          {loading && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-              <div className="animate-spin w-12 h-12 border-4 border-huttle-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading your content...</h3>
-              <p className="text-gray-600">Please wait while we fetch your content library</p>
-            </div>
-          )}
-
-          {/* Content Grid/List */}
-          {!loading && (
-            <>
-              <div className={viewMode === 'grid' 
-                ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4' 
-                : 'space-y-3'
-              }>
-
-                {filteredItems.map((item) => (
-                  <div 
-                    key={item.id}
-                    onClick={() => handleItemClick(item)}
-                    className={`card group relative transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer overflow-hidden ${
-                      selectedItems.includes(item.id) ? 'ring-2 ring-huttle-primary ring-offset-2' : ''
-                    }`}
-                  >
-                    {viewMode === 'grid' ? (
-                      <>
-                        {/* Thumbnail */}
-                        <div className="relative">
-                          {renderThumbnail(item)}
-                          
-                          {/* Selection checkbox */}
-                          <button
-                            onClick={(e) => handleSelectItem(item.id, e)}
-                            className={`absolute top-2 right-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                              selectedItems.includes(item.id)
-                                ? 'bg-huttle-primary text-white scale-100 opacity-100 shadow-md'
-                                : 'bg-white/90 text-gray-400 scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 hover:bg-white hover:text-huttle-primary shadow-sm'
-                            }`}
-                          >
-                            {selectedItems.includes(item.id) ? <Check className="w-5 h-5" /> : <div className="w-4 h-4 rounded border-2 border-gray-300" />}
-                          </button>
-                          
-                          {/* Type badge */}
-                          <div className={`absolute top-2 left-2 px-2.5 py-1 text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-sm backdrop-blur-md ${
-                            item.type === 'image' ? 'bg-pink-500/90 text-white' :
-                            item.type === 'video' ? 'bg-purple-500/90 text-white' :
-                            'bg-huttle-primary/90 text-white'
-                          }`}>
-                            {item.type === 'image' && <Image className="w-3 h-3" />}
-                            {item.type === 'video' && <Video className="w-3 h-3" />}
-                            {item.type === 'text' && <FileText className="w-3 h-3" />}
-                            <span>{item.type}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Info */}
-                        <div className="p-4 bg-white">
-                          <h3 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-huttle-primary transition-colors">{item.name}</h3>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <div className={`w-1.5 h-1.5 rounded-full ${
-                                item.type === 'image' ? 'bg-pink-400' :
-                                item.type === 'video' ? 'bg-purple-400' :
-                                'bg-huttle-primary'
-                              }`} />
-                              {item.date}
-                            </span>
-                            {item.size && <span>{item.size}</span>}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-4 p-4 hover:bg-gray-50/50 transition-colors">
-                        {/* List view thumbnail */}
-                        <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 shadow-inner border border-gray-100">
-                          {item.type === 'text' ? (
-                            <div className="w-full h-full bg-gradient-to-br from-huttle-50 to-cyan-50 flex items-center justify-center p-2">
-                              <FileText className="w-6 h-6 text-huttle-primary" />
-                            </div>
-                          ) : item.type === 'video' ? (
-                            <div className="w-full h-full relative group/thumb">
-                              <img 
-                                src={getDisplayUrl(item) || ''} 
-                                alt={item.name}
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover/thumb:scale-110"
-                              />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm backdrop-blur-sm">
-                                  <Play className="w-4 h-4 text-gray-900 ml-0.5" />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <img 
-                              src={getDisplayUrl(item) || ''} 
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate group-hover:text-huttle-primary transition-colors">{item.name}</h3>
-                          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                            <span>{item.date}</span>
-                            {item.size && (
-                              <>
-                                <span className="w-1 h-1 rounded-full bg-gray-300" />
-                                <span>{item.size}</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded-md ${
-                              item.type === 'image' ? 'bg-pink-50 text-pink-600 border border-pink-100' :
-                              item.type === 'video' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
-                              'bg-huttle-50 text-huttle-primary border border-huttle-100'
-                            }`}>
-                              {item.type}
-                            </span>
-                            {item.project && (
-                              <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-xs font-medium rounded-md border border-gray-100 flex items-center gap-1">
-                                <Folder className="w-3 h-3" />
-                                {safeProjects.find(p => p.id === item.project)?.name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <button
-                          onClick={(e) => handleSelectItem(item.id, e)}
-                          className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                            selectedItems.includes(item.id)
-                              ? 'bg-huttle-primary border-huttle-primary text-white shadow-md'
-                              : 'border-gray-100 text-gray-300 hover:border-huttle-primary hover:text-huttle-primary hover:bg-white'
-                          }`}
-                        >
-                          {selectedItems.includes(item.id) ? <Check className="w-5 h-5" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      {PlatformIcon && <PlatformIcon className="h-3.5 w-3.5" />}
+                      <span>{platformOption?.label || 'Saved'}</span>
+                      <span>·</span>
+                      <span>{formatDate(item.createdAt)}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Empty State */}
-              {filteredItems.length === 0 && !loading && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-                  {safeContentItems.length === 0 ? (
-                    <>
-                      <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-huttle-primary/10 to-indigo-100 flex items-center justify-center">
-                        <CloudUpload className="w-10 h-10 text-huttle-primary" />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">Your content vault is empty</h3>
-                      <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                        Generate your first piece of content
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <button 
-                          onClick={() => setShowUploadModal(true)}
-                          disabled={storagePercent >= 100}
-                          className="px-6 py-3 bg-huttle-gradient text-white rounded-xl font-medium hover:bg-huttle-primary-dark transition-all shadow-md inline-flex items-center justify-center gap-2"
-                        >
-                          <Upload className="w-5 h-5" />
-                          Upload Your First Asset
-                        </button>
-                        <button 
-                          onClick={() => navigate('/dashboard/ai-tools')}
-                          className="px-6 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-2"
-                        >
-                          <Sparkles className="w-5 h-5" />
-                          Start Creating
-                        </button>
-                      </div>
-                      <div className="mt-8 pt-6 border-t border-gray-100">
-                        <p className="text-sm text-gray-500 mb-3">What you can store:</p>
-                        <div className="flex justify-center gap-6 text-sm">
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <Image className="w-4 h-4 text-pink-500" />
-                            <span>Images</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <Video className="w-4 h-4 text-purple-500" />
-                            <span>Videos</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <FileText className="w-4 h-4 text-huttle-primary" />
-                            <span>Text & Captions</span>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No content found</h3>
-                      <p className="text-gray-600 mb-4">
-                        {searchQuery 
-                          ? `No results for "${searchQuery}"`
-                          : 'Try adjusting your filters'
-                        }
-                      </p>
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery('')}
-                          className="text-huttle-primary font-medium hover:underline"
-                        >
-                          Clear search
-                        </button>
+                  <div className="space-y-3">
+                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-800">
+                      {getPreviewText(item, isExpanded)}
+                    </p>
+
+                    {item.contentText.length > 300 && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleExpanded(item.id);
+                        }}
+                        className="text-sm font-medium text-huttle-primary transition-colors hover:text-huttle-primary-dark"
+                      >
+                        {isExpanded ? 'Show less' : 'Show more'}
+                      </button>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 text-xs text-gray-400">
+                      {item.topic && <span className="rounded-full bg-gray-100 px-2.5 py-1">{item.topic}</span>}
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Copied {item.copyCount}x</span>
+                      {item.collectionIds.length > 0 && (
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1">{item.collectionIds.length} collections</span>
                       )}
-                    </>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                    </div>
+                  </div>
 
-        {/* Storage Sidebar - Desktop only, appears on right */}
-        <div className="hidden lg:block lg:w-56 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-24">
-            {/* Storage Header - Compact */}
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                storagePercent >= 90 ? 'bg-red-100' : storagePercent >= 70 ? 'bg-amber-100' : 'bg-huttle-primary/10'
-              }`}>
-                <HardDrive className={`w-4 h-4 ${
-                  storagePercent >= 90 ? 'text-red-600' : storagePercent >= 70 ? 'text-amber-600' : 'text-huttle-primary'
-                }`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-bold text-gray-900">{storageUsedDisplay}</span>
-                  <span className="text-xs text-gray-500">/ {storageLimitDisplay}</span>
-                </div>
-              </div>
-            </div>
+                  <div className="mt-5 flex flex-wrap gap-2 opacity-100 transition-all md:opacity-0 md:group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleCopyItem(item);
+                      }}
+                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setActiveItemId(item.id);
+                        setIsEditing(true);
+                      }}
+                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openCollectionManager([item.id], 'single');
+                      }}
+                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      Save to Collection
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget({ id: item.id, name: item.name || contentConfig.singular });
+                      }}
+                      className="rounded-full border border-red-100 px-3 py-2 text-xs font-medium text-red-500 transition-all hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-            {/* Progress Bar - Compact */}
-            <div className="mb-3">
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-500 ${
-                    storagePercent >= 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                    storagePercent >= 70 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                    'bg-gradient-to-r from-huttle-primary to-indigo-500'
-                  }`}
-                  style={{ width: `${Math.min(storagePercent, 100)}%` }}
-                />
+      {activeItem && (
+        <div
+          className={`fixed inset-0 z-[60] ${isMobile ? 'bg-[#f7f8fa]' : 'bg-black/30 backdrop-blur-sm'}`}
+          onClick={isMobile ? undefined : () => setActiveItemId(null)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className={`overflow-y-auto transition-all ${
+              isMobile
+                ? 'h-full w-full bg-[#f7f8fa]'
+                : 'absolute right-0 top-0 h-full w-full max-w-xl border-l border-gray-200 bg-white shadow-2xl'
+            }`}
+          >
+            <div className={`sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 px-6 py-4 backdrop-blur ${
+              isMobile ? 'bg-[#f7f8fa]/95' : 'bg-white/95'
+            }`}>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Saved Content</p>
+                <h2 className="mt-1 text-xl font-semibold text-gray-900">{activeItem.name || 'Content item'}</h2>
               </div>
-              <p className={`text-xs mt-1 ${
-                storagePercent >= 90 ? 'text-red-600 font-medium' : 'text-gray-500'
-              }`}>
-                {storagePercent >= 100 
-                  ? 'Storage full'
-                  : `${(100 - storagePercent).toFixed(0)}% available`
-                }
-              </p>
-            </div>
-
-            {/* Content Breakdown */}
-            <div className="flex flex-col gap-1.5 mb-3 border-t border-gray-100 pt-3">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-pink-500" />
-                <span className="text-xs text-gray-600">{contentCounts.images} img</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-purple-500" />
-                <span className="text-xs text-gray-600">{contentCounts.videos} vid</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-huttle-primary" />
-                <span className="text-xs text-gray-600">{contentCounts.text} txt</span>
-              </div>
-            </div>
-
-            {/* Upgrade CTA - Compact */}
-            {tierStorageInfo[userTier]?.next && (
-              <Link
-                to="/dashboard/subscription"
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-huttle-gradient text-white text-sm font-medium rounded-lg hover:shadow-md transition-all"
+              <button
+                type="button"
+                onClick={() => setActiveItemId(null)}
+                className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                Upgrade to Pro
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
-            )}
-
-            {/* Pro badge for Pro users - Compact */}
-            {userTier === TIERS.PRO && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
-                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                  <Sparkles className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-xs font-semibold text-gray-900">Pro Storage Unlocked</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Storage Bar - Fixed at bottom, ultra compact */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-2 z-40 shadow-lg">
-        <div className="flex items-center gap-2">
-          {/* Storage icon */}
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            storagePercent >= 90 ? 'bg-red-100' : storagePercent >= 70 ? 'bg-amber-100' : 'bg-huttle-primary/10'
-          }`}>
-            <HardDrive className={`w-3.5 h-3.5 ${
-              storagePercent >= 90 ? 'text-red-600' : storagePercent >= 70 ? 'text-amber-600' : 'text-huttle-primary'
-            }`} />
-          </div>
-          
-          {/* Storage text and progress bar combined */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-0.5">
-              <span className="text-xs font-semibold text-gray-900">{storageUsedDisplay} / {storageLimitDisplay}</span>
-              <span className="text-xs text-gray-500">{contentCounts.images + contentCounts.videos + contentCounts.text} items</span>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
-              <div 
-                className={`h-1 rounded-full transition-all duration-500 ${
-                  storagePercent >= 90 ? 'bg-red-500' :
-                  storagePercent >= 70 ? 'bg-amber-500' :
-                  'bg-huttle-primary'
-                }`}
-                style={{ width: `${Math.min(storagePercent, 100)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Upgrade button */}
-          {tierStorageInfo[userTier]?.next && (
-            <Link
-              to="/dashboard/subscription"
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-gradient text-white text-xs font-medium rounded-lg flex-shrink-0 hover:shadow-md transition-shadow"
-            >
-              <ArrowUpRight className="w-3 h-3" />
-              <span>Pro</span>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Detail Modal */}
-      {showDetailModal && selectedItem && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-2xl">
-              <h2 className="text-xl font-bold text-gray-900">Content Details</h2>
-              <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6">
-              {/* Preview */}
-              {selectedItem.type === 'text' ? (
-                <div className="mb-6">
-                  {editMode ? (
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      rows="10"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none font-mono text-sm"
-                    />
-                  ) : (
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 whitespace-pre-wrap font-mono text-sm">
-                      {selectedItem.content || 'No content'}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mb-6 rounded-xl overflow-hidden bg-gray-100">
-                  {selectedItem.type === 'video' ? (
-                    <div className="relative">
-                      <img 
-                        src={getDisplayUrl(selectedItem) || ''} 
-                        alt={selectedItem.name}
-                        className="w-full"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                          <Play className="w-7 h-7 text-gray-900 ml-1" />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <img 
-                      src={getDisplayUrl(selectedItem) || ''} 
-                      alt={selectedItem.name}
-                      className="w-full"
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
-                  <p className="text-gray-900 font-medium mt-1">{selectedItem.name}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Type</label>
-                  <p className="text-gray-900 capitalize mt-1">{selectedItem.type}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date Added</label>
-                  <p className="text-gray-900 mt-1">{selectedItem.date}</p>
-                </div>
-                {selectedItem.size && (
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">File Size</label>
-                    <p className="text-gray-900 mt-1">{selectedItem.size}</p>
-                  </div>
+            <div className="space-y-6 px-6 py-6">
+              <div className="flex flex-wrap gap-2">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${(CONTENT_TYPE_CONFIG[activeItem.contentType] || CONTENT_TYPE_CONFIG.legacy).badgeClass}`}>
+                  {(CONTENT_TYPE_CONFIG[activeItem.contentType] || CONTENT_TYPE_CONFIG.legacy).singular}
+                </span>
+                {activeItem.platform && (
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                    {getPlatformOption(activeItem.platform)?.label || activeItem.platform}
+                  </span>
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  {selectedItem.type === 'text' ? (
-                    editMode ? (
-                      <>
-                        <button
-                          onClick={handleSaveEdit}
-                          className="flex-1 px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md"
-                        >
-                          Save Changes
-                        </button>
-                        <button
-                          onClick={() => { setEditMode(false); setEditContent(selectedItem.content || ''); }}
-                          className="flex-1 px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setEditMode(true)}
-                          className="flex-1 px-6 py-3 border-2 border-huttle-primary text-huttle-primary rounded-xl hover:bg-huttle-primary hover:text-white transition-all font-medium flex items-center justify-center gap-2"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={handleCopyToClipboard}
-                          className="flex-1 px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Copy to Clipboard
-                        </button>
-                        <button
-                          onClick={handleDownloadText}
-                          className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2 text-gray-600"
-                          title="Download as .txt file"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </>
-                    )
-                  ) : (
-                    <button
-                      onClick={handleDownload}
-                      className="flex-1 px-6 py-3 bg-huttle-gradient text-white rounded-xl hover:bg-huttle-primary-dark transition-colors font-medium shadow-md flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download
-                    </button>
-                  )}
-                </div>
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowAddToProjectModal(true)}
-                    className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
-                  >
-                    <Folder className="w-4 h-4" />
-                    {selectedItem.project ? 'Change Project' : 'Add to Project'}
-                  </button>
-                  {selectedItem.project && (
-                    <button
-                      onClick={handleRemoveFromProject}
-                      className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
-                    >
-                      <X className="w-4 h-4" />
-                      Remove from Project
-                    </button>
-                  )}
-                </div>
-                
-                <button
-                  onClick={() => confirmDeleteContent(selectedItem)}
-                  className="w-full px-6 py-3 bg-red-50 border-2 border-red-200 text-red-600 rounded-xl hover:bg-red-100 transition-all font-semibold flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Permanently
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto">
-            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Upload Content</h2>
-              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setSelectedFilePreview(null); }} className="p-3 hover:bg-gray-100 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpload} className="p-6 space-y-5">
-              {/* Content Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Content Type</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { key: 'image', label: 'Image', icon: Image, color: 'pink' },
-                    { key: 'video', label: 'Video', icon: Video, color: 'purple' },
-                    { key: 'text', label: 'Text', icon: FileText, color: 'blue' }
-                  ].map((type) => (
-                    <button
-                      key={type.key}
-                      type="button"
-                      onClick={() => { setUploadType(type.key); setSelectedFile(null); setSelectedFilePreview(null); }}
-                      className={`flex flex-col items-center gap-2 px-4 py-4 rounded-xl border-2 transition-all ${
-                        uploadType === type.key
-                          ? 'border-huttle-primary bg-huttle-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <type.icon className={`w-6 h-6 ${uploadType === type.key ? 'text-huttle-primary' : 'text-gray-400'}`} />
-                      <span className={`font-medium text-sm ${uploadType === type.key ? 'text-huttle-primary' : 'text-gray-600'}`}>{type.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* File Upload or Text Input */}
-              {uploadType === 'text' ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Text Content</label>
+              <div className="rounded-[24px] bg-gray-50 p-5">
+                {isEditing ? (
                   <textarea
-                    name="content"
-                    rows="6"
-                    placeholder="Enter captions, titles, descriptions, or any text ideas..."
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none resize-none"
+                    value={editedText}
+                    onChange={(event) => setEditedText(event.target.value)}
+                    rows={isMobile ? 14 : 16}
+                    className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[15px] leading-7 text-gray-800 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
                   />
-                </div>
-              ) : (
+                ) : (
+                  <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-800">{activeItem.contentText}</p>
+                )}
+              </div>
+
+              <div className="grid gap-4 rounded-[24px] border border-gray-200 bg-white p-5 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload {uploadType === 'image' ? 'Image' : 'Video'} File
-                  </label>
-                  {selectedFile ? (
-                    <div className="border-2 border-huttle-primary rounded-2xl p-4 bg-huttle-primary/5">
-                      <div className="flex items-center gap-4">
-                        {selectedFilePreview ? (
-                          <img src={selectedFilePreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200">
-                            <Video className="w-8 h-8 text-gray-400" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{selectedFile.name}</p>
-                          <p className="text-xs text-gray-500">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <X className="w-4 h-4 text-gray-500" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-huttle-primary hover:bg-huttle-primary/5 transition-all bg-gray-50/50 group cursor-pointer">
-                      <input
-                        type="file"
-                        name="file"
-                        accept={uploadType === 'image' ? 'image/*' : 'video/*'}
-                        className="hidden"
-                        id="file-upload"
-                        disabled={uploading}
-                        onChange={handleFileSelect}
-                      />
-                      <label htmlFor="file-upload" className="cursor-pointer w-full h-full block">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300">
-                          <Upload className="w-8 h-8 text-huttle-primary" />
-                        </div>
-                        <p className="text-gray-900 font-semibold mb-1 text-lg group-hover:text-huttle-primary transition-colors">
-                          Click or Drag to Upload
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {uploadType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, MOV up to 500MB'}
-                        </p>
-                      </label>
-                    </div>
-                  )}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Tool used</p>
+                  <p className="mt-1 text-sm text-gray-700">{activeItem.toolLabel || humanizeToolSource(activeItem.toolSource)}</p>
                 </div>
-              )}
-
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Give this content a memorable name..."
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none"
-                />
-              </div>
-
-              {/* Project Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assign to Project <span className="text-gray-400 text-xs">(Optional)</span>
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    value={uploadProject}
-                    onChange={(e) => setUploadProject(e.target.value)}
-                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary focus:border-transparent outline-none bg-white"
-                  >
-                    <option value="all">No Project</option>
-                    {safeProjects.filter(p => p.id !== 'all').map((project) => (
-                      <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateProjectModal(true)}
-                    className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all flex items-center gap-2 font-medium"
-                  >
-                    <FolderPlus className="w-4 h-4" />
-                  </button>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Platform</p>
+                  <p className="mt-1 text-sm text-gray-700">{getPlatformOption(activeItem.platform)?.label || 'Not set'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Date</p>
+                  <p className="mt-1 text-sm text-gray-700">{formatDate(activeItem.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Topic</p>
+                  <p className="mt-1 text-sm text-gray-700">{activeItem.topic || 'Not set'}</p>
                 </div>
               </div>
 
-              {/* Submit */}
-              <div className="flex gap-3 pt-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdit}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
+                    >
+                      <Check className="h-4 w-4" />
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditedText(activeItem.contentText);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyItem(activeItem)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openCollectionManager([activeItem.id], 'single')}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+                    >
+                      <FolderPlus className="h-4 w-4" />
+                      Add to Collection
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget({ id: activeItem.id, name: activeItem.name || 'Content item' })}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-100 px-4 py-3 text-sm font-medium text-red-500 transition-all hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {!isEditing && (
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
-                  className="flex-1 px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                  onClick={() => navigate(buildUseAgainTarget(activeItem))}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-gray-800"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className={`flex-1 px-6 py-3 rounded-xl font-medium shadow-md flex items-center justify-center gap-2 ${
-                    uploading
-                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                      : 'bg-huttle-gradient text-white hover:bg-huttle-primary-dark'
-                  } transition-colors`}
-                >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      {uploadProgress || 'Uploading...'}
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Upload
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add to Project Modal */}
-      {showAddToProjectModal && selectedItem && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Add to Project</h2>
-              <button onClick={() => setShowAddToProjectModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <p className="text-sm text-gray-600 mb-4">
-                Select a project for "{selectedItem.name}":
-              </p>
-              <div className="space-y-2">
-                {safeProjects.filter(p => p.id !== 'all').map((project) => (
-                  <button
-                    key={project.id}
-                    onClick={() => handleAddToProject(project.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${
-                      selectedItem.project === project.id
-                        ? 'border-huttle-primary bg-huttle-primary/5'
-                        : 'border-gray-200 hover:border-huttle-primary hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: project.color + '20' }}>
-                        <Folder className="w-4 h-4" style={{ color: project.color }} />
-                      </div>
-                      <span className="font-medium">{project.name}</span>
-                    </div>
-                    {selectedItem.project === project.id && (
-                      <Check className="w-5 h-5 text-huttle-primary" />
-                    )}
-                  </button>
-                ))}
-              </div>
-              {safeProjects.filter(p => p.id !== 'all').length === 0 && (
-                <div className="text-center py-6">
-                  <p className="text-gray-500 mb-3">No projects yet</p>
-                  <button
-                    onClick={() => {
-                      setShowAddToProjectModal(false);
-                      setShowCreateProjectModal(true);
-                    }}
-                    className="text-huttle-primary font-medium hover:underline"
-                  >
-                    Create your first project
-                  </button>
-                </div>
-              )}
-              {selectedItem.project && (
-                <button
-                  onClick={() => handleAddToProject('remove')}
-                  className="w-full mt-3 px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
-                >
-                  Remove from all projects
+                  <Sparkles className="h-4 w-4" />
+                  Use Again
                 </button>
               )}
             </div>
@@ -1850,39 +1056,41 @@ export default function ContentLibrary() {
         </div>
       )}
 
-      {/* Create/Edit Project Modal */}
-      <CreateProjectModal
-        isOpen={showCreateProjectModal}
-        onClose={handleCloseProjectModal}
-        onSave={handleCreateOrUpdateProject}
-        initialData={editingProject}
-        isEditing={!!editingProject}
+      <CollectionManager
+        collections={collections}
+        isOpen={collectionManager.isOpen}
+        isSaving={collectionManager.isSaving}
+        mode={collectionManager.mode}
+        selectedCollectionIds={collectionManager.selectedCollectionIds}
+        newCollectionName={collectionManager.newCollectionName}
+        onClose={closeCollectionManager}
+        onToggleCollection={(collectionId) => {
+          setCollectionManager((currentState) => ({
+            ...currentState,
+            selectedCollectionIds: currentState.selectedCollectionIds.includes(collectionId)
+              ? currentState.selectedCollectionIds.filter((id) => id !== collectionId)
+              : [...currentState.selectedCollectionIds, collectionId],
+          }));
+        }}
+        onNewCollectionNameChange={(value) => {
+          setCollectionManager((currentState) => ({
+            ...currentState,
+            newCollectionName: value,
+          }));
+        }}
+        onSave={handleSaveCollections}
       />
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
-        isOpen={showDeleteConfirmation}
-        onClose={() => { setShowDeleteConfirmation(false); setDeleteTarget(null); }}
-        onConfirm={handleConfirmDelete}
-        title={deleteTarget?.type === 'project' ? 'Delete Project' : 'Delete Content'}
-        message={
-          deleteTarget?.type === 'project'
-            ? 'Are you sure you want to delete this project? Content will be moved to "All Content".'
-            : 'This will permanently delete this content from your library.'
-        }
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteItem}
+        title="Delete Content"
+        message={deleteTarget?.bulk ? 'Delete these selected items? This cannot be undone.' : "Delete this content? This can't be undone."}
         itemName={deleteTarget?.name}
-        type={deleteTarget?.type}
+        type="content"
         isDeleting={isDeleting}
       />
-
-      {/* Upgrade Modal */}
-      <UpgradeModal
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        feature="storage"
-        featureName="Increased Storage"
-      />
-      </div>
     </div>
   );
 }

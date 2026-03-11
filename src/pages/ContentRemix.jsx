@@ -11,7 +11,9 @@ import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { saveContentLibraryItem } from '../config/supabase';
+import { buildContentVaultPayload } from '../utils/contentVault';
 
 /**
  * Remix goal options with metadata
@@ -85,6 +87,7 @@ export default function ContentRemix() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const remixUsage = useAIUsage('contentRemix');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Step tracking
   const [currentStep, setCurrentStep] = useState(1);
@@ -103,6 +106,7 @@ export default function ContentRemix() {
   const [isLoading, setIsLoading] = useState(false);
   const [remixError, setRemixError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [savedId, setSavedId] = useState(null);
 
   // Initialize selected platforms from Brand Voice (extract names from platform objects)
   useEffect(() => {
@@ -119,6 +123,29 @@ export default function ContentRemix() {
       sessionStorage.removeItem('remixContent');
     }
   }, []);
+
+  useEffect(() => {
+    const inputParam = searchParams.get('input');
+    const goalParam = searchParams.get('goal');
+    let didPrefill = false;
+
+    if (inputParam) {
+      setRemixInput(inputParam);
+      didPrefill = true;
+    }
+
+    if (goalParam && REMIX_GOALS.some((goal) => goal.id === goalParam)) {
+      setRemixGoal(goalParam);
+      didPrefill = true;
+    }
+
+    if (didPrefill) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('input');
+      nextParams.delete('goal');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const togglePlatform = (platform) => {
     setSelectedPlatforms(prev =>
@@ -361,6 +388,42 @@ export default function ContentRemix() {
     setCopiedId(id);
     showToast(`Content copied! ${getToastDisclaimer('general')}`, 'success');
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleSaveVariation = async (variation, platformName, variationId) => {
+    if (!user?.id) {
+      showToast('Please log in to save content', 'error');
+      return;
+    }
+
+    try {
+      const contentText = ensureString(variation);
+      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+        name: `Remix - ${platformName}`,
+        contentText,
+        contentType: 'remix',
+        toolSource: 'content_remix',
+        toolLabel: 'Content Remix Studio',
+        topic: remixInput.slice(0, 120),
+        platform: platformName,
+        description: `Content Remix Studio | ${platformName} | ${REMIX_GOALS.find((goal) => goal.id === remixGoal)?.label || remixGoal}`,
+        metadata: {
+          goal: remixGoal,
+          source_content: remixInput.slice(0, 500),
+        },
+      }));
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save');
+      }
+
+      setSavedId(variationId);
+      setTimeout(() => setSavedId(null), 2000);
+      showToast('Saved to Content Vault!', 'success');
+    } catch (error) {
+      console.error('Failed to save remix variation:', error);
+      showToast('Failed to save content', 'error');
+    }
   };
 
   const handleStartOver = () => {
@@ -742,10 +805,11 @@ export default function ContentRemix() {
                             {isCopied ? 'Copied!' : 'Copy'}
                           </button>
                           <button
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            onClick={() => handleSaveVariation(variation, section.platform, variationId)}
+                            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
                           >
-                            <Save className="w-3.5 h-3.5" />
-                            Save
+                            {savedId === variationId ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Save className="w-3.5 h-3.5" />}
+                            {savedId === variationId ? 'Saved!' : 'Save'}
                           </button>
                         </div>
                       </div>

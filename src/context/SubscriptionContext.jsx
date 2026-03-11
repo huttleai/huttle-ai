@@ -1,16 +1,29 @@
-import { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { getUserTier, getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
-import { useToast } from './ToastContext';
+import { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
+import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { AuthContext } from './AuthContext';
-import { isDemoMode } from '../services/stripeAPI';
+import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 
 export const SubscriptionContext = createContext();
 
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
+const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
+
+function normalizeTier(plan) {
+  if (!plan) return TIERS.FREE;
+
+  const normalizedPlan = String(plan).toLowerCase();
+  if (normalizedPlan === 'freemium' || normalizedPlan === 'free') return TIERS.FREE;
+  if (normalizedPlan === 'essentials') return TIERS.ESSENTIALS;
+  if (normalizedPlan === 'pro') return TIERS.PRO;
+  if (normalizedPlan === 'founders' || normalizedPlan === 'founder' || normalizedPlan === 'founders_club') {
+    return TIERS.FOUNDER;
+  }
+
+  return TIERS.FREE;
+}
 
 export function SubscriptionProvider({ children }) {
-  const { addToast: showToast } = useToast();
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
   
@@ -20,14 +33,10 @@ export function SubscriptionProvider({ children }) {
   
   // Check if in demo mode (Stripe not configured)
   const demoMode = isDemoMode();
-  
-  // Founders Only: ALL authenticated users are Founders Club members.
-  // No free/essentials tier enforcement — paid-entry app.
-  const getInitialTier = () => {
-    return TIERS.FOUNDER;
-  };
-  
-  const [userTier, setUserTier] = useState(getInitialTier);
+
+  const [userTier, setUserTier] = useState(TIERS.FREE);
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -66,59 +75,147 @@ export function SubscriptionProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [skipAuth]);
 
-  // Founders Only: Force Founders Club tier for ALL authenticated users.
-  // This bypasses Stripe tier lookups entirely — every user is a founding member.
-  useEffect(() => {
-    setUserTier(TIERS.FOUNDER);
-    setLoading(false);
-    
-    if (userId) {
-      refreshStorageUsage();
+  const refreshSubscription = useCallback(async () => {
+    if (skipAuth) {
+      setUserTier(localStorage.getItem(DEMO_TIER_KEY) || TIERS.PRO);
+      setSubscription(null);
+      setSubscriptionStatus('active');
+      setLoading(false);
+      return;
     }
-  }, [userId]);
 
-  const loadUserTier = async () => {
+    if (!userId) {
+      setUserTier(TIERS.FREE);
+      setSubscription(null);
+      setSubscriptionStatus('inactive');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const { success, tier } = await getUserTier(userId);
-      if (success) {
-        setUserTier(tier);
-      }
+      const result = await getSubscriptionStatus();
+      const nextSubscription = result.success ? result.subscription : null;
+      const nextStatus = nextSubscription?.status || result.status || 'inactive';
+      const nextTier = nextSubscription && ACTIVE_ACCESS_STATUSES.has(nextStatus)
+        ? normalizeTier(nextSubscription.plan || result.plan)
+        : TIERS.FREE;
+
+      setSubscription(nextSubscription);
+      setSubscriptionStatus(nextStatus);
+      setUserTier(nextTier);
     } catch (error) {
-      console.error('Error loading tier:', error);
+      console.error('Error loading subscription:', error);
+      setSubscription(null);
+      setSubscriptionStatus('inactive');
+      setUserTier(TIERS.FREE);
     } finally {
       setLoading(false);
     }
-  };
+  }, [skipAuth, userId]);
+
+  const refreshStorageUsage = useCallback(async () => {
+    if (skipAuth) {
+      setStorageUsage(0);
+      return 0;
+    }
+
+    try {
+      const result = await getSupabaseStorageUsage(userId);
+      if (result.success) {
+        setStorageUsage(result.usageBytes);
+        return result.usageBytes;
+      }
+    } catch (error) {
+      console.error('Error refreshing storage usage:', error);
+    }
+    return storageUsage;
+  }, [skipAuth, storageUsage, userId]);
+
+  useEffect(() => {
+    refreshSubscription();
+  }, [refreshSubscription]);
+
+  useEffect(() => {
+    if (userId) {
+      refreshStorageUsage();
+    } else {
+      setStorageUsage(0);
+    }
+  }, [userId, refreshStorageUsage]);
+
+  const isTrialing = subscription?.status === 'trialing';
+  const isPastDue = subscription?.status === 'past_due';
+  const trialEndsAt = useMemo(
+    () => (subscription?.trialEnd ? new Date(subscription.trialEnd) : null),
+    [subscription?.trialEnd]
+  );
+  const trialDaysRemaining = useMemo(() => {
+    if (!trialEndsAt) return null;
+
+    const remainingMs = trialEndsAt.getTime() - Date.now();
+    return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+  }, [trialEndsAt]);
+  const hasPaidAccess = ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
 
   const checkFeatureAccess = useCallback((feature) => {
-    // Founders Only: All features unlocked
-    return true;
-  }, []);
+    return hasFeatureAccess(userTier, feature) || canTierAccessFeature(feature, userTier);
+  }, [userTier]);
 
   const getFeatureLimit = useCallback((feature) => {
-    // Founders Only: Use Founder tier limits (equivalent to Pro)
-    return TIER_LIMITS[TIERS.FOUNDER]?.[feature] || TIER_LIMITS[TIERS.PRO]?.[feature] || Infinity;
-  }, []);
+    return TIER_LIMITS[userTier]?.[feature] ?? 0;
+  }, [userTier]);
 
   const getAuthoritativeRemainingUsage = useCallback(async (feature) => {
-    // Founders Only: Unlimited usage for all features
-    return Infinity;
-  }, []);
+    if (skipAuth) {
+      return Infinity;
+    }
+
+    if (!userId) {
+      return 0;
+    }
+
+    const featureLimit = getFeatureLimit(feature);
+
+    if (featureLimit === -1 || featureLimit === true) {
+      return Infinity;
+    }
+
+    if (featureLimit === false || featureLimit === 0) {
+      return 0;
+    }
+
+    if (typeof featureLimit !== 'number') {
+      return Infinity;
+    }
+
+    return getRemainingUsage(userId, feature, userTier);
+  }, [getFeatureLimit, skipAuth, userId, userTier]);
 
   const checkAndTrackUsage = async (feature, metadata = {}) => {
-    // Founders Only: All features allowed for all authenticated users
     if (!userId) {
       return { allowed: false, reason: 'auth', remaining: 0 };
     }
 
-    // Track usage for analytics but never block
+    if (!checkFeatureAccess(feature)) {
+      return { allowed: false, reason: 'upgrade', remaining: 0 };
+    }
+
+    const remaining = await getAuthoritativeRemainingUsage(feature);
+    if (remaining <= 0) {
+      return { allowed: false, reason: 'limit', remaining: 0 };
+    }
+
     try {
       await trackUsage(userId, feature, metadata);
     } catch (e) {
       console.warn('Usage tracking failed (non-blocking):', e);
     }
 
-    return { allowed: true, remaining: Infinity };
+    return {
+      allowed: true,
+      remaining: remaining === Infinity ? Infinity : Math.max(0, remaining - 1),
+    };
   };
 
   const refreshUsage = useCallback(async (feature) => {
@@ -150,33 +247,13 @@ export function SubscriptionProvider({ children }) {
   };
 
   const getStorageLimit = () => {
-    // Dev mode: Return Pro tier storage limit (25GB)
     if (skipAuth) {
-      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 25 * 1024 * 1024 * 1024; // 25GB in bytes
+      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 25 * 1024 * 1024 * 1024;
     }
     return TIER_LIMITS[userTier]?.storageLimit || TIER_LIMITS[TIERS.FREE].storageLimit;
   };
 
   const getStorageUsage = () => {
-    return storageUsage;
-  };
-
-  const refreshStorageUsage = async () => {
-    // Dev mode: Skip Supabase calls
-    if (skipAuth) {
-      setStorageUsage(0);
-      return 0;
-    }
-    
-    try {
-      const result = await getSupabaseStorageUsage(userId);
-      if (result.success) {
-        setStorageUsage(result.usageBytes);
-        return result.usageBytes;
-      }
-    } catch (error) {
-      console.error('Error refreshing storage usage:', error);
-    }
     return storageUsage;
   };
 
@@ -187,13 +264,23 @@ export function SubscriptionProvider({ children }) {
   };
 
   const getUpgradeMessage = () => {
-    // Founders Only: No upgrade messages — all users are Pro
+    if (isPastDue) {
+      return 'Your payment needs attention. Update your billing details to keep full access.';
+    }
+
+    if (subscriptionStatus === 'canceled') {
+      return 'Your trial has ended. Upgrade anytime to get back to creating content.';
+    }
+
+    if (userTier === TIERS.FREE) {
+      return 'Start your 7-day free trial to unlock full Pro access.';
+    }
+
     return '';
   };
 
   const canAccessFeatureByName = (featureName) => {
-    // Founders Only: All features unlocked
-    return true;
+    return canTierAccessFeature(featureName, userTier);
   };
 
   return (
@@ -201,6 +288,13 @@ export function SubscriptionProvider({ children }) {
       value={{
         userTier,
         userId,
+        subscription,
+        subscriptionStatus,
+        isTrialing,
+        isPastDue,
+        trialEndsAt,
+        trialDaysRemaining,
+        hasPaidAccess,
         usage,
         loading,
         checkFeatureAccess,
@@ -216,6 +310,7 @@ export function SubscriptionProvider({ children }) {
         refreshStorageUsage,
         canUploadFile,
         getUpgradeMessage,
+        refreshSubscription,
         TIERS,
         TIER_LIMITS,
         FEATURES,

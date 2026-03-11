@@ -151,7 +151,7 @@ export default function Signup() {
     const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'];
     
     return { score, label: labels[score], color: colors[score], requirements };
-  }, [password, uniqueCheckStatus, isUniqueCheckComplete, isPasswordUnique]);
+  }, [password, uniqueCheckStatus]);
 
   // Check if password meets all requirements (including uniqueness)
   const passwordMeetsRequirements = useMemo(() => {
@@ -316,7 +316,10 @@ export default function Signup() {
           {/* Welcome Text */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Create your account</h2>
-            <p className="text-gray-500 text-sm">Start your free trial today</p>
+            <p className="text-gray-500 text-sm">Start Free Trial - No charge for 7 days</p>
+            <p className="text-gray-400 text-xs mt-2">
+              Enter your card to start. Cancel anytime before day 7 and you won&apos;t be charged.
+            </p>
           </div>
 
           {/* Signup Form */}

@@ -25,7 +25,8 @@ import {
   FolderOpen,
   Clock,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -100,7 +101,15 @@ export default function Dashboard() {
   const { brandProfile, loading: isBrandProfileLoading } = useBrand();
   const { showToast } = useToast();
   const { addNotification, addSocialUpdate } = useNotifications();
-  const { userTier, getTierDisplayName } = useSubscription();
+  const {
+    userTier,
+    getTierDisplayName,
+    subscriptionStatus,
+    isTrialing,
+    trialDaysRemaining,
+    trialEndsAt,
+    refreshSubscription,
+  } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const [copiedHashtag, setCopiedHashtag] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
@@ -112,6 +121,8 @@ export default function Dashboard() {
   const [recentVaultItems, setRecentVaultItems] = useState([]);
   const [copiedVaultItem, setCopiedVaultItem] = useState(null);
   const [selectedHashtagPlatform, setSelectedHashtagPlatform] = useState('All');
+  const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
+  const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
   const dashboardLoadedRef = useRef(false);
   const brandProfileRef = useRef(brandProfile);
   const brandLoadingRef = useRef(isBrandProfileLoading);
@@ -195,21 +206,54 @@ export default function Dashboard() {
   useEffect(() => {
     const success = searchParams.get('success');
     const canceled = searchParams.get('canceled');
+    const trialStarted = searchParams.get('trial');
+    const nextParams = new URLSearchParams(searchParams);
+    let shouldReplaceParams = false;
+
     if (success === 'true') {
       showToast(`Welcome to ${getTierDisplayName(userTier)}! Your upgrade is now active.`, 'success');
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!prefersReducedMotion) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#01bad2', '#2B8FC7', '#00ACC1', '#4DD0E1', '#ffffff'], disableForReducedMotion: true });
       }
-      searchParams.delete('success');
-      setSearchParams(searchParams, { replace: true });
+      nextParams.delete('success');
+      shouldReplaceParams = true;
     }
     if (canceled === 'true') {
       showToast('Checkout canceled. No changes were made to your subscription.', 'info');
-      searchParams.delete('canceled');
-      setSearchParams(searchParams, { replace: true });
+      nextParams.delete('canceled');
+      shouldReplaceParams = true;
     }
-  }, [searchParams, setSearchParams, showToast, userTier, getTierDisplayName]);
+
+    if (trialStarted === 'started') {
+      refreshSubscription();
+      setTrialWelcomeDate(trialEndsAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      setShowTrialWelcomeModal(true);
+      nextParams.delete('trial');
+      shouldReplaceParams = true;
+    }
+
+    if (shouldReplaceParams) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, showToast, userTier, getTierDisplayName, refreshSubscription, trialEndsAt]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const snapshotKey = `subscription-status-snapshot:${user.id}`;
+    const previousSnapshot = JSON.parse(localStorage.getItem(snapshotKey) || '{}');
+    const currentSnapshot = {
+      status: subscriptionStatus || 'inactive',
+      updatedAt: Date.now(),
+    };
+
+    if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'inactive')) {
+      showToast('Your trial has ended. Upgrade anytime to get back to creating content.', 'info', 6000);
+    }
+
+    localStorage.setItem(snapshotKey, JSON.stringify(currentSnapshot));
+  }, [subscriptionStatus, showToast, user?.id]);
 
   const isCreator = isCreatorProfile(brandProfile);
   const personalizedGreeting = getPersonalizedGreeting(
@@ -608,6 +652,19 @@ export default function Dashboard() {
                   </Link>
                 )}
               </>
+            )}
+            {isTrialing && (
+              <div className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                trialDaysRemaining !== null && trialDaysRemaining <= 2
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-cyan-100 text-cyan-800'
+              }`}>
+                <span>
+                  {trialDaysRemaining === 0
+                    ? "⚠️ Trial ends today - you'll be charged tonight"
+                    : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
+                </span>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -1184,6 +1241,45 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      {showTrialWelcomeModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-cyan-100 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-huttle-primary to-cyan-400" />
+            <button
+              onClick={() => setShowTrialWelcomeModal(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Close trial welcome"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+            <div className="p-8">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-100 text-cyan-700 flex items-center justify-center mb-5 text-2xl">
+                🎉
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Your 7-day trial has started!</h2>
+              <p className="text-gray-600 mb-3">
+                Your card will not be charged until{' '}
+                <span className="font-semibold text-gray-900">
+                  {trialWelcomeDate?.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </span>
+                .
+              </p>
+              <p className="text-gray-600 mb-6">You have full Pro access. Let&apos;s create some content.</p>
+              <button
+                onClick={() => setShowTrialWelcomeModal(false)}
+                className="btn-primary"
+              >
+                Start Creating
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

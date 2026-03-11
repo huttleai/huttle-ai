@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
+import { buildContentVaultPayload } from '../utils/contentVault';
 const REPURPOSER_EXAMPLES = [
   {
     id: 'ex-001',
@@ -236,13 +237,20 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       const name = `Repurposed ${repurposedContent.format.to} - ${repurposedContent.platform.label}`;
       const fullContent = `${repurposedContent.content}\n\n${repurposedContent.hashtags || ''}`;
 
-      const itemData = {
+      const itemData = buildContentVaultPayload({
         name,
-        type: 'text',
-        content: fullContent,
-        size_bytes: 0,
+        contentText: fullContent,
+        contentType: 'remix',
+        toolSource: 'content_repurposer',
+        toolLabel: 'Content Repurposer',
+        topic: originalContent.slice(0, 120),
+        platform: repurposedContent.platform.value,
         description: `Repurposed from ${repurposedContent.format.from} to ${repurposedContent.format.to} for ${repurposedContent.platform.label}`,
-      };
+        metadata: {
+          from_format: repurposedContent.format.from,
+          to_format: repurposedContent.format.to,
+        },
+      });
 
       const result = await saveContentLibraryItem(user.id, itemData);
 

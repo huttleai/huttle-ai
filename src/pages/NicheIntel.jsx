@@ -123,7 +123,7 @@ export default function NicheIntel() {
       <div className="flex-1 ml-0 md:ml-64 pt-16 md:pt-20 p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20 border border-black" style={{ background: 'linear-gradient(135deg, rgba(1, 186, 210, 1) 0%, rgba(59, 130, 246, 1) 100%)' }}>
               <Search className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">Niche Content Intelligence</h2>
@@ -142,7 +142,7 @@ export default function NicheIntel() {
                   'One-click "Build This Post" into Full Post Builder',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                    <Check className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" />
+                    <Check className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
                     {item}
                   </li>
                 ))}
@@ -151,12 +151,12 @@ export default function NicheIntel() {
 
             <button
               onClick={() => setShowUpgradeModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+              className="px-6 py-3 bg-gradient-to-r from-[#01bad2] to-blue-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-indigo-500/20 transition-all flex items-center gap-2 mx-auto"
             >
-              <Lock className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+              <Lock className="w-4 h-4" />
               Upgrade to Pro to Unlock
             </button>
-            <p className="text-xs text-gray-400 mt-2">Pro: 5 analyses/month &bull; Founders: 10 analyses/month</p>
+            <p className="text-xs text-gray-400 mt-3">Pro: 5 analyses/month &bull; Founders: 10 analyses/month</p>
           </motion.div>
           <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} feature="nicheIntel" featureName="Niche Content Intelligence" />
         </div>
@@ -171,8 +171,8 @@ export default function NicheIntel() {
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
-                <Search className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
+              <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20">
+                <Search className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
               </div>
               <div>
                 <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>

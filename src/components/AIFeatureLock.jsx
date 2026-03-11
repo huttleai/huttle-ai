@@ -45,7 +45,7 @@ export default function AIFeatureLock({ used, limit }) {
           onClick={() => navigate('/dashboard/subscription')}
           className="w-full px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 group btn-upgrade-glow"
         >
-          <span>Upgrade Now</span>
+          <span>Start Free Trial - No charge for 7 days</span>
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         

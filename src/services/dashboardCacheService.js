@@ -147,9 +147,9 @@ function getTrendingMode(brandVoice = {}) {
 
   const hasSpecificNiche = Boolean(niche) && !isGenericTrendingNiche(niche);
   const isJustStarting = growthStage === 'just_starting_out';
-  const isSoloCreatorWithGenericNiche = creatorType === 'solo_creator' && !hasSpecificNiche;
+  const isSoloCreator = creatorType === 'solo_creator';
 
-  if (!hasSpecificNiche || isJustStarting || isSoloCreatorWithGenericNiche) {
+  if (!hasSpecificNiche || isJustStarting || isSoloCreator) {
     return 'platform_wide';
   }
 

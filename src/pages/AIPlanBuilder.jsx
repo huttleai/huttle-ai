@@ -13,7 +13,8 @@ import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, get
 import { usePreferredPlatforms, ALL_PLATFORMS } from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { buildContentVaultPayload } from '../utils/contentVault';
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -101,6 +102,7 @@ export default function AIPlanBuilder() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const planUsage = useAIUsage('planBuilder');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
   
   // Form state
@@ -164,6 +166,17 @@ export default function AIPlanBuilder() {
     setCurrentJobId(null);
     showToast('AI Plan generated successfully!', 'success');
   };
+
+  useEffect(() => {
+    const goalParam = searchParams.get('goal');
+
+    if (!goalParam) return;
+
+    setSelectedGoal(goalParam);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('goal');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   /**
    * Handle job failure
@@ -688,13 +701,20 @@ export default function AIPlanBuilder() {
                     contentMix: generatedPlan.contentMix,
                     savedAt: new Date().toISOString(),
                   };
-                  const result = await saveContentLibraryItem(user.id, {
-                    name: `Content Plan — ${generatedPlan.goal}`,
-                    type: 'text',
-                    content: JSON.stringify(planData, null, 2),
-                    size_bytes: 0,
+                  const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+                    name: `Content Plan - ${generatedPlan.goal}`,
+                    contentText: JSON.stringify(planData, null, 2),
+                    contentType: 'plan',
+                    toolSource: 'ai_plan_builder',
+                    toolLabel: 'AI Plan Builder',
+                    topic: generatedPlan.goal,
+                    platform: generatedPlan.platforms?.[0] || '',
                     description: 'Content Plan from AI Plan Builder',
-                  });
+                    metadata: {
+                      goal: generatedPlan.goal,
+                      platforms: generatedPlan.platforms || [],
+                    },
+                  }));
                   if (result.success) showToast('Plan saved to Content Vault!', 'success');
                   else showToast('Failed to save plan', 'error');
                 } catch { showToast('Failed to save plan', 'error'); }
@@ -780,13 +800,20 @@ export default function AIPlanBuilder() {
                       onClick={async () => {
                         if (!user?.id) return;
                         try {
-                          const result = await saveContentLibraryItem(user.id, {
-                            name: `Day ${daySchedule.day} — ${post.topic || post.theme || 'Content'}`,
-                            type: 'text',
-                            content: `Platform: ${post.platform}\nTopic: ${post.topic || post.theme}\nFormat: ${post.content_type || post.type || 'Post'}\nGoal: ${generatedPlan.goal}`,
-                            size_bytes: 0,
+                          const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+                            name: `Day ${daySchedule.day} - ${post.topic || post.theme || 'Content'}`,
+                            contentText: `Platform: ${post.platform}\nTopic: ${post.topic || post.theme}\nFormat: ${post.content_type || post.type || 'Post'}\nGoal: ${generatedPlan.goal}`,
+                            contentType: 'plan',
+                            toolSource: 'ai_plan_builder',
+                            toolLabel: 'AI Plan Builder',
+                            topic: post.topic || post.theme || generatedPlan.goal,
+                            platform: post.platform,
                             description: 'Content idea from AI Plan Builder',
-                          });
+                            metadata: {
+                              goal: generatedPlan.goal,
+                              post_type: post.content_type || post.type || 'Post',
+                            },
+                          }));
                           if (result.success) showToast('Saved to Vault!', 'success');
                         } catch { showToast('Failed to save', 'error'); }
                       }}

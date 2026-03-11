@@ -69,6 +69,10 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-slate-500 font-medium">/year</span>
                 </div>
                 <p className="text-sm text-slate-500 mt-1">$16.58/mo equivalent</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>14-day money-back guarantee</span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 mb-6">
@@ -128,6 +132,10 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-slate-500 font-medium">/year</span>
                 </div>
                 <p className="text-sm text-slate-500 mt-1">$20.75/mo equivalent</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>14-day money-back guarantee</span>
+                </div>
               </div>
 
               <p className="text-sm text-zinc-600 mb-2 font-medium">For the builders who move fast.</p>
@@ -175,6 +183,10 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-slate-500 font-medium">/year</span>
                 </div>
                 <p className="text-sm text-slate-500 mt-1">$29.75/mo billed annually</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>7-day free trial - card required, cancel anytime</span>
+                </div>
               </div>
 
               <p className="text-sm text-zinc-600 mb-8 font-medium">Or $39/month billed monthly</p>

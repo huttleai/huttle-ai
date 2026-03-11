@@ -16,6 +16,8 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logError, logInfo, logWarn } from './_utils/observability.js';
+import { resolvePlanId } from './_utils/stripePlans.js';
+import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -58,30 +60,6 @@ async function getRawBody(req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
   return Buffer.concat(chunks);
-}
-
-// Map Stripe price IDs to plan tiers
-function getPlanFromPriceId(priceId) {
-  if (!priceId) return 'free';
-  
-  const priceMap = {
-    // Essentials tier
-    [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'essentials',
-    [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'essentials',
-    // Pro tier
-    [process.env.STRIPE_PRICE_PRO_MONTHLY]: 'pro',
-    [process.env.STRIPE_PRICE_PRO_ANNUAL]: 'pro',
-    // Founder tier
-    [process.env.STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
-  };
-  
-  // Remove undefined keys that might have been added
-  const plan = priceMap[priceId];
-  if (plan) return plan;
-  
-  // Log unknown price IDs for debugging
-  console.warn(`Unknown price ID: ${priceId} - defaulting to free tier`);
-  return 'free';
 }
 
 // Add member to Mailchimp Founders Club
@@ -260,7 +238,11 @@ export default async function handler(req, res) {
             if (subscriptionId) {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
               const priceId = subscription.items.data[0]?.price?.id;
-              const plan = subscription.metadata?.planId || getPlanFromPriceId(priceId);
+              const plan = resolvePlanId({
+                planId: subscription.metadata?.planId,
+                metadataPlanId: subscription.metadata?.plan,
+                priceId,
+              });
 
               // Update subscription in database
               await supabase
@@ -270,9 +252,12 @@ export default async function handler(req, res) {
                   stripe_subscription_id: subscriptionId,
                   stripe_customer_id: customerId,
                   tier: plan,
-                  status: 'active',
+                  status: subscription.status,
                   current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
                   current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                  trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
+                  trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+                  cancel_at_period_end: subscription.cancel_at_period_end,
                   updated_at: new Date().toISOString(),
                 }, {
                   onConflict: 'user_id',
@@ -287,6 +272,12 @@ export default async function handler(req, res) {
             console.warn('No auth user found for checkout email:', customerEmail);
           }
         }
+        break;
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        const subscription = event.data.object;
+        await maybeSendTrialReminder({ stripe, supabase, subscription });
         break;
       }
 
@@ -309,7 +300,11 @@ export default async function handler(req, res) {
 
         if (profile) {
           const priceId = subscription.items.data[0]?.price?.id;
-          const plan = subscription.metadata?.planId || getPlanFromPriceId(priceId);
+          const plan = resolvePlanId({
+            planId: subscription.metadata?.planId,
+            metadataPlanId: subscription.metadata?.plan,
+            priceId,
+          });
 
           await supabase
             .from('subscriptions')
@@ -321,6 +316,8 @@ export default async function handler(req, res) {
               status: subscription.status,
               current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
               current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
+              trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
               cancel_at_period_end: subscription.cancel_at_period_end,
               updated_at: new Date().toISOString(),
             }, {
@@ -348,6 +345,7 @@ export default async function handler(req, res) {
             .update({
               tier: 'free',
               status: 'canceled',
+              cancel_at_period_end: false,
               updated_at: new Date().toISOString(),
             })
             .eq('user_id', profile.user_id);

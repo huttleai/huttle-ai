@@ -12,6 +12,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { isFounderStylePlan } from './_utils/stripePlans.js';
 
 // Validate Stripe key exists
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -94,34 +95,43 @@ export default async function handler(req, res) {
       }
     }
 
+    const isFounderPlan = isFounderStylePlan({ planId, priceId });
+    const baseMetadata = {
+      planId,
+      billingCycle,
+      source: isFounderPlan ? 'founders_club' : 'app_checkout',
+      ...(userId && { supabase_user_id: userId }),
+    };
+
+    const subscriptionData = {
+      metadata: baseMetadata,
+      ...(isFounderPlan
+        ? {}
+        : {
+            trial_period_days: 7,
+            trial_settings: {
+              end_behavior: {
+                missing_payment_method: 'cancel',
+              },
+            },
+          }),
+    };
+
     // Create checkout session options
     const sessionOptions = {
       mode: 'subscription',
       payment_method_types: ['card'],
+      payment_method_collection: 'always',
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/dashboard?success=true`,
+      success_url: `${appUrl}/dashboard?${isFounderPlan ? 'success=true' : 'trial=started'}`,
       cancel_url: `${appUrl}/dashboard?canceled=true`,
-      metadata: {
-        planId,
-        billingCycle,
-        source: 'founders_club',
-        // Only add supabase_user_id if user exists (not guest checkout)
-        ...(userId && { supabase_user_id: userId }),
-      },
-      subscription_data: {
-        metadata: {
-          planId,
-          billingCycle,
-          source: 'founders_club',
-          // Only add supabase_user_id if user exists (not guest checkout)
-          ...(userId && { supabase_user_id: userId }),
-        },
-      },
+      metadata: baseMetadata,
+      subscription_data: subscriptionData,
       // Allow promotion codes
       allow_promotion_codes: true,
       // Collect billing address (this includes name)
@@ -133,7 +143,9 @@ export default async function handler(req, res) {
       // Custom text for the checkout page
       custom_text: {
         submit: {
-          message: 'Welcome to the Huttle AI Founders Club! Your membership will be activated immediately after payment.',
+          message: isFounderPlan
+            ? 'Welcome to the Huttle AI Founders Club! Your membership will be activated immediately after payment.'
+            : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',
         },
       },
     };

@@ -43,7 +43,7 @@ export async function testSupabaseConnection() {
     }
 
     // Try a simple query to test connection
-    const { data, error } = await supabase.from('scheduled_posts').select('id').limit(1);
+    const { error } = await supabase.from('scheduled_posts').select('id').limit(1);
     
     if (error) {
       // Check if it's an auth error (expected for unauthenticated requests)
@@ -80,6 +80,8 @@ export const TABLES = {
   USERS: 'users',
   CONTENT: 'generated_content',
   CONTENT_LIBRARY: 'content_library',
+  CONTENT_COLLECTIONS: 'content_collections',
+  CONTENT_COLLECTION_ITEMS: 'content_collection_items',
   PROJECTS: 'projects',
   TRENDS: 'trend_forecasts',
   ACTIVITY: 'user_activity',
@@ -497,7 +499,7 @@ export async function getUserTier(userId) {
       .from(TABLES.SUBSCRIPTIONS)
       .select('tier, status')
       .eq('user_id', userId)
-      .eq('status', 'active')
+      .in('status', ['active', 'trialing', 'past_due'])
       .single();
     
     if (error) {
@@ -586,7 +588,7 @@ export async function uploadFileToStorage(userId, file, type) {
     const safeName = sanitizeFileName(file.name);
     const filePath = `${userId}/${type}s/${Date.now()}-${safeName}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('content-library')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -754,7 +756,7 @@ export async function getStorageUsage(userId) {
     }
 
     return { success: true, usageBytes: 0 };
-  } catch (error) {
+  } catch {
     // Silently fail - storage tracking isn't critical
     // console.error('Error getting storage usage:', error);
     return { success: true, usageBytes: 0 }; // Return success with 0 instead of error
@@ -846,6 +848,130 @@ export async function deleteContentLibraryItem(itemId, userId) {
     return { success: true };
   } catch (error) {
     console.error('Error deleting content library item:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getContentCollections(userId) {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.CONTENT_COLLECTIONS)
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error getting content collections:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createContentCollection(userId, name) {
+  try {
+    const trimmedName = String(name || '').trim();
+
+    if (!trimmedName) {
+      return { success: false, error: 'Collection name is required.' };
+    }
+
+    const { data, error } = await supabase
+      .from(TABLES.CONTENT_COLLECTIONS)
+      .insert({
+        user_id: userId,
+        name: trimmedName,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error creating content collection:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getContentCollectionItems(collectionIds = []) {
+  try {
+    if (!Array.isArray(collectionIds) || collectionIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const { data, error } = await supabase
+      .from(TABLES.CONTENT_COLLECTION_ITEMS)
+      .select('collection_id, content_item_id')
+      .in('collection_id', collectionIds);
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error getting content collection items:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function setContentItemCollections(userId, contentItemId, collectionIds = []) {
+  try {
+    const uniqueCollectionIds = [...new Set((collectionIds || []).filter(Boolean))];
+
+    const { error: deleteError } = await supabase
+      .from(TABLES.CONTENT_COLLECTION_ITEMS)
+      .delete()
+      .eq('content_item_id', contentItemId);
+
+    if (deleteError) throw deleteError;
+
+    if (uniqueCollectionIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const rows = uniqueCollectionIds.map((collectionId) => ({
+      collection_id: collectionId,
+      content_item_id: contentItemId,
+    }));
+
+    const { data, error } = await supabase
+      .from(TABLES.CONTENT_COLLECTION_ITEMS)
+      .insert(rows)
+      .select('collection_id, content_item_id');
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error setting content item collections:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function addItemsToCollection(userId, collectionId, contentItemIds = []) {
+  try {
+    const uniqueItemIds = [...new Set((contentItemIds || []).filter(Boolean))];
+
+    if (!collectionId || uniqueItemIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const rows = uniqueItemIds.map((contentItemId) => ({
+      collection_id: collectionId,
+      content_item_id: contentItemId,
+    }));
+
+    const { data, error } = await supabase
+      .from(TABLES.CONTENT_COLLECTION_ITEMS)
+      .upsert(rows, { onConflict: 'collection_id,content_item_id' })
+      .select('collection_id, content_item_id');
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error adding items to content collection:', error);
     return { success: false, error: error.message };
   }
 }

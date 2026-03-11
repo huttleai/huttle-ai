@@ -137,7 +137,10 @@ export default function PrivacyPolicy() {
 
         <div className="mt-12 pt-8 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
           <span>&copy; 2026 Huttle AI</span>
-          <Link to="/terms" className="hover:text-huttle-primary transition-colors">Terms of Service</Link>
+          <div className="flex items-center gap-4">
+            <Link to="/terms" className="hover:text-huttle-primary transition-colors">Terms of Service</Link>
+            <Link to="/refund-policy" className="hover:text-huttle-primary transition-colors">Refund Policy</Link>
+          </div>
         </div>
       </div>
     </div>

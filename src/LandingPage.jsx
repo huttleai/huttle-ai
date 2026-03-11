@@ -392,7 +392,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "7 Day Happiness Guarantee", desc: "Not satisfied? We will refund you within 7 days, no questions asked" },
+                { title: "14-Day Money-Back Guarantee", desc: "Not satisfied? Email hello@huttleai.com within 14 days for a full refund" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
@@ -822,7 +822,7 @@ const FAQSectionComponent = () => {
     },
     {
       question: "Is there a money-back guarantee?",
-      answer: "Yes. We have a 7-day happiness guarantee. If you're not satisfied within the first 7 days, we'll refund you in full. No questions asked. Email support@huttleai.com and we'll take care of it immediately."
+      answer: "Yes. Founders Club and Builders Club annual plans include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund. Essentials and Pro monthly plans are not refundable, but they include a 7-day free trial before any charge."
     },
     {
       question: "What platforms does Huttle AI support?",
@@ -921,6 +921,10 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-sm md:text-base text-slate-500">/year</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">$16.58/mo equivalent</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>14-day money-back guarantee</span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 mb-4">
@@ -984,6 +988,10 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-sm text-slate-500">/year</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">$20.75/mo equivalent</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>14-day money-back guarantee</span>
+                </div>
               </div>
 
               <p className="text-sm text-slate-600 mb-2">For the builders who move fast.</p>
@@ -1034,6 +1042,10 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-sm text-slate-500">/year</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">$29.75/mo billed annually</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={13} className="text-green-600 flex-shrink-0" />
+                  <span>7-day free trial - card required, cancel anytime</span>
+                </div>
               </div>
 
               <p className="text-sm text-slate-600 mb-5">Or $35/month billed monthly</p>
@@ -1109,7 +1121,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </div>
           
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-6 md:mt-8 text-xs md:text-sm text-slate-500 font-medium">
-            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 7-day happiness guarantee</span>
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 14-day money-back guarantee</span>
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Cancel anytime</span>
           </div>
         </motion.div>
@@ -1270,7 +1282,13 @@ const PolicyModal = ({ isOpen, onClose, type }) => {
 
       <section className="mb-6">
         <h3 className="text-base font-bold text-slate-900 mb-3">5. Refund Policy</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">All sales are final for Founding Member subscriptions. Any additional questions regarding current and future subscription trials and refunds, contact support@huttleai.com</p>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Founders Club and Builders Club annual plans include a 14-day money-back guarantee. Essentials and Pro monthly plans are not eligible for refunds, but include a 7-day free trial before any charge. See our{' '}
+          <Link to="/refund-policy" className="text-huttle-primary hover:underline" onClick={onClose}>
+            Refund Policy
+          </Link>{' '}
+          for full details, or contact hello@huttleai.com with questions.
+        </p>
       </section>
 
       <section className="mb-6">
@@ -1752,7 +1770,7 @@ export default function LandingPage() {
           
           <div className="flex-1 text-center">
             <p className="text-sm text-slate-500">
-              © 2026 Huttle AI · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link>
+              © 2026 Huttle AI · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link> · <Link to="/refund-policy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Refund Policy</Link>
             </p>
           </div>
           
