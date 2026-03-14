@@ -126,13 +126,31 @@ export function SubscriptionProvider({ children }) {
       }
 
       const databaseSubscription = databaseResult.subscription;
-      const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
-      const nextTier = databaseTier
-        || (stripeSubscription && ACTIVE_ACCESS_STATUSES.has(nextStatus)
-          ? normalizeTier(stripeSubscription.plan || stripeResult.plan)
-          : null);
+      const stripeLookupSucceeded = Boolean(stripeResult?.success);
+      const stripeSubscription = stripeLookupSucceeded ? stripeResult.subscription : null;
+      const stripeStatus = stripeSubscription?.status || stripeResult?.status || 'inactive';
+      const stripeTier = stripeSubscription
+        ? normalizeTier(stripeSubscription.plan || stripeResult.plan)
+        : null;
+
+      // Stripe is the subscription source of truth when available.
+      // This prevents stale DB rows from preserving paid access after cancellation.
+      let nextStatus = 'inactive';
+      let nextTier = null;
+
+      if (stripeLookupSucceeded) {
+        nextStatus = stripeStatus;
+        if (ACTIVE_ACCESS_STATUSES.has(stripeStatus)) {
+          nextTier = stripeTier || databaseTier;
+        }
+      } else if (databaseSubscription) {
+        nextStatus = databaseSubscription.status || 'inactive';
+        if (ACTIVE_ACCESS_STATUSES.has(nextStatus)) {
+          nextTier = databaseTier;
+        }
+      }
+
       const nextSubscription = stripeSubscription
         ? {
             ...stripeSubscription,
@@ -140,17 +158,20 @@ export function SubscriptionProvider({ children }) {
               ? {
                   id: databaseSubscription.id,
                   user_id: databaseSubscription.user_id,
-                  plan: databaseTier,
-                  tier: databaseTier,
-                  status: databaseSubscription.status,
+                  dbTier: databaseTier,
+                  dbStatus: databaseSubscription.status,
                 }
               : {}),
+            plan: nextTier,
+            tier: nextTier,
+            status: nextStatus,
           }
-        : (databaseSubscription
+        : (databaseSubscription && nextTier
           ? {
               ...databaseSubscription,
-              plan: databaseTier,
-              tier: databaseTier,
+              plan: nextTier,
+              tier: nextTier,
+              status: nextStatus,
             }
           : null);
 
