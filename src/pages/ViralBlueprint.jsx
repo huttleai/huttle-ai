@@ -30,7 +30,8 @@ import {
   FileText,
   TrendingUp,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  FolderPlus,
 } from 'lucide-react';
 import { 
   TikTokIcon, 
@@ -134,6 +135,160 @@ const OBJECTIVES = [
  */
 const isVideoContent = (postType) => VIDEO_CONTENT_TYPES.includes(postType);
 
+function normalizeStringArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+
+  const singleValue = String(value || '').trim();
+  return singleValue ? [singleValue] : [];
+}
+
+function normalizeBlueprintStep(item, index) {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+
+  const step = Number(
+    item.step
+    || item.sceneNumber
+    || item.scene_number
+    || item.slide_number
+    || item.tweet_number
+    || item.frame_number
+    || index + 1
+  );
+  const title = String(item.title || item.headline || item.timestamp || `Step ${index + 1}`).trim();
+  const text = String(
+    item.script
+    || item.text
+    || item.content
+    || item.dialogue
+    || item.body_text
+    || item.caption
+    || ''
+  ).trim();
+  const visual = String(
+    item.visual
+    || item.visualSuggestion
+    || item.visual_note
+    || item.visual_description
+    || item.media_suggestion
+    || ''
+  ).trim();
+
+  if (!text && !visual) {
+    return null;
+  }
+
+  return {
+    step: Number.isFinite(step) && step > 0 ? step : index + 1,
+    title,
+    script: text,
+    text,
+    visual,
+    visualSuggestion: visual,
+  };
+}
+
+function mergeNestedBlueprintResponse(data) {
+  if (!data || typeof data !== 'object' || !data.blueprint || typeof data.blueprint !== 'object') {
+    return null;
+  }
+
+  const nestedBlueprint = data.blueprint;
+
+  return {
+    ...data,
+    ...nestedBlueprint,
+    directorsCut: nestedBlueprint.directorsCut ?? data.directorsCut,
+    directors_cut: nestedBlueprint.directors_cut ?? data.directors_cut,
+    slide_breakdown: nestedBlueprint.slide_breakdown ?? data.slide_breakdown,
+    tweet_breakdown: nestedBlueprint.tweet_breakdown ?? data.tweet_breakdown,
+    frame_breakdown: nestedBlueprint.frame_breakdown ?? data.frame_breakdown,
+    caption_structure: nestedBlueprint.caption_structure ?? data.caption_structure,
+    seoStrategy: nestedBlueprint.seoStrategy ?? data.seoStrategy,
+    seo_strategy: nestedBlueprint.seo_strategy ?? data.seo_strategy,
+    audioVibe: nestedBlueprint.audioVibe ?? data.audioVibe,
+    audio_vibe: nestedBlueprint.audio_vibe ?? data.audio_vibe,
+    viralScore: nestedBlueprint.viralScore ?? data.viralScore,
+    viral_score: nestedBlueprint.viral_score ?? data.viral_score,
+    hooks: nestedBlueprint.hooks ?? data.hooks,
+    content_script: nestedBlueprint.content_script ?? data.content_script,
+    seo_keywords: nestedBlueprint.seo_keywords ?? data.seo_keywords,
+    suggested_hashtags: nestedBlueprint.suggested_hashtags ?? data.suggested_hashtags,
+    isVideoContent: nestedBlueprint.isVideoContent ?? data.isVideoContent,
+  };
+}
+
+function buildStructuredBlueprintResult(source) {
+  if (!Array.isArray(source?.directorsCut) || source.directorsCut.length === 0) {
+    return null;
+  }
+
+  const directorsCut = source.directorsCut
+    .map((item, index) => normalizeBlueprintStep(item, index))
+    .filter(Boolean);
+
+  if (directorsCut.length === 0) {
+    return null;
+  }
+
+  const rawSeoStrategy = source.seoStrategy && typeof source.seoStrategy === 'object'
+    ? source.seoStrategy
+    : source.seo_strategy && typeof source.seo_strategy === 'object'
+      ? source.seo_strategy
+      : {};
+  const seoStrategy = {
+    visualKeywords: normalizeStringArray(
+      rawSeoStrategy.visualKeywords
+      ?? rawSeoStrategy.visual_keywords
+      ?? source.seo_keywords
+    ),
+    spokenHooks: normalizeStringArray(
+      rawSeoStrategy.spokenHooks
+      ?? rawSeoStrategy.spoken_hooks
+      ?? rawSeoStrategy.title
+      ?? source.hooks
+    ),
+    captionKeywords: normalizeStringArray(
+      rawSeoStrategy.captionKeywords
+      ?? rawSeoStrategy.caption_keywords
+      ?? source.suggested_hashtags
+    ),
+  };
+  const hooks = normalizeStringArray(source.hooks).length > 0
+    ? normalizeStringArray(source.hooks)
+    : seoStrategy.spokenHooks;
+
+  const rawAudioVibe = source.audioVibe && typeof source.audioVibe === 'object'
+    ? source.audioVibe
+    : source.audio_vibe && typeof source.audio_vibe === 'object'
+      ? source.audio_vibe
+      : null;
+  const audioVibe = rawAudioVibe
+    ? {
+        mood: rawAudioVibe.mood || rawAudioVibe.music_style || '',
+        bpm: rawAudioVibe.bpm || '',
+        suggestion: rawAudioVibe.suggestion || '',
+      }
+    : null;
+
+  const parsedViralScore = typeof source.viral_score === 'object'
+    ? source.viral_score?.score
+    : source.viralScore ?? source.viral_score;
+  const viralScore = Number(parsedViralScore) > 0 ? Number(parsedViralScore) : 85;
+
+  return {
+    isVideoContent: typeof source.isVideoContent === 'boolean' ? source.isVideoContent : false,
+    directorsCut,
+    viralScore,
+    audioVibe,
+    seoStrategy,
+    hooks,
+  };
+}
+
 // TODO: Update Grok API credentials in n8n workflow dashboard — current creds returning 403 Forbidden
 
 /**
@@ -156,6 +311,12 @@ const isVideoContent = (postType) => VIDEO_CONTENT_TYPES.includes(postType);
 const adaptBlueprintResponse = (data) => {
   let directorsCut = [];
   let isVideo = false;
+  const mergedBlueprintData = mergeNestedBlueprintResponse(data);
+  const structuredBlueprint = buildStructuredBlueprintResult(mergedBlueprintData || data);
+
+  if (structuredBlueprint?.directorsCut?.length > 0) {
+    return structuredBlueprint;
+  }
 
   // Handle nested response structures — try many common wrappers
   let blueprintData = null;
@@ -621,6 +782,7 @@ export default function ViralBlueprint() {
       const payload = {
         topic: topic.trim(),
         platform: selectedPlatform,                                    // e.g., 'Instagram', 'YouTube'
+        format: selectedPostType,
         platformAliases,                                               // helps n8n templates using alternate naming
         postType: requestedFormat,                                     // Maps to 5 master formats
         requestedPostType: selectedPostType,

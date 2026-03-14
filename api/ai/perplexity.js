@@ -18,9 +18,13 @@ const PERPLEXITY_API_KEY =
   process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
-// Model: llama-3.1-sonar-small-128k-online | Updated: March 2026
-// To upgrade: change the model string below and update .env.example
-const MODEL = "llama-3.1-sonar-small-128k-online";
+const DEFAULT_MODEL = 'sonar';
+const ALLOWED_MODELS = new Set([
+  'sonar',
+  'llama-3.1-sonar-small-128k-online',
+  'llama-3.1-sonar-large-128k-online',
+]);
+const ALLOWED_SEARCH_CONTEXT_SIZES = new Set(['low', 'medium', 'high']);
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -130,7 +134,7 @@ async function getCachedPerplexityResult(cacheConfig, cacheAccess) {
   const { data, error } = await applyCacheUserScope(
     supabase
       .from('niche_content_cache')
-      .select('id, payload, generated_at, expires_at, hit_count')
+      .select('*')
       .eq('cache_key', cacheConfig.key),
     cacheAccess,
   )
@@ -147,7 +151,7 @@ async function getCachedPerplexityResult(cacheConfig, cacheAccess) {
   await incrementCacheHitCount(data);
 
   return {
-    resultData: data.payload,
+    resultData: data.payload ?? data.result_data,
     generatedAt: data.generated_at,
   };
 }
@@ -168,6 +172,7 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'trending',
     payload: cachePayload,
+    result_data: cachePayload,
     generated_at: now.toISOString(),
     expires_at: expiresAt.toISOString(),
     hit_count: 0,
@@ -244,6 +249,18 @@ function toTitleCase(value) {
     .join(' ');
 }
 
+function resolveFallbackLocation(value) {
+  const location = toTitleCase(value);
+  if (!location) return '';
+
+  const normalized = location.toLowerCase();
+  if (normalized === 'your city' || normalized === 'global') {
+    return '';
+  }
+
+  return location;
+}
+
 function normalizeDashboardHashtagPayload(items, cacheConfig = {}) {
   if (!Array.isArray(items)) return [];
 
@@ -303,49 +320,64 @@ function normalizeDashboardHashtagPayload(items, cacheConfig = {}) {
 function buildDashboardFallbackData(cacheConfig = {}) {
   const niche = toTitleCase(cacheConfig.niche || 'Small Business');
   const platform = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
-  const city = toTitleCase(cacheConfig.city || 'your city') || 'your city';
+  const city = resolveFallbackLocation(cacheConfig.city);
 
   if (cacheConfig.type === 'hashtags') {
     const nicheSlug = String(cacheConfig.niche || 'smallbusiness').replace(/[^a-zA-Z0-9]/g, '');
+    const localTags = city
+      ? [
+          { tag: `#${city.replace(/\s+/g, '')}`, volume: 'Medium', status: 'Local', platform, type: 'hashtag' },
+          { tag: `#${city.replace(/\s+/g, '')}${nicheSlug}`, volume: 'Niche', status: 'Local', platform, type: 'hashtag' },
+        ]
+      : [];
 
     return [
       { tag: `#${nicheSlug}`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
       { tag: `#${nicheSlug}tips`, volume: 'Medium', status: 'Niche', platform, type: 'hashtag' },
-      { tag: `#${city.replace(/\s+/g, '')}`, volume: 'Medium', status: 'Local', platform, type: 'hashtag' },
       { tag: `#${platform.replace(/\s+/g, '')}creator`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
       { tag: `#${nicheSlug}community`, volume: 'Niche', status: 'Niche', platform, type: 'hashtag' },
       { tag: `#${nicheSlug}ideas`, volume: 'Medium', status: 'Trending', platform, type: 'hashtag' },
-      { tag: `#${city.replace(/\s+/g, '')}${nicheSlug}`, volume: 'Niche', status: 'Local', platform, type: 'hashtag' },
+      ...localTags,
       { tag: `#${platform.replace(/\s+/g, '')}tips`, volume: 'High', status: 'Trending', platform, type: 'hashtag' },
     ];
   }
 
-  return [
-    {
-      title: `${niche} myths people still believe`,
-      summary: `Educational explainers about ${niche.toLowerCase()} are performing well on ${platform}.`,
-      why_it_matters: `Audiences in ${city} are responding to clear, practical takes they can apply quickly.`,
-      momentum: 'rising',
-      platform,
-      content_idea: `Create a fast ${platform} post debunking one common ${niche.toLowerCase()} misconception.`,
-    },
-    {
-      title: `${city} audience questions this week`,
-      summary: `Localized question-led content is a reliable angle when live trend data is unavailable.`,
-      why_it_matters: `Grounding posts in ${city} helps your content feel more specific and relevant.`,
-      momentum: 'steady',
-      platform,
-      content_idea: `Answer one question your ${city} audience keeps asking about ${niche.toLowerCase()}.`,
-    },
-    {
-      title: `Behind-the-scenes ${niche.toLowerCase()} workflows`,
-      summary: `Process content continues to earn attention because it feels practical and authentic.`,
-      why_it_matters: `Showing your workflow builds trust while giving followers a reason to save the post.`,
-      momentum: 'rising',
-      platform,
-      content_idea: `Break your workflow into 3 quick steps and turn each step into a content beat.`,
-    },
-  ];
+  return {
+    trends: [
+      {
+        topic: `${niche} myths people still believe`,
+        category: 'Industry Shift',
+        why_trending: `Educational explainers about ${niche.toLowerCase()} are performing well on ${platform}.`,
+        relevance_to_niche: 'Audiences are responding to clear, practical takes they can apply quickly.',
+        momentum: 'rising',
+        platforms_active: [platform],
+        estimated_lifespan: 'days',
+        opportunity_window: 'Plan this week',
+      },
+      {
+        topic: `${platform} audience questions this week`,
+        category: 'Cultural Wave',
+        why_trending: 'Localized question-led content is a reliable angle when live trend data is unavailable.',
+        relevance_to_niche: `Grounding posts in current ${platform} audience questions helps your content feel more specific and relevant.`,
+        momentum: 'peaking',
+        platforms_active: [platform],
+        estimated_lifespan: 'days',
+        opportunity_window: 'Act now',
+      },
+      {
+        topic: `Behind-the-scenes ${niche.toLowerCase()} workflows`,
+        category: 'Viral Moment',
+        why_trending: 'Process content continues to earn attention because it feels practical and authentic.',
+        relevance_to_niche: 'Showing your workflow builds trust while giving followers a reason to save the post.',
+        momentum: 'rising',
+        platforms_active: [platform],
+        estimated_lifespan: '1-2 weeks',
+        opportunity_window: 'Plan this week',
+      },
+    ],
+    scan_summary: `Fallback trend snapshot for ${niche} on ${platform}.`,
+    last_updated: new Date().toISOString(),
+  };
 }
 
 async function respondWithDashboardFallback(res, cacheConfig, sourceStatus) {
@@ -381,16 +413,17 @@ export default async function handler(req, res) {
 
   try {
     const requestedCache = req.body?.cache;
+    const requireRealtime = Boolean(req.body?.requireRealtime);
 
     // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
     if (!PERPLEXITY_API_KEY) {
-      if (requestedCache?.key) {
+      if (requestedCache?.key || requireRealtime) {
         logError('perplexity.missing_api_key_for_cached_dashboard_request');
-        return res.status(500).json({ error: 'Perplexity is required for live dashboard trend data.' });
+        return res.status(500).json({ error: 'Perplexity is required for live research requests.' });
       }
 
       logError('perplexity.missing_api_key_using_grok_fallback');
-      const grokKey = process.env.GROK_API_KEY || process.env.VITE_GROK_API_KEY || process.env.XAI_API_KEY;
+      const grokKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
       if (!grokKey) {
         return res.status(500).json({ error: 'AI service not configured' });
       }
@@ -450,7 +483,7 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.2, cache } = req.body;
+    const { messages, temperature = 0.2, cache, model, web_search_options: webSearchOptions } = req.body;
     const cacheAccess = buildCacheAccessContext(req.body, userId);
 
     if (!messages || !Array.isArray(messages)) {
@@ -474,8 +507,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // Enforce fastest in-app Perplexity model for cost/performance consistency.
-    const safeModel = 'sonar';
+    const safeModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
+    const requestedSearchContext = webSearchOptions?.search_context_size;
+    const safeSearchContextSize = ALLOWED_SEARCH_CONTEXT_SIZES.has(requestedSearchContext)
+      ? requestedSearchContext
+      : (cache?.type === 'niche_intel' ? 'high' : 'low');
 
     // Validate temperature range
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.2, 0), 2);
@@ -505,7 +541,7 @@ export default async function handler(req, res) {
         messages,
         temperature: safeTemperature,
         web_search_options: {
-          search_context_size: 'low'
+          search_context_size: safeSearchContextSize
         }
       })
     });
@@ -514,7 +550,7 @@ export default async function handler(req, res) {
       const errorText = await response.text();
       logError('perplexity.upstream_error', { status: response.status, errorText });
 
-      if (cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags')) {
+      if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags')) {
         return respondWithDashboardFallback(res, cache, response.status);
       }
 
@@ -533,6 +569,7 @@ export default async function handler(req, res) {
 
     if (
       cache?.key
+      && !requireRealtime
       && (cache?.type === 'trending' || cache?.type === 'hashtags')
       && !Array.isArray(structuredData)
     ) {
@@ -540,7 +577,7 @@ export default async function handler(req, res) {
       return respondWithDashboardFallback(res, cache, 200);
     }
 
-    if (cache?.type === 'hashtags' && Array.isArray(structuredData) && structuredData.length === 0) {
+    if (!requireRealtime && cache?.type === 'hashtags' && Array.isArray(structuredData) && structuredData.length === 0) {
       logError('perplexity.empty_dashboard_hashtag_payload', { cacheKey: cache.key });
       return respondWithDashboardFallback(res, cache, 200);
     }

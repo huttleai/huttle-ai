@@ -52,6 +52,17 @@ function buildCaptionFallbacks(topic, platformLabel, tone) {
   ]);
 }
 
+function formatHashtagPostCount(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  if (/\b(posts?|uses?)\b/i.test(text)) {
+    return text.replace(/\s{2,}/g, ' ');
+  }
+
+  return `${text} posts`;
+}
+
 export default function AITools() {
   const { addToast: showToast } = useToast();
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
@@ -962,7 +973,7 @@ export default function AITools() {
                           <p className="font-medium text-gray-900 text-xs md:text-sm truncate">{hashtag.tag}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs text-huttle-primary font-medium">Score: {hashtag.score}%</span>
-                            <span className="text-xs text-gray-500">{hashtag.posts} posts</span>
+                            <span className="text-xs text-gray-500">{formatHashtagPostCount(hashtag.posts)}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 ml-2">

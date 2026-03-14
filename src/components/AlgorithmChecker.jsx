@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useMemo, useEffect } from 'react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, Shield, ChevronDown, ChevronUp, Wrench, Sparkles } from 'lucide-react';
 import { checkAlgorithmAlignment, lastUpdated } from '../data/algorithmSignals';
 import PlatformSelector from './PlatformSelector';
@@ -27,10 +27,12 @@ export default function AlgorithmChecker({
 
   const result = useMemo(() => {
     if (!content?.trim()) return null;
-    const r = checkAlgorithmAlignment(content, platform);
-    onScoreChange?.(r.overallScore);
-    return r;
-  }, [content, platform, onScoreChange]);
+    return checkAlgorithmAlignment(content, platform);
+  }, [content, platform]);
+
+  useEffect(() => {
+    onScoreChange?.(result?.overallScore ?? 0);
+  }, [onScoreChange, result]);
 
   if (compact && result) {
     const color = scoreColor(result.overallScore);
@@ -46,7 +48,7 @@ export default function AlgorithmChecker({
   }
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -87,7 +89,7 @@ export default function AlgorithmChecker({
 
       <AnimatePresence mode="wait">
         {result ? (
-          <motion.div
+          <Motion.div
             key="results"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -115,7 +117,7 @@ export default function AlgorithmChecker({
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <motion.div
+                <Motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${result.overallScore}%` }}
                   transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -159,7 +161,7 @@ export default function AlgorithmChecker({
                 </button>
                 <AnimatePresence>
                   {showFixes && (
-                    <motion.div
+                    <Motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -175,7 +177,7 @@ export default function AlgorithmChecker({
                             </div>
                           ))}
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -184,10 +186,10 @@ export default function AlgorithmChecker({
             <p className="text-[11px] text-gray-400">
               Signals last updated: {lastUpdated}
             </p>
-          </motion.div>
+          </Motion.div>
         ) : (
           !hideInput && (
-            <motion.div
+            <Motion.div
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -195,10 +197,10 @@ export default function AlgorithmChecker({
             >
               <Shield className="w-10 h-10 mx-auto mb-2 opacity-30" />
               <p className="text-sm">Paste content above to check algorithm alignment</p>
-            </motion.div>
+            </Motion.div>
           )
         )}
       </AnimatePresence>
-    </motion.div>
+    </Motion.div>
   );
 }

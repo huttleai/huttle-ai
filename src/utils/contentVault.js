@@ -273,7 +273,7 @@ export function buildUseAgainTarget(item) {
     return `/dashboard/ai-tools?tool=visual-brainstorm&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
-  if (source === 'full_post_builder') {
+  if (source === 'full_post_builder' || source === 'full-post-builder') {
     return `/dashboard/full-post-builder?topic=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 

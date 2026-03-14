@@ -1,11 +1,11 @@
 import { useState, useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Search, TrendingUp, Target, Check, Shuffle, Sparkles, Zap, Lock, Loader2, Radar, Activity, ExternalLink, ArrowUpRight, FolderPlus, AlertTriangle, RefreshCw, PenLine } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
-import { scanTrendingTopics } from '../services/perplexityAPI';
+import { getAudienceInsights, scanTrendingTopics } from '../services/perplexityAPI';
 import { getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { useToast } from '../context/ToastContext';
 import { getToastDisclaimer } from './AIDisclaimer';
@@ -44,6 +44,20 @@ function getDeepDiveLoadingMessage(seconds) {
   if (seconds < 18) return 'Analyzing platform activity...';
   if (seconds < 28) return 'Compiling intelligence report...';
   return 'Finalizing deep analysis...';
+}
+
+function formatPlatformLabel(platform) {
+  const normalized = String(platform || '').trim().toLowerCase();
+  const platformLabels = {
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    youtube: 'YouTube',
+    facebook: 'Facebook',
+    x: 'X',
+    twitter: 'X',
+  };
+
+  return platformLabels[normalized] || platform;
 }
 
 function DeepDiveLoadingState({ secondsElapsed }) {
@@ -97,7 +111,8 @@ export default function TrendDiscoveryHub() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const navigate = useNavigate();
-  const { getFeatureLimit, userTier } = useSubscription();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { getFeatureLimit } = useSubscription();
   const quickScanUsage = useAIUsage('trendQuickScan');
   const deepDiveUsage = useAIUsage('trendDeepDive');
   
@@ -114,8 +129,19 @@ export default function TrendDiscoveryHub() {
   const [deepDiveError, setDeepDiveError] = useState(null);
   const [deepDiveLoadingSeconds, setDeepDiveLoadingSeconds] = useState(0);
   const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
+  const [audienceInsightsResult, setAudienceInsightsResult] = useState(null);
+  const [audienceInsightsError, setAudienceInsightsError] = useState(null);
+  const [isLoadingAudienceInsights, setIsLoadingAudienceInsights] = useState(false);
+  const [audienceInsightsContext, setAudienceInsightsContext] = useState(null);
   
   const canAccessDeepDive = getFeatureLimit('trendDeepDive') > 0;
+
+  const clearAudienceInsights = () => {
+    setAudienceInsightsResult(null);
+    setAudienceInsightsError(null);
+    setAudienceInsightsContext(null);
+    setIsLoadingAudienceInsights(false);
+  };
 
   // Simulate scan progress
   useEffect(() => {
@@ -134,7 +160,7 @@ export default function TrendDiscoveryHub() {
   }, [isScanning]);
 
   useEffect(() => {
-    if (!isLoadingDeepDive) {
+    if (!isLoadingDeepDive && !isLoadingAudienceInsights) {
       setDeepDiveLoadingSeconds(0);
       return undefined;
     }
@@ -146,7 +172,81 @@ export default function TrendDiscoveryHub() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isLoadingDeepDive]);
+  }, [isLoadingAudienceInsights, isLoadingDeepDive]);
+
+  useEffect(() => {
+    const routeMode = searchParams.get('mode');
+    if (routeMode !== 'audience') return;
+
+    const routePlatform = String(searchParams.get('platform') || '').trim().toLowerCase();
+    const demographics = String(searchParams.get('demographics') || '').trim() || null;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('mode');
+    nextParams.delete('platform');
+    nextParams.delete('demographics');
+    setSearchParams(nextParams, { replace: true });
+
+    if (!routePlatform) {
+      showToast('Audience Insight Engine requires a platform context.', 'warning');
+      return;
+    }
+
+    if (!brandData?.niche) {
+      showToast('Please set your niche in Brand Voice first', 'warning');
+      return;
+    }
+
+    let isActive = true;
+
+    setActiveMode('deepDive');
+    setDeepDiveResults(null);
+    setDeepDiveError(null);
+    setAudienceInsightsResult(null);
+    setAudienceInsightsError(null);
+    setAudienceInsightsContext({
+      demographics,
+      platform: routePlatform,
+      platformLabel: formatPlatformLabel(routePlatform),
+    });
+    setIsLoadingAudienceInsights(true);
+
+    const fetchAudienceInsights = async () => {
+      try {
+        const result = await getAudienceInsights(brandData, demographics, routePlatform);
+
+        if (!isActive) return;
+
+        if (result.success && result.insights) {
+          setAudienceInsightsResult({
+            insights: result.insights,
+            citations: Array.isArray(result.citations) ? result.citations : [],
+            generatedAt: result.generatedAt || new Date().toISOString(),
+          });
+          showToast(`Audience Insight Engine ready. ${getToastDisclaimer('forecast')}`, 'ai');
+        } else {
+          const errorMessage = result.error || 'Audience Insight Engine encountered a server issue. Please try again in a moment.';
+          setAudienceInsightsError(errorMessage);
+          showToast(errorMessage, 'error');
+        }
+      } catch (error) {
+        if (!isActive) return;
+        console.error('Audience Insight Engine error:', error);
+        const errorMessage = 'Audience Insight Engine encountered a server issue. Please try again in a moment.';
+        setAudienceInsightsError(errorMessage);
+        showToast(errorMessage, 'error');
+      } finally {
+        if (isActive) {
+          setIsLoadingAudienceInsights(false);
+        }
+      }
+    };
+
+    void fetchAudienceInsights();
+
+    return () => {
+      isActive = false;
+    };
+  }, [brandData, searchParams, setSearchParams, showToast]);
 
   const getCategoryStyles = (category) => {
     const normalized = (category || '').toLowerCase();
@@ -233,6 +333,8 @@ export default function TrendDiscoveryHub() {
   };
 
   const handleQuickScan = async () => {
+    clearAudienceInsights();
+
     if (!brandData?.niche) {
       showToast('Please set your niche in Brand Voice first', 'warning');
       return;
@@ -264,7 +366,7 @@ export default function TrendDiscoveryHub() {
         showToast(errorMessage, 'error');
       }
     } catch (error) {
-      console.error('Quick Scan error:', error);
+      console.error('Trend Pulse error:', error);
       setScanError('Trend scan returned unexpected results. Please try again.');
       showToast('Trend scan returned unexpected results. Please try again.', 'error');
     } finally {
@@ -273,6 +375,8 @@ export default function TrendDiscoveryHub() {
   };
 
   const handleDeepDive = async () => {
+    clearAudienceInsights();
+
     if (!canAccessDeepDive) {
       setShowUpgradeModal(true);
       showToast('Deep Dive is available for Essentials and Pro plans', 'warning');
@@ -305,7 +409,7 @@ export default function TrendDiscoveryHub() {
         userProfile = data;
       }
 
-      // Use n8n workflow for Deep Dive
+      // Use the direct Deep Dive AI route
       const result = await getTrendDeepDive({
         trend: deepDiveTopic.trim(),
         niche: brandData?.niche || '',
@@ -350,16 +454,26 @@ export default function TrendDiscoveryHub() {
   };
 
   const handleDeepDiveFromTrend = (trendName) => {
+    clearAudienceInsights();
+
     // Pre-fill the deep dive topic and switch to deep dive mode
     setDeepDiveTopic(trendName);
     setActiveMode('deepDive');
     showToast('Switched to Deep Dive — generate a report for this trend', 'success');
   };
 
-  const handleCreatePostFromTrend = (trendName) => {
+  const handleCreatePostFromTrend = (trendName, trendPlatform = '') => {
     const topic = trendName.substring(0, 200);
-    showToast('Opening AI Power Tools...', 'success');
-    navigate(`/dashboard/ai-tools?tool=caption&topic=${encodeURIComponent(topic)}`);
+    const params = new URLSearchParams({
+      topic,
+    });
+
+    if (trendPlatform) {
+      params.set('platform', String(trendPlatform).toLowerCase());
+    }
+
+    showToast('Opening Full Post Builder...', 'success');
+    navigate(`/dashboard/full-post-builder?${params.toString()}`);
   };
 
   const handleSaveDeepDiveReport = async () => {
@@ -492,7 +606,10 @@ export default function TrendDiscoveryHub() {
               />
               
               <button
-                onClick={() => setActiveMode('quickScan')}
+                onClick={() => {
+                  clearAudienceInsights();
+                  setActiveMode('quickScan');
+                }}
                 title="See what's trending everywhere right now"
                 className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'quickScan'
@@ -507,7 +624,14 @@ export default function TrendDiscoveryHub() {
               </button>
               
               <button
-                onClick={() => canAccessDeepDive ? setActiveMode('deepDive') : setShowUpgradeModal(true)}
+                onClick={() => {
+                  clearAudienceInsights();
+                  if (canAccessDeepDive) {
+                    setActiveMode('deepDive');
+                  } else {
+                    setShowUpgradeModal(true);
+                  }
+                }}
                 title="Research what works specifically in your niche"
                 className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'deepDive'
@@ -550,7 +674,7 @@ export default function TrendDiscoveryHub() {
             )}
           </div>
           
-          {/* Quick Scan Mode */}
+          {/* Trend Pulse Mode */}
           {activeMode === 'quickScan' && (
             <div className="animate-fadeIn">
               {isScanning ? (
@@ -705,7 +829,7 @@ export default function TrendDiscoveryHub() {
                                 <span>Deep Dive</span>
                               </button>
                               <button
-                                onClick={() => handleCreatePostFromTrend(trend.topic)}
+                                onClick={() => handleCreatePostFromTrend(trend.topic, trend.platforms_active?.[0])}
                                 className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-huttle-primary text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:bg-huttle-primary-dark hover:shadow-md"
                               >
                                 <PenLine className="w-3.5 h-3.5" />
@@ -772,7 +896,83 @@ export default function TrendDiscoveryHub() {
           {/* Deep Dive Mode */}
           {activeMode === 'deepDive' && (
             <div className="animate-fadeIn">
-              {!canAccessDeepDive ? (
+              {(isLoadingAudienceInsights || audienceInsightsResult || audienceInsightsError) ? (
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-bold text-gray-900">Audience Insight Engine</h3>
+                        <p className="text-sm text-gray-600">
+                          {audienceInsightsContext?.platformLabel}
+                          {audienceInsightsContext?.demographics ? ` · ${audienceInsightsContext.demographics}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          clearAudienceInsights();
+                          setDeepDiveResults(null);
+                          setDeepDiveError(null);
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Open Deep Dive
+                      </button>
+                    </div>
+                  </div>
+
+                  {isLoadingAudienceInsights && <DeepDiveLoadingState secondsElapsed={deepDiveLoadingSeconds} />}
+
+                  {audienceInsightsError && !isLoadingAudienceInsights && (
+                    <div className="relative py-12 text-center">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 mb-4">
+                        <AlertTriangle className="w-8 h-8 text-red-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Audience Insight Engine Failed</h3>
+                      <p className="text-gray-500 mb-6 max-w-sm mx-auto">{audienceInsightsError}</p>
+                      <button
+                        onClick={() => {
+                          clearAudienceInsights();
+                          setActiveMode('deepDive');
+                        }}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold transition-all shadow-lg"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Open Deep Dive
+                      </button>
+                    </div>
+                  )}
+
+                  {audienceInsightsResult && !isLoadingAudienceInsights && (
+                    <>
+                      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <div className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                          {audienceInsightsResult.insights}
+                        </div>
+                      </div>
+
+                      {audienceInsightsResult.citations?.length > 0 && (
+                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-wrap gap-2">
+                            {audienceInsightsResult.citations.map((citation, idx) => (
+                              <a
+                                key={`${citation}-${idx}`}
+                                href={citation}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-huttle-primary transition-colors hover:border-huttle-200 hover:bg-huttle-50"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Source {idx + 1}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : !canAccessDeepDive ? (
                 /* Upgrade CTA */
                 <div className="relative py-12">
                   {/* Lock Icon */}
@@ -958,7 +1158,7 @@ export default function TrendDiscoveryHub() {
                                     <p className="text-sm text-gray-700">{stripCitations(trend.why_it_matters)}</p>
                                   )}
                                   <button
-                                    onClick={() => handleCreatePostFromTrend(trend?.name || deepDiveResults.topic)}
+                                    onClick={() => handleCreatePostFromTrend(trend?.name || deepDiveResults.topic, trend?.primary_platform)}
                                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-huttle-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
                                   >
                                     <PenLine className="h-3.5 w-3.5" />
@@ -1086,7 +1286,7 @@ export default function TrendDiscoveryHub() {
 
                         <div className="grid grid-cols-1 gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-3">
                           <button
-                            onClick={() => handleCreatePostFromTrend(deepDiveResults.topic)}
+                            onClick={() => handleCreatePostFromTrend(deepDiveResults.topic, report.platform_activity?.[0]?.name || activeTrends?.[0]?.primary_platform)}
                             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-huttle-primary px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
                           >
                             <PenLine className="h-4 w-4" />

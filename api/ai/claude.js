@@ -20,9 +20,9 @@ if (!ANTHROPIC_API_KEY) {
   console.warn('ANTHROPIC_API_KEY not set — Claude features will not work');
 }
 
-// Model: claude-sonnet-4-6 | Updated: March 2026
+// Model: claude-sonnet-4-6-20250514 | Updated: March 2026
 // To upgrade: change the model string below and update .env.example
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "claude-sonnet-4-6-20250514";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -87,8 +87,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    const ALLOWED_MODELS = ['claude-sonnet-4-6-20250514'];
-    const safeModel = ALLOWED_MODELS.includes(model) ? model : 'claude-sonnet-4-6-20250514';
+    const ALLOWED_MODELS = [MODEL];
+    const safeModel = ALLOWED_MODELS.includes(model) ? model : MODEL;
 
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
 

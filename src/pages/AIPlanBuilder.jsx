@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, ArrowRight, Copy, Check, FolderPlus } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
-import { useContent } from '../context/ContentContext';
 import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
@@ -97,7 +96,6 @@ function normalizePlanResultShape(result) {
 
 export default function AIPlanBuilder() {
   const { showToast } = useToast();
-  const { schedulePost } = useContent();
   const { brandProfile } = useBrand();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const planUsage = useAIUsage('planBuilder');
@@ -141,7 +139,19 @@ export default function AIPlanBuilder() {
   /**
    * Handle job completion - apply time optimization and update state
    */
-  const handleJobComplete = (result) => {
+  const handleJobFailed = useCallback((errorMessage) => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    
+    setProgress(0);
+    setIsGenerating(false);
+    setCurrentJobId(null);
+    showToast(errorMessage || 'Failed to generate plan', 'error');
+  }, [showToast]);
+
+  const handleJobComplete = useCallback((result) => {
     // Clear progress interval
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
@@ -165,7 +175,7 @@ export default function AIPlanBuilder() {
     setIsGenerating(false);
     setCurrentJobId(null);
     showToast('AI Plan generated successfully!', 'success');
-  };
+  }, [handleJobFailed, showToast]);
 
   useEffect(() => {
     const goalParam = searchParams.get('goal');
@@ -177,21 +187,6 @@ export default function AIPlanBuilder() {
     nextParams.delete('goal');
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
-
-  /**
-   * Handle job failure
-   */
-  const handleJobFailed = (errorMessage) => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-    
-    setProgress(0);
-    setIsGenerating(false);
-    setCurrentJobId(null);
-    showToast(errorMessage || 'Failed to generate plan', 'error');
-  };
 
   // Subscribe to job updates via Supabase Realtime + fallback polling
   useEffect(() => {
@@ -270,7 +265,7 @@ export default function AIPlanBuilder() {
         clearInterval(progressIntervalRef.current);
       }
     };
-  }, [currentJobId, showToast]);
+  }, [currentJobId, handleJobComplete, handleJobFailed, showToast]);
 
   const handlePlatformToggle = (platform) => {
     setSelectedPlatforms(prev => 
@@ -638,7 +633,7 @@ export default function AIPlanBuilder() {
       {generatedPlan && (
         <div className="mt-8 space-y-6">
           {/* Plan Summary Header */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6"
@@ -668,7 +663,7 @@ export default function AIPlanBuilder() {
                 <p className="text-sm text-gray-600">~{generatedPlan.totalPosts * 5} to build all posts</p>
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
 
           {/* Plan-Level Actions */}
           <div className="flex flex-wrap gap-3">
@@ -679,6 +674,7 @@ export default function AIPlanBuilder() {
                   const params = new URLSearchParams({
                     topic: firstPost.topic || firstPost.theme || '',
                     platform: (firstPost.platform || 'instagram').toLowerCase(),
+                    goal: generatedPlan.goal || '',
                   });
                   navigate(`/dashboard/full-post-builder?${params.toString()}`);
                 }
@@ -744,7 +740,7 @@ export default function AIPlanBuilder() {
           <div className="space-y-4">
             {generatedPlan.schedule?.map((daySchedule, dayIdx) => (
               daySchedule.posts?.map((post, postIdx) => (
-                <motion.div
+                <Motion.div
                   key={`day-${daySchedule.day}-post-${postIdx}`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -788,6 +784,7 @@ export default function AIPlanBuilder() {
                         const params = new URLSearchParams({
                           topic: post.topic || post.theme || '',
                           platform: (post.platform || 'instagram').toLowerCase(),
+                          goal: generatedPlan.goal || '',
                         });
                         navigate(`/dashboard/full-post-builder?${params.toString()}`);
                       }}
@@ -823,7 +820,7 @@ export default function AIPlanBuilder() {
                       Save to Vault
                     </button>
                   </div>
-                </motion.div>
+                </Motion.div>
               ))
             ))}
           </div>

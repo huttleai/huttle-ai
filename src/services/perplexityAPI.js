@@ -12,12 +12,20 @@
  * SECURITY: All API calls now go through the server-side proxy to protect API keys
  */
 
-import { buildBrandContext, buildPromptBrandSection, getNiche, getTargetAudience, getBrandVoice } from '../utils/brandContextBuilder';
+import {
+  buildBrandContext,
+  buildPromptBrandSection,
+  getNiche,
+  getTargetAudience,
+  getBrandVoice,
+  getPromptBrandProfile,
+} from '../utils/brandContextBuilder';
 import { supabase } from '../config/supabase';
-import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
+import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
  * Get auth headers for API requests
@@ -51,16 +59,42 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     body: JSON.stringify({
       messages,
       temperature,
-      model: 'sonar',
+      model: options.model || 'sonar',
       cache: options.cache,
+      requireRealtime: options.requireRealtime,
       personalized: options.personalized,
       targetAudience: options.targetAudience,
       brandContext: options.brandContext,
       competitorHandles: options.competitorHandles,
-      web_search_options: {
+      web_search_options: options.webSearchOptions || {
         search_context_size: 'low'
       }
     })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function callGrokAPI(messages, temperature = 0.2, options = {}) {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(GROK_PROXY_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      messages,
+      temperature,
+      model: options.model || 'grok-4.1-fast-reasoning',
+      cache: options.cache,
+      personalized: options.personalized,
+      targetAudience: options.targetAudience,
+      brandContext: options.brandContext,
+    }),
   });
 
   if (!response.ok) {
@@ -101,8 +135,110 @@ function parseJsonFromText(text) {
   return null;
 }
 
+const PLATFORM_LABELS = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  x: 'X',
+  twitter: 'X',
+};
+
+const TITLE_CASE_SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'of', 'on', 'or', 'the', 'to', 'via', 'vs']);
+const TITLE_CASE_ACRONYMS = {
+  ai: 'AI',
+  api: 'API',
+  b2b: 'B2B',
+  b2c: 'B2C',
+  crm: 'CRM',
+  roi: 'ROI',
+  saas: 'SaaS',
+  seo: 'SEO',
+  ugc: 'UGC',
+  ui: 'UI',
+  ux: 'UX',
+};
+
+function toDisplayTitleCase(value) {
+  const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+
+  const words = cleaned.split(' ');
+  return words
+    .map((word, index) => {
+      const coreMatch = word.match(/[A-Za-z0-9]+/);
+      if (!coreMatch) return word;
+
+      const core = coreMatch[0];
+      const normalizedCore = core.toLowerCase();
+      const isSmallWord = index > 0 && index < words.length - 1 && TITLE_CASE_SMALL_WORDS.has(normalizedCore);
+      const replacement = TITLE_CASE_ACRONYMS[normalizedCore]
+        || (isSmallWord ? normalizedCore : normalizedCore.charAt(0).toUpperCase() + normalizedCore.slice(1));
+
+      return word.replace(core, replacement);
+    })
+    .join(' ');
+}
+
+function normalizeQuickScanPlatformLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'all' || normalized === 'all platforms') {
+    return '';
+  }
+
+  return PLATFORM_LABELS[normalized] || toDisplayTitleCase(value);
+}
+
+function normalizeQuickScanPlatforms(...values) {
+  const normalizedPlatforms = values
+    .flatMap((value) => {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return value.split(/[,/&]|(?:\s+and\s+)/i);
+      return [];
+    })
+    .map((platform) => normalizeQuickScanPlatformLabel(platform))
+    .filter(Boolean);
+
+  return [...new Set(normalizedPlatforms)];
+}
+
+function normalizeQuickScanTopic(value) {
+  return toDisplayTitleCase(value);
+}
+
+function normalizeQuickScanLifespan(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'hours') return 'Short window';
+  if (normalized === 'days') return 'Trending now';
+  if (normalized === '1-2 weeks') return '1-2 week window';
+  if (normalized === 'ongoing') return 'Ongoing';
+  return 'Trending now';
+}
+
 function normalizeQuickScanData(scanData) {
-  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.trends)) {
+  const source = Array.isArray(scanData)
+    ? {
+      trends: scanData.map((trend) => ({
+        topic: trend?.topic || trend?.title || trend?.name || '',
+        category: trend?.category || 'Industry Shift',
+        why_trending: trend?.why_trending || trend?.summary || trend?.overview || '',
+        relevance_to_niche: trend?.relevance_to_niche || trend?.why_it_matters || trend?.content_idea || '',
+        momentum: trend?.momentum || 'rising',
+        platforms_active: normalizeQuickScanPlatforms(
+          trend?.platforms_active,
+          trend?.platform,
+          trend?.primary_platform,
+          trend?.platform_name
+        ),
+        estimated_lifespan: trend?.estimated_lifespan || '',
+        opportunity_window: trend?.opportunity_window || 'Monitor',
+      })),
+      scan_summary: 'Live trend scan complete.',
+      last_updated: new Date().toISOString(),
+    }
+    : scanData;
+
+  if (!source || typeof source !== 'object' || !Array.isArray(source.trends)) {
     return null;
   }
 
@@ -115,29 +251,35 @@ function normalizeQuickScanData(scanData) {
     'News-Driven'
   ]);
   const allowedMomentum = new Set(['rising', 'peaking', 'declining']);
-  const allowedLifespan = new Set(['hours', 'days', '1-2 weeks', 'ongoing']);
   const allowedWindow = new Set(['Act now', 'Plan this week', 'Monitor']);
 
-  const trends = scanData.trends
-    .map((trend) => ({
-      topic: String(trend?.topic || '').trim(),
+  const trends = source.trends
+    .map((trend) => {
+      const platformsActive = normalizeQuickScanPlatforms(
+        trend?.platforms_active,
+        trend?.platform,
+        trend?.primary_platform,
+        trend?.platform_name
+      );
+
+      return {
+      topic: normalizeQuickScanTopic(trend?.topic),
       category: String(trend?.category || '').trim(),
       why_trending: String(trend?.why_trending || '').trim(),
       relevance_to_niche: String(trend?.relevance_to_niche || '').trim(),
       momentum: String(trend?.momentum || '').toLowerCase(),
-      platforms_active: Array.isArray(trend?.platforms_active)
-        ? trend.platforms_active.map((platform) => String(platform || '').trim()).filter(Boolean)
-        : [],
+      platforms_active: platformsActive,
       estimated_lifespan: String(trend?.estimated_lifespan || '').trim(),
       opportunity_window: String(trend?.opportunity_window || '').trim(),
-    }))
+    };
+    })
     .filter((trend) => trend.topic && trend.why_trending && trend.relevance_to_niche)
     .slice(0, 5)
     .map((trend) => ({
       ...trend,
       category: allowedCategories.has(trend.category) ? trend.category : 'Industry Shift',
       momentum: allowedMomentum.has(trend.momentum) ? trend.momentum : 'rising',
-      estimated_lifespan: allowedLifespan.has(trend.estimated_lifespan) ? trend.estimated_lifespan : 'days',
+      estimated_lifespan: normalizeQuickScanLifespan(trend.estimated_lifespan),
       opportunity_window: allowedWindow.has(trend.opportunity_window) ? trend.opportunity_window : 'Monitor',
       platforms_active: trend.platforms_active.length > 0 ? trend.platforms_active : ['Multi-platform'],
     }));
@@ -148,9 +290,77 @@ function normalizeQuickScanData(scanData) {
 
   return {
     trends,
-    scan_summary: String(scanData.scan_summary || '').trim() || 'Live trend scan complete.',
-    last_updated: String(scanData.last_updated || '').trim() || new Date().toISOString(),
+    scan_summary: String(source.scan_summary || '').trim() || 'Live trend scan complete.',
+    last_updated: String(source.last_updated || '').trim() || new Date().toISOString(),
   };
+}
+
+export async function getRealtimeHashtagResearch({ topic, platform = 'instagram', selectedHook = '', caption = '' }, brandData = null) {
+  try {
+    const niche = getNiche(brandData, topic || 'general creator');
+    const audience = getTargetAudience(brandData, 'general audience');
+    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const currentDate = new Date().toISOString().slice(0, 10);
+    const cacheKey = buildCacheKey([topic, platform, currentDate, 'full_post_builder_hashtags']);
+
+    const data = await callPerplexityAPI([
+      {
+        role: 'system',
+        content: 'You are a social media hashtag research specialist. Your job is to find the most currently trending and high-performing hashtags for a specific topic and platform right now.'
+      },
+      {
+        role: 'user',
+        content: `${buildPromptBrandSection(brandData, { niche, targetAudience: audience, platforms: [platform] })}
+
+Topic: ${topic}
+Platform: ${platform}
+Hook context: ${selectedHook || 'Not provided'}
+Caption context: ${caption || 'Not provided'}
+
+Search for the most currently trending and high-performing hashtags for ${topic} on ${platform} right now in 2026.
+
+Return a raw list of 20 candidate hashtags with:
+- The hashtag
+- Current estimated post count
+- Whether it's trending up, stable, or declining
+- Niche relevance score (1-10)
+
+Focus on hashtags that are active right now, not oversaturated, and relevant to ${niche}.
+
+Return JSON only as an array of exactly 20 objects with these keys:
+- hashtag
+- estimatedPostCount
+- trend
+- nicheRelevanceScore`
+      }
+    ], 0.2, {
+      cache: {
+        key: cacheKey,
+        niche: normalizeNiche(niche),
+        platform,
+        type: 'hashtags',
+        ttlHours: 6,
+      },
+      personalized: Boolean(brandContext || brandData?.targetAudience),
+      targetAudience: brandData?.targetAudience || undefined,
+      brandContext: brandContext || undefined,
+      requireRealtime: true,
+    });
+
+    return {
+      success: true,
+      research: data.content || '',
+      citations: data.citations || [],
+      usage: data.usage,
+      cached: Boolean(data.cached),
+    };
+  } catch (error) {
+    console.error('Perplexity hashtag research error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 }
 
 /**
@@ -222,7 +432,10 @@ RULES:
       brandContext: brandContext || undefined,
     });
 
-    const parsed = parseJsonFromText(data.content || '');
+    const parsedStructuredData = typeof data.structuredData === 'string'
+      ? parseJsonFromText(data.structuredData)
+      : data.structuredData;
+    const parsed = parsedStructuredData ?? parseJsonFromText(data.content || '');
     const normalized = normalizeQuickScanData(parsed);
 
     if (!normalized) {
@@ -395,39 +608,47 @@ Include:
  * @param {string} demographics - Optional specific demographics to analyze
  * @returns {Promise<Object>} Audience insights
  */
-export async function getAudienceInsights(brandData, demographics = null) {
+export async function getAudienceInsights(brandData, demographics = null, platform = null) {
   try {
     const niche = getNiche(brandData);
     const audience = demographics || getTargetAudience(brandData);
     const brandContext = buildBrandContext(brandData);
-    const cacheKey = buildCacheKey([niche, 'all', 'audience']);
+    const promptProfile = getPromptBrandProfile(brandData);
+    const selectedPlatform = platform || promptProfile.platforms?.[0] || 'instagram';
+    const userType = promptProfile.creator_type || (brandData?.profileType === 'brand' ? 'brand_business' : 'solo_creator');
+    const cacheKey = buildCacheKey([niche, selectedPlatform, userType, 'audience_insights']);
 
-    const data = await callPerplexityAPI([
+    const data = await callGrokAPI([
       {
         role: 'system',
-        content: 'You are an audience research specialist. Provide deep insights into audience behavior and preferences that help brands connect authentically.'
+        content: 'You are an audience research expert.'
       },
       {
         role: 'user',
-        content: `What are the key preferences, behaviors, and content consumption patterns for ${audience} in the ${niche} space?
+        content: `${buildPromptBrandSection(brandData, {
+          niche,
+          targetAudience: audience,
+          platforms: [selectedPlatform],
+        })}
 
-Brand Profile:
-${brandContext}
+You are an audience research expert. Analyze the target audience for a ${niche} creator posting on ${selectedPlatform}.
 
-Include:
-- Platform preferences and engagement times
-- Content format preferences
-- Pain points and aspirations
-- Language and tone that resonates
-- Topics they actively seek out
-- How to build trust with this audience`
+Return a structured analysis covering:
+1. Core demographics (age range, location, income level, lifestyle)
+2. Top 5 pain points this audience experiences
+3. Top 5 content formats they engage with most
+4. Best times to post for this audience
+5. What makes them stop scrolling
+6. What makes them follow an account
+
+Be specific to ${niche} on ${selectedPlatform}. No generic advice.`
       }
     ], 0.2, {
       cache: {
         key: cacheKey,
         niche: normalizeNiche(niche),
-        platform: 'all',
-        type: 'audience',
+        platform: selectedPlatform,
+        type: 'audience_insights',
         ttlHours: 24,
       },
       personalized: Boolean(brandContext || brandData?.targetAudience || demographics),
@@ -655,7 +876,7 @@ export async function getSocialMediaUpdates(months = 12) {
         if (platformMatches && platformMatches.length > 0) {
           console.warn('Found platform mentions but could not parse as JSON. Returning empty array.');
         }
-      } catch (e) {
+      } catch {
         // Ignore
       }
       
@@ -698,7 +919,12 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const currentMonth = now.toLocaleString('default', { month: 'long' });
     const currentYear = now.getFullYear();
     const currentDate = now.toISOString().slice(0, 10);
-    const cacheKey = buildCacheKey([niche, platform, currentDate, 'niche_intel']);
+    const cacheKey = buildNicheIntelCacheKey({
+      niche,
+      platform,
+      query: nicheQuery,
+      date: currentDate,
+    });
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const competitorHandles = nicheQuery
       .split(',')
@@ -708,7 +934,7 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media content research analyst. Research what content is currently performing best in a given niche. Focus on content formats, hooks, topics, and engagement patterns. Return detailed research findings — not content ideas.'
+        content: 'You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.'
       },
       {
         role: 'user',
@@ -718,22 +944,58 @@ Search for current social media trends and content strategies for ${niche} busin
 
 Focus on the last 30 days where possible. Research what is performing right now for: "${nicheQuery}".
 
-Find:
-1. What content formats are performing best right now (Reels vs carousels vs static posts, etc.)
-2. What topics/themes are getting the most engagement
-3. What hashtags top ${niche} accounts are using
-4. What posting frequency successful accounts use
-5. Any recent algorithm changes affecting ${niche} content
-6. Specific competitor content strategies or recurring patterns that are clearly working
+Return ONLY valid JSON with this exact top-level structure:
+{
+  "trends": [
+    {
+      "name": "Trend or theme name",
+      "summary": "What is happening right now",
+      "best_format": "Reel|Carousel|Static|Story|Short|Thread|Video",
+      "momentum": "Rising|Peaking|Declining",
+      "evidence": ["Specific recent examples, triggers, or content patterns"],
+      "why_it_matters": "Why this matters in this niche right now"
+    }
+  ],
+  "competitors": [
+    {
+      "name": "Competitor or creator name",
+      "handle": "@handle if available",
+      "platform": "${platform}",
+      "patterns": ["Specific content pattern or strategy working now"],
+      "winning_angles": ["Specific angle, series, or hook type working now"]
+    }
+  ],
+  "momentum_signals": [
+    {
+      "signal": "Current signal",
+      "label": "Rising|Peaking|Declining",
+      "evidence": "What current data supports this label"
+    }
+  ],
+  "content_ideas": [
+    {
+      "title": "Specific current content angle",
+      "format": "Reel|Carousel|Static|Story|Short|Thread|Video",
+      "hook": "Observed hook or angle that is working now",
+      "why_it_works": "Why this angle is resonating currently",
+      "momentum": "Rising|Peaking|Declining"
+    }
+  ],
+  "hooks": [
+    "Specific hook pattern or hook line currently working"
+  ]
+}
 
 Requirements:
 - Keep the research specific to ${platform}
-- Focus on actionable, current findings rather than evergreen advice
-- Cite concrete examples where possible
+- Focus on what is working right now, not evergreen advice
+- Ground every section in current web research from the last 30 days where possible
 - Prioritize findings that matter to ${audience}
-- Do not generate content ideas yet; return research only`
+- Include competitor observations when available, especially for any provided handles
+- Return JSON only with no markdown, no commentary, and no extra keys`
       }
     ], 0.2, {
+      model: 'llama-3.1-sonar-large-128k-online',
       cache: {
         key: cacheKey,
         niche: normalizeNiche(niche),
@@ -745,9 +1007,12 @@ Requirements:
       targetAudience: brandData?.targetAudience || undefined,
       brandContext: brandContext || undefined,
       competitorHandles: competitorHandles.length > 0 ? competitorHandles : undefined,
+      webSearchOptions: {
+        search_context_size: 'high'
+      },
     });
 
-    const researchContent = data.content || '';
+    const researchContent = data.structuredData || parseJsonFromText(data.content || '') || data.content || '';
     return {
       success: true,
       research: researchContent,

@@ -69,7 +69,6 @@ If not set, features will use fallback data:
 | `VITE_N8N_PLAN_BUILDER_WEBHOOK` | Client-side plan builder URL |
 | `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` | Client-side viral blueprint URL |
 | `VITE_N8N_DASHBOARD_WEBHOOK` | Dashboard data webhook |
-| `VITE_N8N_TREND_DEEP_DIVE_WEBHOOK` | Trend analysis webhook |
 | `VITE_N8N_TREND_FORECASTER_WEBHOOK` | Trend forecaster webhook |
 | `VITE_N8N_SOCIAL_UPDATES_WEBHOOK` | Social updates webhook |
 

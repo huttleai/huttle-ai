@@ -6,7 +6,6 @@
  * WORKFLOW-BASED FEATURES:
  * - Dashboard Trending Now & Hashtags of the Day
  * - AI Plan Builder
- * - Trend Discovery Deep Dive
  * - Trend Forecaster
  * - Viral Blueprint Generator
  * - Social Updates Feed
@@ -15,6 +14,7 @@
  * - AI Insights, Daily Alerts, Templates, Smart Scheduling
  * - AI Power Tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visuals)
  * - Trend Discovery Quick Scan
+ * - Trend Discovery Deep Dive (direct Perplexity API route)
  * - Audience Insight Engine
  * - Content Remix Studio
  * 
@@ -60,7 +60,6 @@ export const WORKFLOW_ENV_VARS = {
   [WORKFLOW_NAMES.DASHBOARD_TRENDING]: 'VITE_N8N_DASHBOARD_WEBHOOK',
   [WORKFLOW_NAMES.DASHBOARD_HASHTAGS]: 'VITE_N8N_DASHBOARD_WEBHOOK', // Same endpoint, different payload
   [WORKFLOW_NAMES.AI_PLAN_BUILDER]: 'VITE_N8N_PLAN_BUILDER_WEBHOOK',
-  [WORKFLOW_NAMES.TREND_DEEP_DIVE]: 'VITE_N8N_TREND_DEEP_DIVE_WEBHOOK',
   [WORKFLOW_NAMES.TREND_FORECASTER]: 'VITE_N8N_TREND_FORECASTER_WEBHOOK',
   [WORKFLOW_NAMES.VIRAL_BLUEPRINT]: 'VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK',
   [WORKFLOW_NAMES.SOCIAL_UPDATES]: 'VITE_N8N_SOCIAL_UPDATES_WEBHOOK'
@@ -73,7 +72,6 @@ export const WORKFLOW_WEBHOOKS = {
   [WORKFLOW_NAMES.DASHBOARD_TRENDING]: '/webhook/dashboard-trending',
   [WORKFLOW_NAMES.DASHBOARD_HASHTAGS]: '/webhook/dashboard-hashtags',
   [WORKFLOW_NAMES.AI_PLAN_BUILDER]: '/webhook/ai-plan-builder',
-  [WORKFLOW_NAMES.TREND_DEEP_DIVE]: '/webhook/trend-deep-dive',
   [WORKFLOW_NAMES.TREND_FORECASTER]: '/webhook/trend-forecaster',
   [WORKFLOW_NAMES.VIRAL_BLUEPRINT]: '/webhook/viral-blueprint',
   [WORKFLOW_NAMES.SOCIAL_UPDATES]: '/webhook/social-updates'
@@ -98,6 +96,10 @@ export const WORKFLOW_WEBHOOKS = {
  * }
  */
 export function isWorkflowConfigured(workflowName) {
+  if (workflowName === WORKFLOW_NAMES.TREND_DEEP_DIVE) {
+    return true;
+  }
+
   const envVar = WORKFLOW_ENV_VARS[workflowName];
   if (!envVar) {
     console.warn(`[WORKFLOW] Unknown workflow name: ${workflowName}`);
@@ -119,6 +121,10 @@ export function isWorkflowConfigured(workflowName) {
  * // Returns: 'https://your-n8n.app/webhook/ai-plan-builder' or null
  */
 export function getWorkflowUrl(workflowName) {
+  if (workflowName === WORKFLOW_NAMES.TREND_DEEP_DIVE) {
+    return '/api/ai/deep-dive';
+  }
+
   const envVar = WORKFLOW_ENV_VARS[workflowName];
   if (!envVar) {
     console.warn(`[WORKFLOW] Unknown workflow name: ${workflowName}`);
@@ -252,8 +258,8 @@ export const WORKFLOW_FEATURES = [
   {
     name: 'Trend Discovery - Deep Dive',
     workflow: WORKFLOW_NAMES.TREND_DEEP_DIVE,
-    description: 'Comprehensive trend analysis with competitor insights',
-    fallback: 'Basic Perplexity API search'
+    description: 'Direct Perplexity Sonar Pro deep research route',
+    fallback: 'Serverless Perplexity Deep Dive endpoint'
   },
   {
     name: 'Trend Forecaster',
@@ -334,6 +340,11 @@ export const IN_CODE_FEATURES = [
     name: 'Trend Discovery - Quick Scan',
     api: 'Grok + Perplexity',
     description: 'Quick trend scanning'
+  },
+  {
+    name: 'Trend Discovery - Deep Dive',
+    api: 'Perplexity Sonar Pro',
+    description: 'Structured real-time deep trend analysis via serverless route'
   },
   {
     name: 'Audience Insight Engine',

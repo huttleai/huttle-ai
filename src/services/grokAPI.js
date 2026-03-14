@@ -16,9 +16,9 @@
  */
 
 import { callClaudeAPI } from './claudeAPI';
+import { getRealtimeHashtagResearch } from './perplexityAPI';
 import {
   buildSystemPrompt,
-  getBrandVoice,
   getNiche,
   getTargetAudience,
   buildBrandContext,
@@ -40,6 +40,14 @@ import {
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
+const GROK_REASONING_MODEL = 'grok-4.1-fast-reasoning';
+const HOOK_TYPE_ALIASES = {
+  question: 'Question',
+  teaser: 'Teaser',
+  shocking_stat: 'Shocking Stat',
+  story: 'Story',
+  bold_claim: 'Bold Claim',
+};
 const NO_FABRICATED_STATS_GUARDRAIL = 'Do not invent specific statistics or percentages. If referencing data, use general language like "studies show" or "research suggests" rather than fabricating specific numbers like "73% of users".';
 const NO_PLACEHOLDER_GUARDRAIL = 'Never include placeholder text like [Your Name], [Insert Link], or [Add Emoji Here] in your output. Either fill it in with a reasonable example or omit it.';
 const READY_TO_USE_GUARDRAIL = 'Your output must be copy-paste ready. A user should be able to take your output directly to their social media app and post it without any editing required.';
@@ -107,7 +115,7 @@ function getCaptionPlatformInstructions(platform) {
   }
 }
 
-function getHashtagOutputRules(platform, city) {
+function _getHashtagOutputRules(platform, city) {
   const normalizedPlatform = (platform || 'instagram').toLowerCase();
 
   if (normalizedPlatform === 'tiktok') {
@@ -204,7 +212,7 @@ async function callGrokAPI(messages, temperature = 0.7) {
     body: JSON.stringify({
       messages,
       temperature,
-      model: 'grok-4-1-fast-reasoning'
+      model: GROK_REASONING_MODEL
     })
   });
 
@@ -214,6 +222,126 @@ async function callGrokAPI(messages, temperature = 0.7) {
   }
 
   return response.json();
+}
+
+function normalizeMomentumLabel(value, fallback = 'Rising') {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (normalized === 'rising') return 'Rising';
+  if (normalized === 'peaking') return 'Peaking';
+  if (normalized === 'declining') return 'Declining';
+
+  return fallback;
+}
+
+function normalizeResearchPayload(researchData) {
+  if (!researchData) return null;
+
+  if (typeof researchData === 'string') {
+    return parseJsonFromResponse(researchData);
+  }
+
+  if (typeof researchData === 'object') {
+    return researchData;
+  }
+
+  return null;
+}
+
+function normalizeNicheAnalysisPayload(rawAnalysis, platform) {
+  if (!rawAnalysis || typeof rawAnalysis !== 'object') {
+    return null;
+  }
+
+  const normalizedPlatform = getPlatform(platform)?.name || platform || 'Instagram';
+
+  const trendingThemes = Array.isArray(rawAnalysis.trendingThemes)
+    ? rawAnalysis.trendingThemes
+      .map((theme) => ({
+        name: String(theme?.name || '').trim(),
+        why: String(theme?.why || '').trim(),
+        bestFormat: String(theme?.bestFormat || '').trim(),
+        momentum: normalizeMomentumLabel(theme?.momentum),
+      }))
+      .filter((theme) => theme.name && theme.why)
+      .slice(0, 5)
+    : [];
+
+  const hookPatterns = Array.isArray(rawAnalysis.hookPatterns)
+    ? rawAnalysis.hookPatterns
+      .map((hook) => String(hook || '').trim())
+      .filter(Boolean)
+      .slice(0, 4)
+    : [];
+
+  const contentGaps = Array.isArray(rawAnalysis.contentGaps)
+    ? rawAnalysis.contentGaps
+      .map((gap) => ({
+        topic: String(gap?.topic || '').trim(),
+        reason: String(gap?.reason || '').trim(),
+        label: String(gap?.label || 'Untapped Opportunity').trim() || 'Untapped Opportunity',
+      }))
+      .filter((gap) => gap.topic && gap.reason)
+      .slice(0, 3)
+    : [];
+
+  const contentIdeas = Array.isArray(rawAnalysis.contentIdeas)
+    ? rawAnalysis.contentIdeas
+      .map((idea) => ({
+        title: String(idea?.title || '').trim(),
+        format: String(idea?.format || '').trim(),
+        hook: String(idea?.hook || '').trim(),
+        platformFit: String(idea?.platformFit || normalizedPlatform).trim() || normalizedPlatform,
+        momentum: normalizeMomentumLabel(idea?.momentum),
+        whyThisWorks: String(idea?.whyThisWorks || '').trim(),
+        hashtags: Array.isArray(idea?.hashtags)
+          ? idea.hashtags.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5)
+          : [],
+      }))
+      .filter((idea) => idea.title && idea.hook)
+      .slice(0, 5)
+    : [];
+
+  return {
+    trendingThemes,
+    hookPatterns,
+    contentGaps,
+    contentIdeas,
+  };
+}
+
+function normalizeRankedHashtagData(rawItems, hashtagCount) {
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+
+  return rawItems
+    .map((item, index) => {
+      const rawTag = String(item?.tag || item?.hashtag || '').trim();
+      if (!rawTag) return null;
+
+      const parsedScore = Number.parseInt(item?.score ?? item?.engagementScore ?? 0, 10);
+      const score = Number.isFinite(parsedScore)
+        ? Math.min(Math.max(parsedScore, 0), 100)
+        : Math.max(90 - (index * 5), 40);
+      const estimatedPosts = String(item?.estimatedPosts || item?.posts || item?.postCount || '').trim() || 'Unknown';
+      const rawMomentum = String(item?.momentum || item?.trend || '').trim().toLowerCase();
+      const momentum = rawMomentum === 'rising' || rawMomentum === 'peaking' || rawMomentum === 'stable'
+        ? rawMomentum.charAt(0).toUpperCase() + rawMomentum.slice(1)
+        : 'Stable';
+
+      return {
+        tag: rawTag.startsWith('#') ? rawTag : `#${rawTag.replace(/^#*/, '')}`,
+        score,
+        posts: estimatedPosts,
+        estimatedPosts,
+        momentum,
+        reason: String(item?.reason || item?.why || '').trim(),
+        tier: score >= 85 ? 'HIGH' : score >= 70 ? 'MEDIUM' : 'NICHE',
+      };
+    })
+    .filter(Boolean)
+    .slice(0, hashtagCount);
 }
 
 export async function generateTrendIdeas(brandData, trendTopic) {
@@ -734,29 +862,25 @@ Number them 1-4 and return only the hooks.`
   }
 }
 
-export async function generateFullPostHooks({ topic, goal, platform = 'instagram' }, brandData) {
+export async function generateFullPostHooks({ topic, hookType = 'Question', platform = 'instagram' }, brandData) {
   try {
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const platformData = getPlatform(platform);
+    const safeHookType = HOOK_TYPE_ALIASES[hookType] || hookType;
 
     const data = await callGrokAPI([
       {
         role: 'system',
         content: buildSystemPrompt(
-          `You are Hook Sniper for a multi-step post builder. Generate 5 niche-specific hooks that will be used as the first line of a publish-ready post.
+          `You are a professional social media copywriter. Generate hooks that are accurate to current platform behavior and stop-scroll patterns. Each hook must be under 15 words, feel native to the selected platform, and match the creator's brand voice.
 
 OUTPUT RULES:
-- Return exactly 5 hooks, numbered 1-5.
-- Hook 1 = Question
-- Hook 2 = Teaser
-- Hook 3 = Shocking Stat using a plausible general claim and zero fabricated numbers
-- Hook 4 = Story
-- Hook 5 = Bold Claim
-- Every hook must be under 15 words.
-- Every hook must be immediately relevant to the user's specific topic.
-- Every hook must feel different in structure and emotional angle.
-- Never use placeholders.
-- Make them copy-paste ready.
+- Return exactly 4 hooks, numbered 1-4.
+- Every hook must be a ${safeHookType} hook.
+- Every hook must feel distinct in phrasing, rhythm, and emotional angle.
+- Keep every hook specific to the topic and platform.
+- Never use placeholders or generic filler.
+- ${safeHookType === 'Shocking Stat' ? 'Do not invent percentages or precise statistics. Use qualitative surprise language only.' : 'Keep the opening copy-paste ready.'}
 
 ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
           brandData
@@ -766,19 +890,18 @@ ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
         role: 'user',
         content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 
-Generate 5 hooks for this full-post workflow.
+Generate 4 ${safeHookType} hooks for this full-post workflow.
 
 Topic: "${topic}"
-Goal: ${goal || 'engagement'}
 Platform: ${platformData?.name || platform}
 ${getAudiencePainPointGuidance(promptProfile.niche)}
 
 Requirements:
-- Question hook: address a real pain point for this audience
-- Teaser hook: reference something specific to this niche
-- Shocking Stat hook: use phrasing like "Most [audience] don't realize..." without fake numbers
-- Story hook: open a scenario this audience actually lives through
-- Bold Claim hook: take a strong opinion specific to this niche
+- Hook type: ${safeHookType}
+- Match the creator's brand tone: ${promptProfile.tone}
+- Stay under 15 words per hook
+- Make each hook platform-native for ${platformData?.name || platform}
+- Make each hook specific to this niche and audience
 
 Return only the numbered hooks.`
       }
@@ -805,11 +928,13 @@ Return only the numbered hooks.`
  * @returns {Promise<Object>} Styled CTAs grouped by category
  */
 export async function generateStyledCTAs(params, brandData, platform = 'instagram') {
-  const { promoting, goalType } = params;
+  const { promoting, goalType, selectedHook, caption } = params;
 
   const goalLabels = {
+    'followers': 'Grow followers',
     'engagement': 'Drive Engagement (comments, shares, saves)',
     'sales': 'Drive Sales/Conversions (purchases, sign-ups, downloads)',
+    'leads': 'Generate leads',
     'dms': 'Drive DMs/Leads (direct messages, inquiries)'
   };
 
@@ -835,42 +960,26 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const systemPrompt = buildSystemPrompt(
-      `You are Conversion Architect — a direct response copywriter who has studied the psychology of micro-commitments, social proof triggers, and platform-specific friction points. You know a CTA is not a sentence at the end of a post — it is a precision-engineered invitation that matches the emotional state the content just created.
-
-THE 5 CTA STYLES YOU MASTER:
-- Soft: Low-friction invite that lowers resistance
-- Engagement: Comment, reply, save, or share action tailored to the platform
-- Traffic: Click, tap, bio-link, or comment-to-get-the-link CTA
-- Lead: DM, inquiry, booking, or opt-in CTA tied to a specific outcome
-- Direct: Highest-intent conversion CTA tied to the service or offer
-
-CHAIN-OF-THOUGHT (apply before generating):
-1. What specific action does the creator want the audience to take?
-2. What emotional state is the audience in after consuming this content?
-3. Which friction level fits the audience temperature — cold (soft) or warm (direct/urgency)?
-4. What does this platform reward — comments, saves, clicks, DMs?
-5. Is each CTA specific to THIS offering, or generic enough to apply anywhere?
+      `You are a conversion copywriter specializing in social media. Generate CTAs that drive the specific goal selected, feel native to the platform, and match the creator's brand voice and tone.
 
 OUTPUT FORMAT — Return ONLY valid JSON:
 {
   "ctas": [
-    { "style": "Soft", "cta": "...", "tip": "..." },
-    { "style": "Engagement", "cta": "...", "tip": "..." },
-    { "style": "Traffic", "cta": "...", "tip": "..." },
-    { "style": "Lead", "cta": "...", "tip": "..." },
-    { "style": "Direct", "cta": "...", "tip": "..." }
+    { "style": "CTA 1", "cta": "...", "tip": "..." },
+    { "style": "CTA 2", "cta": "...", "tip": "..." },
+    { "style": "CTA 3", "cta": "...", "tip": "..." },
+    { "style": "CTA 4", "cta": "...", "tip": "..." },
+    { "style": "CTA 5", "cta": "...", "tip": "..." }
   ],
   "platformTip": "which CTA style performs best on this platform for this goal, and the single biggest CTA mistake to avoid here"
 }
 
 QUALITY GATES:
-- Each CTA must name or reference what is being promoted — no generic filler
-- Match the platform action surface: link in bio, comments, messages, bookings, profile button, or reposts
-- Engagement CTA should feel native to the platform's algorithm
-- Traffic CTA should tell the user exactly where to go next
-- Lead CTA should mention the specific service, keyword, consultation, or deliverable
-- Direct CTA should feel like the clearest conversion move for a ready buyer
-- Soft CTAs must feel like a gift, not an ask
+- Return exactly 5 platform-specific CTAs
+- Each CTA must point toward the requested goal
+- Each CTA must reference the creator's topic, offer, or outcome
+- Use platform-native action language for ${platformData?.name || platform}
+- Make the CTA feel natural, specific, and conversion-aware
 
 CREATOR-TYPE BRANCHING:
 ${creatorPromptGuidance.instructions}
@@ -892,6 +1001,8 @@ Goal: ${goalLabels[goalType] || goalType}
 Platform: ${platformData?.name || platform}
 Brand tone to match: ${promptProfile.tone}
 Creator type: ${creatorPromptGuidance.label}
+Selected hook: ${selectedHook || 'Not provided'}
+Caption context: ${caption || 'Not provided'}
 
 Platform CTA style: ${ctaGuidelines.style}
 Platform examples: ${ctaGuidelines.examples.join(', ')}
@@ -900,11 +1011,11 @@ Platform fit reminder: use ${platform === 'instagram' ? 'bio-link, save, comment
 Generate exactly 5 CTAs, one for each style below. Return ONLY a JSON object:
 {
   "ctas": [
-    { "style": "Soft", "cta": "low-pressure CTA text here", "tip": "why this style works" },
-    { "style": "Engagement", "cta": "comment/share/save CTA text here", "tip": "why this style works" },
-    { "style": "Traffic", "cta": "click or visit CTA text here", "tip": "why this style works" },
-    { "style": "Lead", "cta": "DM or inquiry CTA text here", "tip": "why this style works" },
-    { "style": "Direct", "cta": "highest-intent CTA text here", "tip": "why this style works" }
+    { "style": "CTA 1", "cta": "CTA text here", "tip": "why this CTA works" },
+    { "style": "CTA 2", "cta": "CTA text here", "tip": "why this CTA works" },
+    { "style": "CTA 3", "cta": "CTA text here", "tip": "why this CTA works" },
+    { "style": "CTA 4", "cta": "CTA text here", "tip": "why this CTA works" },
+    { "style": "CTA 5", "cta": "CTA text here", "tip": "why this CTA works" }
   ],
   "platformTip": "which CTA style tends to perform best on ${platformData?.name || platform} and why"
 }
@@ -1048,11 +1159,18 @@ Number them 1-5. Include a brief explanation of why each CTA works for ${platfor
 }
 
 export async function generateHashtags(input, brandData, platform = 'instagram') {
+  const request = typeof input === 'string'
+    ? { topic: input, platform }
+    : { ...(input || {}), platform: input?.platform || platform };
+  const topic = request.topic || '';
+  const selectedHook = request.selectedHook || '';
+  const caption = request.caption || '';
+  const isFullPostBuilderRequest = typeof input === 'object' && input !== null;
+
   // Check if demo mode is enabled AND no real input - return mock data
-  if (isDemoMode() && !input?.trim()) {
+  if (isDemoMode() && !topic?.trim()) {
     await simulateDelay(800, 1500);
-    const hashtagGuidelines = getHashtagGuidelines(platform);
-    const hashtagCount = hashtagGuidelines?.max || 10;
+    const hashtagCount = isFullPostBuilderRequest ? 10 : (getHashtagGuidelines(platform)?.max || 10);
     const mockHashtags = getHashtagMocks(hashtagCount);
     return {
       success: true,
@@ -1063,57 +1181,43 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
   }
 
   try {
-    const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
-    const niche = promptProfile.niche;
-    const brandVoice = promptProfile.tone;
-    const audience = promptProfile.targetAudience;
-    
-    // Get platform-specific hashtag guidelines
-    const hashtagGuidelines = getHashtagGuidelines(platform);
     const platformData = getPlatform(platform);
-    const hashtagRules = getHashtagOutputRules(platform, promptProfile.city);
-    
-    // Determine hashtag count based on platform
-    const hashtagCount = hashtagGuidelines.max || 10;
-
+    const hashtagCount = isFullPostBuilderRequest ? 10 : (getHashtagGuidelines(platform)?.max || 10);
+    const realtimeResearch = await getRealtimeHashtagResearch({
+      topic,
+      platform,
+      selectedHook,
+      caption,
+    }, brandData);
+    const niche = getNiche(brandData, topic || 'general creator');
+    const audience = getTargetAudience(brandData, 'general audience');
+    const liveResearchText = realtimeResearch.success
+      ? (realtimeResearch.research || 'No live research returned.')
+      : '';
+    const hasRealtimeResearch = Boolean(realtimeResearch.success && liveResearchText.trim());
     const systemPrompt = buildSystemPrompt(
-      `You are Hashtag Strategist — a platform growth specialist who treats hashtag selection as algorithmic science, not guesswork. You understand the difference between reach potential and competition density, and you build stacks designed to get content discovered by high-intent, relevant audiences.
+      `You are a hashtag ranking specialist for social media growth. Use the live research provided to rank the most current and high-performing hashtags for the topic and platform.
 
-THE 3 TIERS YOU ALWAYS MIX:
-- HIGH: Broad but still relevant discovery terms
-- MEDIUM: Mid-competition tags with stronger intent
-- NICHE: Highly specific audience, topic, service, or location tags
-
-CHAIN-OF-THOUGHT (apply before generating):
-1. What is the core topic, niche, and viewer intent for this content?
-2. What would the ideal audience member type into the search bar?
-3. What community or movement hashtags does this niche actively use?
-4. What platform conventions apply (e.g., LinkedIn uses few; TikTok differs)?
-5. Does the final mix include representation from all 4 tiers?
-
-OUTPUT FORMAT — Return ONLY a valid JSON array of objects:
+OUTPUT FORMAT — Return ONLY a valid JSON array:
 [
   {
-    "tag": "#ExactTag",
-    "tier": "HIGH",
-    "estimatedPosts": "450K",
-    "score": 87,
-    "reason": "Why this tag works for this specific content and audience"
+    "hashtag": "#ExactHashtag",
+    "engagementScore": 84,
+    "estimatedPosts": "2.4M posts",
+    "momentum": "Rising",
+    "reason": "One sentence explaining why this hashtag is high-potential right now"
   }
 ]
 
 QUALITY GATES:
-- Return exactly the number of hashtags requested, no more, no less
-- Score each tag 0–100 for engagement potential for THIS content specifically
-- Never invent tags — only suggest hashtags that plausibly exist on this platform
-- Do not include the brand name unless the user's profile specifies it
-- Avoid generic filler tags (#love, #instagood, #photooftheday) unless platform conventions strongly call for them
-- Volume distribution must be 3-4 HIGH, 3-4 MEDIUM, and 2-3 NICHE for Instagram-style outputs
-- If location is available, include realistic city-specific tags or search terms
+- Return exactly ${hashtagCount} hashtags
+- Rank by current engagement opportunity using the live research first when it is available
+- Score each hashtag from 0-100 for engagement potential
+- Keep the list platform-native for ${platformData?.name || platform}
+- Avoid filler hashtags unless the live research strongly supports them
+- Never output markdown or commentary outside the JSON array
 
-${buildPromptGuardrails({ readyToUse: true })}
-
-VAGUE INPUT FALLBACK: If input is a single word or clearly generic, generate hashtags for a broad content category and add a "note" field as the first element: { "note": "Broad topic detected — add context (niche, angle, format) for a more targeted stack" }.`,
+${buildPromptGuardrails({ readyToUse: true })}`,
       brandData
     );
 
@@ -1124,53 +1228,53 @@ VAGUE INPUT FALLBACK: If input is a single word or clearly generic, generate has
       },
       {
         role: 'user',
-        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+        content: `${buildPromptBrandSection(brandData, {
+          niche,
+          targetAudience: audience,
+          platforms: [platform],
+        })}
 
-Generate exactly ${hashtagCount} optimized ${hashtagRules.outputLabel} for: "${input}"
+${hasRealtimeResearch ? `Given this real-time hashtag research:
 
-PLATFORM: ${platformData?.name || 'Social Media'}
-Recommended hashtag count: ${hashtagGuidelines.count}
-Hashtag style for this platform: ${hashtagGuidelines.style}
-Platform tip: ${hashtagGuidelines.tip}
-Platform-specific output rule: ${hashtagRules.formatRule}
-Location rule: ${hashtagRules.cityRule}
+${liveResearchText}
 
-Niche: ${niche}
-Brand voice: ${brandVoice}
-Target audience: ${audience}
+Select and rank the best 8-10 hashtags for a ${niche} creator posting about ${topic} on ${platformData?.name || platform}.`
+          : `Perplexity Sonar real-time research is unavailable right now.
 
-Return ONLY a valid JSON array of exactly ${hashtagCount} objects, ranked by engagement potential:
-[
-  {
-    "tag": "#ExactHashtag",
-    "tier": "HIGH|MEDIUM|NICHE",
-    "estimatedPosts": "2.4M",
-    "score": 84,
-    "reason": "Why this tag reaches the right audience for this content on ${platformData?.name || 'this platform'}"
-  }
-]
+Generate the best fallback hashtag set for a ${niche} creator posting about ${topic} on ${platformData?.name || platform} using platform-native hashtag strategy knowledge.`}
 
-Distribution requirements:
-- Instagram: 3-4 HIGH, 3-4 MEDIUM, 2-3 NICHE
-- TikTok: 5-7 total, still include a broad / medium / niche mix and allow #fyp or #foryou only if it fits
-- Facebook: 4-6 total, fewer but still niche-specific
-- LinkedIn: 4-6 total, professional and credibility-focused
-- YouTube: 5-7 total and optimize them as search-friendly discovery terms
+Selected hook: ${selectedHook || 'Not provided'}
+Caption context: ${caption || 'Not provided'}
 
-Ensure every tag is directly relevant to "${input}" and to the ${niche} niche. Do not include markdown, explanation text, or anything outside the JSON array.`
+Return ONLY a JSON array of exactly ${hashtagCount} ranked hashtags.
+For each item include:
+- hashtag
+- engagementScore
+- estimatedPosts
+- momentum
+- reason`
       }
-    ], 0.5);
+    ], 0.4);
+    const hashtagData = normalizeRankedHashtagData(parseJsonFromResponse(data.content), hashtagCount);
+
+    if (hashtagData.length === 0) {
+      throw new Error('Could not parse ranked hashtags response.');
+    }
 
     return {
       success: true,
       hashtags: data.content || '',
-      usage: data.usage
+      hashtagData,
+      citations: realtimeResearch.citations || [],
+      research: liveResearchText,
+      usage: data.usage,
+      realtime: hasRealtimeResearch,
     };
   } catch (error) {
     console.error('Grok API Error:', error);
     
     // Fallback: generate hashtags from the user's actual input
-    const words = (input || 'content').split(/\s+/).filter(w => w.length > 2);
+    const words = (topic || 'content').split(/\s+/).filter(w => w.length > 2);
     const baseTag = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('');
     const fallbackHashtags = [
       { tag: `#${baseTag}`, score: 90, posts: '1.2M' },
@@ -1184,7 +1288,8 @@ Ensure every tag is directly relevant to "${input}" and to the ${niche} niche. D
       hashtags: fallbackHashtags.map(h => `${h.tag} (Score: ${h.score}%, ${h.posts} posts)`).join('\n'),
       hashtagData: fallbackHashtags,
       usage: { fallback: true },
-      note: 'Using fallback hashtags due to API unavailability'
+      note: 'Using fallback hashtags due to API unavailability',
+      realtime: false,
     };
   }
 }
@@ -1445,7 +1550,7 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
     const userPrompts = {
       sales: `Remix this content for ${modeGoal}: "${content}"
 
-Create 2-3 variations for these platforms: ${platformList}.
+Create exactly 3 variations for each of these platforms: ${platformList}.
 
 For each variation:
 - Label it with the target platform name (e.g., "### Instagram", "### TikTok")
@@ -1456,10 +1561,10 @@ For each variation:
 - Add a P.S. that handles a common objection
 - Optimize for the specific platform's format and audience
 
-Format: Use "### Platform Name" as headers for each platform section.`,
+Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
       educational: `Remix this content for ${modeGoal}: "${content}"
 
-Create 2-3 variations for these platforms: ${platformList}.
+Create exactly 3 variations for each of these platforms: ${platformList}.
 
 For each variation:
 - Label it with the target platform name (e.g., "### Instagram", "### TikTok")
@@ -1469,10 +1574,10 @@ For each variation:
 - End with a takeaway or actionable next step
 - Optimize for the specific platform's format and audience
 
-Format: Use "### Platform Name" as headers for each platform section.`,
+Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
       community: `Remix this content for ${modeGoal}: "${content}"
 
-Create 2-3 variations for these platforms: ${platformList}.
+Create exactly 3 variations for each of these platforms: ${platformList}.
 
 For each variation:
 - Label it with the target platform name (e.g., "### Instagram", "### TikTok")
@@ -1482,10 +1587,10 @@ For each variation:
 - End with an invitation to share their own experience
 - Optimize for the specific platform's format and audience
 
-Format: Use "### Platform Name" as headers for each platform section.`,
+Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
       viral: `Remix this trending content for ${modeGoal}: "${content}"
 
-Create 2-3 variations for these platforms: ${platformList}.
+Create exactly 3 variations for each of these platforms: ${platformList}.
 
 For each variation:
 - Label it with the target platform name (e.g., "### Instagram", "### TikTok")
@@ -1495,7 +1600,7 @@ For each variation:
 - Include relevant emojis and trending formats
 - Optimize for the specific platform's format and audience
 
-Format: Use "### Platform Name" as headers for each platform section.`
+Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`
     };
 
     const userPrompt = userPrompts[mode] || userPrompts.viral;
@@ -2007,16 +2112,7 @@ Content:
 ${content}`,
       },
     ];
-    let data;
-    try {
-      data = await callClaudeAPI([...messages], 0.3);
-    } catch (claudeError) {
-      if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.3);
-      } else {
-        throw claudeError;
-      }
-    }
+    const data = await callGrokAPI([...messages], 0.3);
 
     const parsed = parseJsonFromResponse(data.content);
     if (parsed) {
@@ -2037,7 +2133,7 @@ export async function autoImprovePhrase(fullContent, originalPhrase, brandData =
     const messages = [
       {
         role: 'system',
-        content: `You rewrite the full sentence containing the flagged phrase so it sounds more natural, human, and brand-consistent. You may lightly smooth the neighboring sentence if needed, but do not rewrite the whole draft. Return ONLY the improved full content with the local edit applied — no explanation, no JSON.
+        content: `You rewrite the full sentence containing the flagged phrase so it sounds more natural, human, and brand-consistent. You may lightly smooth the neighboring sentence if needed, but do not rewrite the whole draft. Pass a clear "make this more human" instruction through your rewrite. Return ONLY the improved full content with the local edit applied — no explanation, no JSON.
 
 ${buildPromptBrandSection(brandData)}`,
       },
@@ -2051,16 +2147,7 @@ ${fullContent}
 Return the full content with that phrase rewritten to sound more human. Keep the meaning intact, avoid AI clichés, and make the local edit feel genuinely different.`,
       },
     ];
-    let data;
-    try {
-      data = await callClaudeAPI([...messages], 0.5);
-    } catch (claudeError) {
-      if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.5);
-      } else {
-        throw claudeError;
-      }
-    }
+    const data = await callGrokAPI([...messages], 0.5);
 
     return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
   } catch (error) {
@@ -2193,10 +2280,14 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
 
   try {
     const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const structuredResearch = normalizeResearchPayload(researchData);
+    const researchContext = structuredResearch
+      ? JSON.stringify(structuredResearch, null, 2)
+      : String(researchData || '').trim();
     const messages = [
       {
         role: 'system',
-        content: `You are Niche Intelligence Analyst — you transform raw trend research into actionable content strategy. You generate ORIGINAL ideas inspired by trends, never copied from them.
+        content: `You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
 
 OUTPUT — Return ONLY valid JSON:
 {
@@ -2227,10 +2318,13 @@ RULES:
 - hookPatterns: 3-4 fillable templates with [brackets]
 - contentGaps: 2-3 underserved topics with clear audience demand
 - contentIdeas: exactly 5 original ideas, specific enough to execute immediately
+- Every momentum field must be exactly one of: Rising, Peaking, Declining
 - Every content idea must be niche-specific, platform-specific, and grounded in the research findings
 - Every content idea must include a direct hook, a momentum label, a whyThisWorks explanation, and 3-5 relevant hashtags
 - All ideas must be original and aligned with the brand voice
-- Never copy or closely paraphrase existing content`,
+- Never copy or closely paraphrase existing content
+- Use competitor patterns and momentum_signals when provided
+- Rank the 5 content ideas from strongest opportunity to weakest opportunity`,
       },
       {
         role: 'user',
@@ -2239,12 +2333,12 @@ RULES:
 Based on this niche research, generate content intelligence:
 
 Research data:
-${researchData}
+${researchContext}
 
 Target platform: ${platform}
 ${brandContext ? `\nBrand profile:\n${brandContext}` : ''}
 
-Generate trending themes, hook patterns, content gaps, and 5 original content ideas.
+Generate trending themes, hook patterns, content gaps, and 5 ranked original content ideas.
 
 For content ideas:
 - Make them immediately executable, not generic
@@ -2254,20 +2348,12 @@ For content ideas:
 - Include one strong hook per idea`,
       },
     ];
-    let data;
-    try {
-      data = await callClaudeAPI([...messages], 0.7);
-    } catch (claudeError) {
-      if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.7);
-      } else {
-        throw claudeError;
-      }
-    }
+    const data = await callGrokAPI(messages, 0.7);
 
     const parsed = parseJsonFromResponse(data.content);
-    if (parsed) {
-      return { success: true, analysis: parsed, usage: data.usage };
+    const normalizedAnalysis = normalizeNicheAnalysisPayload(parsed, platform);
+    if (normalizedAnalysis) {
+      return { success: true, analysis: normalizedAnalysis, usage: data.usage };
     }
     return { success: true, rawAnalysis: data.content, usage: data.usage };
   } catch (error) {

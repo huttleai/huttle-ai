@@ -24,7 +24,7 @@ This guide shows you how to build n8n workflows for your **4 advertised features
 | **AI Plan Builder** | ✅ Yes | ✅ Mock plans | Ready (fallback works) |
 | **Trend Lab Quick Scan** | ❌ No | N/A (uses Perplexity API) | **Already works!** |
 | **Trend Lab Audience Insights** | ❌ No | N/A (uses Perplexity API) | **Already works!** |
-| **Trend Lab Deep Dive** | ✅ Yes | ✅ Perplexity fallback | Ready (fallback works) |
+| **Trend Lab Deep Dive** | ❌ No | N/A (uses direct Perplexity route) | **Already works!** |
 
 ---
 
@@ -43,7 +43,7 @@ VITE_N8N_CONTENT_REMIX_WEBHOOK=https://your-n8n-instance.com/webhook/content-rem
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n-instance.com/webhook/plan-builder
 
 # Trend Lab Deep Dive (Priority #4)
-VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n-instance.com/webhook/trend-deep-dive
+# Uses /api/ai/deep-dive with PERPLEXITY_API_KEY
 ```
 
 **⚠️ IMPORTANT**: If you don't set these, the app will **automatically use fallback generators** - users won't see errors!

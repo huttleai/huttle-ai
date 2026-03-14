@@ -5,13 +5,13 @@
  * Handles timeout and error responses.
  * 
  * Environment Variables Required:
- * - VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK: n8n webhook endpoint for Content Remix Studio
+ * - N8N_WEBHOOK_URL_GENERATOR: legacy n8n webhook endpoint for the retired generator flow
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 
-const N8N_WEBHOOK_URL = process.env.VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK || process.env.N8N_WEBHOOK_URL_GENERATOR;
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[n8n-generator] N8N webhook URL not configured. Set VITE_N8N_CONTENT_REMIX_STUDIO_WEBHOOK or N8N_WEBHOOK_URL_GENERATOR in environment.');
+    console.error('[n8n-generator] N8N webhook URL not configured. Set N8N_WEBHOOK_URL_GENERATOR in environment.');
     // Return a clear error so the frontend can fall back to Grok API
     return res.status(503).json({ 
       error: 'Content Remix Studio workflow not configured. Using fallback AI.',

@@ -6,6 +6,7 @@
  * 
  * Environment Variables Required:
  * - N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
+ * - GROK_API_KEY: server-side Grok key forwarded to the workflow when needed
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -14,6 +15,7 @@ import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 const N8N_WEBHOOK_URL =
   process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK ||
   process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
+const GROK_API_KEY = process.env.GROK_API_KEY;
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -101,7 +103,18 @@ export default async function handler(req, res) {
 
   try {
     // Validate and sanitize input before forwarding to n8n
-    const { platform, postType, topic, objective, targetAudience, voiceContext } = req.body || {};
+    const {
+      platform,
+      postType,
+      format,
+      requestedPostType,
+      platformAliases,
+      topic,
+      objective,
+      targetAudience,
+      voiceContext,
+      constraints,
+    } = req.body || {};
     if (!platform || !topic) {
       return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
     }
@@ -109,14 +122,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
-    const normalizedPostType = POST_TYPE_MAP[String(postType || 'post').toLowerCase()] || 'Post';
+    const rawFormat = String(format || requestedPostType || postType || 'post').trim();
+    const normalizedPostType = POST_TYPE_MAP[rawFormat.toLowerCase()] || 'Post';
     const sanitizedPayload = {
       platform,
+      format: rawFormat || normalizedPostType,
+      selectedFormat: rawFormat || normalizedPostType,
       postType: normalizedPostType,
+      requestedPostType: rawFormat || normalizedPostType,
+      platformAliases: Array.isArray(platformAliases)
+        ? platformAliases.map((value) => String(value || '').trim()).filter(Boolean)
+        : [],
       topic: String(topic).substring(0, 500),
       objective: objective || 'viral',
       targetAudience: targetAudience ? String(targetAudience).substring(0, 200) : '',
       voiceContext: voiceContext || {},
+      constraints: constraints && typeof constraints === 'object'
+        ? constraints
+        : {
+            expectedFormat: normalizedPostType,
+            expectedPlatform: platform,
+          },
+      ...(GROK_API_KEY ? { grokApiKey: GROK_API_KEY } : {}),
     };
 
     // Forward sanitized request to n8n webhook

@@ -616,7 +616,7 @@ export default function Dashboard() {
   }, [isDashboardLoading, dashboardError, dashboardData?.created_at, normalizedNiche]);
 
   return (
-    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-24 lg:pt-16 px-4 sm:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-20 lg:pt-16 px-4 sm:px-6 lg:px-8 pb-12">
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}

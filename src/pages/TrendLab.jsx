@@ -9,16 +9,16 @@ import { useToast } from '../context/ToastContext';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 
-// TODO: N8N_WORKFLOW - Import workflow services for features moving to n8n
+// Trend Lab mixes direct AI routes with workflow-backed features.
 import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
 
 /**
  * Trend Lab Page - Feature Separation
  * 
- * MOVING TO N8N WORKFLOW:
+ * TREND LAB DATA SOURCES:
  * - Trend Forecaster (planned launch) -> WORKFLOW_NAMES.TREND_FORECASTER
- * - Trend Deep Dive (in TrendDiscoveryHub) -> WORKFLOW_NAMES.TREND_DEEP_DIVE
+ * - Trend Deep Dive (in TrendDiscoveryHub) -> direct Perplexity Deep Dive route
  *
  * See docs/AI-FEATURES-SEPARATION.md for complete mapping
  */

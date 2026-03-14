@@ -392,7 +392,7 @@ These features are designed to use n8n workflows:
 | Dashboard Trending | `VITE_N8N_DASHBOARD_WEBHOOK` | `/webhook/dashboard-trending` |
 | Dashboard Hashtags | `VITE_N8N_DASHBOARD_WEBHOOK` | `/webhook/dashboard-hashtags` |
 | AI Plan Builder | `VITE_N8N_PLAN_BUILDER_WEBHOOK` | `/webhook/ai-plan-builder` |
-| Trend Deep Dive | `VITE_N8N_TREND_DEEP_DIVE_WEBHOOK` | `/webhook/trend-deep-dive` |
+| Trend Deep Dive | Direct serverless route | `/api/ai/deep-dive` |
 | Trend Forecaster | `VITE_N8N_TREND_FORECASTER_WEBHOOK` | `/webhook/trend-forecaster` |
 | Viral Blueprint | `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` | `/webhook/viral-blueprint` |
 | Social Updates | `VITE_N8N_SOCIAL_UPDATES_WEBHOOK` | `/webhook/social-updates` |
@@ -405,7 +405,6 @@ Add these to your `.env` when workflows are ready:
 # N8N Workflow Endpoints (AI Features)
 VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard-data
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/ai-plan-builder
-VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n.app/webhook/trend-deep-dive
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
 VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
 VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates

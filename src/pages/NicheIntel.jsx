@@ -1,16 +1,16 @@
 import { useState, useContext, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
   Copy, Check, Sparkles, Lock,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
-import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
 import PlatformSelector from '../components/PlatformSelector';
 import UpgradeModal from '../components/UpgradeModal';
+import AIUsageMeter from '../components/AIUsageMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
@@ -32,8 +32,7 @@ function hasConfiguredNiche(brandData) {
 
 export default function NicheIntel() {
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
-  const { user } = useContext(AuthContext);
-  const { checkFeatureAccess, userTier, getFeatureLimit } = useSubscription();
+  const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const { featureUsed, featureLimit, trackFeatureUsage, canGenerate } = useAIUsage('nicheIntel');
@@ -67,7 +66,7 @@ export default function NicheIntel() {
 
   const handleAnalyze = async () => {
     if (!canGenerate) {
-      addToast('Monthly analysis limit reached', 'warning');
+      addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
       return;
     }
 
@@ -77,13 +76,6 @@ export default function NicheIntel() {
     setAnalysis(null);
 
     try {
-      const usage = await trackFeatureUsage({ query: resolvedQuery, platform });
-      if (!usage.allowed) {
-        addToast('Analysis limit reached for this month', 'warning');
-        setLoading(false);
-        return;
-      }
-
       const researchRes = await researchNicheContent(resolvedQuery, platform, brandData);
       if (!researchRes.success) {
         addToast('Research failed. Try again.', 'error');
@@ -93,6 +85,17 @@ export default function NicheIntel() {
 
       const analysisRes = await analyzeNiche(researchRes.research, brandData, platform);
       if (analysisRes.success && analysisRes.analysis) {
+        const usage = await trackFeatureUsage({
+          query: resolvedQuery,
+          platform,
+          cachedResearch: Boolean(researchRes.cached),
+        });
+
+        if (!usage.allowed) {
+          addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
+          return;
+        }
+
         setAnalysis(analysisRes.analysis);
       } else {
         addToast('Analysis failed. Try again.', 'error');
@@ -105,8 +108,12 @@ export default function NicheIntel() {
   };
 
   const handleBuildPost = (idea) => {
-    const topicParam = encodeURIComponent(idea.title || idea.hook || '');
-    navigate(`/dashboard/full-post-builder?topic=${topicParam}`);
+    const searchParams = new URLSearchParams({
+      topic: idea.title || idea.hook || '',
+      platform: String(idea.platformFit || platform || 'instagram').toLowerCase(),
+    });
+
+    navigate(`/dashboard/full-post-builder?${searchParams.toString()}`);
   };
 
   const handleCopyHook = async (hook, idx) => {
@@ -122,7 +129,7 @@ export default function NicheIntel() {
     return (
       <div className="flex-1 ml-0 md:ml-64 pt-16 md:pt-20 p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20 border border-black" style={{ background: 'linear-gradient(135deg, rgba(1, 186, 210, 1) 0%, rgba(59, 130, 246, 1) 100%)' }}>
               <Search className="w-8 h-8 text-white" />
             </div>
@@ -157,7 +164,7 @@ export default function NicheIntel() {
               Upgrade to Pro to Unlock
             </button>
             <p className="text-xs text-gray-400 mt-3">Pro: 5 analyses/month &bull; Founders: 10 analyses/month</p>
-          </motion.div>
+          </Motion.div>
           <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} feature="nicheIntel" featureName="Niche Content Intelligence" />
         </div>
       </div>
@@ -168,49 +175,43 @@ export default function NicheIntel() {
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20">
-                <Search className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
-                <p className="text-xs md:text-sm text-gray-500 mt-0.5">Discover what&rsquo;s working in your niche</p>
-              </div>
+        <div className="mb-6 md:mb-8">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+              <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
             </div>
-            {featureLimit != null && (
-              <div className="text-right">
-                <span className="text-xs text-gray-500">{featureUsed} / {featureLimit} analyses</span>
-                <div className="w-20 bg-gray-200 rounded-full h-1.5 mt-1">
-                  <div
-                    className="h-1.5 rounded-full bg-huttle-primary transition-all"
-                    style={{ width: `${Math.min((featureUsed / (featureLimit || 1)) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
+              <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
+            </div>
           </div>
-        </motion.div>
+          <div className="mt-3">
+            <AIUsageMeter
+              used={featureUsed}
+              limit={featureLimit}
+              label="Analyses this month"
+              compact
+            />
+          </div>
+        </div>
 
         {/* Input Panel */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-6"
-        >
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 animate-fadeIn mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center text-sm font-bold text-huttle-primary">1</span>
+            Enter your niche or competitor handles
+          </h2>
+          <p className="text-sm text-gray-500 mb-4 ml-10">
+            Niches, keywords, or @handles to analyze.
+          </p>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Enter your niche or competitor handles</label>
-              <textarea
-                value={nicheQuery}
-                onChange={(e) => setNicheQuery(e.target.value)}
-                placeholder="@fitcoachsarah, fitness transformation, med spa"
-                rows={2}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-              />
-            </div>
+            <textarea
+              value={nicheQuery}
+              onChange={(e) => setNicheQuery(e.target.value)}
+              placeholder="@fitcoachsarah, fitness transformation, med spa"
+              rows={2}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
+            />
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
             {!isBrandLoading && !isBrandVoiceComplete && (
               <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
@@ -220,7 +221,7 @@ export default function NicheIntel() {
             <button
               onClick={handleAnalyze}
               disabled={loading || !canGenerate || isBrandLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-huttle-primary text-white rounded-xl font-medium text-sm hover:shadow-lg disabled:opacity-50 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-huttle-primary text-white rounded-xl font-semibold text-sm hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
             >
               {loading ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing your niche...</>
@@ -229,13 +230,32 @@ export default function NicheIntel() {
               )}
             </button>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Brand Context */}
+        {!analysis && !loading && brandData?.niche && (
+          <div className="mb-6 bg-huttle-50 rounded-xl border border-huttle-100 p-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-huttle-primary" />
+              Your Brand Context
+            </h3>
+            <div className="space-y-1 text-xs text-gray-600">
+              <p><span className="text-gray-400">Niche:</span> {brandData.niche}</p>
+              {brandData.targetAudience && (
+                <p><span className="text-gray-400">Audience:</span> {brandData.targetAudience}</p>
+              )}
+              {brandData.brandVoice && (
+                <p><span className="text-gray-400">Voice:</span> {brandData.brandVoice}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-200 p-5">
+              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                 <div className="h-5 w-40 bg-gray-100 rounded animate-pulse mb-3" />
                 <div className="space-y-2">
                   <div className="h-4 bg-gray-100 rounded animate-pulse" />
@@ -249,14 +269,14 @@ export default function NicheIntel() {
         {/* Results */}
         <AnimatePresence>
           {analysis && !loading && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
               {/* Section 1: Trending Themes */}
               {analysis.trendingThemes?.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
                     <TrendingUp className="w-5 h-5 text-teal-500" /> What&rsquo;s Trending in Your Niche
                   </h3>
@@ -283,7 +303,7 @@ export default function NicheIntel() {
 
               {/* Section 2: Hook Patterns */}
               {analysis.hookPatterns?.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
                     <Lightbulb className="w-5 h-5 text-amber-500" /> Top Hook Patterns
                   </h3>
@@ -305,7 +325,7 @@ export default function NicheIntel() {
 
               {/* Section 3: Content Gaps */}
               {analysis.contentGaps?.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
                     <Target className="w-5 h-5 text-emerald-500" /> Content Gap Opportunities
                   </h3>
@@ -327,7 +347,7 @@ export default function NicheIntel() {
 
               {/* Section 4: Content Ideas */}
               {analysis.contentIdeas?.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
                     <Sparkles className="w-5 h-5 text-indigo-500" /> Your 5 Content Ideas
                   </h3>
@@ -356,7 +376,7 @@ export default function NicheIntel() {
                           </div>
                           <button
                             onClick={() => handleBuildPost(idea)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 text-white rounded-lg text-xs font-medium hover:bg-indigo-600 transition-colors flex-shrink-0"
+                            className="flex items-center gap-1 px-3 py-1.5 bg-huttle-primary text-white rounded-lg text-xs font-medium hover:bg-huttle-primary-dark transition-colors flex-shrink-0"
                           >
                             <Zap className="w-3 h-3" /> Build Post
                           </button>
@@ -368,16 +388,16 @@ export default function NicheIntel() {
               )}
 
               <AIDisclaimerFooter />
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
 
         {/* Empty State */}
         {!analysis && !loading && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-400">
+          <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-400">
             <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-sm">Enter your niche and hit Analyze to discover content intelligence</p>
-          </motion.div>
+          </Motion.div>
         )}
       </div>
 

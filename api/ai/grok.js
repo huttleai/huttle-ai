@@ -16,9 +16,12 @@ import { logError, logInfo } from '../_utils/observability.js';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
-// Model: grok-4.1-fast-reasoning | Updated: March 2026
-// To upgrade: change the model string below and update .env.example
-const MODEL = "grok-4.1-fast-reasoning";
+const DEFAULT_MODEL = 'grok-4.1-fast-reasoning';
+const ALLOWED_MODELS = new Set([
+  'grok-4.1-fast-reasoning',
+  'grok-3-fast',
+  'grok-3-mini-fast',
+]);
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -27,6 +30,168 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per user
+
+function hasPersonalizationSignals(body = {}) {
+  return Boolean(
+    body.personalized
+    || body.targetAudience
+    || body.brandContext
+  );
+}
+
+function buildCacheAccessContext(requestBody = {}, userId = null) {
+  const isPersonalized = hasPersonalizationSignals(requestBody);
+  return {
+    isPersonalized,
+    userId: isPersonalized ? userId : null,
+  };
+}
+
+function applyCacheUserScope(query, cacheAccess) {
+  if (cacheAccess?.userId) {
+    return query.eq('user_id', cacheAccess.userId);
+  }
+
+  return query.is('user_id', null);
+}
+
+async function incrementCacheHitCount(cacheRow) {
+  if (!supabase || !cacheRow?.id) return;
+
+  try {
+    const nextHitCount = Number.isFinite(cacheRow.hit_count) ? cacheRow.hit_count + 1 : 1;
+    await supabase
+      .from('niche_content_cache')
+      .update({ hit_count: nextHitCount })
+      .eq('id', cacheRow.id);
+  } catch {
+    // Best-effort only.
+  }
+}
+
+function formatCachedResponse(resultData) {
+  if (!resultData || typeof resultData !== 'object') {
+    return {
+      success: true,
+      content: typeof resultData === 'string' ? resultData : '',
+      usage: null,
+    };
+  }
+
+  return {
+    success: true,
+    content: resultData.content || '',
+    usage: resultData.usage || null,
+  };
+}
+
+async function getCachedGrokResult(cacheConfig, cacheAccess) {
+  if (!supabase || !cacheConfig?.key) return null;
+
+  const { data, error } = await applyCacheUserScope(
+    supabase
+      .from('niche_content_cache')
+      .select('*')
+      .eq('cache_key', cacheConfig.key),
+    cacheAccess,
+  ).maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  if (!data.expires_at || new Date(data.expires_at).getTime() <= Date.now()) {
+    return null;
+  }
+
+  await incrementCacheHitCount(data);
+
+  return {
+    resultData: data.payload ?? data.result_data,
+    generatedAt: data.generated_at,
+  };
+}
+
+async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
+  if (!cacheConfig?.key || cachePayload == null) return;
+  if (!supabase) {
+    console.error('[Grok Cache Write FAILED] Missing service-role Supabase client', cacheConfig.key);
+    return;
+  }
+
+  const now = new Date();
+  const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
+  const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+  const cacheRow = {
+    cache_key: cacheConfig.key,
+    niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
+    platform: cacheConfig.platform || 'instagram',
+    feature: cacheConfig.type || 'grok',
+    payload: cachePayload,
+    result_data: cachePayload,
+    generated_at: now.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    hit_count: 0,
+    user_id: cacheAccess?.userId || null,
+  };
+
+  const { data: existingRow, error: lookupError } = await applyCacheUserScope(
+    supabase
+      .from('niche_content_cache')
+      .select('id')
+      .eq('cache_key', cacheConfig.key),
+    cacheAccess,
+  ).maybeSingle();
+
+  if (lookupError && lookupError.code !== 'PGRST116') {
+    console.error('[Grok Cache Write FAILED]', lookupError.message, cacheConfig.key);
+    return;
+  }
+
+  if (existingRow?.id) {
+    const { error } = await supabase
+      .from('niche_content_cache')
+      .update(cacheRow)
+      .eq('id', existingRow.id);
+
+    if (error) {
+      console.error('[Grok Cache Write FAILED]', error.message, cacheConfig.key);
+      return;
+    }
+
+    console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
+    return;
+  }
+
+  const { error } = await supabase
+    .from('niche_content_cache')
+    .insert(cacheRow);
+
+  if (error) {
+    if (error.code === '23505') {
+      const { error: retryError } = await applyCacheUserScope(
+        supabase
+          .from('niche_content_cache')
+          .update(cacheRow)
+          .eq('cache_key', cacheConfig.key),
+        cacheAccess,
+      );
+
+      if (retryError) {
+        console.error('[Grok Cache Write FAILED]', retryError.message, cacheConfig.key);
+        return;
+      }
+
+      console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
+      return;
+    }
+
+    console.error('[Grok Cache Write FAILED]', error.message, cacheConfig.key);
+    return;
+  }
+
+  console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
+}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -86,15 +251,27 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.7, model } = req.body;
+    const {
+      messages,
+      temperature = 0.7,
+      model,
+      cache,
+      personalized,
+      targetAudience,
+      brandContext,
+    } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    // SECURITY: Whitelist allowed models to prevent abuse of expensive models
-    const ALLOWED_MODELS = ['grok-4-1-fast-reasoning', 'grok-3-fast', 'grok-3-mini-fast'];
-    const safeModel = ALLOWED_MODELS.includes(model) ? model : 'grok-4-1-fast-reasoning';
+    const requestedModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
+    const safeModel = requestedModel === DEFAULT_MODEL ? 'grok-4-1-fast-reasoning' : requestedModel;
+    const cacheAccess = buildCacheAccessContext({
+      personalized,
+      targetAudience,
+      brandContext,
+    }, userId);
 
     // Validate temperature range
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
@@ -102,6 +279,17 @@ export default async function handler(req, res) {
     // Validate messages array size to prevent abuse
     if (messages.length > 20) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
+    }
+
+    if (cache?.key) {
+      const cachedResult = await getCachedGrokResult(cache, cacheAccess);
+      if (cachedResult) {
+        return res.status(200).json({
+          ...formatCachedResponse(cachedResult.resultData),
+          cached: true,
+          generatedAt: cachedResult.generatedAt,
+        });
+      }
     }
 
     // Forward request to Grok API
@@ -128,10 +316,20 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     
-    return res.status(200).json({
+    const payload = {
       success: true,
       content: data.choices?.[0]?.message?.content || '',
-      usage: data.usage
+      usage: data.usage,
+    };
+
+    if (cache?.key) {
+      await setCachedGrokResult(cache, payload, cacheAccess);
+    }
+
+    return res.status(200).json({
+      ...payload,
+      cached: false,
+      generatedAt: new Date().toISOString(),
     });
 
   } catch (error) {

@@ -76,8 +76,13 @@ async function loadHandler(relativePath) {
 // Load API routes dynamically
 async function setupRoutes() {
   // Use relative paths from project root
-  // n8n-generator route
+  // Content remix route
+  app.all('/api/ai/content-remix', await loadHandler('api/ai/content-remix.js'));
+  app.all('/api/ai/claude', await loadHandler('api/ai/claude.js'));
+
+  // Legacy n8n-generator route
   app.all('/api/ai/n8n-generator', await loadHandler('api/ai/n8n-generator.js'));
+  app.all('/api/ai/deep-dive', await loadHandler('api/ai/deep-dive.js'));
   app.all('/api/ai/trend-deep-dive', await loadHandler('api/ai/trend-deep-dive.js'));
   
   // Other AI routes

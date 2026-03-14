@@ -5,15 +5,46 @@ export async function getCachedResult(cacheKey) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
 
-    const { data, error } = await supabase
+    const nowIso = new Date().toISOString();
+    const userId = session.user?.id;
+
+    const readScopedCache = async (userScope) => supabase
       .from('niche_content_cache')
-      .select('payload, generated_at, expires_at')
+      .select('*')
       .eq('cache_key', cacheKey)
-      .gt('expires_at', new Date().toISOString())
+      .gt('expires_at', nowIso)
+      .match(userScope)
       .maybeSingle();
 
-    if (error || !data) return null;
-    return { data: data.payload, generatedAt: data.generated_at, cached: true };
+    let result = null;
+
+    if (userId) {
+      const { data, error } = await readScopedCache({ user_id: userId });
+      if (!error && data) {
+        result = data;
+      }
+    }
+
+    if (!result) {
+      const { data, error } = await supabase
+        .from('niche_content_cache')
+        .select('*')
+        .eq('cache_key', cacheKey)
+        .gt('expires_at', nowIso)
+        .is('user_id', null)
+        .maybeSingle();
+
+      if (!error && data) {
+        result = data;
+      }
+    }
+
+    if (!result) return null;
+    return {
+      data: result.payload ?? result.result_data,
+      generatedAt: result.generated_at,
+      cached: true,
+    };
   } catch {
     return null;
   }

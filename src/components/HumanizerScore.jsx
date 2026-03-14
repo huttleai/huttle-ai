@@ -1,7 +1,8 @@
-import { useState, useContext } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useContext, useEffect, useRef } from 'react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { User, AlertTriangle, Sparkles, RefreshCw, ChevronDown, ChevronUp, Zap } from 'lucide-react';
-import { scoreHumanness, autoImprovePhrase } from '../services/grokAPI';
+import { scoreHumanness } from '../services/grokAPI';
+import { humanizeContentWithClaude } from '../services/claudeAPI';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 
@@ -26,6 +27,7 @@ export default function HumanizerScore({
   onTrackUsage,
   compact = false,
   hideInput = false,
+  autoRun = false,
 }) {
   const { brandData } = useContext(BrandContext);
   const { addToast } = useToast();
@@ -35,6 +37,7 @@ export default function HumanizerScore({
   const [loading, setLoading] = useState(false);
   const [improvingPhrase, setImprovingPhrase] = useState(null);
   const [expandedDim, setExpandedDim] = useState(null);
+  const lastAnalyzedContentRef = useRef('');
 
   const content = externalContent ?? localContent;
 
@@ -60,6 +63,7 @@ export default function HumanizerScore({
       const res = await scoreHumanness(content, brandData);
       if (res.success && res.score) {
         setResult(res.score);
+        lastAnalyzedContentRef.current = content;
         onScoreChange?.(res.score.overall);
       } else {
         addToast('Could not analyze content. Try again.', 'error');
@@ -71,38 +75,73 @@ export default function HumanizerScore({
     }
   };
 
-  const handleAutoImprove = async (flaggedPhrase) => {
-    setImprovingPhrase(flaggedPhrase.original);
+  useEffect(() => {
+    if (!autoRun || !content?.trim() || loading) return;
+    if (lastAnalyzedContentRef.current === content) return;
+    runAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, content]);
+
+  const handleAutoImprove = async (flaggedPhrase = null) => {
+    const targetLabel = flaggedPhrase?.original || '__full_rewrite__';
+    setImprovingPhrase(targetLabel);
     try {
-      const res = await autoImprovePhrase(content, flaggedPhrase.original, brandData);
-      if (res.success && res.improvedContent) {
-        onContentUpdate?.(res.improvedContent);
-        if (!externalContent) setLocalContent(res.improvedContent);
-        addToast('Phrase improved!', 'success');
+      const res = await humanizeContentWithClaude(content, brandData);
+      if (res.success && res.content) {
+        onContentUpdate?.(res.content);
+        if (!externalContent) setLocalContent(res.content);
+        addToast(flaggedPhrase ? 'Phrase improved!' : 'Content humanized!', 'success');
         setTimeout(() => runAnalysis(), 300);
       }
     } catch {
-      addToast('Could not improve phrase.', 'error');
+      addToast(flaggedPhrase ? 'Could not improve phrase.' : 'Could not humanize content.', 'error');
     } finally {
       setImprovingPhrase(null);
     }
   };
 
-  if (compact && result) {
-    const color = scoreColorMap(result.overall);
+  if (compact) {
+    const displayScore = result?.overall ?? '—';
+    const color = result ? scoreColorMap(result.overall) : { bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-200', bar: 'bg-gray-300', label: 'Pending' };
     return (
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${color.bg} ${color.border}`}>
-        <User className={`w-4 h-4 ${color.text}`} />
-        <div className="flex flex-col">
-          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">Human</span>
-          <span className={`text-lg font-bold leading-tight ${color.text}`}>{result.overall}</span>
-        </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (!loading) runAnalysis();
+          }}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${color.bg} ${color.border}`}
+        >
+          <User className={`w-4 h-4 ${color.text}`} />
+          <div className="flex flex-col">
+            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">Human</span>
+            {loading ? (
+              <span className="text-xs text-gray-400">Analyzing...</span>
+            ) : (
+              <span className={`text-lg font-bold leading-tight ${color.text}`}>{displayScore}</span>
+            )}
+          </div>
+        </button>
+        {result?.flaggedPhrases?.length > 0 && onContentUpdate && (
+          <button
+            type="button"
+            onClick={() => handleAutoImprove(result.flaggedPhrases[0])}
+            disabled={Boolean(improvingPhrase)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+          >
+            {improvingPhrase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            Humanize It
+          </button>
+        )}
+        {result && (
+          <span className={`text-xs font-medium ${color.text}`}>{color.label}</span>
+        )}
       </div>
     );
   }
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -121,23 +160,21 @@ export default function HumanizerScore({
         </div>
       )}
 
-      {!hideInput && (
-        <button
-          onClick={runAnalysis}
-          disabled={loading || !content?.trim()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl font-medium text-sm hover:shadow-lg disabled:opacity-50 transition-all"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...
-            </>
-          ) : (
-            <>
-              <User className="w-4 h-4" /> Score Humanness
-            </>
-          )}
-        </button>
-      )}
+      <button
+        onClick={runAnalysis}
+        disabled={loading || !content?.trim()}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl font-medium text-sm hover:shadow-lg disabled:opacity-50 transition-all"
+      >
+        {loading ? (
+          <>
+            <RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...
+          </>
+        ) : (
+          <>
+            <User className="w-4 h-4" /> {hideInput ? 'Analyze Content' : 'Score Humanness'}
+          </>
+        )}
+      </button>
 
       {/* Loading skeleton */}
       {loading && (
@@ -153,7 +190,7 @@ export default function HumanizerScore({
 
       <AnimatePresence mode="wait">
         {result && !loading && (
-          <motion.div
+          <Motion.div
             key="results"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -173,13 +210,28 @@ export default function HumanizerScore({
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <motion.div
+                <Motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${result.overall}%` }}
                   transition={{ duration: 0.6, ease: 'easeOut' }}
                   className={`h-2.5 rounded-full ${scoreColorMap(result.overall).bar}`}
                 />
               </div>
+              {onContentUpdate && (
+                <button
+                  type="button"
+                  onClick={() => handleAutoImprove()}
+                  disabled={Boolean(improvingPhrase)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-teal-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {improvingPhrase === '__full_rewrite__' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  Humanize It
+                </button>
+              )}
             </div>
 
             {/* Dimension Scores */}
@@ -203,14 +255,14 @@ export default function HumanizerScore({
                       </div>
                       <AnimatePresence>
                         {isExpanded && (
-                          <motion.p
+                          <Motion.p
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="text-xs text-gray-600 mt-2"
                           >
                             {dim.feedback}
-                          </motion.p>
+                          </Motion.p>
                         )}
                       </AnimatePresence>
                     </button>
@@ -246,7 +298,7 @@ export default function HumanizerScore({
                         ) : (
                           <Zap className="w-3 h-3" />
                         )}
-                        Auto-improve
+                        Humanize It
                       </button>
                     </div>
                   </div>
@@ -260,7 +312,7 @@ export default function HumanizerScore({
             >
               <RefreshCw className="w-3.5 h-3.5" /> Re-analyze
             </button>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -270,6 +322,6 @@ export default function HumanizerScore({
           <p className="text-sm">Paste content and click Score to check how human it sounds</p>
         </div>
       )}
-    </motion.div>
+    </Motion.div>
   );
 }

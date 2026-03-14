@@ -150,7 +150,6 @@ N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/plan-builder
 VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
 VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard
-VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n.app/webhook/trend-deep-dive
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
 VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates
 ```

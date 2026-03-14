@@ -18,7 +18,6 @@ This document covers the **N8N Workflow** features.
 | Dashboard - Trending Now | `dashboard-trending` | `/webhook/dashboard-trending` | Pending |
 | Dashboard - Hashtags of the Day | `dashboard-hashtags` | `/webhook/dashboard-hashtags` | Pending |
 | AI Plan Builder | `ai-plan-builder` | `/webhook/ai-plan-builder` | Pending |
-| Trend Discovery - Deep Dive | `trend-deep-dive` | `/webhook/trend-deep-dive` | Pending |
 | Trend Forecaster | `trend-forecaster` | `/webhook/trend-forecaster` | Pending |
 | Viral Blueprint | `viral-blueprint` | `/webhook/viral-blueprint` | Pending |
 | Social Updates | `social-updates` | `/webhook/social-updates` | Pending |
@@ -35,7 +34,6 @@ VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard-data
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/ai-plan-builder
 
 # Trend workflows
-VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n.app/webhook/trend-deep-dive
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
 
 # Content workflows

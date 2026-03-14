@@ -16,7 +16,10 @@
     }
   ],
   "functions": {
-    "api/ai/trend-deep-dive.js": {
+    "api/ai/content-remix.js": {
+      "maxDuration": 45
+    },
+    "api/ai/deep-dive.js": {
       "maxDuration": 60
     }
   },

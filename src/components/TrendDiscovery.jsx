@@ -467,15 +467,15 @@ export default function TrendDiscovery() {
       {/* Results */}
       {renderResults()}
 
-      {/* Environment Variable Reminder */}
-      {error?.includes('not configured') && (
+      {/* Server configuration reminder */}
+      {(error?.includes('not configured') || error?.includes('Perplexity API key')) && (
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h4 className="text-sm font-semibold text-blue-800 mb-2">Setup Required</h4>
           <p className="text-sm text-blue-700 mb-2">
-            Add the following to your <code className="px-1.5 py-0.5 bg-blue-100 rounded text-xs">.env</code> file:
+            Add the following server-side variable to your <code className="px-1.5 py-0.5 bg-blue-100 rounded text-xs">.env</code> file:
           </p>
           <code className="block p-2 bg-blue-100 rounded text-xs text-blue-900 font-mono">
-            VITE_N8N_TREND_DEEP_DIVE_WEBHOOK=https://your-n8n-instance.app/webhook/trend-deep-dive
+            PERPLEXITY_API_KEY=your_perplexity_api_key_here
           </code>
         </div>
       )}

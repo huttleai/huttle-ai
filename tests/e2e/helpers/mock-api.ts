@@ -100,6 +100,82 @@ function buildScoreResponse() {
   });
 }
 
+function buildContentRemixResponse() {
+  return {
+    success: true,
+    content: [
+      '### Instagram',
+      'Variation 1: Turn one founder lesson into a save-worthy carousel with a bold first slide and a punchy takeaway.',
+      '',
+      'Variation 2: Open with the hard truth founders avoid, then break the lesson into three quick, screenshot-ready insights.',
+      '',
+      'Variation 3: Reframe the lesson as a founder confession with a short story and a comments CTA.',
+      '',
+      '### TikTok',
+      'Variation 1: Lead with a pattern interrupt, deliver the founder lesson in fast beats, and close with "want part 2?"',
+      '',
+      'Variation 2: Use a creator-style mini rant that flips into one tactical founder takeaway people can steal today.',
+      '',
+      'Variation 3: Open with "if I were starting over" and turn the lesson into a quick-hit script built for retention.',
+      '',
+      '### X',
+      'Variation 1: Turn the insight into a sharp thread opener followed by concise founder lessons and one CTA to bookmark.',
+      '',
+      'Variation 2: Write it like a contrarian founder take with one clean example and a reply-driving close.',
+      '',
+      'Variation 3: Frame it as a compact operating principle founders can quote, share, and reuse.',
+      '',
+      '### YouTube',
+      'Variation 1: Expand the lesson into a curiosity-led short-form script with a stronger payoff in the final line.',
+      '',
+      'Variation 2: Position it like a quick founder tutorial with one mistake, one fix, and one next step.',
+      '',
+      'Variation 3: Use a more narrative hook that promises a concrete founder outcome before delivering the lesson.',
+    ].join('\n'),
+    sections: [
+      {
+        platform: 'Instagram',
+        variations: [
+          'Turn one founder lesson into a save-worthy carousel with a bold first slide and a punchy takeaway.',
+          'Open with the hard truth founders avoid, then break the lesson into three quick, screenshot-ready insights.',
+          'Reframe the lesson as a founder confession with a short story and a comments CTA.',
+        ],
+      },
+      {
+        platform: 'TikTok',
+        variations: [
+          'Lead with a pattern interrupt, deliver the founder lesson in fast beats, and close with "want part 2?"',
+          'Use a creator-style mini rant that flips into one tactical founder takeaway people can steal today.',
+          'Open with "if I were starting over" and turn the lesson into a quick-hit script built for retention.',
+        ],
+      },
+      {
+        platform: 'X',
+        variations: [
+          'Turn the insight into a sharp thread opener followed by concise founder lessons and one CTA to bookmark.',
+          'Write it like a contrarian founder take with one clean example and a reply-driving close.',
+          'Frame it as a compact operating principle founders can quote, share, and reuse.',
+        ],
+      },
+      {
+        platform: 'YouTube',
+        variations: [
+          'Expand the lesson into a curiosity-led short-form script with a stronger payoff in the final line.',
+          'Position it like a quick founder tutorial with one mistake, one fix, and one next step.',
+          'Use a more narrative hook that promises a concrete founder outcome before delivering the lesson.',
+        ],
+      },
+    ],
+    metadata: {
+      model: 'claude-sonnet-4-6-20250514',
+      requestedMode: 'viral',
+      normalizedMode: 'viral_reach',
+      platformCount: 4,
+    },
+    usage: { input_tokens: 180, output_tokens: 420 },
+  };
+}
+
 function buildJsonContentResponse() {
   return JSON.stringify({
     content: 'Creators do not need more hours. They need a repeatable system that turns one insight into three strong posts.',
@@ -107,6 +183,61 @@ function buildJsonContentResponse() {
     tips: ['Lead with a sharp tension point.', 'Keep the CTA singular.'],
     hooks: ['Your content problem is probably a workflow problem.', 'Most creators are optimizing the wrong step.'],
   });
+}
+
+function buildDeepDiveResponse() {
+  return {
+    success: true,
+    report: {
+      overview: 'Creator workflow automation is gaining traction across short-form platforms, especially where proof-based education is outperforming generic advice.',
+      confidence: {
+        level: 'High',
+      },
+      active_trends: [
+        {
+          name: 'Workflow proof posts',
+          status: 'Rising',
+          velocity: 'Steady',
+          primary_platform: 'Instagram',
+          evidence: 'Creators are packaging systems into before-and-after breakdowns and save-focused carousel formats.',
+          why_it_matters: 'Concrete proof angles make AI and productivity content feel more credible and easier to share.',
+        },
+      ],
+      platform_activity: [
+        {
+          name: 'Instagram',
+          activity_level: 'High',
+          top_format: 'Carousels',
+          "what's_happening": 'Educational system breakdowns with strong first-slide hooks are driving saves and shares.',
+        },
+        {
+          name: 'TikTok',
+          activity_level: 'Medium',
+          top_format: 'Short talking-head videos',
+          "what's_happening": 'Fast workflow recaps and creator process clips are pulling attention when they lead with a clear pain point.',
+        },
+      ],
+      competitor_landscape: 'Top creator-education accounts are leaning into repeatable frameworks, proof screenshots, and lightweight behind-the-scenes process content.',
+      audience_sentiment: {
+        overall_mood: 'Positive',
+        detail: 'Audiences respond well when the advice feels practical, current, and immediately usable.',
+      },
+      timing_window: {
+        action_window: 'This week',
+        reasoning: 'The topic still has momentum, but creators are rewarding fast execution and fresh examples.',
+        lifespan: 'Likely relevant for the next 1-2 weeks',
+      },
+    },
+    citations: ['https://example.com/deep-dive'],
+    metadata: {
+      processed_at: '2026-03-10T12:00:00.000Z',
+      sections_parsed: {
+        trend_count: 1,
+        platform_count: 2,
+        has_competitors: true,
+      },
+    },
+  };
 }
 
 function buildGrokContent(body: Record<string, unknown>) {
@@ -148,6 +279,7 @@ export async function seedDemoState(page: Page) {
           },
         })
       );
+      window.localStorage.setItem('has_completed_onboarding:dev-user-123', 'true');
       window.localStorage.setItem('huttleSocialUpdatesRead', JSON.stringify([]));
       window.sessionStorage.setItem(
         'draftContent',
@@ -208,6 +340,10 @@ export async function setupMockApis(page: Page) {
     });
   });
 
+  await page.route('**/api/ai/content-remix**', async (route) => {
+    await fulfillJson(route, buildContentRemixResponse());
+  });
+
   await page.route('**/api/ai/n8n-generator**', async (route) => {
     await fulfillJson(route, {
       success: true,
@@ -217,13 +353,12 @@ export async function setupMockApis(page: Page) {
     });
   });
 
+  await page.route('**/api/ai/deep-dive**', async (route) => {
+    await fulfillJson(route, buildDeepDiveResponse());
+  });
+
   await page.route('**/api/ai/trend-deep-dive**', async (route) => {
-    await fulfillJson(route, {
-      summary: 'Creator workflow automation is rising across short-form platforms.',
-      audienceSentiment: 'Positive',
-      sourceLinks: ['https://example.com/deep-dive'],
-      recommendations: ['Lead with proof.', 'Post the format that already matches the trend.'],
-    });
+    await fulfillJson(route, buildDeepDiveResponse());
   });
 
   await page.route('**/api/create-checkout-session**', async (route) => {

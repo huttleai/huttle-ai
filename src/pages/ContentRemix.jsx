@@ -1,9 +1,9 @@
 import { useState, useContext, useEffect } from 'react';
-import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, BookOpen, Users, ExternalLink } from 'lucide-react';
+import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { generateWithN8n } from '../services/n8nGeneratorAPI';
+import { generateContentRemix } from '../services/contentRemixAPI';
 import { remixContentWithMode } from '../services/grokAPI';
 import { getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -39,26 +39,6 @@ const REMIX_GOALS = [
     borderActive: 'border-green-400 ring-green-200',
     iconColor: 'text-green-600',
   },
-  {
-    id: 'educational',
-    label: 'Educational',
-    description: 'Teach and provide value',
-    icon: BookOpen,
-    color: 'blue',
-    bgGradient: 'from-blue-50 to-indigo-50',
-    borderActive: 'border-blue-400 ring-blue-200',
-    iconColor: 'text-blue-600',
-  },
-  {
-    id: 'community',
-    label: 'Community Building',
-    description: 'Spark conversations and connection',
-    icon: Users,
-    color: 'purple',
-    bgGradient: 'from-purple-50 to-violet-50',
-    borderActive: 'border-purple-400 ring-purple-200',
-    iconColor: 'text-purple-600',
-  },
 ];
 
 /**
@@ -76,7 +56,7 @@ const PLATFORM_STYLES = {
  * Content Remix Studio — Reimagined UX
  * 
  * Step 1: Paste text content
- * Step 2: Choose remix goal (Viral, Sales, Educational, Community)
+ * Step 2: Choose remix goal (Viral Reach or Sales Conversion)
  * Step 3: Select output platforms (from Brand Voice)
  * Step 4: View remixed results per platform
  */
@@ -170,33 +150,51 @@ export default function ContentRemix() {
     return String(val);
   };
 
+  const sanitizeVariationText = (value) => {
+    const text = ensureString(value).replace(/\*\*(.*?)\*\*/g, '$1').replace(/\r\n/g, '\n');
+    if (!text) return '';
+
+    const withoutStandaloneLabels = text
+      .split('\n')
+      .filter((line) => !/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*:?\s*$/i.test(line.trim()))
+      .join('\n');
+
+    return withoutStandaloneLabels
+      .replace(/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*[:.\-]?\s*/i, '')
+      .trim();
+  };
+
   /**
    * Split a single platform's content into distinct variations
    */
   const splitIntoVariations = (content) => {
-    if (!content) return [ensureString(content)];
+    const cleanedContent = sanitizeVariationText(content);
+    if (!cleanedContent) return [cleanedContent];
 
     // Try splitting by numbered headers: "1.", "2.", "3." or "Variation 1", etc.
-    const numberedSplit = content.split(/\n\s*(?:\d+[\.\)]\s+|(?:Variation|Option|Version)\s*\d+[:\.\s])/i);
+    const numberedSplit = cleanedContent.split(/\n\s*(?:\d+[\.\)]\s+|(?:Variation|Option|Version)\s*\d+[:\.\s])/i);
     if (numberedSplit.length >= 2) {
       // First item may be empty or a preamble — filter out empties
-      return numberedSplit.map(v => v.trim()).filter(v => v.length > 15).slice(0, 3);
+      return numberedSplit.map((value) => sanitizeVariationText(value)).filter((value) => value.length > 15).slice(0, 3);
     }
 
     // Try splitting by markdown headers: "### " or "## "
-    const headerSplit = content.split(/\n\s*#{2,3}\s+/);
+    const headerSplit = cleanedContent.split(/\n\s*#{2,3}\s+/);
     if (headerSplit.length >= 2) {
-      return headerSplit.map(v => v.trim()).filter(v => v.length > 15).slice(0, 3);
+      return headerSplit.map((value) => sanitizeVariationText(value)).filter((value) => value.length > 15).slice(0, 3);
     }
 
     // Try splitting by double newlines (paragraphs)
-    const paragraphs = content.split(/\n\n+/).map(v => v.trim()).filter(v => v.length > 20);
+    const paragraphs = cleanedContent
+      .split(/\n\n+/)
+      .map((value) => sanitizeVariationText(value))
+      .filter((value) => value.length > 20);
     if (paragraphs.length >= 2) {
       return paragraphs.slice(0, 3);
     }
 
     // Return as single variation
-    return [content.trim()];
+    return [cleanedContent];
   };
 
   /**
@@ -285,7 +283,7 @@ export default function ContentRemix() {
   };
 
   /**
-   * Handle content remixing — n8n first, then Grok fallback
+   * Handle content remixing — Claude first, then Grok fallback
    */
   const handleRemix = async () => {
     if (!remixInput.trim()) {
@@ -312,14 +310,13 @@ export default function ContentRemix() {
     setRemixResults(null);
 
     try {
-      // Try n8n first
-      const result = await generateWithN8n({
+      // Try Claude first
+      const result = await generateContentRemix({
         userId: user.id,
-        topic: remixInput,
-        platform: selectedPlatforms.join(', '),
-        contentType: 'remix',
+        originalContent: remixInput,
+        platforms: selectedPlatforms,
         brandVoice: getBrandVoice(brandData),
-        remixMode: remixGoal,
+        mode: remixGoal,
         additionalContext: {
           mode: remixGoal,
           niche: getNiche(brandData),
@@ -331,7 +328,9 @@ export default function ContentRemix() {
 
       if (result.success && result.content) {
         const safeContent = ensureString(result.content);
-        const parsed = parseRemixOutput(safeContent);
+        const parsed = Array.isArray(result.sections) && result.sections.length > 0
+          ? result.sections
+          : parseRemixOutput(safeContent);
         setRemixResults({ raw: safeContent, sections: parsed });
         const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
         showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
@@ -339,8 +338,8 @@ export default function ContentRemix() {
         return;
       }
 
-      // n8n failed — fallback to Grok API
-      console.warn('n8n remix failed, falling back to Grok API:', result.error);
+      // Claude failed — fallback to Grok API
+      console.warn('Claude remix failed, falling back to Grok API:', result.error);
       const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
 
       if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
@@ -791,7 +790,7 @@ export default function ContentRemix() {
                         {/* Content */}
                         <div className="p-5">
                           <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                            {typeof variation === 'string' ? variation : ensureString(variation)}
+                            {sanitizeVariationText(variation)}
                           </div>
                         </div>
 

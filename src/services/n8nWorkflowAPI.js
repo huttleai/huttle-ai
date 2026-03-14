@@ -1,21 +1,23 @@
 /**
  * N8N Workflow API Service
  * 
- * This service handles all AI features that will be powered by n8n workflows.
- * Each function calls a separate n8n webhook endpoint.
+ * This service handles long-running AI features that use either workflow-backed
+ * endpoints or dedicated serverless routes.
  * 
  * WORKFLOW-BASED FEATURES (this file):
  * - Dashboard Trending Now & Hashtags of the Day
  * - AI Plan Builder
- * - Trend Discovery Deep Dive
  * - Trend Forecaster
  * - Viral Blueprint Generator
  * - Social Updates Feed
  * 
+ * DIRECT SERVERLESS FEATURES (also in this file):
+ * - Trend Discovery Deep Dive
+ * 
  * IN-CODE FEATURES (NOT in this file - use grokAPI.js / perplexityAPI.js):
  * - AI Insights, Daily Alerts, Templates, Smart Scheduling
  * - AI Power Tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visuals)
- * - Trend Discovery Quick Scan (Grok + Perplexity)
+ * - Trend Discovery Trend Pulse (Grok + Perplexity)
  * - Audience Insight Engine
  * - Content Remix Studio
  * 
@@ -31,7 +33,7 @@ import {
 import { API_TIMEOUTS } from '../config/apiConfig';
 import { retryFetch } from '../utils/retryFetch';
 
-const TREND_DEEP_DIVE_PROXY_URL = '/api/ai/trend-deep-dive';
+const TREND_DEEP_DIVE_PROXY_URL = '/api/ai/deep-dive';
 
 // ============================================================================
 // AUTH & HEADERS
@@ -323,14 +325,7 @@ export async function generateAIPlan({ goal, period, platforms, niche, brandVoic
 // ============================================================================
 
 /**
- * Get deep dive trend analysis via n8n workflow
- * 
- * TODO: N8N_WORKFLOW - Implement n8n workflow that:
- * 1. Receives trend topic and user context
- * 2. Performs comprehensive research across multiple sources
- * 3. Analyzes competitor content on this trend
- * 4. Generates actionable content ideas
- * 5. Returns detailed analysis with citations
+ * Get deep dive trend analysis via the direct Deep Dive AI route
  * 
  * @param {Object} params - Deep dive parameters
  * @param {string} params.trend - Trend topic to analyze
@@ -352,6 +347,7 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
           userId,
           trend,
           topic: trend,
+          platform: Array.isArray(platforms) ? platforms[0] || '' : '',
           niche,
           platforms,
           brandData,
@@ -365,10 +361,11 @@ export async function getTrendDeepDive({ trend, niche, platforms = [], brandData
     );
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       return {
         success: false,
         errorType: 'server_error',
-        reason: 'Deep Dive encountered a server issue. Please try again in a moment.'
+        reason: errorData?.error || 'Deep Dive encountered a server issue. Please try again in a moment.'
       };
     }
 
