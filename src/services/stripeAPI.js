@@ -290,14 +290,16 @@ export async function getSubscriptionStatus() {
     });
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       return {
-        success: true,
+        success: false,
         subscription: null,
         plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
         cancelAtPeriodEnd: false,
+        error: errorData.error || `Failed to load subscription status (${response.status})`,
       };
     }
 
@@ -315,13 +317,14 @@ export async function getSubscriptionStatus() {
   } catch (error) {
     console.error('Subscription Status Error:', error);
     return {
-      success: true,
+      success: false,
       subscription: null,
       plan: null,
       status: 'inactive',
       currentPeriodEnd: null,
       trialEnd: null,
       cancelAtPeriodEnd: false,
+      error: error.message,
     };
   }
 }
