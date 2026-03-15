@@ -6,7 +6,8 @@ import {
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
-  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle, LogIn
+  Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle, LogIn,
+  Shuffle, FolderOpen, BarChart2, CalendarDays
 } from "lucide-react";
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
@@ -22,14 +23,6 @@ import { BlurFade } from "./components/magicui/BlurFade";
 import { FAQAccordion } from "./components/magicui/FAQAccordion";
 import { ParticleNetwork } from "./components/magicui/ParticleNetwork";
 import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
-// Custom Feature Icons
-import { 
-  ViralBlueprintIcon,
-  AIPlanBuilderIcon, 
-  ContentRemixIcon, 
-  CaptionGeneratorIcon, 
-  QualityScorerIcon 
-} from "./components/icons/FeatureIcons";
 
 // ============================================
 // ANIMATION VARIANTS & CONFIGS (simplified)
@@ -392,13 +385,13 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "14-Day Money-Back Guarantee", desc: "Not satisfied? Email hello@huttleai.com within 14 days for a full refund" },
+                { title: "14-Day Money-Back Guarantee", desc: "" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
                   <div>
                     <p className="font-bold text-slate-900 text-sm">{item.title}</p>
-                    <p className="text-xs text-slate-500 font-medium">{item.desc}</p>
+                    {item.desc && <p className="text-xs text-slate-500 font-medium">{item.desc}</p>}
                   </div>
                 </div>
               ))}
@@ -410,8 +403,8 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
                 <p className="text-3xl font-black text-slate-900">$199<span className="text-sm font-medium text-slate-500">/year</span></p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-slate-400 line-through font-medium mb-1">$357/year</p>
-                <p className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-200 inline-block">Save 44%</p>
+                <p className="text-sm text-slate-400 line-through font-medium mb-1">$397.80/year</p>
+                <p className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-200 inline-block">Save 50%</p>
               </div>
             </div>
 
@@ -549,6 +542,186 @@ const OrbitingPlatformsSection = () => {
 };
 
 // ============================================
+// NICHE-SPECIFIC SECTION
+// ============================================
+
+const NICHE_DATA = {
+  "Med Spa": {
+    trends: [
+      { topic: "Skin Barrier Health", status: "Peaking", color: "bg-red-500" },
+      { topic: "Anti-Aging Treatments", status: "Rising", color: "bg-green-500" },
+      { topic: "Hydration Protocols", status: "Rising", color: "bg-green-500" },
+    ],
+    hashtags: ["#medspa", "#skincare", "#glowup", "#aesthetics"],
+    hook: "The one skincare treatment my clients ask about every single week",
+  },
+  "Fitness Coach": {
+    trends: [
+      { topic: "Protein Prioritization", status: "Peaking", color: "bg-red-500" },
+      { topic: "Zone 2 Cardio", status: "Rising", color: "bg-green-500" },
+      { topic: "Recovery Routines", status: "Rising", color: "bg-green-500" },
+    ],
+    hashtags: ["#fitnessmotivation", "#personaltrainer", "#gains", "#wellness"],
+    hook: "Why 80% of my clients were doing cardio completely wrong",
+  },
+  "Solo Creator": {
+    trends: [
+      { topic: "Creator Economy 2026", status: "Peaking", color: "bg-red-500" },
+      { topic: "Monetization Strategies", status: "Rising", color: "bg-green-500" },
+      { topic: "Authentic BTS Content", status: "Rising", color: "bg-green-500" },
+    ],
+    hashtags: ["#fyp", "#contentcreator", "#creatorlife", "#viral"],
+    hook: "POV: You finally figured out how to beat the algorithm",
+  },
+  "Real Estate": {
+    trends: [
+      { topic: "Market Rate Drops", status: "Peaking", color: "bg-red-500" },
+      { topic: "First-Time Buyer Tips", status: "Rising", color: "bg-green-500" },
+      { topic: "Investment Properties", status: "Rising", color: "bg-green-500" },
+    ],
+    hashtags: ["#realestate", "#housingmarket", "#investing", "#realtorlife"],
+    hook: "The market shift nobody's talking about — and what it means for buyers",
+  },
+};
+
+const NICHE_TABS = ["Med Spa", "Fitness Coach", "Solo Creator", "Real Estate"];
+
+const NicheSpecificSection = () => {
+  const [selectedNiche, setSelectedNiche] = useState("Solo Creator");
+  const data = NICHE_DATA[selectedNiche];
+
+  return (
+    <section className="py-16 md:py-32 px-4 bg-white overflow-hidden border-t border-slate-200/60">
+      <div className="container mx-auto max-w-6xl">
+        <motion.div
+          className="text-center mb-10 md:mb-16"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
+        >
+          <span className="inline-block px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-[#01bad2]/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20">
+            Niche-Specific
+          </span>
+          <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-4 leading-tight">
+            Built for YOUR niche.<br className="hidden md:block" />
+            <span className="text-slate-400 font-medium">Not everyone's.</span>
+          </h2>
+          <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
+            A med spa owner gets med spa content. A fitness coach gets fitness trends. No generic advice.
+          </p>
+        </motion.div>
+
+        {/* Niche Tabs */}
+        <motion.div
+          className="flex flex-wrap justify-center gap-2 md:gap-3 mb-8 md:mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          {NICHE_TABS.map((niche) => (
+            <button
+              key={niche}
+              onClick={() => setSelectedNiche(niche)}
+              className={`px-4 md:px-6 py-2 md:py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                selectedNiche === niche
+                  ? "bg-[#01bad2] text-white shadow-lg shadow-[#01bad2]/25"
+                  : "bg-white text-slate-700 border border-slate-200 hover:border-[#01bad2]/40 hover:text-[#01bad2]"
+              }`}
+            >
+              {niche}
+            </button>
+          ))}
+        </motion.div>
+
+        {/* Preview Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <div className="bg-white rounded-2xl md:rounded-[2rem] border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-5 md:p-8 relative overflow-hidden">
+            {/* Top bar */}
+            <div className="flex items-center justify-between mb-6 md:mb-8">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                </span>
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-400">
+                  {selectedNiche} · Live Data
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100">
+                <img src="/huttle-logo.png" alt="Huttle AI" className="h-3.5 md:h-4 w-auto" />
+                <span className="text-[10px] md:text-xs font-bold text-slate-500">Huttle AI</span>
+              </div>
+            </div>
+
+            {/* 3-Column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-0 md:divide-x md:divide-slate-100">
+              {/* Column 1: Trending Now */}
+              <div className="md:pr-6 lg:pr-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp size={16} className="text-[#01bad2]" />
+                  <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-400">Trending Now</span>
+                </div>
+                <div className="space-y-3">
+                  {data.trends.map((trend) => (
+                    <div key={trend.topic} className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-800">{trend.topic}</span>
+                      <span className={`flex items-center gap-1.5 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full ${
+                        trend.status === "Peaking"
+                          ? "bg-red-50 text-red-600 border border-red-100"
+                          : "bg-green-50 text-green-600 border border-green-100"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${trend.color}`}></span>
+                        {trend.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Column 2: Top Hashtags */}
+              <div className="md:px-6 lg:px-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Hash size={16} className="text-[#01bad2]" />
+                  <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-400">Top Hashtags</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {data.hashtags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-3 py-1.5 rounded-full bg-slate-50 text-slate-600 text-xs md:text-sm font-medium border border-slate-100"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Column 3: AI Hook */}
+              <div className="md:pl-6 lg:pl-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Zap size={16} className="text-[#01bad2]" />
+                  <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-400">AI Hook</span>
+                </div>
+                <p className="text-sm md:text-base text-slate-600 italic leading-relaxed">
+                  "{data.hook}"
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
+// ============================================
 // BENTO FEATURE GRID
 // ============================================
 
@@ -589,14 +762,9 @@ const BentoGrid = () => {
             <div className="group w-full h-full p-6 md:p-10 rounded-3xl bg-slate-50 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden bg-gradient-to-br from-white to-slate-50">
               <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#01bad2]/5 rounded-full blur-3xl group-hover:bg-[#01bad2]/10 transition-colors duration-500" />
               <div className="mb-6 z-10">
-                <div className="h-14 w-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#01bad2] mb-6 group-hover:scale-110 transition-transform duration-500">
-                  <ViralBlueprintIcon size={28} />
-                </div>
+                <Rocket size={28} className="text-[#01bad2] mb-6 group-hover:scale-110 transition-transform duration-500" />
                 <h3 className="text-2xl md:text-3xl font-bold mb-3 text-slate-900 leading-tight">Viral Blueprint Generator</h3>
                 <p className="text-base leading-relaxed text-slate-500">Tell us your topic and platform. We research what's trending, write a step-by-step script with hooks, visuals, and keywords — in 30 seconds.</p>
-              </div>
-              <div className="mt-auto z-10 flex-1 flex items-end justify-center pt-8">
-                <img src="/viral-blueprint-mockup.png" alt="Viral Blueprint Dashboard" className="w-full max-w-[300px] rounded-t-2xl shadow-2xl translate-y-8 group-hover:translate-y-4 transition-transform duration-700 ease-out" />
               </div>
             </div>
           </motion.div>
@@ -611,9 +779,7 @@ const BentoGrid = () => {
           >
             <div className="group w-full h-full p-6 md:p-8 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row gap-6 relative overflow-hidden">
               <div className="z-10 flex-1">
-                <div className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[#2B8FC7] mb-4 group-hover:scale-110 transition-transform duration-500">
-                  <ContentRemixIcon size={24} />
-                </div>
+                <Shuffle size={24} className="text-[#01bad2] mb-4 group-hover:scale-110 transition-transform duration-500" />
                 <h3 className="text-xl md:text-2xl font-bold mb-2 text-slate-900 leading-tight">Content Remix Studio</h3>
                 <p className="text-sm leading-relaxed text-slate-500">Drop in one post. Get back 5 platform-optimized versions instantly. TikTok, Instagram, X, YouTube, Facebook.</p>
               </div>
@@ -637,9 +803,7 @@ const BentoGrid = () => {
             transition={{ duration: 0.4, delay: 0.2 }}
           >
             <div className="group w-full h-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden">
-              <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-green-500 mb-4 group-hover:scale-110 transition-transform duration-500">
-                <Search size={20} />
-              </div>
+              <FolderOpen size={20} className="text-[#01bad2] mb-4 group-hover:scale-110 transition-transform duration-500" />
               <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Content Vault</h3>
               <p className="text-xs leading-relaxed text-slate-500">Save, organize, and access all your AI-created content in one place.</p>
             </div>
@@ -654,9 +818,7 @@ const BentoGrid = () => {
             transition={{ duration: 0.4, delay: 0.3 }}
           >
             <div className="group w-full h-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col relative overflow-hidden">
-              <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-orange-500 mb-4 group-hover:scale-110 transition-transform duration-500">
-                <QualityScorerIcon size={20} />
-              </div>
+              <BarChart2 size={20} className="text-[#01bad2] mb-4 group-hover:scale-110 transition-transform duration-500" />
               <h3 className="text-lg font-bold mb-2 text-slate-900 leading-tight">Viral Quality Score</h3>
               <p className="text-xs leading-relaxed text-slate-500">Get a viral potential score before you hit post. See what to fix.</p>
             </div>
@@ -671,9 +833,7 @@ const BentoGrid = () => {
             transition={{ duration: 0.4, delay: 0.4 }}
           >
             <div className="group w-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row items-center gap-6">
-               <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-gradient-to-br from-[#2B8FC7] to-[#01bad2] flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-500">
-                  <AIPlanBuilderIcon size={32} />
-               </div>
+               <CalendarDays size={32} className="text-[#01bad2] flex-shrink-0 group-hover:scale-110 transition-transform duration-500" />
                <div>
                  <h3 className="text-xl font-bold mb-2 text-slate-900">AI Plan Builder</h3>
                  <p className="text-sm text-slate-500">Get a full week of posts planned in 30 seconds. No more Sunday night scrambling.</p>
@@ -689,9 +849,7 @@ const BentoGrid = () => {
             transition={{ duration: 0.4, delay: 0.5 }}
           >
             <div className="group w-full p-6 rounded-3xl bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(1,186,210,0.08)] hover:border-[#01bad2]/30 transition-all duration-500 flex flex-col sm:flex-row items-center gap-6">
-               <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[#2B8FC7] shadow-sm group-hover:scale-110 transition-transform duration-500">
-                  <CaptionGeneratorIcon size={32} />
-               </div>
+               <MessageSquare size={32} className="text-[#01bad2] flex-shrink-0 group-hover:scale-110 transition-transform duration-500" />
                <div>
                  <h3 className="text-xl font-bold mb-2 text-slate-900">AI Power Tools</h3>
                  <p className="text-sm text-slate-500">Caption generator, hashtag research, hook builder, CTA suggester — all built in.</p>
@@ -711,9 +869,9 @@ const BentoGrid = () => {
 
 const PainPointsSection = () => {
   const painPoints = [
-    { emoji: "🤔", title: "What should we post?", text: "It's 9am. We've been staring at a blank caption for 20 minutes. We post something generic. It gets 12 likes. We wonder why we bother." },
-    { emoji: "📉", title: "Why did that flop?", text: "We spent 3 hours on a Reel. Picked the music. Edited the cuts. Wrote the caption. 47 views. Meanwhile, someone filming their lunch gets 200K." },
-    { emoji: "😫", title: "We can't keep up", text: "TikTok wants raw. Instagram wants polished. X wants hot takes. YouTube wants long-form. We are one team trying to be four different creators." }
+    { emoji: "🤔", title: "Hours wasted staring at a blank screen", text: "You know you need to post. You just don't know what to say. Every day you put it off costs you followers, clients, and revenue." },
+    { emoji: "📉", title: "Generic content that gets ignored", text: "Templates and generic AI tools don't know your niche. Your audience scrolls past content that could have been written by anyone." },
+    { emoji: "😫", title: "Juggling ten different tools", text: "Trend research here, caption writing there, hashtag tools somewhere else. No wonder content feels like a second job." }
   ];
 
   return (
@@ -737,8 +895,8 @@ const PainPointsSection = () => {
           transition={{ duration: 0.5 }}
         >
           <h2 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-[#01bad2] mb-3 border border-[#01bad2]/20 px-3 py-1 rounded-full inline-block bg-[#01bad2]/5">The Struggle</h2>
-          <h3 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-slate-900 mb-4">The content grind is real.</h3>
-          <p className="text-slate-500 max-w-2xl mx-auto text-sm md:text-lg">We built this because we were tired of the constant pressure to create for every platform.</p>
+          <h3 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-slate-900 mb-4">Content creation is exhausting.<br/><span className="text-slate-400 font-medium">It shouldn't be.</span></h3>
+          <p className="text-slate-500 max-w-2xl mx-auto text-sm md:text-lg">We built this because we were tired of the constant pressure to create — without knowing what would actually work.</p>
         </motion.div>
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8">
@@ -916,20 +1074,16 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl md:text-5xl font-black text-slate-900">
-                    $<NumberTicker value={199} startValue={357} duration={0.8} triggerOnView={true} />
+                    $<NumberTicker value={199} startValue={398} duration={0.8} triggerOnView={true} />
                   </span>
                   <span className="text-sm md:text-base text-slate-500">/year</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">$16.58/mo equivalent</p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>14-day money-back guarantee</span>
-                </div>
               </div>
 
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm text-slate-400 line-through">$357/yr</span>
-                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 44%</span>
+                <span className="text-sm text-slate-400 line-through">$397.80/yr</span>
+                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 50%</span>
               </div>
 
               <p className="text-sm text-slate-600 mb-4 font-medium">Lock in the lowest price we'll ever offer.</p>
@@ -943,11 +1097,11 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 {[
                   'All Pro features forever',
                   'Rate locked — never increases',
+                  '800 AI generations/month',
                   'Viral Blueprint & AI Plan Builder',
                   'Content Remix Studio & Trend Lab',
                   'AI Power Tools (captions, hooks, CTAs)',
                   'Content Vault for all your creations',
-                  'Cancel anytime',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
@@ -958,10 +1112,10 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 
               <BorderBeamButton 
                 onClick={onOpenFoundersModal}
-                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm md:text-xs shadow-lg shadow-[#01bad2]/20"
+                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20"
                 beamDuration={6}
               >
-                Claim Your $199/yr Founders Spot
+                Join the Founders Club
                 <ArrowRight size={16} className="ml-2" />
               </BorderBeamButton>
             </div>
@@ -977,7 +1131,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                AVAILABLE NOW
+                AVAILABLE SOON
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
@@ -988,10 +1142,11 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   <span className="text-sm text-slate-500">/year</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">$20.75/mo equivalent</p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>14-day money-back guarantee</span>
-                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-sm text-slate-400 line-through">$397.80/yr</span>
+                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 37%</span>
               </div>
 
               <p className="text-sm text-slate-600 mb-2">Launch pricing for creators who want Pro access at a lower annual rate.</p>
@@ -1001,6 +1156,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 {[
                   'All Pro features forever',
                   'Rate locked — never increases',
+                  '800 AI generations/month',
                   'Everything in Founding Member',
                   'Time-limited, not spot-limited',
                 ].map((feat, j) => (
@@ -1012,12 +1168,11 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               </ul>
 
               <button
-                onClick={() => { window.location.href = '/dashboard/signup'; }}
-                className="w-full h-12 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-colors"
+                disabled
+                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
-                Sign Up To Choose Builders
+                Available March 31
               </button>
-              <p className="text-center text-xs text-slate-500 mt-3">Save $148.80/yr vs future Pro annual pricing</p>
             </div>
           </motion.div>
 
@@ -1035,25 +1190,19 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Public Pricing</h3>
-              
-              <div className="mb-1">
-                <p className="text-sm text-slate-500 mt-1">Essentials</p>
-                <div className="text-3xl md:text-4xl font-black text-slate-900">$15<span className="text-sm font-medium text-slate-500">/month</span></div>
-                <p className="text-xs text-slate-500">or $153/year with 15% annual savings</p>
-              </div>
+              <p className="text-sm text-slate-500 mb-4">What everyone else pays after the launch window closes.</p>
 
-              <div className="mb-5 mt-4">
-                <p className="text-sm text-slate-500">Pro</p>
-                <div className="text-3xl md:text-4xl font-black text-slate-900">$39<span className="text-sm font-medium text-slate-500">/month</span></div>
-                <p className="text-xs text-slate-500">or $397.80/year with 15% annual savings</p>
+              <div className="mb-5">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Pro</p>
+                <div className="text-2xl md:text-3xl font-black text-slate-900">$397.80<span className="text-sm font-medium text-slate-500">/year</span></div>
               </div>
 
               <ul className="space-y-2.5 mb-6">
                 {[
-                  'Essentials includes 150 AI generations/month',
-                  'Pro includes 600 AI generations/month',
-                  'Founders and Builders include 800 AI generations/month',
-                  'Launch members keep the better launch pricing',
+                  '600 AI generations/month',
+                  'Founders save $198.80/yr vs this price',
+                  'Builders save $148.80/yr vs this price',
+                  'Available after the launch window closes',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
@@ -1068,6 +1217,19 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             </div>
           </motion.div>
         </div>
+
+        {/* Shared guarantee line beneath all cards */}
+        <motion.div
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-8 text-xs md:text-sm text-slate-500 font-medium"
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.5 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
+          <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> 14-day money-back guarantee on launch plans</span>
+          <span className="text-slate-300 hidden md:inline">·</span>
+          <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> Cancel anytime</span>
+        </motion.div>
       </div>
     </section>
   );
@@ -1736,6 +1898,9 @@ export default function LandingPage() {
 
       {/* PAIN POINTS SECTION */}
       <PainPointsSection />
+
+      {/* NICHE-SPECIFIC SECTION */}
+      <NicheSpecificSection />
 
       {/* BENTO FEATURE GRID */}
       <BentoGrid />

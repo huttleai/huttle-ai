@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../config/supabase';
-import { LogIn, Mail, Lock, Loader, Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react';
+import { LogIn, Mail, Lock, Loader, Sparkles, Shuffle, TrendingUp, Zap } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -54,10 +54,10 @@ export default function Login() {
   };
 
   const features = [
-    { icon: Sparkles, text: 'AI-powered content generation' },
-    { icon: Calendar, text: 'Smart scheduling & planning' },
-    { icon: TrendingUp, text: 'Trend analysis & forecasting' },
-    { icon: Zap, text: 'Boost engagement instantly' },
+    { icon: Sparkles, text: 'Viral Blueprint Generator' },
+    { icon: Shuffle, text: 'Content Remix Studio' },
+    { icon: TrendingUp, text: 'Trend Lab & forecasting' },
+    { icon: Zap, text: 'AI Plan Builder' },
   ];
 
   return (
