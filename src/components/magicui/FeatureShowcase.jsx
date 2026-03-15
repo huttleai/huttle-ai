@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, 
   FolderOpen, 
-  Repeat2, 
-  Radio, 
-  MessageSquare, 
+  Shuffle, 
+  TrendingUp, 
+  Rocket, 
+  CalendarDays, 
   BarChart3,
+  Repeat2,
   ChevronLeft,
   ChevronRight,
   Play
@@ -247,8 +249,7 @@ const features = [
     id: 'viral-blueprint',
     title: 'Viral Blueprint Generator',
     description: 'AI analyzes trending content and generates complete scripts with hooks, visuals, keywords, and optimal timing.',
-    icon: Sparkles,
-    gradient: 'from-purple-500 to-pink-500',
+    icon: Rocket,
     preview: ViralBlueprintPreview,
   },
   {
@@ -256,31 +257,27 @@ const features = [
     title: 'Content Vault',
     description: 'Store, organize, and access all your content assets — scripts, images, drafts, and more — in one secure place.',
     icon: FolderOpen,
-    gradient: 'from-cyan-500 to-blue-500',
     preview: ContentVaultPreview,
   },
   {
     id: 'ai-plan-builder',
     title: 'AI Plan Builder',
     description: 'Generate complete 7-day and 14-day content calendars in seconds with personalized post ideas tailored to your niche.',
-    icon: BarChart3,
-    gradient: 'from-purple-500 to-indigo-500',
+    icon: CalendarDays,
     preview: AIPlanBuilderPreview,
   },
   {
     id: 'content-remix',
     title: 'Content Remix Studio',
     description: 'Transform one piece of content into 5 platform-optimized variations instantly. One idea, everywhere.',
-    icon: Repeat2,
-    gradient: 'from-orange-500 to-red-500',
+    icon: Shuffle,
     preview: ContentRemixPreview,
   },
   {
     id: 'trend-discovery',
     title: 'Trend Lab',
     description: 'Real-time discovery of current trends in your niche across all platforms. Never miss a viral moment.',
-    icon: Radio,
-    gradient: 'from-emerald-500 to-green-500',
+    icon: TrendingUp,
     preview: TrendRadarPreview,
   },
 ];
@@ -319,9 +316,7 @@ export function FeatureShowcase({ className = "" }) {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <div className={`inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br ${activeFeature.gradient} mb-4 md:mb-6`}>
-                <activeFeature.icon size={24} className="text-white md:w-7 md:h-7" />
-              </div>
+              <activeFeature.icon size={28} className="text-[#01bad2] w-8 h-8 md:w-10 md:h-10 mb-4 md:mb-6" />
               
               <h3 className="text-xl md:text-3xl lg:text-4xl font-bold text-slate-900 mb-3 md:mb-4">
                 {activeFeature.title}
