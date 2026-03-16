@@ -2,7 +2,8 @@
  * Viral Blueprint Webhook Proxy
  * 
  * Serverless function that proxies Viral Blueprint requests to n8n webhook.
- * This avoids CORS issues by making the request server-side.
+ * Now supports the enriched blueprintContext payload with required_sections,
+ * excluded_sections, viral_score_weights, etc.
  * 
  * Environment Variables Required:
  * - N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
@@ -17,24 +18,11 @@ const N8N_WEBHOOK_URL =
   process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-// Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube']);
-const POST_TYPE_MAP = {
-  reel: 'Video',
-  short: 'Video',
-  tiktok: 'Video',
-  video: 'Video',
-  carousel: 'Carousel',
-  story: 'Story',
-  thread: 'Thread',
-  post: 'Post',
-  'image post': 'Post',
-  image: 'Post',
-};
+const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube', 'LinkedIn']);
 
 function hasUsefulBlueprintContent(payload) {
   if (!payload) return false;
@@ -43,17 +31,10 @@ function hasUsefulBlueprintContent(payload) {
   if (typeof payload !== 'object') return false;
 
   const meaningfulKeys = [
-    'blueprint',
-    'directors_cut',
-    'directorsCut',
-    'slide_breakdown',
-    'tweet_breakdown',
-    'frame_breakdown',
-    'caption_structure',
-    'hooks',
-    'content_script',
-    'seo_keywords',
-    'suggested_hashtags',
+    'blueprint', 'sections', 'viral_score', 'viral_score_breakdown',
+    'directors_cut', 'directorsCut', 'slide_breakdown', 'tweet_breakdown',
+    'frame_breakdown', 'caption_structure', 'hooks', 'content_script',
+    'seo_keywords', 'suggested_hashtags',
   ];
 
   if (meaningfulKeys.some((key) => payload[key])) return true;
@@ -63,24 +44,16 @@ function hasUsefulBlueprintContent(payload) {
   );
 }
 
-/**
- * Main handler function
- */
 export default async function handler(req, res) {
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-  // Set secure CORS headers
   setCorsHeaders(req, res);
-
-  // Handle preflight request
   if (handlePreflight(req, res)) return;
 
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // SECURITY: Require authentication
   const authHeader = req.headers.authorization;
   if (!authHeader || !supabase) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -92,29 +65,27 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Invalid authentication' });
   }
 
-  // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
     console.error('[viral-blueprint-proxy] N8N webhook URL not configured', { requestId });
-    return res.status(500).json({ 
-      error: 'Service not configured. Please try again later.',
-      requestId
-    });
+    return res.status(500).json({ error: 'Service not configured. Please try again later.', requestId });
   }
 
   try {
-    // Validate and sanitize input before forwarding to n8n
     const {
-      platform,
-      postType,
-      format,
-      requestedPostType,
-      platformAliases,
       topic,
-      objective,
-      targetAudience,
-      voiceContext,
-      constraints,
+      platform,
+      content_type,
+      goal,
+      niche,
+      target_audience,
+      brand_voice_tone,
+      required_sections,
+      optional_sections,
+      excluded_sections,
+      viral_score_weights,
+      blueprint_label,
     } = req.body || {};
+
     if (!platform || !topic) {
       return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
     }
@@ -122,31 +93,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
-    const rawFormat = String(format || requestedPostType || postType || 'post').trim();
-    const normalizedPostType = POST_TYPE_MAP[rawFormat.toLowerCase()] || 'Post';
     const sanitizedPayload = {
-      platform,
-      format: rawFormat || normalizedPostType,
-      selectedFormat: rawFormat || normalizedPostType,
-      postType: normalizedPostType,
-      requestedPostType: rawFormat || normalizedPostType,
-      platformAliases: Array.isArray(platformAliases)
-        ? platformAliases.map((value) => String(value || '').trim()).filter(Boolean)
-        : [],
       topic: String(topic).substring(0, 500),
-      objective: objective || 'viral',
-      targetAudience: targetAudience ? String(targetAudience).substring(0, 200) : '',
-      voiceContext: voiceContext || {},
-      constraints: constraints && typeof constraints === 'object'
-        ? constraints
-        : {
-            expectedFormat: normalizedPostType,
-            expectedPlatform: platform,
-          },
+      platform,
+      content_type: content_type || 'Post',
+      goal: goal || 'Grow Followers',
+      niche: niche ? String(niche).substring(0, 200) : '',
+      target_audience: target_audience ? String(target_audience).substring(0, 200) : '',
+      brand_voice_tone: brand_voice_tone ? String(brand_voice_tone).substring(0, 100) : 'Authentic',
+      required_sections: Array.isArray(required_sections) ? required_sections : [],
+      optional_sections: Array.isArray(optional_sections) ? optional_sections : [],
+      excluded_sections: Array.isArray(excluded_sections) ? excluded_sections : [],
+      viral_score_weights: viral_score_weights && typeof viral_score_weights === 'object' ? viral_score_weights : {},
+      blueprint_label: blueprint_label || '',
+      // Legacy fields for backward compatibility with existing n8n workflows
+      format: content_type || 'Post',
+      postType: content_type || 'Post',
+      requestedPostType: content_type || 'Post',
+      objective: goal || 'viral',
+      targetAudience: target_audience || '',
       ...(GROK_API_KEY ? { grokApiKey: GROK_API_KEY } : {}),
     };
 
-    // Forward sanitized request to n8n webhook
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: {
@@ -154,8 +122,7 @@ export default async function handler(req, res) {
         'Accept': 'application/json',
       },
       body: JSON.stringify(sanitizedPayload),
-      // Add timeout for long-running workflows
-      signal: AbortSignal.timeout(120000), // 120 seconds
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!response.ok) {
@@ -168,7 +135,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Parse and return the response
     const rawResponse = await response.text().catch(() => '');
     const data = rawResponse ? (() => {
       try { return JSON.parse(rawResponse); } catch { return null; }
@@ -176,7 +142,7 @@ export default async function handler(req, res) {
 
     if (!hasUsefulBlueprintContent(data || rawResponse)) {
       return res.status(502).json({
-        error: 'n8n response missing blueprint content. Expected blueprint/script/seo fields.',
+        error: 'n8n response missing blueprint content.',
         requestId
       });
     }
@@ -191,32 +157,16 @@ export default async function handler(req, res) {
     console.error('[viral-blueprint-proxy] Error:', {
       name: error.name,
       message: error.message,
-      stack: error.stack
     });
 
-    // Handle timeout errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      return res.status(504).json({ 
-        error: 'Request timeout: n8n workflow took longer than 120 seconds',
-        requestId
-      });
+      return res.status(504).json({ error: 'Request timeout: n8n workflow took longer than 120 seconds', requestId });
     }
 
-    // Handle network errors
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
-      return res.status(502).json({ 
-        error: 'Unable to reach n8n webhook. Please check the webhook URL.',
-        requestId
-      });
+      return res.status(502).json({ error: 'Unable to reach n8n webhook.', requestId });
     }
 
-    // SECURITY: Don't expose internal error details to client
-    return res.status(500).json({ 
-      error: 'An unexpected error occurred. Please try again.',
-      requestId
-    });
+    return res.status(500).json({ error: 'An unexpected error occurred. Please try again.', requestId });
   }
 }
-
-
-
