@@ -45,6 +45,8 @@ const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl,
 const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
 const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
 const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_FOUNDERS_API_KEY.split('-')[1] || 'us22';
+const USERS_PAGE_SIZE = 200;
+const MAX_USER_LOOKUP_PAGES = 50;
 
 // Disable body parsing - we need the raw body for webhook verification
 export const config = {
@@ -152,6 +154,52 @@ async function markEventProcessed(eventId, eventType) {
   return true;
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function findAuthUserById(userId) {
+  if (!userId || !supabase) return { user: null, error: null };
+
+  const { data, error } = await supabase.auth.admin.getUserById(userId);
+  if (error) {
+    return { user: null, error };
+  }
+
+  return { user: data?.user || null, error: null };
+}
+
+async function findAuthUserByEmail(customerEmail) {
+  if (!customerEmail || !supabase) return { user: null, error: null };
+
+  const targetEmail = normalizeEmail(customerEmail);
+  if (!targetEmail) return { user: null, error: null };
+
+  // listUsers does not support server-side email filtering, so paginate and match locally.
+  for (let page = 1; page <= MAX_USER_LOOKUP_PAGES; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: USERS_PAGE_SIZE,
+    });
+
+    if (error) {
+      return { user: null, error };
+    }
+
+    const users = data?.users || [];
+    const matchedUser = users.find((candidate) => normalizeEmail(candidate?.email) === targetEmail);
+    if (matchedUser) {
+      return { user: matchedUser, error: null };
+    }
+
+    if (users.length < USERS_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return { user: null, error: null };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -200,21 +248,26 @@ export default async function handler(req, res) {
         const customerId = session.customer;
         const subscriptionId = session.subscription;
         const customerEmail = session.customer_email || session.customer_details?.email;
+        const metadataUserId = session.metadata?.supabase_user_id;
 
-        if (customerEmail && customerId) {
-          // Find user by email - use filtered query instead of listing all users
-          // SECURITY & PERFORMANCE: listUsers() loads ALL users into memory which is 
-          // both slow and a potential DoS vector as the user base grows
-          const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
-            filter: `email.eq.${customerEmail}`,
-            page: 1,
-            perPage: 1,
-          });
-          if (userLookupError) {
-            console.error('Error finding auth user by email:', userLookupError);
-            break;
+        if (customerId) {
+          let user = null;
+
+          if (metadataUserId) {
+            const { user: metadataUser, error: metadataLookupError } = await findAuthUserById(metadataUserId);
+            if (metadataLookupError) {
+              throw new Error(`Failed to resolve metadata user (${metadataUserId}): ${metadataLookupError.message}`);
+            }
+            user = metadataUser;
           }
-          const user = userList?.users?.[0];
+
+          if (!user) {
+            const { user: emailUser, error: emailLookupError } = await findAuthUserByEmail(customerEmail);
+            if (emailLookupError) {
+              throw new Error(`Failed to resolve checkout user by email (${customerEmail}): ${emailLookupError.message}`);
+            }
+            user = emailUser;
+          }
           
           if (user) {
             // Extract customer name from session
@@ -224,7 +277,7 @@ export default async function handler(req, res) {
             const lastName = nameParts.slice(1).join(' ') || '';
 
             // Update or create user profile with Stripe customer ID
-            await supabase
+            const { error: profileUpsertError } = await supabase
               .from('user_profile')
               .upsert({
                 user_id: user.id,
@@ -233,6 +286,9 @@ export default async function handler(req, res) {
               }, {
                 onConflict: 'user_id',
               });
+            if (profileUpsertError) {
+              throw new Error(`Failed to upsert user_profile for user ${user.id}: ${profileUpsertError.message}`);
+            }
 
             // Get subscription details to determine plan
             if (subscriptionId) {
@@ -245,7 +301,7 @@ export default async function handler(req, res) {
               });
 
               // Update subscription in database
-              await supabase
+              const { error: subscriptionUpsertError } = await supabase
                 .from('subscriptions')
                 .upsert({
                   user_id: user.id,
@@ -262,13 +318,19 @@ export default async function handler(req, res) {
                 }, {
                   onConflict: 'user_id',
                 });
+              if (subscriptionUpsertError) {
+                throw new Error(`Failed to upsert subscription for user ${user.id}: ${subscriptionUpsertError.message}`);
+              }
 
               // Add launch and paid members to the founding audience workflow.
-              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
+              if (customerEmail && (plan === 'pro' || plan === 'founder' || plan === 'builder')) {
                 await addToFoundersClub(customerEmail, firstName, lastName);
               }
             }
           } else {
+            if (metadataUserId) {
+              throw new Error(`Checkout metadata user not found: ${metadataUserId}`);
+            }
             console.warn('No auth user found for checkout email:', customerEmail);
           }
         }
