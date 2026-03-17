@@ -21,7 +21,7 @@ import { AuthContext } from '../context/AuthContext';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 8;
 const MAX_PLATFORM_SELECTIONS = 4;
 
 const CREATOR_TYPES = [
@@ -71,14 +71,54 @@ const PLATFORM_OPTIONS = [
   { value: 'x', label: 'X', icon: Twitter },
 ];
 
-const STEP_LABELS = ['Type', 'Niche', 'Stage', 'Audience', 'Platforms', 'City'];
+const TONE_CHIPS_OPTIONS = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'conversational', label: 'Conversational' },
+  { value: 'inspirational', label: 'Inspirational' },
+  { value: 'educational', label: 'Educational' },
+  { value: 'bold', label: 'Bold' },
+  { value: 'warm', label: 'Warm' },
+];
+
+const FOLLOWER_COUNT_OPTIONS = [
+  { value: 'under_500', label: 'Under 500' },
+  { value: '500_2k', label: '500–2K' },
+  { value: '2k_10k', label: '2K–10K' },
+  { value: '10k_50k', label: '10K–50K' },
+  { value: '50k_plus', label: '50K+' },
+];
+
+const CONVERSION_GOAL_OPTIONS = [
+  { value: 'book_appointment', label: 'Book an appointment' },
+  { value: 'dm_us', label: 'DM us' },
+  { value: 'visit_website', label: 'Visit website' },
+  { value: 'buy_now', label: 'Buy now' },
+  { value: 'get_quote', label: 'Get a quote' },
+  { value: 'join_list', label: 'Join a list' },
+];
+
+const CONTENT_PERSONA_OPTIONS = [
+  { value: 'the_expert', label: 'The Expert' },
+  { value: 'the_entertainer', label: 'The Entertainer' },
+  { value: 'the_motivator', label: 'The Motivator' },
+  { value: 'the_documenter', label: 'The Documenter' },
+  { value: 'the_educator', label: 'The Educator' },
+  { value: 'the_storyteller', label: 'The Storyteller' },
+];
+
+const STEP_LABELS = ['Type', 'Niche', 'Stage', 'Audience', 'Platforms', 'Tone', 'Goals', 'City'];
 
 const defaultFormData = {
   creator_type: '',
   niche: '',
   growth_stage: 'building_momentum',
   target_audience: '',
+  audience_pain_point: '',
   platforms: [],
+  follower_count: '',
+  tone_chips: [],
+  conversion_goal: '',
+  content_persona: '',
   city: '',
 };
 
@@ -172,6 +212,11 @@ export default function OnboardingQuiz({ onComplete }) {
       return false;
     }
 
+    if (currentStep === 6 && formData.tone_chips.length === 0) {
+      addToast('Select at least one tone to continue.', 'warning');
+      return false;
+    }
+
     return true;
   };
 
@@ -215,6 +260,7 @@ export default function OnboardingQuiz({ onComplete }) {
       city: nextCityValue,
       niche: formData.niche.trim(),
       target_audience: formData.target_audience.trim(),
+      audience_pain_point: formData.audience_pain_point.trim(),
       growth_stage: formData.growth_stage || 'building_momentum',
     };
 
@@ -247,7 +293,12 @@ export default function OnboardingQuiz({ onComplete }) {
           niche: nextFormData.niche,
           growthStage: nextFormData.growth_stage,
           targetAudience: nextFormData.target_audience,
+          audiencePainPoint: nextFormData.audience_pain_point || null,
           platforms: nextFormData.platforms,
+          followerCount: nextFormData.follower_count || null,
+          toneChips: nextFormData.tone_chips || [],
+          conversionGoal: nextFormData.conversion_goal || null,
+          contentPersona: nextFormData.content_persona || null,
           city: nextCityValue || null,
           quizCompletedAt: nowIso,
           onboardingStep: TOTAL_STEPS,
@@ -269,7 +320,12 @@ export default function OnboardingQuiz({ onComplete }) {
         growthStage: nextFormData.growth_stage,
         creatorType: nextFormData.creator_type,
         targetAudience: nextFormData.target_audience,
+        audiencePainPoint: nextFormData.audience_pain_point,
         platforms: nextFormData.platforms,
+        followerCount: nextFormData.follower_count,
+        toneChips: nextFormData.tone_chips,
+        conversionGoal: nextFormData.conversion_goal,
+        contentPersona: nextFormData.content_persona,
         city: nextCityValue,
       }));
 
@@ -419,7 +475,7 @@ export default function OnboardingQuiz({ onComplete }) {
 
           <FieldLabel>{isBrandBusiness ? 'Ideal Customer' : 'Audience Description'}</FieldLabel>
           <textarea
-            rows={5}
+            rows={3}
             value={formData.target_audience}
             onChange={(event) =>
               setFormData((prev) => ({ ...prev, target_audience: event.target.value }))
@@ -432,6 +488,19 @@ export default function OnboardingQuiz({ onComplete }) {
             <span className={hasAudienceDepth ? 'text-emerald-600' : 'text-slate-400'}>
               {audienceWordCount} words
             </span>
+          </div>
+
+          <div className="mt-6">
+            <FieldLabel>Their biggest pain point?</FieldLabel>
+            <input
+              type="text"
+              value={formData.audience_pain_point}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, audience_pain_point: event.target.value }))
+              }
+              placeholder="e.g., They want results but don't know where to start"
+              className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+            />
           </div>
         </div>
       );
@@ -478,6 +547,147 @@ export default function OnboardingQuiz({ onComplete }) {
                     <Icon className="h-5 w-5" />
                   </div>
                   <span className="flex-1 font-semibold text-slate-900">{platform.label}</span>
+                  {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6">
+            <FieldLabel>Your current following (approx)?</FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {FOLLOWER_COUNT_OPTIONS.map((option) => {
+                const isSelected = formData.follower_count === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, follower_count: option.value }))}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${
+                      isSelected
+                        ? 'border-huttle-primary bg-huttle-50 text-huttle-primary shadow-sm'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 6) {
+      const MAX_TONE = 3;
+      const handleToneToggle = (value) => {
+        setFormData((prev) => {
+          const current = prev.tone_chips;
+          if (current.includes(value)) {
+            return { ...prev, tone_chips: current.filter((v) => v !== value) };
+          }
+          if (current.length >= MAX_TONE) {
+            addToast(`Pick up to ${MAX_TONE} tones.`, 'warning');
+            return prev;
+          }
+          return { ...prev, tone_chips: [...current, value] };
+        });
+      };
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            How would you describe your tone?
+          </h2>
+          <p className="mb-6 text-slate-500">Select up to 3 that feel like you</p>
+
+          <div className="flex flex-wrap gap-3">
+            {TONE_CHIPS_OPTIONS.map((option) => {
+              const isSelected = formData.tone_chips.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleToneToggle(option.value)}
+                  className={`px-5 py-3 rounded-2xl text-sm font-semibold transition-all border-2 ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 text-huttle-primary shadow-md'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  {option.label}
+                  {isSelected && <Check className="ml-2 inline h-4 w-4" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+            <span>Select 1–3</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+              {formData.tone_chips.length}/{MAX_TONE}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    if (step === 7) {
+      if (isBrandBusiness) {
+        return (
+          <div className="animate-fadeIn">
+            <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+              What's your primary conversion goal?
+            </h2>
+            <p className="mb-6 text-slate-500">What action should your audience take?</p>
+
+            <div className="space-y-3">
+              {CONVERSION_GOAL_OPTIONS.map((option) => {
+                const isSelected = formData.conversion_goal === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, conversion_goal: option.value }))}
+                    className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                      isSelected
+                        ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                    {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What's your content persona?
+          </h2>
+          <p className="mb-6 text-slate-500">How does your audience know you?</p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {CONTENT_PERSONA_OPTIONS.map((option) => {
+              const isSelected = formData.content_persona === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, content_persona: option.value }))}
+                  className={`flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
                   {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
                 </button>
               );
@@ -551,7 +761,7 @@ export default function OnboardingQuiz({ onComplete }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-8 gap-1.5">
                 {STEP_LABELS.map((label, index) => {
                   const stepNumber = index + 1;
                   const isActive = stepNumber === step;

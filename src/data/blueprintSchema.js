@@ -107,27 +107,27 @@ export function getSectionsForType(platform, contentType) {
 }
 
 const BLUEPRINT_LABELS = {
-  'Instagram|Image Post': '📸 Instagram Image Post Blueprint',
-  'Instagram|Reel': '🎬 Instagram Reel Blueprint',
-  'Instagram|Carousel': '🎠 Instagram Carousel Blueprint',
-  'Instagram|Story': '📖 Instagram Story Blueprint',
-  'TikTok|Video': '🎵 TikTok Video Blueprint',
-  'YouTube|Short': '▶️ YouTube Short Blueprint',
-  'YouTube|Long-Form': '🎥 YouTube Long-Form Blueprint',
-  'X/Twitter|Post': '🐦 X/Twitter Post Blueprint',
-  'X|Post': '🐦 X/Twitter Post Blueprint',
-  'X/Twitter|Thread': '🧵 X/Twitter Thread Blueprint',
-  'X|Thread': '🧵 X/Twitter Thread Blueprint',
-  'LinkedIn|Post': '💼 LinkedIn Post Blueprint',
-  'LinkedIn|Article': '📝 LinkedIn Article Blueprint',
-  'Facebook|Post': '📘 Facebook Post Blueprint',
-  'Facebook|Reel': '🎬 Facebook Reel Blueprint',
-  'Facebook|Story': '📖 Facebook Story Blueprint',
+  'Instagram|Image Post': '📸 Instagram Image Post Brief',
+  'Instagram|Reel': '🎬 Instagram Reel Brief',
+  'Instagram|Carousel': '🎠 Instagram Carousel Brief',
+  'Instagram|Story': '📖 Instagram Story Brief',
+  'TikTok|Video': '🎵 TikTok Video Brief',
+  'YouTube|Short': '▶️ YouTube Short Brief',
+  'YouTube|Long-Form': '🎥 YouTube Long-Form Brief',
+  'X/Twitter|Post': '🐦 X/Twitter Post Brief',
+  'X|Post': '🐦 X/Twitter Post Brief',
+  'X/Twitter|Thread': '🧵 X/Twitter Thread Brief',
+  'X|Thread': '🧵 X/Twitter Thread Brief',
+  'LinkedIn|Post': '💼 LinkedIn Post Brief',
+  'LinkedIn|Article': '📝 LinkedIn Article Brief',
+  'Facebook|Post': '📘 Facebook Post Brief',
+  'Facebook|Reel': '🎬 Facebook Reel Brief',
+  'Facebook|Story': '📖 Facebook Story Brief',
 };
 
 export function getBlueprintLabel(platform, contentType) {
   const key = resolvePlatformKey(platform);
-  return BLUEPRINT_LABELS[`${key}|${contentType}`] || BLUEPRINT_LABELS[`${platform}|${contentType}`] || `📋 ${platform} ${contentType} Blueprint`;
+  return BLUEPRINT_LABELS[`${key}|${contentType}`] || BLUEPRINT_LABELS[`${platform}|${contentType}`] || `📋 ${platform} ${contentType} Brief`;
 }
 
 const SCORE_WEIGHTS = {

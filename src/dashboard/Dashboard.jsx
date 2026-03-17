@@ -14,7 +14,7 @@ import Dashboard from '../pages/Dashboard';
 import ContentLibrary from '../pages/ContentLibrary';
 import AIPlanBuilder from '../pages/AIPlanBuilder';
 import TrendLab from '../pages/TrendLab';
-import ViralBlueprint from '../pages/ViralBlueprint';
+import IgniteEngine from '../pages/IgniteEngine';
 import ContentRemix from '../pages/ContentRemix';
 import Profile from '../pages/Profile';
 import BrandVoice from '../pages/BrandVoice';
@@ -113,7 +113,7 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
           <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
           <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
           <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
-          <Route path="/viral-blueprint" element={<ProtectedRoute><ViralBlueprint /></ProtectedRoute>} />
+          <Route path="/ignite-engine" element={<ProtectedRoute><IgniteEngine /></ProtectedRoute>} />
           <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
           <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
           <Route path="/full-post-builder" element={<ProtectedRoute><FullPostBuilder /></ProtectedRoute>} />

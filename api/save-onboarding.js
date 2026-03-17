@@ -44,7 +44,12 @@ export default async function handler(req, res) {
       niche,
       growthStage,
       targetAudience,
+      audiencePainPoint,
       platforms,
+      followerCount,
+      toneChips,
+      conversionGoal,
+      contentPersona,
       city,
       quizCompletedAt,
       onboardingStep,
@@ -52,27 +57,31 @@ export default async function handler(req, res) {
 
     const nowIso = new Date().toISOString();
 
+    const profilePayload = {
+      user_id: user.id,
+      first_name: firstName || null,
+      profile_type: profileType || 'creator',
+      brand_name: brandName || null,
+      niche: niche || null,
+      target_audience: targetAudience || null,
+      audience_pain_point: audiencePainPoint || null,
+      preferred_platforms: Array.isArray(platforms) ? platforms : [],
+      follower_count: followerCount || null,
+      tone_chips: Array.isArray(toneChips) ? toneChips : [],
+      conversion_goal: conversionGoal || null,
+      content_persona: contentPersona || null,
+      has_completed_onboarding: true,
+      quiz_completed_at: quizCompletedAt || nowIso,
+      onboarding_step: onboardingStep || 8,
+      updated_at: nowIso,
+    };
+
     const { error: profileError } = await supabase
       .from('user_profile')
-      .upsert(
-        {
-          user_id: user.id,
-          first_name: firstName || null,
-          profile_type: profileType || 'creator',
-          brand_name: brandName || null,
-          niche: niche || null,
-          target_audience: targetAudience || null,
-          preferred_platforms: Array.isArray(platforms) ? platforms : [],
-          has_completed_onboarding: true,
-          quiz_completed_at: quizCompletedAt || nowIso,
-          onboarding_step: onboardingStep || 6,
-          updated_at: nowIso,
-        },
-        {
-          onConflict: 'user_id',
-          ignoreDuplicates: false,
-        }
-      );
+      .upsert(profilePayload, {
+        onConflict: 'user_id',
+        ignoreDuplicates: false,
+      });
 
     if (profileError) {
       console.error('save-onboarding profile upsert failed:', profileError);

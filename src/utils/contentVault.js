@@ -278,7 +278,7 @@ export function buildUseAgainTarget(item) {
   }
 
   if (source === 'viral_blueprint') {
-    return `/dashboard/viral-blueprint?topic=${encodedTopic}&platform=${blueprintPlatform}&postType=${encodedPostType}&audience=${encodedAudience}`;
+    return `/dashboard/ignite-engine?topic=${encodedTopic}&platform=${blueprintPlatform}&postType=${encodedPostType}&audience=${encodedAudience}`;
   }
 
   if (source === 'content_remix') {

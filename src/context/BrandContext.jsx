@@ -25,11 +25,13 @@ export function useBrand() {
 export function BrandProvider({ children }) {
   const { user, userProfile, needsOnboarding } = useContext(AuthContext);
   const [brandData, setBrandData] = useState({
-    firstName: '', // User first name from onboarding
-    profileType: 'brand', // 'brand' or 'creator'
-    creatorArchetype: '', // 'educator', 'entertainer', 'storyteller', 'inspirer', 'curator'
+    firstName: '',
+    profileType: 'brand',
+    creatorArchetype: '',
     brandName: '',
+    socialHandle: '',
     niche: '',
+    subNiche: '',
     contentFocus: '',
     city: '',
     industry: '',
@@ -39,11 +41,30 @@ export function BrandProvider({ children }) {
     brandVoice: '',
     platforms: [],
     goals: [],
+    // Audience expansion
+    audiencePainPoint: '',
+    audienceActionTrigger: '',
+    // Voice expansion
+    toneChips: [],
+    writingStyle: '',
+    examplePost: '',
+    // Content expansion
+    contentToPost: [],
+    contentToAvoid: '',
+    // Growth
+    followerCount: '',
+    // Business-only
+    primaryOffer: '',
+    conversionGoal: '',
+    // Creator-only
+    contentPersona: '',
+    monetizationGoal: '',
+    showUpStyle: '',
     // Viral content strategy fields
-    contentStrengths: [], // What user is best at
-    biggestChallenge: '', // Main content struggle
-    hookStylePreference: '', // Preferred hook style for viral content
-    emotionalTriggers: [], // How they want audience to feel
+    contentStrengths: [],
+    biggestChallenge: '',
+    hookStylePreference: '',
+    emotionalTriggers: [],
   });
   const [loading, setLoading] = useState(true);
   // Track if we need to force reload (e.g., after onboarding completes)
@@ -115,7 +136,9 @@ export function BrandProvider({ children }) {
             profileType: data.profile_type || 'brand',
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
+            socialHandle: data.social_handle || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
+            subNiche: data.sub_niche || data.industry || '',
             contentFocus: userPreferences.content_focus
               ? formatEnumArray(userPreferences.content_focus)
               : (data.content_focus ? formatEnumArray(data.content_focus) : ''),
@@ -133,6 +156,25 @@ export function BrandProvider({ children }) {
             brandVoice: data.brand_voice_preference ? formatEnumLabel(data.brand_voice_preference) : '',
             platforms: data.preferred_platforms || [],
             goals: data.content_goals || [],
+            // Audience expansion
+            audiencePainPoint: data.audience_pain_point || '',
+            audienceActionTrigger: data.audience_action_trigger || '',
+            // Voice expansion
+            toneChips: data.tone_chips || [],
+            writingStyle: data.writing_style || '',
+            examplePost: data.example_post || '',
+            // Content expansion
+            contentToPost: data.content_to_post || [],
+            contentToAvoid: data.content_to_avoid || '',
+            // Growth
+            followerCount: data.follower_count || '',
+            // Business-only
+            primaryOffer: data.primary_offer || '',
+            conversionGoal: data.conversion_goal || '',
+            // Creator-only
+            contentPersona: data.content_persona || '',
+            monetizationGoal: data.monetization_goal || '',
+            showUpStyle: data.show_up_style || '',
             // Viral content strategy fields
             contentStrengths: data.content_strengths || [],
             biggestChallenge: data.biggest_challenge ? normalizeOptionalEnum(data.biggest_challenge) : '',
@@ -199,12 +241,33 @@ export function BrandProvider({ children }) {
           profile_type: updated.profileType || 'brand',
           creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
+          social_handle: updated.socialHandle || null,
           industry: updated.industry || null,
           niche: updated.niche,
+          sub_niche: updated.subNiche || null,
           target_audience: updated.targetAudience,
           brand_voice_preference: updated.brandVoice,
           preferred_platforms: updated.platforms,
           content_goals: updated.goals,
+          // Audience expansion
+          audience_pain_point: updated.audiencePainPoint || null,
+          audience_action_trigger: updated.audienceActionTrigger || null,
+          // Voice expansion
+          tone_chips: updated.toneChips || [],
+          writing_style: updated.writingStyle || null,
+          example_post: updated.examplePost || null,
+          // Content expansion
+          content_to_post: updated.contentToPost || [],
+          content_to_avoid: updated.contentToAvoid || null,
+          // Growth
+          follower_count: updated.followerCount || null,
+          // Business-only
+          primary_offer: updated.primaryOffer || null,
+          conversion_goal: updated.conversionGoal || null,
+          // Creator-only
+          content_persona: updated.contentPersona || null,
+          monetization_goal: updated.monetizationGoal || null,
+          show_up_style: updated.showUpStyle || null,
           // Viral content strategy fields
           content_strengths: updated.contentStrengths || [],
           biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
@@ -241,7 +304,9 @@ export function BrandProvider({ children }) {
       profileType: 'brand',
       creatorArchetype: '',
       brandName: '',
+      socialHandle: '',
       niche: '',
+      subNiche: '',
       contentFocus: '',
       city: '',
       industry: '',
@@ -251,7 +316,19 @@ export function BrandProvider({ children }) {
       brandVoice: '',
       platforms: [],
       goals: [],
-      // Viral content strategy fields
+      audiencePainPoint: '',
+      audienceActionTrigger: '',
+      toneChips: [],
+      writingStyle: '',
+      examplePost: '',
+      contentToPost: [],
+      contentToAvoid: '',
+      followerCount: '',
+      primaryOffer: '',
+      conversionGoal: '',
+      contentPersona: '',
+      monetizationGoal: '',
+      showUpStyle: '',
       contentStrengths: [],
       biggestChallenge: '',
       hookStylePreference: '',
@@ -260,7 +337,6 @@ export function BrandProvider({ children }) {
     setBrandData(resetData);
     localStorage.removeItem('brandData');
 
-    // Also reset in Supabase if user is authenticated
     if (user?.id) {
       try {
         const resetProfileData = {
@@ -268,13 +344,27 @@ export function BrandProvider({ children }) {
           profile_type: 'brand',
           creator_archetype: null,
           brand_name: null,
+          social_handle: null,
           industry: null,
           niche: null,
+          sub_niche: null,
           target_audience: null,
           brand_voice_preference: null,
           preferred_platforms: [],
           content_goals: [],
-          // Viral content strategy fields
+          audience_pain_point: null,
+          audience_action_trigger: null,
+          tone_chips: [],
+          writing_style: null,
+          example_post: null,
+          content_to_post: [],
+          content_to_avoid: null,
+          follower_count: null,
+          primary_offer: null,
+          conversion_goal: null,
+          content_persona: null,
+          monetization_goal: null,
+          show_up_style: null,
           content_strengths: [],
           biggest_challenge: null,
           hook_style_preference: null,

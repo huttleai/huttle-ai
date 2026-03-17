@@ -1,108 +1,252 @@
 import { useContext, useState, useEffect, useMemo } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
-import { Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile, PenTool, Heart, Search, Info, Eye, TrendingUp, Calendar, MessageSquare, Lightbulb, Clock, AlertCircle, HelpCircle, Rocket, Target, Zap, Users } from 'lucide-react';
+import {
+  Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile,
+  PenTool, Heart, Info, Eye, TrendingUp, Calendar,
+  MessageSquare, Lightbulb, Clock, Rocket, Target, Zap, Users,
+} from 'lucide-react';
 import { normalizeEnumValue } from '../utils/formatEnumLabel';
-// AIVoicePreview removed per requirements
 
-// Profile types
 const PROFILE_TYPES = [
-  { 
-    value: 'brand', 
-    label: 'Brand / Business', 
+  {
+    value: 'brand',
+    label: 'Brand / Business',
     description: 'Small business, agency, or company',
     icon: Briefcase,
-    gradient: 'from-slate-600 to-blue-600'
   },
-  { 
-    value: 'creator', 
-    label: 'Solo Creator', 
+  {
+    value: 'creator',
+    label: 'Solo Creator',
     description: 'Building your personal brand',
     icon: Sparkles,
-    gradient: 'from-huttle-500 to-huttle-600'
-  }
+  },
 ];
 
-// Creator archetypes
-const CREATOR_ARCHETYPES = [
-  { value: 'educator', label: 'The Educator', description: 'Teach and explain', emoji: '📚', icon: BookOpen, color: 'from-blue-500 to-cyan-500' },
-  { value: 'entertainer', label: 'The Entertainer', description: 'Make people smile', emoji: '🎭', icon: Smile, color: 'from-huttle-500 to-huttle-600' },
-  { value: 'storyteller', label: 'The Storyteller', description: 'Share experiences', emoji: '✨', icon: PenTool, color: 'from-amber-500 to-orange-500' },
-  { value: 'inspirer', label: 'The Inspirer', description: 'Motivate others', emoji: '🔥', icon: Heart, color: 'from-huttle-500 to-huttle-600' },
-  { value: 'curator', label: 'The Curator', description: 'Discover gems', emoji: '💎', icon: Search, color: 'from-blue-500 to-cyan-500' }
-];
-
-// Platform options
 const PLATFORMS = [
   { value: 'instagram', label: 'Instagram' },
   { value: 'tiktok', label: 'TikTok' },
   { value: 'youtube', label: 'YouTube' },
   { value: 'facebook', label: 'Facebook' },
   { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'twitter', label: 'X (Twitter)' }
+  { value: 'twitter', label: 'X (Twitter)' },
 ];
 
-// Goals for brands
 const BRAND_GOALS = [
   { value: 'brand_awareness', label: 'Increase brand awareness' },
   { value: 'drive_sales', label: 'Drive sales' },
   { value: 'build_community', label: 'Build community' },
   { value: 'educate_audience', label: 'Educate audience' },
-  { value: 'generate_leads', label: 'Generate leads' }
+  { value: 'generate_leads', label: 'Generate leads' },
 ];
 
-// Goals for creators
 const CREATOR_GOALS = [
   { value: 'grow_following', label: 'Grow my following' },
   { value: 'boost_engagement', label: 'Boost engagement' },
   { value: 'build_community', label: 'Build community' },
   { value: 'share_story', label: 'Share my story' },
-  { value: 'monetize', label: 'Monetize content' }
+  { value: 'monetize', label: 'Monetize content' },
 ];
 
-// Content strengths - what users are best at
+const AUDIENCE_ACTION_OPTIONS = [
+  { value: 'good_deal', label: 'A good deal / offer' },
+  { value: 'social_proof', label: 'Social proof / results' },
+  { value: 'education', label: 'Education / knowing more' },
+  { value: 'feeling_understood', label: 'Feeling understood' },
+  { value: 'fomo', label: 'FOMO / trending content' },
+];
+
+const TONE_OPTIONS = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'conversational', label: 'Conversational' },
+  { value: 'humorous', label: 'Humorous' },
+  { value: 'inspirational', label: 'Inspirational' },
+  { value: 'educational', label: 'Educational' },
+  { value: 'bold', label: 'Bold' },
+  { value: 'warm', label: 'Warm' },
+  { value: 'luxury', label: 'Luxury' },
+  { value: 'raw_authentic', label: 'Raw/Authentic' },
+  { value: 'motivational', label: 'Motivational' },
+];
+
+const WRITING_STYLE_OPTIONS = [
+  { value: 'short_punchy', label: 'Short and punchy' },
+  { value: 'storytelling', label: 'Storytelling' },
+  { value: 'data_facts', label: 'Data and facts' },
+  { value: 'question_based', label: 'Question-based' },
+  { value: 'how_to', label: 'How-to/instructional' },
+];
+
+const CONTENT_TO_POST_OPTIONS = [
+  { value: 'behind_scenes', label: 'Behind the scenes' },
+  { value: 'results', label: 'Results/transformations' },
+  { value: 'educational_tips', label: 'Educational tips' },
+  { value: 'trending', label: 'Trending topics' },
+  { value: 'personal_stories', label: 'Personal stories' },
+  { value: 'product_spotlight', label: 'Product/service spotlights' },
+  { value: 'testimonials', label: 'Testimonials' },
+  { value: 'polls_questions', label: 'Polls/questions' },
+];
+
+const FOLLOWER_COUNT_OPTIONS = [
+  { value: 'under_500', label: 'Under 500' },
+  { value: '500_2k', label: '500–2K' },
+  { value: '2k_10k', label: '2K–10K' },
+  { value: '10k_50k', label: '10K–50K' },
+  { value: '50k_plus', label: '50K+' },
+];
+
+const BUSINESS_TYPE_OPTIONS = [
+  { value: 'service', label: 'Service (appointment-based)' },
+  { value: 'physical_product', label: 'Physical product' },
+  { value: 'digital_product', label: 'Digital product' },
+  { value: 'coaching', label: 'Coaching/consulting' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'subscription', label: 'Subscription' },
+];
+
+const CONVERSION_GOAL_OPTIONS = [
+  { value: 'book_appointment', label: 'Book an appointment' },
+  { value: 'dm_us', label: 'DM us' },
+  { value: 'visit_website', label: 'Visit website' },
+  { value: 'buy_now', label: 'Buy now' },
+  { value: 'get_quote', label: 'Get a quote' },
+  { value: 'join_list', label: 'Join a list' },
+];
+
+const SHOW_UP_OPTIONS = [
+  { value: 'on_camera', label: 'On camera (talking head)' },
+  { value: 'voice_over', label: 'Voice over footage' },
+  { value: 'text_on_screen', label: 'Text on screen' },
+  { value: 'photos_only', label: 'Photos only' },
+  { value: 'mixed', label: 'Mixed' },
+];
+
+const CONTENT_PERSONA_OPTIONS = [
+  { value: 'the_expert', label: 'The Expert' },
+  { value: 'the_entertainer', label: 'The Entertainer' },
+  { value: 'the_motivator', label: 'The Motivator' },
+  { value: 'the_documenter', label: 'The Documenter' },
+  { value: 'the_educator', label: 'The Educator' },
+  { value: 'the_storyteller', label: 'The Storyteller' },
+];
+
+const MONETIZATION_GOAL_OPTIONS = [
+  { value: 'brand_deals', label: 'Brand deals' },
+  { value: 'selling_own', label: 'Selling my own product/service' },
+  { value: 'affiliate', label: 'Affiliate income' },
+  { value: 'community', label: 'Community building' },
+  { value: 'growing', label: 'Not yet — just growing' },
+];
+
 const CONTENT_STRENGTHS = [
   { value: 'storytelling', label: 'Storytelling', icon: PenTool },
   { value: 'education', label: 'Education', icon: BookOpen },
   { value: 'entertainment', label: 'Entertainment', icon: Smile },
   { value: 'visuals', label: 'Visuals', icon: Eye },
   { value: 'trends', label: 'Trends', icon: TrendingUp },
-  { value: 'authenticity', label: 'Authenticity', icon: Heart }
+  { value: 'authenticity', label: 'Authenticity', icon: Heart },
 ];
 
-// Biggest challenges
 const CONTENT_CHALLENGES = [
   { value: 'consistency', label: 'Staying Consistent', icon: Calendar },
   { value: 'ideas', label: 'Coming Up With Ideas', icon: Lightbulb },
   { value: 'engagement', label: 'Getting Engagement', icon: MessageSquare },
   { value: 'growth', label: 'Growing My Audience', icon: TrendingUp },
   { value: 'time', label: 'Finding Time', icon: Clock },
-  { value: 'quality', label: 'Creating Quality Content', icon: Sparkles }
+  { value: 'quality', label: 'Creating Quality Content', icon: Sparkles },
 ];
 
-// Emotional triggers - how audience should feel
 const EMOTIONAL_TRIGGERS = [
   { value: 'inspired', label: 'Inspired', icon: Rocket },
   { value: 'entertained', label: 'Entertained', icon: Smile },
   { value: 'educated', label: 'Educated', icon: BookOpen },
   { value: 'connected', label: 'Connected', icon: Users },
   { value: 'motivated', label: 'Motivated', icon: Target },
-  { value: 'understood', label: 'Understood', icon: Heart }
+  { value: 'understood', label: 'Understood', icon: Heart },
 ];
 
 function normalizeSingleSelect(value, options) {
   if (!value) return '';
   const normalized = normalizeEnumValue(value);
-  return options.some((option) => option.value === normalized) ? normalized : '';
+  return options.some((o) => o.value === normalized) ? normalized : '';
 }
 
 function normalizeMultiSelect(values, options) {
   if (!Array.isArray(values)) return [];
-  const validValues = new Set(options.map((option) => option.value));
-  return values
-    .map((value) => normalizeEnumValue(value))
-    .filter((value) => validValues.has(value));
+  const valid = new Set(options.map((o) => o.value));
+  return values.map((v) => normalizeEnumValue(v)).filter((v) => valid.has(v));
 }
+
+function SectionHeader({ icon: Icon, title, subtitle }) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-1">
+        {Icon && <Icon className="w-5 h-5 text-huttle-primary" />}
+        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+      </div>
+      {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+    </div>
+  );
+}
+
+function ChipSelect({ options, value, onChange, multi = false }) {
+  const isSelected = (optionValue) =>
+    multi ? (Array.isArray(value) && value.includes(optionValue)) : value === optionValue;
+
+  const handleClick = (optionValue) => {
+    if (multi) {
+      const arr = Array.isArray(value) ? value : [];
+      onChange(
+        arr.includes(optionValue)
+          ? arr.filter((v) => v !== optionValue)
+          : [...arr, optionValue]
+      );
+    } else {
+      onChange(value === optionValue ? '' : optionValue);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const active = isSelected(option.value);
+        const Icon = option.icon;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => handleClick(option.value)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+              active
+                ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {Icon && <Icon className="w-4 h-4" />}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FieldInput({ label, required, helper, children }) {
+  return (
+    <div>
+      <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {helper && <p className="text-xs text-gray-400 mb-2">{helper}</p>}
+      {children}
+    </div>
+  );
+}
+
+const inputClasses =
+  'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm';
 
 export default function BrandVoice() {
   const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
@@ -111,68 +255,96 @@ export default function BrandVoice() {
   const toFormData = (source = {}) => ({
     firstName: source.firstName || '',
     profileType: source.profileType || 'brand',
-    creatorArchetype: normalizeSingleSelect(source.creatorArchetype, CREATOR_ARCHETYPES),
     brandName: source.brandName || '',
     socialHandle: source.socialHandle || '',
     niche: source.niche || '',
+    subNiche: source.subNiche || '',
     city: source.city || '',
     industry: source.industry || '',
     targetAudience: source.targetAudience || '',
     brandVoice: source.brandVoice || '',
     platforms: source.platforms || [],
     goals: source.goals || [],
-    // Viral content strategy fields
+    audiencePainPoint: source.audiencePainPoint || '',
+    audienceActionTrigger: source.audienceActionTrigger || '',
+    toneChips: source.toneChips || [],
+    writingStyle: source.writingStyle || '',
+    examplePost: source.examplePost || '',
+    contentToPost: source.contentToPost || [],
+    contentToAvoid: source.contentToAvoid || '',
+    followerCount: source.followerCount || '',
+    primaryOffer: source.primaryOffer || '',
+    conversionGoal: source.conversionGoal || '',
+    contentPersona: source.contentPersona || '',
+    monetizationGoal: source.monetizationGoal || '',
+    showUpStyle: source.showUpStyle || '',
+    creatorArchetype: source.creatorArchetype || '',
     contentStrengths: normalizeMultiSelect(source.contentStrengths, CONTENT_STRENGTHS),
     biggestChallenge: normalizeSingleSelect(source.biggestChallenge, CONTENT_CHALLENGES),
-    emotionalTriggers: normalizeMultiSelect(source.emotionalTriggers, EMOTIONAL_TRIGGERS)
+    emotionalTriggers: normalizeMultiSelect(source.emotionalTriggers, EMOTIONAL_TRIGGERS),
   });
 
   const [formData, setFormData] = useState(toFormData(brandData));
-
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sync form data when brandData changes (e.g., after loading)
   useEffect(() => {
-    if (brandData) {
-      setFormData(toFormData(brandData));
-    }
+    if (brandData) setFormData(toFormData(brandData));
   }, [brandData]);
 
-  // Track unsaved changes
   useEffect(() => {
-    const hasChanges = JSON.stringify(formData) !== JSON.stringify(toFormData(brandData));
-    setHasUnsavedChanges(hasChanges);
+    setHasUnsavedChanges(JSON.stringify(formData) !== JSON.stringify(toFormData(brandData)));
   }, [formData, brandData]);
 
   const isCreator = formData.profileType === 'creator';
+  const goals = isCreator ? CREATOR_GOALS : BRAND_GOALS;
 
-  // Calculate profile completeness
+  const set = (key) => (e) => {
+    const val = typeof e === 'string' || Array.isArray(e) ? e : e?.target?.value ?? '';
+    setFormData((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const setCapitalized = (key) => (e) => {
+    const raw = e.target.value;
+    setFormData((prev) => ({ ...prev, [key]: raw.charAt(0).toUpperCase() + raw.slice(1) }));
+  };
+
+  const toggleArray = (key) => (val) => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: prev[key].includes(val)
+        ? prev[key].filter((v) => v !== val)
+        : [...prev[key], val],
+    }));
+  };
+
   const completeness = useMemo(() => {
     const fields = [
-      { key: 'firstName', weight: 10, filled: !!formData.firstName },
-      { key: 'profileType', weight: 8, filled: !!formData.profileType },
-      { key: 'brandName', weight: 12, filled: !!formData.brandName },
-      { key: 'niche', weight: 10, filled: !!formData.niche },
-      { key: 'industry', weight: 8, filled: !!formData.industry },
-      { key: 'targetAudience', weight: 10, filled: !!formData.targetAudience },
-      { key: 'brandVoice', weight: 10, filled: !!formData.brandVoice },
-      { key: 'platforms', weight: 8, filled: formData.platforms?.length > 0 },
-      { key: 'goals', weight: 5, filled: formData.goals?.length > 0 },
-      // Viral content strategy fields
-      { key: 'contentStrengths', weight: 8, filled: formData.contentStrengths?.length > 0 },
-      { key: 'biggestChallenge', weight: 6, filled: !!formData.biggestChallenge },
-      { key: 'emotionalTriggers', weight: 6, filled: formData.emotionalTriggers?.length > 0 },
+      { weight: 10, filled: !!formData.firstName },
+      { weight: 8, filled: !!formData.profileType },
+      { weight: 10, filled: !!formData.brandName },
+      { weight: 8, filled: !!formData.niche },
+      { weight: 8, filled: !!formData.targetAudience },
+      { weight: 6, filled: formData.platforms?.length > 0 },
+      { weight: 5, filled: formData.goals?.length > 0 },
+      { weight: 6, filled: !!formData.audiencePainPoint },
+      { weight: 8, filled: formData.toneChips?.length > 0 },
+      { weight: 6, filled: !!formData.writingStyle },
+      { weight: 8, filled: !!formData.examplePost },
+      { weight: 5, filled: formData.contentToPost?.length > 0 },
+      { weight: 5, filled: !!formData.followerCount },
+      { weight: 5, filled: formData.contentStrengths?.length > 0 },
+      { weight: 4, filled: !!formData.biggestChallenge },
+      { weight: 4, filled: formData.emotionalTriggers?.length > 0 },
     ];
-    
-    if (isCreator) {
-      fields.push({ key: 'creatorArchetype', weight: 8, filled: !!formData.creatorArchetype });
+    if (!isCreator) {
+      fields.push({ weight: 5, filled: !!formData.conversionGoal });
+    } else {
+      fields.push({ weight: 5, filled: !!formData.contentPersona });
     }
-    
-    const totalWeight = fields.reduce((sum, f) => sum + f.weight, 0);
-    const filledWeight = fields.reduce((sum, f) => sum + (f.filled ? f.weight : 0), 0);
-    
-    return Math.round((filledWeight / totalWeight) * 100);
+    const total = fields.reduce((s, f) => s + f.weight, 0);
+    const filled = fields.reduce((s, f) => s + (f.filled ? f.weight : 0), 0);
+    return Math.round((filled / total) * 100);
   }, [formData, isCreator]);
 
   const handleSave = async () => {
@@ -180,17 +352,13 @@ export default function BrandVoice() {
       addToast('First name is required', 'warning');
       return;
     }
-    
     setIsSaving(true);
     try {
       const result = await updateBrandData(formData);
-      
       if (result?.success === false) {
         addToast(result.error || 'Failed to save. Please try again.', 'error');
         return;
       }
-      
-      // Only refresh and mark saved after confirmed success
       refreshBrandData();
       setHasUnsavedChanges(false);
       addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
@@ -203,80 +371,37 @@ export default function BrandVoice() {
   };
 
   const handleReset = () => {
-    const resetData = {
-      firstName: '',
-      profileType: 'brand',
-      creatorArchetype: '',
-      brandName: '',
-      socialHandle: '',
-      niche: '',
-      city: '',
-      industry: '',
-      targetAudience: '',
-      brandVoice: '',
-      platforms: [],
-      goals: [],
-      // Viral content strategy fields
-      contentStrengths: [],
-      biggestChallenge: '',
-      emotionalTriggers: []
-    };
-    setFormData(resetData);
+    setFormData(toFormData({}));
     addToast('Form reset successfully', 'info');
   };
 
-  const handlePlatformToggle = (platform) => {
-    setFormData(prev => ({
-      ...prev,
-      platforms: prev.platforms.includes(platform)
-        ? prev.platforms.filter(p => p !== platform)
-        : [...prev.platforms, platform]
-    }));
-  };
-
-  const handleGoalToggle = (goal) => {
-    setFormData(prev => ({
-      ...prev,
-      goals: prev.goals.includes(goal)
-        ? prev.goals.filter(g => g !== goal)
-        : [...prev.goals, goal]
-    }));
-  };
-
-  const handleStrengthToggle = (strength) => {
-    setFormData(prev => ({
-      ...prev,
-      contentStrengths: prev.contentStrengths.includes(strength)
-        ? prev.contentStrengths.filter(s => s !== strength)
-        : [...prev.contentStrengths, strength]
-    }));
-  };
-
-  const handleEmotionalTriggerToggle = (trigger) => {
-    setFormData(prev => ({
-      ...prev,
-      emotionalTriggers: prev.emotionalTriggers.includes(trigger)
-        ? prev.emotionalTriggers.filter(t => t !== trigger)
-        : [...prev.emotionalTriggers, trigger]
-    }));
-  };
-
-  // Get labels based on profile type
-  const labels = {
-    nameLabel: isCreator ? 'Your Name or Handle' : 'Brand Name',
-    namePlaceholder: isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa',
-    nicheLabel: isCreator ? 'Content Focus' : 'Niche',
-    nichePlaceholder: isCreator ? 'e.g., Lifestyle, Fitness, Comedy' : 'e.g., Medical Spa, Fitness, Beauty',
-    industryLabel: isCreator ? 'Category' : 'Sub-niche',
-    industryPlaceholder: isCreator ? 'e.g., Entertainment, Health & Wellness' : 'e.g., Anti-aging treatments, Personal training, Organic skincare',
-    industryHelper: isCreator ? 'Optional broader category' : 'Optional — narrow down your niche further',
-    audienceLabel: isCreator ? 'Your Community' : 'Target Audience',
-    audiencePlaceholder: isCreator ? 'e.g., Young adults who love authentic lifestyle content' : 'e.g., Women aged 25-45 interested in anti-aging treatments',
-    voiceLabel: isCreator ? 'Your Vibe & Style' : 'Brand Voice & Tone',
-    voicePlaceholder: isCreator ? 'e.g., Authentic, relatable, fun, conversational' : 'e.g., Professional yet friendly, empowering, educational',
-  };
-
-  const goals = isCreator ? CREATOR_GOALS : BRAND_GOALS;
+  const CompletenessRing = ({ className = '' }) => (
+    <div className={`flex items-center gap-4 ${className}`}>
+      <div className="relative w-12 h-12">
+        <svg className="w-12 h-12 transform -rotate-90">
+          <circle cx="24" cy="24" r="20" fill="none" stroke="#f3f4f6" strokeWidth="4" />
+          <circle
+            cx="24" cy="24" r="20" fill="none"
+            stroke={isCreator ? '#01bad2' : '#0ea5e9'}
+            strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={`${completeness * 1.256} 125.6`}
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`text-xs font-bold ${completeness === 100 ? 'text-green-600' : 'text-gray-700'}`}>
+            {completeness}%
+          </span>
+        </div>
+      </div>
+      <div className="text-sm">
+        <p className="font-semibold text-gray-900">Profile Status</p>
+        <p className={`text-xs ${completeness === 100 ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+          {completeness === 100 ? 'Complete!' : 'In Progress'}
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
@@ -292,49 +417,15 @@ export default function BrandVoice() {
                 {isCreator ? 'Creator Voice' : 'Brand Voice'}
               </h1>
               <p className="text-base text-gray-500 transition-all">
-                {isCreator 
-                  ? 'Customize AI to match your unique style and personality' 
-                  : 'Customize all AI features to your brand, niche, and industry'
-                }
+                {isCreator
+                  ? 'Customize AI to match your unique style and personality'
+                  : 'Customize all AI features to your brand, niche, and industry'}
               </p>
             </div>
           </div>
-          
-          {/* Completeness Ring */}
-          <div className="hidden sm:flex items-center gap-4 bg-white p-2 pr-4 rounded-xl border border-gray-100 shadow-sm">
-            <div className="relative w-12 h-12">
-              <svg className="w-12 h-12 transform -rotate-90">
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="20"
-                  fill="none"
-                  stroke="#f3f4f6"
-                  strokeWidth="4"
-                />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="20"
-                  fill="none"
-                  stroke={isCreator ? '#01bad2' : '#0ea5e9'}
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={`${completeness * 1.256} 125.6`}
-                  className="transition-all duration-700 ease-out"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-xs font-bold ${completeness === 100 ? 'text-green-600' : 'text-gray-700'}`}>
-                  {completeness}%
-                </span>
-              </div>
-            </div>
-            <div className="text-sm">
-              <p className="font-semibold text-gray-900">Profile Status</p>
-              <p className={`text-xs ${completeness === 100 ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
-                {completeness === 100 ? 'Complete! 🎉' : 'In Progress'}
-              </p>
+          <div className="hidden sm:flex">
+            <div className="bg-white p-2 pr-4 rounded-xl border border-gray-100 shadow-sm">
+              <CompletenessRing />
             </div>
           </div>
         </div>
@@ -347,14 +438,14 @@ export default function BrandVoice() {
             I create content as a:
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {PROFILE_TYPES.map(type => {
+            {PROFILE_TYPES.map((type) => {
               const Icon = type.icon;
               const isSelected = formData.profileType === type.value;
-              
               return (
                 <button
                   key={type.value}
-                  onClick={() => setFormData(prev => ({ ...prev, profileType: type.value }))}
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, profileType: type.value }))}
                   className={`group relative flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left ${
                     isSelected
                       ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
@@ -362,8 +453,8 @@ export default function BrandVoice() {
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${
-                    isSelected 
-                      ? 'bg-huttle-primary text-white shadow-lg shadow-huttle-primary/30' 
+                    isSelected
+                      ? 'bg-huttle-primary text-white shadow-lg shadow-huttle-primary/30'
                       : 'bg-gray-50 text-gray-400 group-hover:bg-huttle-primary/10 group-hover:text-huttle-primary'
                   }`}>
                     <Icon className="w-6 h-6" />
@@ -387,362 +478,417 @@ export default function BrandVoice() {
           </div>
         </div>
 
-        {/* Creator Archetype (Only for creators) */}
-        {isCreator && (
-          <div className="card p-6 mb-6 animate-fadeIn">
-            <label className="block text-sm font-bold text-gray-900 mb-1 uppercase tracking-wide">
-              Your Creator Archetype
-            </label>
-            <p className="text-sm text-gray-500 mb-4">This helps AI understand your unique content style</p>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {CREATOR_ARCHETYPES.map(archetype => {
-                const isSelected = formData.creatorArchetype === archetype.value;
-                const Icon = archetype.icon;
-                
-                return (
-                  <button
-                    key={archetype.value}
-                    onClick={() => setFormData(prev => ({ ...prev, creatorArchetype: archetype.value }))}
-                    className={`group relative p-4 rounded-xl border transition-all duration-200 text-center flex flex-col items-center ${
-                      isSelected
-                        ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
-                      isSelected 
-                        ? 'bg-huttle-primary/10' 
-                        : 'bg-gray-50 group-hover:bg-gray-100'
-                    }`}>
-                      <Icon className={`w-6 h-6 ${
-                        isSelected ? 'text-huttle-primary' : 'text-gray-500 group-hover:text-gray-700'
-                      }`} />
-                    </div>
-                    <p className={`text-sm font-bold leading-tight ${isSelected ? 'text-gray-900' : 'text-gray-600'}`}>
-                      {archetype.label}
-                    </p>
-                    {isSelected && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-huttle-primary rounded-full flex items-center justify-center shadow-sm">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Main Form */}
+        {/* ── SECTION 1: ABOUT YOU / YOUR BRAND ── */}
         <div className="card p-6 mb-6">
+          <SectionHeader icon={User} title="About You" subtitle="Basic information about you and your brand" />
           <div className="space-y-6">
-            {/* First Name (required) */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                First Name <span className="text-red-500">*</span>
-              </label>
+            <FieldInput label="First Name" required>
               <input
                 type="text"
                 value={formData.firstName}
-                onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                onChange={set('firstName')}
                 placeholder="e.g., Sarah"
-                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm ${
-                  !formData.firstName.trim() ? 'border-red-200' : 'border-gray-200'
-                }`}
+                className={`${inputClasses} ${!formData.firstName.trim() ? 'border-red-200' : ''}`}
               />
               {!formData.firstName.trim() && (
                 <p className="text-xs text-red-500 mt-1">First name is required</p>
               )}
-            </div>
+            </FieldInput>
 
-            {/* Brand Name / Handle */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                {labels.nameLabel}
-              </label>
+            <FieldInput label={isCreator ? 'Your Name or Handle' : 'Brand Name'}>
               <input
                 type="text"
                 value={formData.brandName}
-                onChange={(e) => setFormData(prev => ({ ...prev, brandName: e.target.value }))}
-                placeholder={labels.namePlaceholder}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+                onChange={set('brandName')}
+                placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
+                className={inputClasses}
               />
-            </div>
+            </FieldInput>
 
-            {/* Social Media Handle (optional) */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                Social Media Handle <span className="text-gray-400 font-normal normal-case">(Optional)</span>
-              </label>
+            <FieldInput label="Social Media Handle">
               <input
                 type="text"
                 value={formData.socialHandle}
-                onChange={(e) => setFormData(prev => ({ ...prev, socialHandle: e.target.value }))}
+                onChange={set('socialHandle')}
                 placeholder="e.g., @sarahcreates"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+                className={inputClasses}
               />
-            </div>
+            </FieldInput>
 
-            {/* Niche / Content Focus */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                {labels.nicheLabel}
-              </label>
+            <FieldInput label={isCreator ? 'Content Focus' : 'Niche'}>
               <input
                 type="text"
                 value={formData.niche}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Capitalize first letter
-                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
-                  setFormData(prev => ({ ...prev, niche: capitalized }));
-                }}
-                placeholder={labels.nichePlaceholder}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+                onChange={setCapitalized('niche')}
+                placeholder={isCreator ? 'e.g., Lifestyle, Fitness, Comedy' : 'e.g., Medical Spa, Fitness, Beauty'}
+                className={inputClasses}
               />
-            </div>
+            </FieldInput>
 
-            {/* Sub-niche / Category */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                {labels.industryLabel}
-                <span className="text-gray-400 font-normal ml-1 normal-case text-xs">(Optional)</span>
-              </label>
-              {labels.industryHelper && (
-                <p className="text-xs text-gray-400 mb-2">{labels.industryHelper}</p>
-              )}
+            <FieldInput label="Sub-niche" helper="Optional — narrow down your niche further">
               <input
                 type="text"
-                value={formData.industry}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Capitalize first letter
-                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
-                  setFormData(prev => ({ ...prev, industry: capitalized }));
-                }}
-                placeholder={labels.industryPlaceholder}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+                value={formData.subNiche}
+                onChange={setCapitalized('subNiche')}
+                placeholder="e.g., Anti-aging treatments, Beginner fitness"
+                className={inputClasses}
               />
-            </div>
+            </FieldInput>
 
-            {/* City */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                City
-                <span className="text-gray-400 font-normal ml-1 normal-case text-xs">(Optional)</span>
-              </label>
-              <p className="text-xs text-gray-400 mb-2">Used to localize dashboard trends and hashtags when available.</p>
+            <FieldInput label="City" helper="Used to localize dashboard trends and hashtags when available.">
               <input
                 type="text"
                 value={formData.city}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
-                  setFormData(prev => ({ ...prev, city: capitalized }));
-                }}
+                onChange={setCapitalized('city')}
                 placeholder="e.g., Atlanta"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm"
+                className={inputClasses}
               />
-            </div>
+            </FieldInput>
 
-            {/* Target Audience / Community */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                {labels.audienceLabel}
-              </label>
-              <textarea
-                value={formData.targetAudience}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Capitalize first letter
-                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
-                  setFormData(prev => ({ ...prev, targetAudience: capitalized }));
-                }}
-                placeholder={labels.audiencePlaceholder}
-                rows="3"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none resize-none transition-all shadow-sm"
-              />
-            </div>
-
-            {/* Voice & Tone / Vibe & Style */}
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 transition-all uppercase tracking-wide">
-                {labels.voiceLabel}
-              </label>
-              <textarea
-                value={formData.brandVoice}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Capitalize first letter
-                  const capitalized = value.charAt(0).toUpperCase() + value.slice(1);
-                  setFormData(prev => ({ ...prev, brandVoice: capitalized }));
-                }}
-                placeholder={labels.voicePlaceholder}
-                rows="3"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none resize-none transition-all shadow-sm"
-              />
-            </div>
-
-            {/* Platforms */}
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
                 Primary Platforms
               </label>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map(platform => {
-                  const isSelected = formData.platforms.includes(platform.value);
+                {PLATFORMS.map((p) => {
+                  const active = formData.platforms.includes(p.value);
                   return (
                     <button
-                      key={platform.value}
-                      onClick={() => handlePlatformToggle(platform.value)}
+                      key={p.value}
+                      type="button"
+                      onClick={() => toggleArray('platforms')(p.value)}
                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
-                        isSelected
+                        active
                           ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      {platform.label}
+                      {p.label}
                     </button>
                   );
                 })}
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Goals */}
+        {/* ── SECTION 2: YOUR AUDIENCE ── */}
+        <div className="card p-6 mb-6">
+          <SectionHeader icon={Users} title="Your Audience" subtitle="Help the AI understand who you're talking to" />
+          <div className="space-y-6">
+            <FieldInput label={isCreator ? 'Who they are' : 'Who they are'}>
+              <textarea
+                value={formData.targetAudience}
+                onChange={setCapitalized('targetAudience')}
+                placeholder="e.g., Women 25-45 interested in skincare"
+                rows="3"
+                className={`${inputClasses} resize-none`}
+              />
+            </FieldInput>
+
+            <FieldInput
+              label="Their biggest pain point"
+              helper="What keeps them up at night related to your niche?"
+            >
+              <input
+                type="text"
+                value={formData.audiencePainPoint}
+                onChange={setCapitalized('audiencePainPoint')}
+                placeholder="e.g., They want smooth skin but fear pain and cost"
+                className={inputClasses}
+              />
+            </FieldInput>
+
             <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 transition-all uppercase tracking-wide">
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                What makes them act
+              </label>
+              <ChipSelect
+                options={AUDIENCE_ACTION_OPTIONS}
+                value={formData.audienceActionTrigger}
+                onChange={set('audienceActionTrigger')}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── SECTION 3: YOUR VOICE ── */}
+        <div className="card p-6 mb-6">
+          <SectionHeader icon={Mic2} title="Your Voice" subtitle="Define how the AI should sound when writing for you" />
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Tone
+              </label>
+              <p className="text-xs text-gray-400 mb-3">Select all that apply</p>
+              <ChipSelect
+                options={TONE_OPTIONS}
+                value={formData.toneChips}
+                onChange={set('toneChips')}
+                multi
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Writing Style
+              </label>
+              <ChipSelect
+                options={WRITING_STYLE_OPTIONS}
+                value={formData.writingStyle}
+                onChange={set('writingStyle')}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                A post that sounds like you
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                Paste a caption or post you've written that felt like you. This is the single most useful thing you can give the AI — it will mirror your exact style.
+              </p>
+              <textarea
+                value={formData.examplePost}
+                onChange={set('examplePost')}
+                placeholder="Paste your example here..."
+                rows="4"
+                className={`${inputClasses} resize-none`}
+              />
+              <div className="mt-2 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-huttle-50/60 border border-huttle-primary/10">
+                <Sparkles className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-600">
+                  The AI will match your sentence length, emoji style, punctuation, and vocabulary from this example.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── SECTION 4: YOUR CONTENT ── */}
+        <div className="card p-6 mb-6">
+          <SectionHeader icon={PenTool} title="Your Content" subtitle="What kind of content you want to create" />
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Content I want to post more of
+              </label>
+              <ChipSelect
+                options={CONTENT_TO_POST_OPTIONS}
+                value={formData.contentToPost}
+                onChange={set('contentToPost')}
+                multi
+              />
+            </div>
+
+            <FieldInput label="Content to avoid" helper="Optional">
+              <input
+                type="text"
+                value={formData.contentToAvoid}
+                onChange={set('contentToAvoid')}
+                placeholder="e.g., Nothing too salesy, no dancing trends"
+                className={inputClasses}
+              />
+            </FieldInput>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
                 Content Goals
               </label>
               <div className="flex flex-wrap gap-2">
-                {goals.map(goal => {
-                  const isSelected = formData.goals.includes(goal.value);
+                {goals.map((g) => {
+                  const active = formData.goals.includes(g.value);
                   return (
                     <button
-                      key={goal.value}
-                      onClick={() => handleGoalToggle(goal.value)}
+                      key={g.value}
+                      type="button"
+                      onClick={() => toggleArray('goals')(g.value)}
                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
-                        isSelected
-                          ? isCreator 
-                            ? 'bg-gradient-to-r from-huttle-500 to-huttle-600 text-white border-transparent shadow-md'
-                            : 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                        active
+                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      {goal.label}
+                      {g.label}
                     </button>
                   );
                 })}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Viral Content Strategy Section */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <div className="flex items-center gap-2 mb-6">
-              <Zap className="w-5 h-5 text-huttle-primary" />
-              <h3 className="text-lg font-bold text-gray-900">Viral Content Strategy</h3>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">These settings help AI create content optimized for maximum engagement and virality.</p>
-            
+        {/* ── SECTION 5: GROWTH ── */}
+        <div className="card p-6 mb-6">
+          <SectionHeader icon={TrendingUp} title="Growth" subtitle="Helps AI calibrate strategy for your stage of growth" />
+          <div>
+            <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+              Your current following
+            </label>
+            <ChipSelect
+              options={FOLLOWER_COUNT_OPTIONS}
+              value={formData.followerCount}
+              onChange={set('followerCount')}
+            />
+          </div>
+        </div>
+
+        {/* ── SECTION 6: BUSINESS DETAILS (business only) ── */}
+        {!isCreator && (
+          <div className="card p-6 mb-6 animate-fadeIn">
+            <SectionHeader icon={Briefcase} title="Business Details" subtitle="Tell the AI about your business so it can optimize for conversions" />
             <div className="space-y-6">
-              {/* Content Strengths */}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                  Your Content Strengths
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  What you sell
                 </label>
-                <p className="text-sm text-gray-500 mb-3">What are you best at? AI will emphasize these.</p>
-                <div className="flex flex-wrap gap-2">
-                  {CONTENT_STRENGTHS.map(strength => {
-                    const Icon = strength.icon;
-                    const isSelected = formData.contentStrengths.includes(strength.value);
-                    return (
-                      <button
-                        key={strength.value}
-                        onClick={() => handleStrengthToggle(strength.value)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
-                          isSelected
-                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        {strength.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <ChipSelect
+                  options={BUSINESS_TYPE_OPTIONS}
+                  value={formData.industry}
+                  onChange={set('industry')}
+                />
               </div>
 
-              {/* Biggest Challenge */}
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                  Biggest Challenge
-                </label>
-                <p className="text-sm text-gray-500 mb-3">We'll help you overcome this.</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {CONTENT_CHALLENGES.map(challenge => {
-                    const Icon = challenge.icon;
-                    const isSelected = formData.biggestChallenge === challenge.value;
-                    return (
-                      <button
-                        key={challenge.value}
-                        onClick={() => setFormData(prev => ({ ...prev, biggestChallenge: challenge.value }))}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                          isSelected
-                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{challenge.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <FieldInput label="Your main offer">
+                <input
+                  type="text"
+                  value={formData.primaryOffer}
+                  onChange={set('primaryOffer')}
+                  placeholder="e.g., Laser hair removal packages from $199"
+                  className={inputClasses}
+                />
+              </FieldInput>
 
-              {/* Emotional Triggers */}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                  Emotional Triggers
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Primary conversion goal
                 </label>
-                <p className="text-sm text-gray-500 mb-3">How do you want your audience to feel?</p>
-                <div className="flex flex-wrap gap-2">
-                  {EMOTIONAL_TRIGGERS.map(emotion => {
-                    const Icon = emotion.icon;
-                    const isSelected = formData.emotionalTriggers.includes(emotion.value);
-                    return (
-                      <button
-                        key={emotion.value}
-                        onClick={() => handleEmotionalTriggerToggle(emotion.value)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
-                          isSelected
-                            ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        {emotion.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <ChipSelect
+                  options={CONVERSION_GOAL_OPTIONS}
+                  value={formData.conversionGoal}
+                  onChange={set('conversionGoal')}
+                />
               </div>
             </div>
           </div>
+        )}
 
-          {/* Save/Reset Buttons */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-100">
-            <button 
+        {/* ── SECTION 7: CREATOR DETAILS (creator only) ── */}
+        {isCreator && (
+          <div className="card p-6 mb-6 animate-fadeIn">
+            <SectionHeader icon={Sparkles} title="Creator Details" subtitle="Help the AI understand your creative style" />
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  How you show up
+                </label>
+                <ChipSelect
+                  options={SHOW_UP_OPTIONS}
+                  value={formData.showUpStyle}
+                  onChange={set('showUpStyle')}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Your content persona
+                </label>
+                <ChipSelect
+                  options={CONTENT_PERSONA_OPTIONS}
+                  value={formData.contentPersona}
+                  onChange={set('contentPersona')}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Monetization goal
+                </label>
+                <ChipSelect
+                  options={MONETIZATION_GOAL_OPTIONS}
+                  value={formData.monetizationGoal}
+                  onChange={set('monetizationGoal')}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SECTION 8: VIRAL CONTENT STRATEGY (kept as-is) ── */}
+        <div className="card p-6 mb-6">
+          <div className="flex items-center gap-2 mb-6">
+            <Zap className="w-5 h-5 text-huttle-primary" />
+            <h3 className="text-lg font-bold text-gray-900">Viral Content Strategy</h3>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">These settings help AI create content optimized for maximum engagement and virality.</p>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Your Content Strengths
+              </label>
+              <p className="text-sm text-gray-500 mb-3">What are you best at? AI will emphasize these.</p>
+              <ChipSelect
+                options={CONTENT_STRENGTHS}
+                value={formData.contentStrengths}
+                onChange={set('contentStrengths')}
+                multi
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Biggest Challenge
+              </label>
+              <p className="text-sm text-gray-500 mb-3">We'll help you overcome this.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {CONTENT_CHALLENGES.map((challenge) => {
+                  const Icon = challenge.icon;
+                  const active = formData.biggestChallenge === challenge.value;
+                  return (
+                    <button
+                      key={challenge.value}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, biggestChallenge: challenge.value }))}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                        active
+                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{challenge.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Emotional Triggers
+              </label>
+              <p className="text-sm text-gray-500 mb-3">How do you want your audience to feel?</p>
+              <ChipSelect
+                options={EMOTIONAL_TRIGGERS}
+                value={formData.emotionalTriggers}
+                onChange={set('emotionalTriggers')}
+                multi
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save / Reset Buttons */}
+        <div className="card p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
               onClick={handleSave}
               disabled={!hasUnsavedChanges || isSaving}
               className={`flex-1 px-6 py-3 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 ${
                 !hasUnsavedChanges || isSaving
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
-                  : isCreator
-                    ? 'bg-gradient-to-r from-huttle-500 to-huttle-600 text-white hover:shadow-lg hover:shadow-huttle-500/20'
-                    : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark hover:shadow-lg hover:shadow-huttle-primary/20'
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                  : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark hover:shadow-lg hover:shadow-huttle-primary/20'
               }`}
             >
               {isSaving ? (
@@ -757,14 +903,15 @@ export default function BrandVoice() {
                 </>
               )}
             </button>
-            <button 
+            <button
+              type="button"
               onClick={handleReset}
               className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-colors"
             >
               Reset
             </button>
           </div>
-          
+
           {hasUnsavedChanges && (
             <p className="mt-4 text-sm text-amber-600 flex items-center justify-center gap-1.5 font-medium bg-amber-50 py-2 rounded-lg border border-amber-100">
               <Info className="w-4 h-4" />
@@ -775,55 +922,24 @@ export default function BrandVoice() {
 
         {/* Mobile Completeness */}
         <div className="sm:hidden card p-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="relative w-12 h-12">
-              <svg className="w-12 h-12 transform -rotate-90">
-                <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="20"
-                  fill="none"
-                  stroke={isCreator ? '#01bad2' : '#0ea5e9'}
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={`${completeness * 1.256} 125.6`}
-                  className="transition-all duration-700 ease-out"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-xs font-bold ${completeness === 100 ? 'text-green-600' : 'text-gray-700'}`}>
-                  {completeness}%
-                </span>
-              </div>
-            </div>
-            <div>
-              <p className="font-medium text-gray-900">Profile Completeness</p>
-              <p className="text-sm text-gray-500">
-                {completeness === 100 
-                  ? 'Your profile is complete! 🎉' 
-                  : 'Complete your profile for better AI suggestions'
-                }
-              </p>
-            </div>
-          </div>
+          <CompletenessRing />
+          <p className="text-sm text-gray-500 mt-2">
+            {completeness === 100
+              ? 'Your profile is complete!'
+              : 'Complete your profile for better AI suggestions'}
+          </p>
         </div>
 
         {/* How This Helps */}
-        <div className={`rounded-xl border p-5 md:p-6 transition-all duration-500 ${
-          isCreator 
-            ? 'bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-200/50'
-            : 'bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-primary/20'
-        }`}>
+        <div className="rounded-xl border p-5 md:p-6 bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-primary/20 transition-all duration-500">
           <div className="flex items-start gap-3">
-            <Sparkles className={`w-5 h-5 flex-shrink-0 mt-1 ${isCreator ? 'text-huttle-primary' : 'text-huttle-primary'}`} />
+            <Sparkles className="w-5 h-5 flex-shrink-0 mt-1 text-huttle-primary" />
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">How This Helps</h3>
               <p className="text-sm text-gray-700">
-                {isCreator 
+                {isCreator
                   ? 'Your creator profile personalizes all AI-generated content across Huttle AI. Trend Lab and AI Plan Builder will match your unique voice and connect authentically with your community.'
-                  : 'Your brand settings personalize all AI-generated content across Huttle AI. Trend Lab and AI Plan Builder will tailor suggestions specifically to your niche and voice.'
-                }
+                  : 'Your brand settings personalize all AI-generated content across Huttle AI. Trend Lab and AI Plan Builder will tailor suggestions specifically to your niche and voice.'}
               </p>
             </div>
           </div>

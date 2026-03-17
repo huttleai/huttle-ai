@@ -84,7 +84,7 @@ export default function Sidebar() {
         { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools?tool=caption', color: 'from-yellow-500 to-orange-500' },
         { name: 'Trend Lab', icon: Beaker, path: '/dashboard/trend-lab', color: 'from-pink-500 to-rose-500' },
         { name: 'Niche Intel', icon: Search, path: '/dashboard/niche-intel', badge: 'Pro', color: 'from-indigo-500 to-blue-500' },
-        { name: 'Viral Blueprint', icon: Flame, path: '/dashboard/viral-blueprint', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
+        { name: 'Ignite Engine', icon: Flame, path: '/dashboard/ignite-engine', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
         { name: 'Content Remix Studio', icon: Repeat, path: '/dashboard/content-remix', color: 'from-teal-500 to-cyan-500' },
       ]
     },

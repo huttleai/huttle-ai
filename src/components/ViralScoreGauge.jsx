@@ -102,7 +102,7 @@ export default function ViralScoreGauge({ score = 0 }) {
       
       {/* Label */}
       <div className="mt-4 text-center">
-        <h3 className="text-lg font-bold text-gray-900">Viral Potential Score</h3>
+        <h3 className="text-lg font-bold text-gray-900">Performance Score</h3>
         <p className="text-xs text-gray-500 mt-1">
           {displayScore > 85 ? '🔥 Excellent' : displayScore > 70 ? '⚡ Good' : '💡 Improvable'}
         </p>

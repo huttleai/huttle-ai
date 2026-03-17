@@ -1,17 +1,17 @@
 import { useState, useContext, useEffect, useMemo } from 'react';
+import { motion as Motion } from 'framer-motion';
 import { useBrand } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
-  Zap, 
-  Sparkles, 
-  Lock, 
-  Check, 
+import {
+  Zap,
+  Sparkles,
+  Lock,
+  Check,
   ChevronRight,
-  ChevronDown,
   Lightbulb,
   Copy,
   RefreshCw,
@@ -20,19 +20,19 @@ import {
   User,
   Users,
   Music,
-  Video,
   FileText,
   Hash,
-  TrendingUp,
   AlertTriangle,
   ArrowRight,
   FolderPlus,
   Info,
+  Clock,
+  Camera,
 } from 'lucide-react';
-import { 
-  TikTokIcon, 
-  InstagramIcon, 
-  TwitterXIcon, 
+import {
+  TikTokIcon,
+  InstagramIcon,
+  TwitterXIcon,
   YouTubeIcon,
   FacebookIcon,
   LinkedInIcon,
@@ -43,7 +43,6 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 import ViralScoreGauge from '../components/ViralScoreGauge';
-import PremiumScriptRenderer from '../components/PremiumScriptRenderer';
 import {
   getSectionsForType,
   getBlueprintLabel,
@@ -119,25 +118,31 @@ const GOALS = [
   { id: 'Build Authority', label: 'Build Authority', emoji: '🤝' },
 ];
 
-function getScoreExplanation(score) {
-  if (score >= 90) return 'Exceptional — all signals point to viral';
-  if (score >= 80) return 'Great — built to outperform average content';
-  if (score >= 65) return 'Good — strong chance of solid performance';
-  if (score >= 50) return 'Solid foundation — refine before posting';
-  return 'Needs significant work before posting';
+function getVerdict(score) {
+  if (score >= 90) return { label: 'Exceptional', className: 'bg-green-100 text-green-700 border-green-200' };
+  if (score >= 80) return { label: 'Great', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+  if (score >= 66) return { label: 'Good', className: 'bg-blue-100 text-blue-700 border-blue-200' };
+  if (score >= 50) return { label: 'Average — refine before posting', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
+  return { label: 'Needs work', className: 'bg-red-100 text-red-700 border-red-200' };
 }
 
-function getScoreBreakdown(viralScore) {
-  const base = viralScore;
-  return [
-    { label: 'Hook Strength', value: Math.min(100, Math.max(0, base + 3)), weight: 25 },
-    { label: 'Trend Alignment', value: Math.min(100, Math.max(0, base - 2)), weight: 25 },
-    { label: 'Audience Fit', value: Math.min(100, Math.max(0, base + 1)), weight: 25 },
-    { label: 'Platform Optimization', value: Math.min(100, Math.max(0, base - 2)), weight: 25 },
-  ];
-}
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.1, duration: 0.4, ease: 'easeOut' },
+  }),
+};
 
-export default function ViralBlueprint() {
+const BREAKDOWN_ITEMS = [
+  { label: 'Hook Strength', key: 'hookStrength' },
+  { label: 'Trend Alignment', key: 'trendAlignment' },
+  { label: 'Audience Fit', key: 'audienceFit' },
+  { label: 'Platform Fit', key: 'platformOptimization' },
+];
+
+export default function IgniteEngine() {
   const { brandProfile, isCreator } = useBrand();
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
@@ -154,6 +159,9 @@ export default function ViralBlueprint() {
       })
     : [];
 
+  const isBrandVoiceComplete = brandProfile?.niche && brandProfile?.targetAudience
+    && (brandProfile?.toneChips?.length > 0 || brandProfile?.brandVoice);
+
   // Form state
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedPostType, setSelectedPostType] = useState('');
@@ -163,23 +171,19 @@ export default function ViralBlueprint() {
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedBlueprint, setGeneratedBlueprint] = useState(null);
+  const [generatedBrief, setGeneratedBrief] = useState(null);
   const [generatedForPlatform, setGeneratedForPlatform] = useState('');
   const [generatedForPostType, setGeneratedForPostType] = useState('');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [loadingStep, setLoadingStep] = useState('Generate Blueprint');
-  const [savedBlueprint, setSavedBlueprint] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('Generate Brief');
+  const [savedBrief, setSavedBrief] = useState(false);
   const [parseError, setParseError] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
-  const [expandedSteps, setExpandedSteps] = useState({});
-  const [showAllVisualKeywords, setShowAllVisualKeywords] = useState(false);
-  const [showAllCaptionKeywords, setShowAllCaptionKeywords] = useState(false);
-  
   const [currentView, setCurrentView] = useState('input');
   const [usageCount, setUsageCount] = useState(0);
   const [usageLimit, setUsageLimit] = useState(0);
 
-  const hasMismatch = generatedBlueprint && (selectedPlatform !== generatedForPlatform || selectedPostType !== generatedForPostType);
+  const hasMismatch = generatedBrief && (selectedPlatform !== generatedForPlatform || selectedPostType !== generatedForPostType);
   const mismatchLabel = hasMismatch ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
   const newLabel = hasMismatch ? getBlueprintLabel(selectedPlatform, selectedPostType) : '';
 
@@ -210,8 +214,14 @@ export default function ViralBlueprint() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (!isGenerating) { setLoadingStep('Generate Blueprint'); return; }
-    const messages = ['Scanning platform trends...', 'Analyzing viral patterns...', 'Drafting content strategy...', 'Finalizing blueprint...'];
+    if (brandProfile?.targetAudience && !targetAudience) {
+      setTargetAudience(brandProfile.targetAudience);
+    }
+  }, [brandProfile]);
+
+  useEffect(() => {
+    if (!isGenerating) { setLoadingStep('Generate Brief'); return; }
+    const messages = ['Scanning platform trends...', 'Analyzing content patterns...', 'Drafting your strategy...', 'Finalizing brief...'];
     let idx = 0;
     setLoadingStep(messages[0]);
     const interval = setInterval(() => { idx = (idx + 1) % messages.length; setLoadingStep(messages[idx]); }, 12000);
@@ -244,19 +254,10 @@ export default function ViralBlueprint() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
-  const toggleStep = (index) => {
-    setExpandedSteps(prev => ({ ...prev, [index]: !prev[index] }));
-  };
-
-  const getVisibleItems = (items, showAll, limit = 8) => {
-    if (!Array.isArray(items)) return [];
-    return showAll ? items : items.slice(0, limit);
-  };
-
   const handleGenerate = async () => {
     if (!hasAccess) { setShowUpgradeModal(true); return; }
     if (isAtLimit || !blueprintUsage.canGenerate) {
-      showToast("You've reached your monthly blueprint limit. Resets on the 1st.", 'warning');
+      showToast("You've reached your monthly brief limit. Resets on the 1st.", 'warning');
       return;
     }
     if (!isFormValid) { showToast('Please fill in all required fields', 'warning'); return; }
@@ -268,9 +269,9 @@ export default function ViralBlueprint() {
     try {
       const { required, optional, excluded } = getSectionsForType(selectedPlatform, selectedPostType);
       const viralWeights = getViralScoreWeights(selectedPlatform, selectedPostType);
-      const blueprintLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
+      const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
 
-      const blueprintContext = {
+      const briefContext = {
         topic: topic.trim(),
         platform: selectedPlatform,
         content_type: selectedPostType,
@@ -282,7 +283,24 @@ export default function ViralBlueprint() {
         optional_sections: optional,
         excluded_sections: excluded,
         viral_score_weights: viralWeights,
-        blueprint_label: blueprintLabel,
+        blueprint_label: briefLabel,
+        user_type: brandProfile?.profileType || 'brand',
+        brand_name: brandProfile?.brandName || '',
+        handle: brandProfile?.socialHandle || '',
+        sub_niche: brandProfile?.subNiche || '',
+        city: brandProfile?.city || '',
+        audience_pain_point: brandProfile?.audiencePainPoint || '',
+        audience_action_trigger: brandProfile?.audienceActionTrigger || '',
+        tone_chips: brandProfile?.toneChips || [],
+        writing_style: brandProfile?.writingStyle || '',
+        example_post: brandProfile?.examplePost || '',
+        content_to_post: brandProfile?.contentToPost || [],
+        content_to_avoid: brandProfile?.contentToAvoid || '',
+        follower_count: brandProfile?.followerCount || '',
+        primary_offer: brandProfile?.primaryOffer || '',
+        conversion_goal: brandProfile?.conversionGoal || '',
+        content_persona: brandProfile?.contentPersona || '',
+        monetization_goal: brandProfile?.monetizationGoal || '',
       };
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -300,7 +318,7 @@ export default function ViralBlueprint() {
             'Accept': 'application/json',
             ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
           },
-          body: JSON.stringify(blueprintContext),
+          body: JSON.stringify(briefContext),
           signal: controller.signal,
           mode: 'cors',
         });
@@ -314,7 +332,7 @@ export default function ViralBlueprint() {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        console.error('[Blueprint] HTTP Error:', response.status, errorText);
+        console.error('[IgniteEngine] HTTP Error:', response.status, errorText);
         throw new Error(`HTTP_ERROR: ${response.status}`);
       }
 
@@ -323,45 +341,44 @@ export default function ViralBlueprint() {
         const rawText = await response.text();
         responseData = rawText ? JSON.parse(rawText) : {};
       } catch (e) {
-        console.error('[Blueprint] JSON Parse Error:', e);
+        console.error('[IgniteEngine] JSON Parse Error:', e);
         throw new Error('INVALID_JSON');
       }
 
-      const normalized = normalizeN8nResponse(responseData, blueprintLabel);
+      const normalized = normalizeN8nResponse(responseData);
 
-      if (!normalized || (!normalized.directorsCut?.length && !normalized.sections)) {
-        console.error('[Blueprint] No usable content in response');
-        throw new Error('INVALID_BLUEPRINT_STRUCTURE');
+      if (!normalized || !normalized.performanceScore) {
+        console.error('[IgniteEngine] No usable content in response');
+        throw new Error('INVALID_BRIEF_STRUCTURE');
       }
 
-      setGeneratedBlueprint(normalized);
+      setGeneratedBrief(normalized);
       setGeneratedForPlatform(selectedPlatform);
       setGeneratedForPostType(selectedPostType);
-      setExpandedSteps({ 0: true });
 
       const newUsage = usageCount + 1;
       setUsageCount(newUsage);
       localStorage.setItem('viralBlueprintUsage', newUsage.toString());
 
       if (import.meta.env.DEV) {
-        const prompt = buildN8nSystemPrompt(blueprintContext);
-        console.log('=== PASTE THIS INTO N8N MASTER BLUEPRINT GENERATOR ===');
+        const prompt = buildN8nSystemPrompt(briefContext);
+        console.log('=== PASTE THIS INTO N8N IGNITE ENGINE GENERATOR ===');
         console.log(prompt);
       }
 
-      showToast('Viral Blueprint generated!', 'success');
+      showToast('Ignite Engine brief generated!', 'success');
       setCurrentView('results');
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
     } catch (error) {
-      console.error('[Blueprint] Generation error:', error.message);
-      
-      if (error.message === 'INVALID_JSON' || error.message === 'INVALID_BLUEPRINT_STRUCTURE') {
+      console.error('[IgniteEngine] Generation error:', error.message);
+
+      if (error.message === 'INVALID_JSON' || error.message === 'INVALID_BRIEF_STRUCTURE') {
         setParseError(true);
         setCurrentView('results');
       }
 
-      let msg = "We're having trouble generating your blueprint. Please try again in a moment.";
+      let msg = "We're having trouble generating your brief. Please try again in a moment.";
       if (error.message === 'REQUEST_TIMEOUT') msg = 'This request is taking longer than expected. Please try again.';
       else if (error.message.startsWith('HTTP_ERROR')) msg = 'We received an unexpected response. Please try again.';
 
@@ -369,20 +386,19 @@ export default function ViralBlueprint() {
 
       if (topic.trim() && !parseError) {
         try {
-          const grokBlueprint = await attemptGrokFallback(
+          const fallbackBrief = await attemptGrokFallback(
             selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
           );
-          if (grokBlueprint) {
-            setGeneratedBlueprint(grokBlueprint);
+          if (fallbackBrief) {
+            setGeneratedBrief(fallbackBrief);
             setGeneratedForPlatform(selectedPlatform);
             setGeneratedForPostType(selectedPostType);
-            setExpandedSteps({ 0: true });
             setParseError(false);
             setCurrentView('results');
-            showToast('Blueprint generated via direct AI.', 'success');
+            showToast('Brief generated via direct AI.', 'success');
           }
         } catch {
-          // Both failed
+          // Both paths failed
         }
       }
     } finally {
@@ -390,55 +406,45 @@ export default function ViralBlueprint() {
     }
   };
 
-  const handleSaveBlueprint = async () => {
-    if (!user?.id || !generatedBlueprint) { showToast('Generate a blueprint first', 'warning'); return; }
+  const handleSaveBrief = async () => {
+    if (!user?.id || !bp) { showToast('Generate a brief first', 'warning'); return; }
     try {
-      const bp = generatedBlueprint;
       const textParts = [];
+      if (bp.hook) textParts.push(`Hook:\n${bp.hook}`);
+      if (bp.script) textParts.push(`Script:\n${bp.script}`);
+      if (bp.caption) textParts.push(`Caption:\n${bp.caption}`);
+      if (bp.hashtags) {
+        const allTags = [...(bp.hashtags.niche || []), ...(bp.hashtags.mid || []), ...(bp.hashtags.broad || [])];
+        if (allTags.length) textParts.push(`Hashtags:\n${allTags.join(' ')}`);
+      }
+      if (bp.proTip) textParts.push(`Pro Tip:\n${bp.proTip}`);
 
-      if (bp.directorsCut?.length) {
-        textParts.push(
-          bp.directorsCut
-            .map(s => `${s.title || `Step ${s.step}`}\n${s.text || s.script || ''}`)
-            .join('\n\n')
-        );
-      }
-      if (bp.seoStrategy?.spokenHooks?.length) {
-        textParts.push('Hooks:\n' + bp.seoStrategy.spokenHooks.join('\n'));
-      }
-      if (bp.seoStrategy?.captionKeywords?.length) {
-        textParts.push('Hashtags:\n' + bp.seoStrategy.captionKeywords.join(' '));
-      }
-      if (bp.seoStrategy?.visualKeywords?.length) {
-        textParts.push('Keywords:\n' + bp.seoStrategy.visualKeywords.join(', '));
-      }
-
-      const blueprintText = textParts.filter(Boolean).join('\n\n');
+      const briefText = textParts.filter(Boolean).join('\n\n');
       const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
-        name: `Blueprint - ${topic.slice(0, 50) || selectedPlatform || 'Content'}`,
-        contentText: blueprintText,
+        name: `Brief - ${topic.slice(0, 50) || selectedPlatform || 'Content'}`,
+        contentText: briefText,
         contentType: 'blueprint',
         toolSource: 'viral_blueprint',
-        toolLabel: 'Viral Blueprint',
+        toolLabel: 'Ignite Engine',
         topic,
         platform: selectedPlatform,
-        description: `Viral Blueprint | ${selectedPlatform} | ${selectedPostType || 'Content'}`,
+        description: `Ignite Engine | ${selectedPlatform} | ${selectedPostType || 'Content'}`,
         metadata: {
           goal,
           target_audience: targetAudience,
           post_type: selectedPostType,
           platform_display: selectedPlatform,
-          viral_score: bp.viralScore,
+          performance_score: bp.performanceScore,
         },
       }));
 
       if (!result.success) throw new Error(result.error || 'Failed to save');
-      setSavedBlueprint(true);
-      setTimeout(() => setSavedBlueprint(false), 2000);
+      setSavedBrief(true);
+      setTimeout(() => setSavedBrief(false), 2000);
       showToast('Saved to Content Vault!', 'success');
     } catch (error) {
-      console.error('Failed to save blueprint:', error);
-      showToast('Failed to save blueprint', 'error');
+      console.error('Failed to save brief:', error);
+      showToast('Failed to save brief', 'error');
     }
   };
 
@@ -448,20 +454,17 @@ export default function ViralBlueprint() {
     setGoal('Grow Followers');
     setTopic('');
     setTargetAudience('');
-    setGeneratedBlueprint(null);
+    setGeneratedBrief(null);
     setGeneratedForPlatform('');
     setGeneratedForPostType('');
     setParseError(false);
-    setExpandedSteps({});
-    setShowAllVisualKeywords(false);
-    setShowAllCaptionKeywords(false);
     setCopiedSection(null);
     setCurrentView('input');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRegenerate = () => {
-    setGeneratedBlueprint(null);
+    setGeneratedBrief(null);
     setParseError(false);
     setCurrentView('input');
     setTimeout(() => handleGenerate(), 100);
@@ -469,17 +472,16 @@ export default function ViralBlueprint() {
 
   /* ─── Render ────────────────────────────────────────────────── */
 
-  const bp = generatedBlueprint;
-  const viralScore = bp?.viralScore ?? 0;
-  const scoreBreakdown = viralScore > 0 ? getScoreBreakdown(viralScore) : [];
-  const blueprintLabel = bp?.blueprintLabel || getBlueprintLabel(generatedForPlatform, generatedForPostType);
+  const bp = generatedBrief;
+  const performanceScore = bp?.performanceScore ?? 0;
+  const briefLabel = bp ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
-      
+
       <div className="relative z-10 max-w-4xl mx-auto space-y-8">
-        
+
         {/* Header */}
         <div className="mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
@@ -489,14 +491,14 @@ export default function ViralBlueprint() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-0.5 flex-wrap">
                 <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
-                  Viral Blueprint
+                  Ignite Engine
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-huttle-gradient text-white text-[10px] font-bold uppercase tracking-wider">
                   Beta
                 </span>
               </div>
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">
-                Engineer viral content with AI-powered precision
+                Built to maximize reach. Backed by live data.
               </p>
             </div>
             {hasAccess && (
@@ -504,7 +506,7 @@ export default function ViralBlueprint() {
                 <AIUsageMeter
                   used={blueprintUsage.featureUsed}
                   limit={blueprintUsage.featureLimit}
-                  label="Blueprints this month"
+                  label="Briefs this month"
                   compact
                 />
               </div>
@@ -516,7 +518,7 @@ export default function ViralBlueprint() {
         {currentView === 'input' && (
         <div className="card-glass overflow-hidden relative animate-fadeIn">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-50" />
-          
+
           <div className="p-6 md:p-8 space-y-8 relative z-10">
             {!hasAccess ? (
               <div className="text-center py-16">
@@ -528,7 +530,7 @@ export default function ViralBlueprint() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-3">Initialize Command Center</h2>
                 <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                  Upgrade to Essentials or Pro to unlock the full power of the Viral Blueprint Generator.
+                  Upgrade to Essentials or Pro to unlock the full power of the Ignite Engine.
                 </p>
                 <button
                   onClick={() => setShowUpgradeModal(true)}
@@ -551,6 +553,23 @@ export default function ViralBlueprint() {
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                   </div>
                 </div>
+
+                {!isBrandVoiceComplete && (
+                  <div className="flex items-center gap-3 p-4 bg-huttle-50 border border-huttle-primary/20 rounded-xl animate-fadeIn">
+                    <Sparkles className="w-5 h-5 text-huttle-primary flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700">
+                        Complete your Brand Voice for more personalized briefs
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/dashboard/brand-voice')}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-huttle-primary bg-white hover:bg-huttle-50 rounded-lg transition-colors whitespace-nowrap border border-huttle-primary/20"
+                    >
+                      Complete Now <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <h2 className="text-lg font-bold text-gray-900">Select Platform</h2>
@@ -616,7 +635,7 @@ export default function ViralBlueprint() {
 
                   {sectionPreview.length > 0 && (
                     <div className="mt-3 animate-fadeIn">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Blueprint includes:</p>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Brief includes:</p>
                       <div className="flex flex-wrap gap-1.5">
                         {sectionPreview.map((meta, i) => (
                           <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium border border-gray-200/50 animate-slideUp" style={{ animationDelay: `${i * 40}ms` }}>
@@ -697,7 +716,7 @@ export default function ViralBlueprint() {
                     ) : (
                       <>
                         <Zap className="w-6 h-6 fill-current drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                        <span className="drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">Generate Blueprint</span>
+                        <span className="drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]">Generate Brief</span>
                         <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
                       </>
                     )}
@@ -712,7 +731,7 @@ export default function ViralBlueprint() {
 
         {/* ─── RESULTS ────────────────────────────────────────── */}
         {currentView === 'results' && hasAccess && (
-          <div id="blueprint-results" className="space-y-8 animate-fadeIn">
+          <div id="brief-results" className="space-y-6 animate-fadeIn">
 
             {/* Mismatch Warning */}
             {hasMismatch && (
@@ -720,8 +739,8 @@ export default function ViralBlueprint() {
                 <Info className="w-5 h-5 text-amber-600 flex-shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm text-amber-800">
-                    Your current blueprint was generated for <span className="font-bold">{mismatchLabel}</span>.
-                    Regenerate to get a blueprint for <span className="font-bold">{newLabel}</span>.
+                    Your current brief was generated for <span className="font-bold">{mismatchLabel}</span>.
+                    Regenerate to get a brief for <span className="font-bold">{newLabel}</span>.
                   </p>
                 </div>
                 <button onClick={handleRegenerate} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap">
@@ -739,8 +758,8 @@ export default function ViralBlueprint() {
                       <Check className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900">Blueprint Generated!</h2>
-                      <p className="text-sm text-gray-500">Your viral content strategy is ready</p>
+                      <h2 className="text-xl font-bold text-gray-900">Brief Generated!</h2>
+                      <p className="text-sm text-gray-500">Your Ignite Engine brief is ready</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-4">
@@ -755,13 +774,13 @@ export default function ViralBlueprint() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={handleSaveBlueprint} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
-                    {savedBlueprint ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
-                    <span>{savedBlueprint ? 'Saved!' : 'Save to Vault'}</span>
+                  <button onClick={handleSaveBrief} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+                    {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
+                    <span>{savedBrief ? 'Saved!' : 'Save to Vault'}</span>
                   </button>
                   <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
                     <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                    <span>Create New Blueprint</span>
+                    <span>Create New Brief</span>
                   </button>
                 </div>
               </div>
@@ -773,7 +792,7 @@ export default function ViralBlueprint() {
                 <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle className="w-8 h-8 text-red-400" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Blueprint generation failed</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Brief generation failed</h3>
                 <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">We received an unexpected response from the AI. This can happen occasionally. Please try again.</p>
                 <button onClick={handleRegenerate} className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-all">
                   <RefreshCw className="w-4 h-4" /> Try Again
@@ -781,279 +800,168 @@ export default function ViralBlueprint() {
               </div>
             )}
 
-            {/* ─── BLUEPRINT CONTENT ──────────────────────────── */}
+            {/* ─── BRIEF CONTENT ──────────────────────────────── */}
             {bp && (
-              <div className="space-y-8">
+              <div className="space-y-6">
 
-                {/* Blueprint Label */}
-                {blueprintLabel && (
+                {/* Brief Label Badge */}
+                {briefLabel && (
                   <div className="flex justify-center">
                     <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-gray-900 to-gray-800 text-white text-sm font-bold shadow-lg">
-                      {blueprintLabel}
+                      {briefLabel}
                     </span>
                   </div>
                 )}
 
-                {/* ── Viral Score with Breakdown ── */}
-                {viralScore > 0 && (
-                  <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-gradient-to-br from-white/60 to-gray-50/40 border border-white/60 shadow-lg p-8 md:p-12">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-50/20 via-transparent to-purple-50/20 pointer-events-none" />
-                    <div className="relative z-10">
+                {/* ── Performance Score Card ── */}
+                {performanceScore > 0 && (
+                  <Motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
+                    <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-8 md:p-12">
                       <div className="flex items-center justify-center">
-                        <ViralScoreGauge score={viralScore} />
+                        <ViralScoreGauge score={performanceScore} />
                       </div>
 
-                      {/* Score Explanation */}
-                      <p className="text-center text-sm font-medium text-gray-500 mt-4">
-                        {getScoreExplanation(viralScore)}
-                      </p>
-
-                      {/* 4-Criteria Breakdown */}
-                      <div className="mt-8 space-y-3 max-w-md mx-auto">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-4">Score Breakdown</h4>
-                        {scoreBreakdown.map((item, i) => (
-                          <div key={i}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-gray-600">{item.label}</span>
-                              <span className="text-xs font-bold text-gray-900">{item.value}/100 <span className="text-gray-400 font-normal">({item.weight}%)</span></span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-1000 ease-out ${item.value >= 80 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : item.value >= 65 ? 'bg-gradient-to-r from-amber-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
-                                style={{ width: `${item.value}%`, transitionDelay: `${i * 200}ms` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Director's Cut / Content Steps ── */}
-                {bp.directorsCut?.length > 0 && (
-                  <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-lg p-6 md:p-8">
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/20 pointer-events-none" />
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                          <div className="relative">
-                            <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl blur opacity-40 animate-pulse" />
-                            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center shadow-xl ring-1 ring-white/20">
-                              {bp.isVideoContent
-                                ? <Video className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                                : <FileText className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-                              }
-                            </div>
-                          </div>
-                          {bp.isVideoContent ? "The Director's Cut" : 'Content Blueprint'}
-                        </h2>
-                        <span className="text-sm font-medium text-gray-500">
-                          {bp.directorsCut.length} {bp.directorsCut.length === 1 ? 'step' : 'steps'}
-                        </span>
-                      </div>
-
-                      <div className="space-y-4">
-                        {bp.directorsCut.map((step, index) => {
-                          const isExpanded = expandedSteps[index] ?? index === 0;
-                          const contentText = step.text || step.script || '';
-                          const visualText = step.visualSuggestion || step.visual || '';
-
-                          return (
-                            <div
-                              key={index}
-                              className="relative backdrop-blur-md bg-white/80 rounded-2xl border border-white/80 overflow-hidden hover:shadow-xl transition-all duration-300 animate-slideUp"
-                              style={{ animationDelay: `${index * 100}ms` }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => toggleStep(index)}
-                                className="w-full flex items-center justify-between gap-4 p-4 bg-gradient-to-r from-gray-50/80 to-white/60 border-b border-gray-100/50 backdrop-blur-sm text-left"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 text-white flex items-center justify-center font-bold text-sm shadow-lg">
-                                    {step.step || index + 1}
-                                  </div>
-                                  <h3 className="font-bold text-gray-900">{step.title || `Step ${index + 1}`}</h3>
+                      {bp.scoreBreakdown && (
+                        <div className="mt-8 space-y-3 max-w-md mx-auto">
+                          {BREAKDOWN_ITEMS.map((item, i) => {
+                            const value = bp.scoreBreakdown[item.key] ?? 0;
+                            return (
+                              <div key={item.key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                                  <span className="text-xs font-bold text-gray-900">{value}/25</span>
                                 </div>
-                                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-
-                              {isExpanded && (
-                                <div className="p-6">
-                                  {contentText && (
-                                    <PremiumScriptRenderer
-                                      content={contentText}
-                                      onCopy={(text) => handleCopy(text, `step-${index}`)}
-                                    />
-                                  )}
-                                  {visualText && (
-                                    <div className="mt-4 p-4 bg-gradient-to-br from-purple-50/80 to-indigo-50/60 backdrop-blur-sm rounded-xl border border-purple-100/50">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-sm">{bp.isVideoContent ? '🎬' : '📸'}</span>
-                                        <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">Visual Direction</span>
-                                      </div>
-                                      <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">{visualText}</p>
-                                    </div>
-                                  )}
+                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <Motion.div
+                                    className={`h-full rounded-full ${value >= 20 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : value >= 15 ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : value >= 10 ? 'bg-gradient-to-r from-amber-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(value / 25) * 100}%` }}
+                                    transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
+                                  />
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── SEO Strategy ── */}
-                {(bp.seoStrategy?.visualKeywords?.length > 0 || bp.seoStrategy?.spokenHooks?.length > 0 || bp.seoStrategy?.captionKeywords?.length > 0) && (
-                  <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/60 border border-white/60 shadow-lg p-6 md:p-8">
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-green-50/20 pointer-events-none" />
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
-                            <Hash className="w-5 h-5 text-white" />
-                          </div>
-                          SEO Strategy
-                        </h2>
-                        <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 text-xs font-bold uppercase tracking-wider shadow-sm border border-green-200/50">
-                          Keyword Pack
-                        </span>
-                      </div>
-
-                      <div className="space-y-6">
-
-                        {/* Visual Keywords */}
-                        {bp.seoStrategy.visualKeywords?.length > 0 && (() => {
-                          const visible = getVisibleItems(bp.seoStrategy.visualKeywords, showAllVisualKeywords, 10);
-                          const hidden = Math.max(bp.seoStrategy.visualKeywords.length - visible.length, 0);
-                          return (
-                            <div className="backdrop-blur-md bg-white/80 rounded-2xl p-6 border border-green-100/60 hover:shadow-xl transition-all duration-300 hover:border-green-200/80">
-                              <div className="flex items-center gap-2 mb-4">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-md">
-                                  <TrendingUp className="w-4 h-4 text-white" />
-                                </div>
-                                <h3 className="font-bold text-gray-900 text-sm">Trending Keywords</h3>
                               </div>
-                              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Trending search terms to boost discoverability</p>
-                              <div className="flex flex-wrap gap-2">
-                                {visible.map((keyword, i) => (
-                                  <span key={i} className="px-4 py-2 bg-gradient-to-br from-green-50/90 to-emerald-100/70 backdrop-blur-sm border border-green-300/60 rounded-full text-xs font-semibold text-green-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer" onClick={() => handleCopy(keyword, `vk-${i}`)}>
-                                    {copiedSection === `vk-${i}` ? '✓ Copied' : keyword}
-                                  </span>
-                                ))}
-                              </div>
-                              {hidden > 0 && (
-                                <button onClick={() => setShowAllVisualKeywords(true)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:text-green-800 transition-colors">
-                                  <span>Show {hidden} more keywords</span> <ChevronDown className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {showAllVisualKeywords && bp.seoStrategy.visualKeywords.length > 10 && (
-                                <button onClick={() => setShowAllVisualKeywords(false)} className="mt-3 ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition-colors">
-                                  <span>Show fewer</span> <ChevronDown className="w-3.5 h-3.5 rotate-180" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* Spoken Hooks */}
-                        {bp.seoStrategy.spokenHooks?.length > 0 && (
-                          <div className="backdrop-blur-md bg-white/80 rounded-2xl p-6 border border-amber-100/60 hover:shadow-xl transition-all duration-300 hover:border-amber-200/80">
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
-                                  <Flame className="w-4 h-4 text-white" />
-                                </div>
-                                <h3 className="font-bold text-gray-900 text-sm">Spoken Hooks</h3>
-                              </div>
-                              <button onClick={() => handleCopy(bp.seoStrategy.spokenHooks.join('\n\n'), 'all-hooks')} className="px-4 py-2 rounded-xl bg-white/80 hover:bg-white border border-amber-200 hover:border-amber-300 text-amber-700 text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md transition-all flex items-center gap-2">
-                                {copiedSection === 'all-hooks' ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy All</>}
-                              </button>
-                            </div>
-                            <div className="space-y-3">
-                              {bp.seoStrategy.spokenHooks.map((hook, i) => (
-                                <div key={i} className="group flex items-start gap-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-amber-100/60 hover:border-amber-200 hover:shadow-md transition-all cursor-pointer" onClick={() => handleCopy(hook, `hook-${i}`)}>
-                                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-md">{i + 1}</div>
-                                  <p className="flex-1 text-gray-800 leading-relaxed font-medium">{hook}</p>
-                                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {copiedSection === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Caption Keywords / Hashtags */}
-                        {bp.seoStrategy.captionKeywords?.length > 0 && (() => {
-                          const visible = getVisibleItems(bp.seoStrategy.captionKeywords, showAllCaptionKeywords, 12);
-                          const hidden = Math.max(bp.seoStrategy.captionKeywords.length - visible.length, 0);
-                          return (
-                            <div className="backdrop-blur-md bg-white/80 rounded-2xl p-6 border border-purple-100/60 hover:shadow-xl transition-all duration-300 hover:border-purple-200/80">
-                              <div className="flex items-center gap-2 mb-4">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-500 flex items-center justify-center shadow-md">
-                                  <Hash className="w-4 h-4 text-white" />
-                                </div>
-                                <h3 className="font-bold text-gray-900 text-sm">Hashtags</h3>
-                              </div>
-                              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Caption & description tags</p>
-                              <div className="flex flex-wrap gap-2">
-                                {visible.map((tag, i) => (
-                                  <span key={i} className="px-4 py-2 bg-gradient-to-br from-purple-50/90 to-purple-100/70 backdrop-blur-sm border border-purple-200/60 rounded-full text-xs font-semibold text-purple-700 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer" onClick={() => handleCopy(tag, `ct-${i}`)}>
-                                    {copiedSection === `ct-${i}` ? '✓ Copied' : tag}
-                                  </span>
-                                ))}
-                              </div>
-                              {hidden > 0 && (
-                                <button onClick={() => setShowAllCaptionKeywords(true)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-800 transition-colors">
-                                  <span>Show {hidden} more tags</span> <ChevronDown className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {showAllCaptionKeywords && bp.seoStrategy.captionKeywords.length > 12 && (
-                                <button onClick={() => setShowAllCaptionKeywords(false)} className="mt-3 ml-3 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition-colors">
-                                  <span>Show fewer</span> <ChevronDown className="w-3.5 h-3.5 rotate-180" />
-                                </button>
-                              )}
-                              <button onClick={() => handleCopy(bp.seoStrategy.captionKeywords.join(' '), 'all-tags')} className="mt-5 w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
-                                {copiedSection === 'all-tags' ? <><Check className="w-3.5 h-3.5" /> Copied All!</> : <><Copy className="w-3.5 h-3.5" /> Copy All Tags</>}
-                              </button>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Audio Vibe (video content only) ── */}
-                {bp.isVideoContent && bp.audioVibe && (
-                  <div className="glass-panel rounded-2xl p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center shadow-lg">
-                        <Music className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h2 className="text-lg font-bold text-gray-900">Audio Vibe</h2>
-                        <p className="text-gray-600">{bp.audioVibe.mood}</p>
-                      </div>
-                      {bp.audioVibe.bpm && (
-                        <div className="text-right">
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">BPM</span>
-                          <p className="text-lg font-mono font-bold text-gray-900">{bp.audioVibe.bpm}</p>
+                            );
+                          })}
                         </div>
                       )}
+
+                      {bp.scoreReason && (
+                        <p className="text-center text-sm text-gray-400 italic mt-6 max-w-lg mx-auto">
+                          {bp.scoreReason}
+                        </p>
+                      )}
+
+                      {performanceScore > 0 && (() => {
+                        const verdict = getVerdict(performanceScore);
+                        return (
+                          <div className="flex justify-center mt-5">
+                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold border ${verdict.className}`}>
+                              {verdict.label}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    {bp.audioVibe.suggestion && (
-                      <p className="mt-4 text-sm text-gray-500 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        💡 {bp.audioVibe.suggestion}
-                      </p>
-                    )}
-                  </div>
+                  </Motion.div>
                 )}
 
+                {/* ── Conditional Content Sections ── */}
+                {bp.isVideoContent ? (
+                  <>
+                    {bp.hook && (
+                      <Motion.div custom={1} variants={cardVariants} initial="hidden" animate="visible">
+                        <SectionCard icon={<Flame className="w-4 h-4 text-white" />} iconBg="bg-gradient-to-br from-amber-400 to-orange-500" title="Your Opening Hook" action={
+                          <CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'hook'} onClick={() => handleCopy(bp.hook, 'hook')} />
+                        }>
+                          <p className="text-lg font-semibold text-gray-900 leading-relaxed">{bp.hook}</p>
+                          {bp.hookReason && <ReasonCallout text={bp.hookReason} />}
+                        </SectionCard>
+                      </Motion.div>
+                    )}
+
+                    {bp.script && (
+                      <Motion.div custom={2} variants={cardVariants} initial="hidden" animate="visible">
+                        <SectionCard icon={<FileText className="w-4 h-4 text-white" />} iconBg="bg-gradient-to-br from-violet-500 to-purple-600" title="Script" action={
+                          <CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'script'} onClick={() => handleCopy(bp.script, 'script')} />
+                        }>
+                          <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">{bp.script}</div>
+                          <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Estimated read time: ~{Math.max(1, Math.round(bp.script.split(/\s+/).length / 130))} min
+                          </p>
+                        </SectionCard>
+                      </Motion.div>
+                    )}
+
+                    {bp.caption && (
+                      <Motion.div custom={3} variants={cardVariants} initial="hidden" animate="visible">
+                        <CaptionCard bp={bp} copiedSection={copiedSection} handleCopy={handleCopy} />
+                      </Motion.div>
+                    )}
+
+                    {bp.audioVibe && (
+                      <Motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible">
+                        <SectionCard icon={<Music className="w-4 h-4 text-white" />} iconBg="bg-gradient-to-br from-pink-500 to-violet-500" title="Audio Direction">
+                          <div className="space-y-3">
+                            <InfoRow emoji="🎵" label="Mood" value={bp.audioVibe.mood} />
+                            <InfoRow emoji="🥁" label="BPM" value={bp.audioVibe.bpm} />
+                            <InfoRow emoji="💡" label="Tip" value={bp.audioVibe.tip} />
+                          </div>
+                        </SectionCard>
+                      </Motion.div>
+                    )}
+
+                    {bp.imageDirection && (
+                      <Motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible">
+                        <ImageDirectionCard imageDirection={bp.imageDirection} />
+                      </Motion.div>
+                    )}
+
+                    {bp.postingIntel && (
+                      <Motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible">
+                        <PostingIntelCard postingIntel={bp.postingIntel} />
+                      </Motion.div>
+                    )}
+
+                    {bp.proTip && (
+                      <Motion.div custom={7} variants={cardVariants} initial="hidden" animate="visible">
+                        <ProTipCard proTip={bp.proTip} />
+                      </Motion.div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {bp.caption && (
+                      <Motion.div custom={1} variants={cardVariants} initial="hidden" animate="visible">
+                        <CaptionCard bp={bp} copiedSection={copiedSection} handleCopy={handleCopy} />
+                      </Motion.div>
+                    )}
+
+                    {bp.hashtags && (
+                      <Motion.div custom={2} variants={cardVariants} initial="hidden" animate="visible">
+                        <HashtagsCard hashtags={bp.hashtags} copiedSection={copiedSection} handleCopy={handleCopy} />
+                      </Motion.div>
+                    )}
+
+                    {bp.imageDirection && (
+                      <Motion.div custom={3} variants={cardVariants} initial="hidden" animate="visible">
+                        <ImageDirectionCard imageDirection={bp.imageDirection} />
+                      </Motion.div>
+                    )}
+
+                    {bp.postingIntel && (
+                      <Motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible">
+                        <PostingIntelCard postingIntel={bp.postingIntel} />
+                      </Motion.div>
+                    )}
+
+                    {bp.proTip && (
+                      <Motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible">
+                        <ProTipCard proTip={bp.proTip} />
+                      </Motion.div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
@@ -1074,96 +982,254 @@ export default function ViralBlueprint() {
   );
 }
 
+/* ─── Section Helper Components ──────────────────────────────── */
+
+function SectionCard({ icon, iconBg, title, action, children }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-6 pb-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center shadow-sm`}>
+            {icon}
+          </div>
+          <h3 className="font-bold text-gray-900">{title}</h3>
+        </div>
+        {action}
+      </div>
+      <div className="px-6 pb-6">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CopyBtn({ label, copiedLabel, active, onClick }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all">
+      {active ? <><Check className="w-3.5 h-3.5 text-green-600" /> {copiedLabel}</> : <><Copy className="w-3.5 h-3.5" /> {label}</>}
+    </button>
+  );
+}
+
+function ReasonCallout({ text }) {
+  return (
+    <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+      <p className="text-sm text-gray-500 italic">💡 {text}</p>
+    </div>
+  );
+}
+
+function InfoRow({ emoji, label, value }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start gap-3 py-2">
+      <span className="text-base flex-shrink-0">{emoji}</span>
+      <div>
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
+        <p className="text-sm text-gray-800 mt-0.5">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function CaptionCard({ bp, copiedSection, handleCopy }) {
+  return (
+    <SectionCard
+      icon={<Sparkles className="w-4 h-4 text-white" />}
+      iconBg="bg-gradient-to-br from-teal-500 to-cyan-500"
+      title="Your Caption"
+      action={<CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'caption'} onClick={() => handleCopy(bp.caption, 'caption')} />}
+    >
+      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+        <p className="whitespace-pre-wrap text-gray-800 leading-relaxed">{bp.caption}</p>
+      </div>
+      {bp.captionReason && <ReasonCallout text={bp.captionReason} />}
+    </SectionCard>
+  );
+}
+
+function HashtagsCard({ hashtags, copiedSection, handleCopy }) {
+  const allTags = [...(hashtags.niche || []), ...(hashtags.mid || []), ...(hashtags.broad || [])];
+
+  const renderRow = (label, tags, prefix) => {
+    if (!tags?.length) return null;
+    return (
+      <div>
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {tags.map((tag, i) => (
+            <button
+              key={i}
+              onClick={() => handleCopy(tag, `${prefix}-${i}`)}
+              className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 hover:border-gray-300 hover:scale-105 transition-all"
+            >
+              {copiedSection === `${prefix}-${i}` ? '✓ Copied' : tag}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <SectionCard
+      icon={<Hash className="w-4 h-4 text-white" />}
+      iconBg="bg-gradient-to-br from-purple-500 to-purple-600"
+      title="Hashtags"
+      action={<CopyBtn label="Copy All" copiedLabel="Copied All!" active={copiedSection === 'all-tags'} onClick={() => handleCopy(allTags.join(' '), 'all-tags')} />}
+    >
+      <div className="space-y-5">
+        {renderRow('Niche', hashtags.niche, 'niche')}
+        {renderRow('Mid-Range', hashtags.mid, 'mid')}
+        {renderRow('Broad', hashtags.broad, 'broad')}
+      </div>
+      {hashtags.reason && (
+        <p className="text-xs text-gray-400 mt-5">{hashtags.reason}</p>
+      )}
+    </SectionCard>
+  );
+}
+
+function ImageDirectionCard({ imageDirection }) {
+  return (
+    <SectionCard
+      icon={<Camera className="w-4 h-4 text-white" />}
+      iconBg="bg-gradient-to-br from-indigo-500 to-blue-500"
+      title="Image Direction"
+    >
+      <div className="space-y-3">
+        <InfoRow emoji="📸" label="Concept" value={imageDirection.concept} />
+        <InfoRow emoji="🎨" label="Style" value={imageDirection.style} />
+        <InfoRow emoji="✍️" label="Text Overlay" value={imageDirection.textOverlay || 'None'} />
+        <InfoRow emoji="⚠️" label="Avoid" value={imageDirection.avoid} />
+      </div>
+      {imageDirection.reason && <ReasonCallout text={imageDirection.reason} />}
+    </SectionCard>
+  );
+}
+
+function PostingIntelCard({ postingIntel }) {
+  return (
+    <SectionCard
+      icon={<Clock className="w-4 h-4 text-white" />}
+      iconBg="bg-gradient-to-br from-green-500 to-emerald-500"
+      title="When to Post"
+    >
+      <div className="space-y-4">
+        <div>
+          <span className="inline-flex items-center px-4 py-2 rounded-full bg-cyan-50 text-cyan-700 text-sm font-bold border border-cyan-200">
+            {postingIntel.bestTime}
+          </span>
+          {postingIntel.reason && (
+            <p className="text-xs text-gray-400 mt-2">{postingIntel.reason}</p>
+          )}
+        </div>
+        {postingIntel.frequency && (
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span>🔁</span>
+            <span className="font-medium">Post frequency:</span>
+            <span>{postingIntel.frequency}</span>
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+function ProTipCard({ proTip }) {
+  return (
+    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-200/60 shadow-sm p-6">
+      <div className="flex items-start gap-3">
+        <span className="text-xl flex-shrink-0">⚡</span>
+        <div>
+          <h3 className="font-bold text-gray-900 mb-2">Pro Tip</h3>
+          <p className="text-gray-700 leading-relaxed">{proTip}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Response Normalization ─────────────────────────────────── */
 
-/**
- * Normalize any n8n response shape into the rendering format:
- * { directorsCut, seoStrategy, audioVibe, viralScore, isVideoContent, blueprintLabel }
- */
-function normalizeN8nResponse(data, fallbackLabel) {
+function normalizeN8nResponse(data) {
   if (!data || typeof data !== 'object') return null;
 
-  // The n8n response wraps blueprint data inside a "blueprint" key
   const inner = (data.blueprint && typeof data.blueprint === 'object')
     ? data.blueprint
     : data;
 
-  // Extract directorsCut — handles both camelCase and snake_case
-  let directorsCut = inner.directorsCut || inner.directors_cut || [];
-  if (!Array.isArray(directorsCut)) {
-    const scenes = directorsCut?.scenes || directorsCut;
-    directorsCut = Array.isArray(scenes) ? scenes : [];
-  }
+  const isVideoContent = Boolean(inner.isVideoContent ?? inner.is_video_content ?? false);
 
-  // Normalize each step
-  directorsCut = directorsCut.map((item, i) => {
-    if (!item || typeof item !== 'object') return null;
-    return {
-      step: Number(item.step || item.sceneNumber || item.scene_number || item.slide_number || item.tweet_number || item.frame_number || i + 1),
-      title: String(item.title || item.headline || item.timestamp || `Step ${i + 1}`).trim(),
-      text: String(item.text || item.content || item.dialogue || item.body_text || item.caption || '').trim(),
-      script: String(item.script || '').trim(),
-      visual: String(item.visual || item.visual_note || item.visual_description || item.media_suggestion || '').trim(),
-      visualSuggestion: String(item.visualSuggestion || item.visual_suggestion || '').trim(),
-    };
-  }).filter(Boolean);
+  const rawScore = inner.performanceScore ?? inner.performance_score ?? inner.viralScore ?? inner.viral_score;
+  const performanceScore = typeof rawScore === 'object'
+    ? (rawScore?.score ?? 0)
+    : (Number(rawScore) || 0);
 
-  // Extract SEO strategy
-  const rawSeo = inner.seoStrategy || inner.seo_strategy || {};
-  const seoStrategy = {
-    visualKeywords: normalizeArray(rawSeo.visualKeywords ?? rawSeo.visual_keywords ?? inner.seo_keywords),
-    spokenHooks: normalizeArray(rawSeo.spokenHooks ?? rawSeo.spoken_hooks ?? inner.hooks),
-    captionKeywords: normalizeArray(rawSeo.captionKeywords ?? rawSeo.caption_keywords ?? inner.suggested_hashtags),
+  const rawBreakdown = inner.scoreBreakdown ?? inner.score_breakdown ?? {};
+  const scoreBreakdown = {
+    hookStrength: Number(rawBreakdown.hookStrength ?? rawBreakdown.hook_strength ?? 0),
+    trendAlignment: Number(rawBreakdown.trendAlignment ?? rawBreakdown.trend_alignment ?? 0),
+    audienceFit: Number(rawBreakdown.audienceFit ?? rawBreakdown.audience_fit ?? 0),
+    platformOptimization: Number(rawBreakdown.platformOptimization ?? rawBreakdown.platform_optimization ?? 0),
   };
 
-  // Extract audio vibe
-  const rawAudio = inner.audioVibe || inner.audio_vibe || null;
-  const audioVibe = rawAudio ? {
-    mood: rawAudio.mood || rawAudio.music_style || '',
-    bpm: rawAudio.bpm || '',
-    suggestion: rawAudio.suggestion || '',
+  const scoreReason = String(inner.scoreReason ?? inner.score_reason ?? '').trim();
+  const caption = String(inner.caption ?? '').trim();
+  const captionReason = String(inner.captionReason ?? inner.caption_reason ?? '').trim();
+
+  const rawHashtags = inner.hashtags ?? null;
+  const hashtags = rawHashtags ? {
+    niche: normalizeArray(rawHashtags.niche),
+    mid: normalizeArray(rawHashtags.mid),
+    broad: normalizeArray(rawHashtags.broad),
+    reason: String(rawHashtags.reason ?? '').trim(),
   } : null;
 
-  // Viral score
-  const rawScore = inner.viralScore ?? inner.viral_score;
-  const viralScore = typeof rawScore === 'object' ? (rawScore?.score ?? 85) : (Number(rawScore) > 0 ? Number(rawScore) : 85);
+  const rawImageDir = inner.imageDirection ?? inner.image_direction ?? null;
+  const imageDirection = rawImageDir ? {
+    concept: String(rawImageDir.concept ?? '').trim(),
+    style: String(rawImageDir.style ?? '').trim(),
+    textOverlay: rawImageDir.textOverlay ?? rawImageDir.text_overlay ?? null,
+    avoid: String(rawImageDir.avoid ?? '').trim(),
+    reason: String(rawImageDir.reason ?? '').trim(),
+  } : null;
 
-  // Video flag
-  const isVideoContent = typeof inner.isVideoContent === 'boolean'
-    ? inner.isVideoContent
-    : typeof data.isVideoContent === 'boolean'
-      ? data.isVideoContent
-      : false;
+  const rawPosting = inner.postingIntel ?? inner.posting_intel ?? null;
+  const postingIntel = rawPosting ? {
+    bestTime: String(rawPosting.bestTime ?? rawPosting.best_time ?? '').trim(),
+    reason: String(rawPosting.reason ?? '').trim(),
+    frequency: String(rawPosting.frequency ?? '').trim(),
+  } : null;
 
-  // Blueprint label
-  const blueprintLabel = data.blueprint_label || data.blueprintLabel || inner.blueprint_label || inner.blueprintLabel || fallbackLabel || '';
+  const proTip = String(inner.proTip ?? inner.pro_tip ?? '').trim();
 
-  // If directorsCut is empty, try to build from simplified format
-  if (directorsCut.length === 0 && (inner.content_script || inner.hooks || inner.suggested_hashtags)) {
-    directorsCut = [{
-      step: 1,
-      title: 'Content Blueprint',
-      text: inner.content_script || '',
-      script: '',
-      visual: inner.visual_direction || '',
-      visualSuggestion: '',
-    }];
-    if (inner.hooks) seoStrategy.spokenHooks = normalizeArray(inner.hooks);
-    if (inner.seo_keywords) seoStrategy.visualKeywords = normalizeArray(inner.seo_keywords);
-    if (inner.suggested_hashtags) seoStrategy.captionKeywords = normalizeArray(inner.suggested_hashtags);
-  }
+  const hook = String(inner.hook ?? '').trim();
+  const hookReason = String(inner.hookReason ?? inner.hook_reason ?? '').trim();
+  const script = String(inner.script ?? '').trim();
 
-  // Also keep raw sections if present (for future new-format n8n responses)
-  const sections = inner.sections || null;
+  const rawAudioVibe = inner.audioVibe ?? inner.audio_vibe ?? null;
+  const audioVibe = rawAudioVibe ? {
+    mood: String(rawAudioVibe.mood ?? '').trim(),
+    bpm: String(rawAudioVibe.bpm ?? '').trim(),
+    tip: String(rawAudioVibe.tip ?? rawAudioVibe.suggestion ?? '').trim(),
+  } : null;
 
   return {
-    directorsCut,
-    seoStrategy,
-    audioVibe,
-    viralScore,
     isVideoContent,
-    blueprintLabel,
-    sections,
+    performanceScore,
+    scoreBreakdown,
+    scoreReason,
+    caption,
+    captionReason,
+    hashtags,
+    imageDirection,
+    postingIntel,
+    proTip,
+    hook,
+    hookReason,
+    script,
+    audioVibe,
   };
 }
 
@@ -1178,7 +1244,7 @@ function normalizeArray(value) {
 async function attemptGrokFallback(platform, contentType, topic, goal, targetAudience, brandProfile) {
   const isVideo = ['Reel', 'Video', 'Short', 'Long-Form'].includes(contentType);
 
-  const prompt = `You are a viral content strategist. Generate a ${contentType} blueprint for ${platform}.
+  const prompt = `You are a content strategist. Generate a ${contentType} content brief for ${platform}.
 
 Topic: ${topic}
 Goal: ${goal}
@@ -1188,19 +1254,43 @@ Brand Voice: ${brandProfile?.brandVoice || 'authentic'}
 Return ONLY valid JSON with this exact structure:
 {
   "isVideoContent": ${isVideo},
-  "viralScore": <number 70-95>,
-  "directorsCut": [
-    { "step": 1, "title": "The Hook", "${isVideo ? 'script' : 'text'}": "<content>", "${isVideo ? 'visual' : 'visualSuggestion'}": "<visual direction>" },
-    { "step": 2, "title": "The Setup", "${isVideo ? 'script' : 'text'}": "<content>", "${isVideo ? 'visual' : 'visualSuggestion'}": "<visual direction>" },
-    { "step": 3, "title": "The Value", "${isVideo ? 'script' : 'text'}": "<content>", "${isVideo ? 'visual' : 'visualSuggestion'}": "<visual direction>" },
-    { "step": 4, "title": "The CTA", "${isVideo ? 'script' : 'text'}": "<content>", "${isVideo ? 'visual' : 'visualSuggestion'}": "<visual direction>" }
-  ],
-  "seoStrategy": {
-    "visualKeywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-    "spokenHooks": ["hook1", "hook2", "hook3"],
-    "captionKeywords": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+  "performanceScore": <number 70-95>,
+  "scoreBreakdown": {
+    "hookStrength": <0-25>,
+    "trendAlignment": <0-25>,
+    "audienceFit": <0-25>,
+    "platformOptimization": <0-25>
   },
-  "audioVibe": ${isVideo ? '{ "mood": "<music mood>", "bpm": "<bpm range>", "suggestion": "<audio tip>" }' : 'null'}
+  "scoreReason": "<brief explanation of the score>",
+  ${isVideo ? `"hook": "<compelling opening hook line>",
+  "hookReason": "<why this hook works>",
+  "script": "<full script with ... pause markers>",` : ''}
+  "caption": "<full caption with emojis and line breaks>",
+  "captionReason": "<why this caption works>",
+  ${!isVideo ? `"hashtags": {
+    "niche": ["#tag1", "#tag2", "#tag3"],
+    "mid": ["#tag1", "#tag2", "#tag3"],
+    "broad": ["#tag1", "#tag2", "#tag3"],
+    "reason": "<hashtag strategy>"
+  },` : ''}
+  ${isVideo ? `"audioVibe": {
+    "mood": "<music mood>",
+    "bpm": "<bpm range>",
+    "tip": "<audio direction tip>"
+  },` : ''}
+  "imageDirection": {
+    "concept": "<visual concept>",
+    "style": "<visual style>",
+    "textOverlay": "<text overlay or null>",
+    "avoid": "<what to avoid visually>",
+    "reason": "<visual strategy>"
+  },
+  "postingIntel": {
+    "bestTime": "<best posting time>",
+    "reason": "<timing rationale>",
+    "frequency": "<posting frequency>"
+  },
+  "proTip": "<actionable pro tip>"
 }
 
 Make content specific, actionable, and optimized for ${platform} ${contentType}. Output ONLY raw JSON.`;
@@ -1218,7 +1308,7 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
       model: 'grok-3-fast',
       temperature: 0.7,
       messages: [
-        { role: 'system', content: 'You are a viral content strategist. Return only valid JSON.' },
+        { role: 'system', content: 'You are a content strategist. Return only valid JSON.' },
         { role: 'user', content: prompt }
       ]
     }),
@@ -1233,7 +1323,7 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return normalizeN8nResponse(parsed, getBlueprintLabel(platform, contentType));
+    return normalizeN8nResponse(parsed);
   } catch {
     return null;
   }
