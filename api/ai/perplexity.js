@@ -415,6 +415,45 @@ export default async function handler(req, res) {
     const requestedCache = req.body?.cache;
     const requireRealtime = Boolean(req.body?.requireRealtime);
 
+    // Authenticate user before any upstream proxying (including fallbacks)
+    let userId = null;
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader && supabase) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (!error && user) {
+        userId = user.id;
+      }
+    }
+
+    // SECURITY: Require authentication for AI API access
+    // This prevents unauthorized usage of expensive AI API credits
+    if (!userId) {
+      return res.status(401).json({ 
+        error: 'Authentication required to use AI features. Please log in.' 
+      });
+    }
+
+    // Apply rate limiting before any provider call, including fallback paths
+    const rateLimit = await checkPersistentRateLimit({
+      userKey: userId,
+      route: 'perplexity',
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowSeconds: RATE_LIMIT_WINDOW / 1000,
+    });
+    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
+    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
+    
+    if (!rateLimit.allowed) {
+      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded. Please wait before making more requests.',
+        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
+      });
+    }
+
     // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
     if (!PERPLEXITY_API_KEY) {
       if (requestedCache?.key || requireRealtime) {
@@ -441,45 +480,6 @@ export default async function handler(req, res) {
       }
       const grokData = await grokRes.json();
       return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
-    }
-
-    // Authenticate user
-    let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (!error && user) {
-        userId = user.id;
-      }
-    }
-
-    // SECURITY: Require authentication for AI API access
-    // This prevents unauthorized usage of expensive AI API credits
-    if (!userId) {
-      return res.status(401).json({ 
-        error: 'Authentication required to use AI features. Please log in.' 
-      });
-    }
-
-    // Check rate limit
-    const rateLimit = await checkPersistentRateLimit({
-      userKey: userId,
-      route: 'perplexity',
-      maxRequests: RATE_LIMIT_MAX_REQUESTS,
-      windowSeconds: RATE_LIMIT_WINDOW / 1000,
-    });
-    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
-    
-    if (!rateLimit.allowed) {
-      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
-      return res.status(429).json({ 
-        error: 'Rate limit exceeded. Please wait before making more requests.',
-        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
-      });
     }
 
     // Extract request parameters
