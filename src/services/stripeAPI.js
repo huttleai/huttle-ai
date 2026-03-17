@@ -284,14 +284,47 @@ export async function createPortalSession() {
 export async function getSubscriptionStatus() {
   try {
     const headers = await getAuthHeaders();
+    if (!headers.Authorization) {
+      return {
+        success: false,
+        unauthorized: true,
+        shouldRetry: false,
+        statusCode: 401,
+        subscription: null,
+        plan: null,
+        status: 'inactive',
+        currentPeriodEnd: null,
+        trialEnd: null,
+        cancelAtPeriodEnd: false,
+      };
+    }
+
     const response = await fetch('/api/subscription-status', {
       method: 'GET',
       headers,
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        return {
+          success: false,
+          unauthorized: true,
+          shouldRetry: false,
+          statusCode: 401,
+          subscription: null,
+          plan: null,
+          status: 'inactive',
+          currentPeriodEnd: null,
+          trialEnd: null,
+          cancelAtPeriodEnd: false,
+        };
+      }
+
       return {
-        success: true,
+        success: false,
+        unauthorized: false,
+        shouldRetry: response.status >= 500 || response.status === 408 || response.status === 429,
+        statusCode: response.status,
         subscription: null,
         plan: null,
         status: 'inactive',
@@ -305,6 +338,9 @@ export async function getSubscriptionStatus() {
     
     return {
       success: true,
+      unauthorized: false,
+      shouldRetry: false,
+      statusCode: response.status,
       subscription: data.subscription,
       plan: data.plan,
       status: data.status,
@@ -315,7 +351,10 @@ export async function getSubscriptionStatus() {
   } catch (error) {
     console.error('Subscription Status Error:', error);
     return {
-      success: true,
+      success: false,
+      unauthorized: false,
+      shouldRetry: true,
+      statusCode: 0,
       subscription: null,
       plan: null,
       status: 'inactive',

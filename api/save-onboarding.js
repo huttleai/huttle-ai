@@ -7,6 +7,22 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
+function normalizeProfileType(profileType, creatorType) {
+  const normalizedProfileType = String(profileType || '').trim().toLowerCase();
+  const normalizedCreatorType = String(creatorType || '').trim().toLowerCase();
+
+  if (
+    normalizedProfileType === 'business'
+    || normalizedProfileType === 'brand'
+    || normalizedProfileType === 'brand_business'
+    || normalizedCreatorType === 'brand_business'
+  ) {
+    return 'business';
+  }
+
+  return 'creator';
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
@@ -56,11 +72,12 @@ export default async function handler(req, res) {
     } = req.body || {};
 
     const nowIso = new Date().toISOString();
+    const normalizedProfileType = normalizeProfileType(profileType, creatorType);
 
     const profilePayload = {
       user_id: user.id,
       first_name: firstName || null,
-      profile_type: profileType || 'creator',
+      profile_type: normalizedProfileType,
       brand_name: brandName || null,
       niche: niche || null,
       target_audience: targetAudience || null,

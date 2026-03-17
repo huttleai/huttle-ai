@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, supabase, TABLES, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
@@ -8,6 +8,9 @@ export const SubscriptionContext = createContext();
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
 const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const MAX_SUBSCRIPTION_ATTEMPTS = 3;
+const SUBSCRIPTION_RETRY_DELAY_MS = 5000;
+const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
 
 async function getDatabaseSubscription(userId) {
   const { data, error } = await supabase
@@ -48,6 +51,7 @@ function normalizeTier(plan) {
 export function SubscriptionProvider({ children }) {
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
+  const authLoading = authContext?.loading ?? true;
   
   // Check for dev mode (same pattern as AuthContext)
   // SECURITY: Only allow via explicit environment variable in development
@@ -62,9 +66,31 @@ export function SubscriptionProvider({ children }) {
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
+  const isRefreshingRef = useRef(false);
   
   // Get actual user ID from AuthContext
   const userId = user?.id || null;
+
+  const applyFreeTierDefaults = useCallback(() => {
+    setSubscription(null);
+    setSubscriptionStatus('inactive');
+    setUserTier(null);
+  }, []);
+
+  const clearSubscriptionTimers = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
+    if (pollingIntervalRef.current) {
+      window.clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
 
   // Function to change tier in demo mode
   const setDemoTier = useCallback((newTier) => {
@@ -97,8 +123,9 @@ export function SubscriptionProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [skipAuth]);
 
-  const refreshSubscription = useCallback(async () => {
+  const refreshSubscription = useCallback(async ({ preserveRetryState = false } = {}) => {
     if (skipAuth) {
+      retryCountRef.current = 0;
       setUserTier(localStorage.getItem(DEMO_TIER_KEY) || TIERS.PRO);
       setSubscription(null);
       setSubscriptionStatus('active');
@@ -106,20 +133,64 @@ export function SubscriptionProvider({ children }) {
       return;
     }
 
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     if (!userId) {
-      setUserTier(null);
-      setSubscription(null);
-      setSubscriptionStatus('inactive');
+      retryCountRef.current = 0;
+      clearSubscriptionTimers();
+      applyFreeTierDefaults();
       setLoading(false);
       return;
     }
 
+    if (isRefreshingRef.current) return;
+
+    if (!preserveRetryState && retryTimeoutRef.current) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
+    isRefreshingRef.current = true;
     setLoading(true);
+
+    const SUBSCRIPTION_TIMEOUT_MS = 10000;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      console.warn('⚠️ [Subscription] Load timed out after 10s — defaulting to free tier.');
+      applyFreeTierDefaults();
+      setLoading(false);
+    }, SUBSCRIPTION_TIMEOUT_MS);
+
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        retryCountRef.current = 0;
+        clearSubscriptionTimers();
+        applyFreeTierDefaults();
+        return;
+      }
+
       const [databaseResult, stripeResult] = await Promise.all([
         getDatabaseSubscription(userId),
         getSubscriptionStatus(),
       ]);
+
+      clearTimeout(timeoutId);
+      if (timedOut) return;
+
+      if (stripeResult?.unauthorized || stripeResult?.statusCode === 401) {
+        retryCountRef.current = 0;
+        clearSubscriptionTimers();
+        applyFreeTierDefaults();
+        return;
+      }
 
       if (!databaseResult.success) {
         console.error('Error loading subscription from database:', databaseResult.error);
@@ -157,15 +228,43 @@ export function SubscriptionProvider({ children }) {
       setSubscription(nextSubscription);
       setSubscriptionStatus(nextStatus);
       setUserTier(nextTier);
+
+      if (stripeResult?.shouldRetry && retryCountRef.current < MAX_SUBSCRIPTION_ATTEMPTS - 1) {
+        retryCountRef.current += 1;
+        retryTimeoutRef.current = window.setTimeout(() => {
+          retryTimeoutRef.current = null;
+          void refreshSubscription({ preserveRetryState: true });
+        }, SUBSCRIPTION_RETRY_DELAY_MS);
+      } else if (stripeResult?.shouldRetry) {
+        clearSubscriptionTimers();
+        retryCountRef.current = 0;
+      } else {
+        retryCountRef.current = 0;
+      }
     } catch (error) {
+      clearTimeout(timeoutId);
+      if (timedOut) return;
+
       console.error('Error loading subscription:', error);
-      setSubscription(null);
-      setSubscriptionStatus('inactive');
-      setUserTier(null);
+      applyFreeTierDefaults();
+
+      if (retryCountRef.current < MAX_SUBSCRIPTION_ATTEMPTS - 1) {
+        retryCountRef.current += 1;
+        retryTimeoutRef.current = window.setTimeout(() => {
+          retryTimeoutRef.current = null;
+          void refreshSubscription({ preserveRetryState: true });
+        }, SUBSCRIPTION_RETRY_DELAY_MS);
+      } else {
+        clearSubscriptionTimers();
+        retryCountRef.current = 0;
+      }
     } finally {
-      setLoading(false);
+      isRefreshingRef.current = false;
+      if (!timedOut) {
+        setLoading(false);
+      }
     }
-  }, [skipAuth, userId]);
+  }, [applyFreeTierDefaults, authLoading, clearSubscriptionTimers, skipAuth, userId]);
 
   const refreshStorageUsage = useCallback(async () => {
     if (skipAuth) {
@@ -186,8 +285,43 @@ export function SubscriptionProvider({ children }) {
   }, [skipAuth, storageUsage, userId]);
 
   useEffect(() => {
-    refreshSubscription();
-  }, [refreshSubscription]);
+    if (skipAuth) {
+      void refreshSubscription();
+
+      return () => {
+        clearSubscriptionTimers();
+      };
+    }
+
+    if (authLoading) {
+      setLoading(true);
+      clearSubscriptionTimers();
+
+      return () => {
+        clearSubscriptionTimers();
+      };
+    }
+
+    if (!userId) {
+      retryCountRef.current = 0;
+      clearSubscriptionTimers();
+      applyFreeTierDefaults();
+      setLoading(false);
+
+      return () => {
+        clearSubscriptionTimers();
+      };
+    }
+
+    void refreshSubscription();
+    pollingIntervalRef.current = window.setInterval(() => {
+      void refreshSubscription();
+    }, SUBSCRIPTION_POLL_INTERVAL_MS);
+
+    return () => {
+      clearSubscriptionTimers();
+    };
+  }, [applyFreeTierDefaults, authLoading, clearSubscriptionTimers, refreshSubscription, skipAuth, userId]);
 
   useEffect(() => {
     if (userId) {

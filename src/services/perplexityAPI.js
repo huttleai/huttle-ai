@@ -615,7 +615,12 @@ export async function getAudienceInsights(brandData, demographics = null, platfo
     const brandContext = buildBrandContext(brandData);
     const promptProfile = getPromptBrandProfile(brandData);
     const selectedPlatform = platform || promptProfile.platforms?.[0] || 'instagram';
-    const userType = promptProfile.creator_type || (brandData?.profileType === 'brand' ? 'brand_business' : 'solo_creator');
+    const userType = promptProfile.creator_type
+      || (
+        brandData?.profileType === 'brand' || brandData?.profileType === 'business'
+          ? 'brand_business'
+          : 'solo_creator'
+      );
     const cacheKey = buildCacheKey([niche, selectedPlatform, userType, 'audience_insights']);
 
     const data = await callGrokAPI([

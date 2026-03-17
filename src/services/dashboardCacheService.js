@@ -131,7 +131,7 @@ function getBrandVoiceCreatorType(brandVoice = {}) {
 
   const profileType = normalizeTextValue(brandVoice?.profileType || brandVoice?.profile_type).toLowerCase();
   if (profileType === 'creator') return 'solo_creator';
-  if (profileType === 'brand') return 'brand_business';
+  if (profileType === 'brand' || profileType === 'business') return 'brand_business';
   return null;
 }
 

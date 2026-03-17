@@ -51,8 +51,8 @@ export function AuthProvider({ children }) {
   const checkUserProfile = useCallback(async (userId) => {
     const hasCachedOnboardingCompletion = readCachedOnboardingCompletion(userId);
 
-    // Create a timeout promise to prevent hanging queries
-    const QUERY_TIMEOUT_MS = 15000; // 15 seconds
+    // Reduced timeout — AuthContext only needs a lightweight check, not the full profile
+    const QUERY_TIMEOUT_MS = 8000;
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error(`Profile query timed out after ${QUERY_TIMEOUT_MS / 1000} seconds. This may indicate the user_profile table doesn't exist or RLS policies are misconfigured.`));
@@ -60,12 +60,12 @@ export function AuthProvider({ children }) {
     });
 
     try {
-      // Race between the actual query and the timeout
+      // Only select the columns AuthContext actually needs — avoids pulling all 30+ columns
       const queryPromise = supabase
         .from('user_profile')
-        .select('*')
+        .select('user_id, has_completed_onboarding, profile_type, first_name')
         .eq('user_id', userId)
-        .maybeSingle(); // Use maybeSingle() instead of single() for new users
+        .maybeSingle();
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
@@ -129,14 +129,27 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      console.error('❌ [Auth] Error in checkUserProfile:', error);
+      const isTimeout = error.message?.includes('timed out');
+      console.error(`❌ [Auth] Error in checkUserProfile (${isTimeout ? 'timeout' : 'exception'}):`, error.message);
+
+      if (isTimeout) {
+        // Timeout likely means Supabase cold start, not a missing profile.
+        // Let the user through with a degraded experience instead of blocking.
+        console.warn('⚠️ [Auth] Treating timeout as temporary — allowing access with free defaults.');
+        setUserProfile(null);
+        setNeedsOnboarding(false);
+        setProfileChecked(true);
+        profileCheckedRef.current = true;
+        currentUserIdRef.current = userId;
+        return;
+      }
+
       console.error('❌ [Auth] This may indicate:');
       console.error('   1. The user_profile table does not exist in Supabase');
       console.error('   2. RLS policies are blocking the query');
       console.error('   3. Network connectivity issues');
       console.error('❌ [Auth] Please run the SQL scripts in docs/setup/ in your Supabase SQL Editor');
 
-      // On error, force onboarding to be safe
       setUserProfile(null);
       setNeedsOnboarding(true);
       setProfileChecked(true);

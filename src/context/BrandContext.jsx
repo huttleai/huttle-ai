@@ -5,6 +5,10 @@ import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/f
 
 export const BrandContext = createContext();
 
+function isBusinessProfileType(profileType) {
+  return !profileType || profileType === 'brand' || profileType === 'business';
+}
+
 export function useBrand() {
   const context = useContext(BrandContext);
   if (!context) {
@@ -18,7 +22,7 @@ export function useBrand() {
     loading: context.loading,
     // Convenience helpers for profile type
     isCreator: context.brandData?.profileType === 'creator',
-    isBrand: context.brandData?.profileType === 'brand' || !context.brandData?.profileType,
+    isBrand: isBusinessProfileType(context.brandData?.profileType),
   };
 }
 
@@ -101,9 +105,6 @@ export function BrandProvider({ children }) {
       }
 
       try {
-        // Load from Supabase user_profile table
-        // Use maybeSingle() instead of single() for new users who might not have a profile yet
-        // Add timeout protection to prevent hanging queries
         const QUERY_TIMEOUT_MS = 8000;
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Brand data query timed out')), QUERY_TIMEOUT_MS);
@@ -115,17 +116,30 @@ export function BrandProvider({ children }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        const [{ data, error }, preferencesResult] = await Promise.all([
+        // Run preferences independently — never let it block or fail the main load
+        const safePreferencesPromise = getUserPreferences(user.id).catch((e) => {
+          console.warn('[Brand] Preferences fetch failed (non-blocking):', e.message);
+          return { success: false, data: null };
+        });
+
+        const [profileResult, preferencesResult] = await Promise.allSettled([
           Promise.race([queryPromise, timeoutPromise]),
-          getUserPreferences(user.id),
+          safePreferencesPromise,
         ]);
 
+        // Extract profile data — if the query itself failed, throw to trigger retry
+        if (profileResult.status === 'rejected') {
+          throw profileResult.reason;
+        }
+
+        const { data, error } = profileResult.value;
         if (error) {
           throw error;
         }
 
-        const userPreferences = preferencesResult?.success && preferencesResult.data
-          ? preferencesResult.data
+        const userPreferences = preferencesResult.status === 'fulfilled'
+            && preferencesResult.value?.success && preferencesResult.value.data
+          ? preferencesResult.value.data
           : {};
 
         if (data) {
@@ -188,18 +202,27 @@ export function BrandProvider({ children }) {
           // Also sync to localStorage as backup
           localStorage.setItem('brandData', JSON.stringify(mappedData));
         } else {
-          // No profile found, try localStorage
+          // No profile row exists — create a minimal default row so future queries succeed
+          console.info('[Brand] No profile row found, inserting default for user:', user.id);
+          const { error: insertError } = await supabase
+            .from('user_profile')
+            .upsert({ user_id: user.id, profile_type: 'brand' }, { onConflict: 'user_id' });
+
+          if (insertError) {
+            console.warn('[Brand] Default row insert failed (non-critical):', insertError.message);
+          }
+
           applyLocalBrandFallback();
         }
       } catch (error) {
         if (retryCount === 0) {
           shouldRetry = true;
-          console.warn('[Brand] First load failed, retrying in 3s...');
+          console.warn('[Brand] First load failed, retrying in 1s...');
           retryTimeoutId = setTimeout(() => {
             if (isActive) {
               fetchBrandData(1);
             }
-          }, 3000);
+          }, 1000);
           return;
         }
 

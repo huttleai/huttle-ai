@@ -66,7 +66,9 @@ function resolveCreatorPromptType(promptProfile, brandData = null) {
     return explicitCreatorType;
   }
 
-  return brandData?.profileType === 'brand' ? 'brand_business' : 'solo_creator';
+  return brandData?.profileType === 'brand' || brandData?.profileType === 'business'
+    ? 'brand_business'
+    : 'solo_creator';
 }
 
 function getCreatorPromptGuidance(promptProfile, brandData = null) {

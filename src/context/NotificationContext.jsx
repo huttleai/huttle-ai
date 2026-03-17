@@ -1,33 +1,63 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
+import { AuthContext } from './AuthContext';
 
 const NotificationContext = createContext();
+
+function getNotificationStorageKey(userId) {
+  return userId ? `huttleNotifications:${userId}` : null;
+}
+
+function getDismissalStorageKey(userId) {
+  return userId ? `huttleDismissed:${userId}` : null;
+}
 
 export function useNotifications() {
   return useContext(NotificationContext);
 }
 
 export function NotificationProvider({ children }) {
+  const authContext = useContext(AuthContext);
+  const currentUserId = authContext?.user?.id || null;
+  const prevUserIdRef = useRef(currentUserId);
+
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
 
-  // Load notifications from localStorage on mount
+  // Clear stale data and reload when user changes (sign-out, different account)
   useEffect(() => {
-    const parsed = safeReadJson(localStorage, 'huttleNotifications', []);
-    if (Array.isArray(parsed)) {
-      setNotifications(parsed);
-      setUnreadCount(parsed.filter(n => !n.read).length);
-    }
-  }, []);
+    const prevId = prevUserIdRef.current;
+    prevUserIdRef.current = currentUserId;
 
-  // Save notifications to localStorage
+    if (prevId !== currentUserId) {
+      // User changed — wipe in-memory state immediately
+      setNotifications([]);
+      setUnreadCount(0);
+      setShowNotificationPanel(false);
+    }
+
+    // Load user-scoped notifications (or nothing if logged out)
+    const storageKey = getNotificationStorageKey(currentUserId);
+    if (storageKey) {
+      const parsed = safeReadJson(localStorage, storageKey, []);
+      if (Array.isArray(parsed)) {
+        setNotifications(parsed);
+        setUnreadCount(parsed.filter(n => !n.read).length);
+      }
+    }
+  }, [currentUserId]);
+
+  // Persist notifications to user-scoped localStorage
   useEffect(() => {
-    safeWriteJson(localStorage, 'huttleNotifications', notifications, { maxBytes: 1_500_000 });
+    const storageKey = getNotificationStorageKey(currentUserId);
+    if (storageKey) {
+      safeWriteJson(localStorage, storageKey, notifications, { maxBytes: 1_500_000 });
+    }
     setUnreadCount(notifications.filter(n => !n.read).length);
-  }, [notifications]);
+  }, [notifications, currentUserId]);
 
   /**
    * Add a notification
@@ -40,11 +70,11 @@ export function NotificationProvider({ children }) {
     );
     if (isDuplicate) return null;
 
-    // Check permanent dismissal registry
     const dismissKey = notification.dismissKey || notification.title;
-    if (dismissKey) {
+    const dismissStorageKey = getDismissalStorageKey(currentUserId);
+    if (dismissKey && dismissStorageKey) {
       try {
-        const dismissed = new Set(JSON.parse(localStorage.getItem('huttleDismissed') || '[]'));
+        const dismissed = new Set(JSON.parse(localStorage.getItem(dismissStorageKey) || '[]'));
         if (dismissed.has(dismissKey)) return null;
       } catch { /* ignore */ }
     }
@@ -228,11 +258,12 @@ export function NotificationProvider({ children }) {
   const removeNotification = (id) => {
     setNotifications(prev => {
       const target = prev.find(n => n.id === id);
-      if (target?.dismissKey) {
+      const dismissStorageKey = getDismissalStorageKey(currentUserId);
+      if (target?.dismissKey && dismissStorageKey) {
         try {
-          const dismissed = new Set(JSON.parse(localStorage.getItem('huttleDismissed') || '[]'));
+          const dismissed = new Set(JSON.parse(localStorage.getItem(dismissStorageKey) || '[]'));
           dismissed.add(target.dismissKey);
-          localStorage.setItem('huttleDismissed', JSON.stringify([...dismissed]));
+          localStorage.setItem(dismissStorageKey, JSON.stringify([...dismissed]));
         } catch { /* ignore */ }
       }
       return prev.filter(n => n.id !== id);

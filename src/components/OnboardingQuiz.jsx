@@ -130,7 +130,7 @@ function countWords(value) {
 }
 
 function getProfileType(creatorType) {
-  return creatorType === 'brand_business' ? 'brand' : 'creator';
+  return creatorType === 'brand_business' ? 'business' : 'creator';
 }
 
 function getFirstNameFromUser(user) {
