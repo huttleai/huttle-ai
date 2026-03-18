@@ -1,148 +1,400 @@
-import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+// Huttle AI — Privacy Policy | Last updated: March 17, 2026
+
+import React from 'react';
+import LegalPageLayout, { LegalCallout } from '../components/legal/LegalPageLayout';
+
+const listClassName = 'list-disc space-y-2 pl-5';
+const headingClassName = 'text-lg font-semibold text-slate-900';
+
+const sections = [
+  {
+    id: 'information-we-collect',
+    title: 'Information We Collect',
+    content: (
+      <>
+        <div>
+          <h3 className={headingClassName}>1.1 Information You Provide</h3>
+          <ul className={`${listClassName} mt-3`}>
+            <li>
+              Account registration information such as email address, first name, and password. Your
+              password is hashed by Supabase Auth, and we do not receive your raw password.
+            </li>
+            <li>
+              Profile data such as display name, profile picture, niche or industry, target audience,
+              and brand voice preferences.
+            </li>
+            <li>
+              Content inputs that you enter into AI tools, including captions, topics, hooks, prompts,
+              brand details, and similar creative instructions used to generate outputs.
+            </li>
+            <li>
+              Billing-related records. Payment information is processed by Stripe, and Huttle AI stores
+              only Stripe customer references and subscription status, not raw card data.
+            </li>
+            <li>Communications you send to support@huttleai.com or through support channels.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 className={headingClassName}>1.2 Information Collected Automatically</h3>
+          <ul className={`${listClassName} mt-3`}>
+            <li>Usage data such as features used, generation counts, tool interactions, and session duration</li>
+            <li>Technical data such as IP address, browser type, device type, operating system, and referring URL</li>
+            <li>
+              Cookies and local storage items such as session tokens, preference settings, and tour
+              completion status
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h3 className={headingClassName}>1.3 Information from Third Parties</h3>
+          <ul className={`${listClassName} mt-3`}>
+            <li>Stripe subscription status and billing history, excluding raw card data</li>
+            <li>Supabase Auth OAuth login data if social sign-in is enabled in the future</li>
+            <li>n8n workflow trigger events associated with your user ID</li>
+          </ul>
+        </div>
+      </>
+    ),
+  },
+  {
+    id: 'how-we-use-your-information',
+    title: 'How We Use Your Information',
+    content: (
+      <>
+        <p>We use your information to:</p>
+        <ul className={listClassName}>
+          <li>Provide, maintain, support, and improve the Huttle AI service</li>
+          <li>Authenticate your identity and administer your account</li>
+          <li>Process payments and manage subscriptions through Stripe</li>
+          <li>
+            Generate AI outputs in response to your prompts using third-party AI providers including
+            xAI Grok, Perplexity AI, and Anthropic Claude
+          </li>
+          <li>Send transactional emails such as welcome messages, receipts, and subscription notices via Mailchimp</li>
+          <li>Send product updates and feature announcements, subject to your marketing preferences</li>
+          <li>Enforce our Terms of Service and Acceptable Use Policy</li>
+          <li>Analyze aggregate product usage trends to improve the service</li>
+          <li>Comply with legal obligations, resolve disputes, and prevent misuse</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'how-your-inputs-are-processed-by-ai',
+    title: 'How Your Inputs Are Processed by AI',
+    content: (
+      <>
+        <p>
+          Content you submit into Huttle AI tools, including captions, topics, niche details, and brand
+          voice inputs, may be sent to third-party AI APIs in order to generate outputs.
+        </p>
+        <ul className={listClassName}>
+          <li>
+            xAI (Grok): inputs are processed pursuant to xAI&apos;s privacy practices at{' '}
+            <a href="https://x.ai/privacy" className="text-huttle-primary hover:underline">
+              x.ai/privacy
+            </a>
+          </li>
+          <li>
+            Perplexity AI: inputs are processed pursuant to Perplexity&apos;s privacy practices at{' '}
+            <a href="https://www.perplexity.ai/privacy" className="text-huttle-primary hover:underline">
+              perplexity.ai/privacy
+            </a>
+          </li>
+          <li>
+            Anthropic (Claude): inputs are processed pursuant to Anthropic&apos;s privacy practices at{' '}
+            <a href="https://www.anthropic.com/privacy" className="text-huttle-primary hover:underline">
+              anthropic.com/privacy
+            </a>
+          </li>
+        </ul>
+        <p>Huttle AI does not use your content inputs to train AI models.</p>
+        <LegalCallout tone="yellow" title="Sensitive Information Warning">
+          <p>
+            We strongly recommend that you do not enter personally identifiable information, financial
+            account details, health information, or other sensitive personal data into AI generation
+            tools unless strictly necessary and legally permitted.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'how-we-share-your-information',
+    title: 'How We Share Your Information',
+    content: (
+      <>
+        <p>We do not sell your personal data. We share data only with the following categories of recipients:</p>
+        <ul className={listClassName}>
+          <li>
+            Stripe for payment processing (
+            <a href="https://stripe.com/privacy" className="text-huttle-primary hover:underline">
+              stripe.com/privacy
+            </a>
+            )
+          </li>
+          <li>
+            Supabase for database hosting and authentication (
+            <a href="https://supabase.com/privacy" className="text-huttle-primary hover:underline">
+              supabase.com/privacy
+            </a>
+            )
+          </li>
+          <li>
+            Vercel for hosting and serverless infrastructure (
+            <a
+              href="https://vercel.com/legal/privacy-policy"
+              className="text-huttle-primary hover:underline"
+            >
+              vercel.com/legal/privacy-policy
+            </a>
+            )
+          </li>
+          <li>
+            xAI for AI generation of prompts without sharing your account login credentials (
+            <a href="https://x.ai/privacy" className="text-huttle-primary hover:underline">
+              x.ai/privacy
+            </a>
+            )
+          </li>
+          <li>
+            Perplexity AI for AI and search query processing (
+            <a href="https://www.perplexity.ai/privacy" className="text-huttle-primary hover:underline">
+              perplexity.ai/privacy
+            </a>
+            )
+          </li>
+          <li>
+            Anthropic for AI generation (
+            <a href="https://www.anthropic.com/privacy" className="text-huttle-primary hover:underline">
+              anthropic.com/privacy
+            </a>
+            )
+          </li>
+          <li>
+            Mailchimp for email communications (
+            <a
+              href="https://mailchimp.com/legal/privacy/"
+              className="text-huttle-primary hover:underline"
+            >
+              mailchimp.com/legal/privacy
+            </a>
+            )
+          </li>
+          <li>
+            n8n for workflow automation (
+            <a href="https://n8n.io/legal/privacy" className="text-huttle-primary hover:underline">
+              n8n.io/legal/privacy
+            </a>
+            )
+          </li>
+          <li>Law enforcement, regulators, or government authorities when required by law</li>
+          <li>
+            Successor entities in connection with a merger, acquisition, financing, or sale of assets,
+            in which case we will provide notice where legally required
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'data-retention',
+    title: 'Data Retention',
+    content: (
+      <>
+        <ul className={listClassName}>
+          <li>Account data is retained while your account is active and for up to 90 days after a deletion request</li>
+          <li>Content Vault data is deleted within 30 days of account termination</li>
+          <li>
+            AI generation inputs are not stored by Huttle AI beyond the current session, while third-party
+            AI providers may apply their own retention policies
+          </li>
+          <li>Billing records are retained for seven years for tax and legal compliance, primarily through Stripe</li>
+          <li>Support emails are retained for up to three years</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'cookies-and-tracking',
+    title: 'Cookies and Tracking',
+    content: (
+      <>
+        <ul className={listClassName}>
+          <li>Session cookies are required for authentication and cannot be opted out of while using the service</li>
+          <li>Local storage is used for preference settings, tour status, and other UI state that does not require sensitive personal data</li>
+          <li>
+            Huttle AI currently relies on aggregate Supabase query logs rather than third-party analytics
+            SDKs such as Google Analytics, Mixpanel, or ad-tracking pixels
+          </li>
+          <li>We do not serve advertising and do not use tracking pixels for ad targeting</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'your-rights',
+    title: 'Your Rights',
+    content: (
+      <>
+        <p>Depending on your location, you may have the right to:</p>
+        <ul className={listClassName}>
+          <li>Access the personal data we hold about you</li>
+          <li>Correct inaccurate or incomplete personal data</li>
+          <li>Delete your account and associated personal data</li>
+          <li>Request portability of your data in a machine-readable format</li>
+          <li>Object to certain processing activities</li>
+          <li>Opt out of marketing emails using the unsubscribe link or by contacting support@huttleai.com</li>
+        </ul>
+        <p>
+          To exercise these rights, email{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>{' '}
+          with the subject line &quot;Privacy Request — [Right Name]&quot; and include your account email
+          address. We will respond within 30 days.
+        </p>
+        <p>
+          For your protection, we may request reasonable information to verify your identity and
+          authority before fulfilling a privacy request, and we may limit or deny requests where an
+          applicable legal exception applies.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'gdpr-european-users',
+    title: 'GDPR (European Users)',
+    content: (
+      <>
+        <ul className={listClassName}>
+          <li>Our legal bases for processing include contract performance, legitimate interests, and legal obligations</li>
+          <li>Data controller: Huttle AI, Atlanta, GA, USA</li>
+          <li>
+            Cross-border transfers may occur to the United States and other countries where our service
+            providers operate; by using the service, you acknowledge and consent to those transfers where
+            permitted
+          </li>
+          <li>You may lodge a complaint with your local supervisory authority if you believe your rights have been violated</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'ccpa-california-users',
+    title: 'CCPA (California Users)',
+    content: (
+      <>
+        <ul className={listClassName}>
+          <li>We do not sell personal information as defined by the CCPA</li>
+          <li>California residents may request to know what personal information we collect and request deletion of eligible data</li>
+          <li>
+            Authorized agent requests may be submitted to support@huttleai.com with the subject line
+            &quot;CCPA Request&quot;
+          </li>
+          <li>We will not discriminate against you for exercising applicable privacy rights</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'childrens-privacy',
+    title: "Children's Privacy",
+    content: (
+      <>
+        <p>Huttle AI is not directed to children under 13 years of age.</p>
+        <p>
+          We do not knowingly collect personal information from children under 13. If we learn that we
+          have collected such information, we will delete it as promptly as reasonably possible.
+        </p>
+        <p>
+          If you believe a child under 13 has provided us with information, contact{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>{' '}
+          immediately.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'security',
+    title: 'Security',
+    content: (
+      <>
+        <ul className={listClassName}>
+          <li>Data is stored in Supabase with row-level security controls designed to restrict access to authorized users</li>
+          <li>Passwords are hashed by Supabase Auth using industry-standard mechanisms, and we do not see raw passwords</li>
+          <li>API keys are stored in Vercel environment variables and are not intentionally exposed client-side</li>
+          <li>Payment data is handled exclusively by Stripe under its PCI DSS-compliant environment</li>
+          <li>We use HTTPS and TLS to protect data in transit</li>
+          <li>Access to production systems and third-party service providers is limited to operational needs and managed through technical and administrative controls</li>
+        </ul>
+        <p>
+          Despite these safeguards, no internet or cloud-based system can be guaranteed to be 100%
+          secure, and we cannot guarantee absolute security.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'changes-to-this-policy',
+    title: 'Changes to This Policy',
+    content: (
+      <>
+        <p>We may update this Privacy Policy from time to time.</p>
+        <p>
+          If we make material changes, we will provide notice by email or similar communication at
+          least 14 days before those changes take effect, unless a shorter notice period is required by
+          law, security needs, or urgent operational circumstances.
+        </p>
+        <p>
+          Continued use of the service after the effective date of an updated Privacy Policy constitutes
+          acceptance of the revised Policy.
+        </p>
+        <p>The &quot;Last updated&quot; date at the top of this page reflects the most recent revision.</p>
+      </>
+    ),
+  },
+  {
+    id: 'contact-us',
+    title: 'Contact Us',
+    content: (
+      <>
+        <p>
+          Privacy questions may be directed to{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>
+          .
+        </p>
+        <p>Use the subject line: &quot;Privacy Inquiry&quot;.</p>
+        <p>Huttle AI, Atlanta, GA, United States.</p>
+      </>
+    ),
+  },
+];
 
 export default function PrivacyPolicy() {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-huttle-primary mb-8 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Huttle AI
-        </Link>
-
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-slate-500 italic mb-10">Last updated: February 2026</p>
-
-        <div className="prose prose-slate max-w-none">
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">1. Introduction</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Huttle AI ("we," "our," or "us") respects your privacy and is committed to protecting your personal data. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website and use our services.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">2. Information We Collect</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">We collect information you provide directly to us, including:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
-              <li><span className="font-semibold">Account Information:</span> Name, email address, and password when you create an account</li>
-              <li><span className="font-semibold">Payment Information:</span> When you make a purchase, our payment processor (Stripe) collects your payment card details. We do not store your full card information on our servers</li>
-              <li><span className="font-semibold">Brand Profile Data:</span> Business niche, target audience, brand voice preferences, and social media platform selections you provide during onboarding</li>
-              <li><span className="font-semibold">Usage Data:</span> Information about how you interact with our services, including features used, content generated, and preferences set</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">3. How We Use Your Information</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">We use the information we collect to:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li>Provide, maintain, and improve our services</li>
-              <li>Personalize AI-generated content based on your brand profile</li>
-              <li>Process transactions and send related information</li>
-              <li>Send you technical notices, updates, and support messages</li>
-              <li>Send marketing communications (you can opt out at any time)</li>
-              <li>Monitor and analyze trends, usage, and activities</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">4. AI Data Processing</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">
-              Huttle AI uses third-party AI services to power content generation and analysis features. When you use AI-powered features:
-            </p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
-              <li><span className="font-semibold">xAI (Grok):</span> Used for content generation, caption writing, and trend analysis. Your prompts and brand context are sent to xAI's API for processing.</li>
-              <li><span className="font-semibold">Perplexity:</span> Used for real-time trend research and social media update analysis. Query data is sent to Perplexity's API.</li>
-              <li>We do not use your content to train AI models. Your data is processed solely to generate responses for your requests.</li>
-              <li>AI-generated content is stored in your account for your convenience and is not shared with other users.</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">5. Third-Party Services</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">We use the following third-party services to operate Huttle AI:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
-              <li><span className="font-semibold">Supabase:</span> Database hosting, authentication, and file storage. Your data is stored securely in Supabase's cloud infrastructure.</li>
-              <li><span className="font-semibold">Stripe:</span> Payment processing. Stripe handles all payment card data directly; we never see or store your full card number.</li>
-              <li><span className="font-semibold">Vercel:</span> Application hosting and serverless functions.</li>
-              <li><span className="font-semibold">Mailchimp:</span> Email communications for waitlist and product updates.</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">6. Information Sharing</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">We do not sell, trade, or rent your personal information to third parties. We may share your information with:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
-              <li><span className="font-semibold">Service Providers:</span> Third-party vendors who assist us in operating our services (as listed above)</li>
-              <li><span className="font-semibold">Legal Requirements:</span> When required by law or to protect our rights</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">7. Data Retention</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We retain your personal data for as long as your account is active or as needed to provide you services. If you delete your account, we will delete your personal data within 30 days, except where we are required to retain it for legal or regulatory purposes.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">8. Data Security</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction. All data is encrypted in transit (TLS) and at rest.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">9. Your Rights</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">You have the right to:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li>Access the personal data we hold about you</li>
-              <li>Request correction of inaccurate data</li>
-              <li>Request deletion of your data</li>
-              <li>Opt out of marketing communications</li>
-              <li>Export your data</li>
-            </ul>
-            <p className="text-sm text-slate-600 leading-relaxed mt-3">To exercise these rights, contact us at <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">support@huttleai.com</a>.</p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">10. Cookies</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We use essential cookies to ensure our website functions properly. These include authentication session cookies managed by Supabase. We do not use third-party advertising cookies.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">11. Children's Privacy</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Huttle AI is not intended for use by anyone under the age of 16. We do not knowingly collect personal information from children. If you believe a child has provided us with personal data, please contact us and we will delete it promptly.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">12. Changes to This Policy</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last updated" date.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-bold text-slate-900 mb-3">13. Contact Us</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              If you have any questions about this Privacy Policy, please contact us at{' '}
-              <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">support@huttleai.com</a>
-            </p>
-          </section>
-        </div>
-
-        <div className="mt-12 pt-8 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
-          <span>&copy; 2026 Huttle AI</span>
-          <div className="flex items-center gap-4">
-            <Link to="/terms" className="hover:text-huttle-primary transition-colors">Terms of Service</Link>
-            <Link to="/refund-policy" className="hover:text-huttle-primary transition-colors">Refund Policy</Link>
-          </div>
-        </div>
-      </div>
-    </div>
+    <LegalPageLayout
+      title="Privacy Policy"
+      lastUpdated="March 17, 2026"
+      effectiveDate="March 17, 2026"
+      intro='Huttle AI ("we", "us", and "our") is committed to protecting your privacy. This Privacy Policy explains what information we collect, how we use it, when we share it, and the rights and choices available to you.'
+      sections={sections}
+    >
+      <LegalCallout title="Privacy At A Glance">
+        <p>
+          We do not sell personal data, we rely on core service providers like Supabase, Stripe, and
+          Vercel to operate the platform, and AI prompts may be processed by third-party model
+          providers to deliver Huttle AI features.
+        </p>
+        <p>
+          If our service providers, analytics approach, or product workflows change over time, we may
+          update this Privacy Policy to reflect those changes before or when they take effect.
+        </p>
+      </LegalCallout>
+    </LegalPageLayout>
   );
 }

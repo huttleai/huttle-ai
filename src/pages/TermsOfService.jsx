@@ -1,149 +1,516 @@
+// Huttle AI — Terms of Service | Last updated: March 17, 2026
+
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import LegalPageLayout, { LegalCallout } from '../components/legal/LegalPageLayout';
+
+const listClassName = 'list-disc space-y-2 pl-5';
+const headingClassName = 'text-lg font-semibold text-slate-900';
+
+const sections = [
+  {
+    id: 'acceptance-of-terms',
+    title: 'Acceptance of Terms',
+    content: (
+      <>
+        <p>
+          By accessing or using Huttle AI, including `huttleai.com`, any related subdomains, and the
+          Huttle AI platform, you agree to be bound by these Terms of Service and any policies
+          incorporated by reference.
+        </p>
+        <p>
+          If you do not agree to these Terms, you must not access or use the service.
+        </p>
+        <p>
+          You represent that you are at least 18 years old, or the age of majority in your
+          jurisdiction, and legally capable of entering into a binding agreement.
+        </p>
+        <p>
+          If you use Huttle AI on behalf of a company, agency, or other business entity, you represent
+          that you have authority to bind that entity, and that entity also accepts these Terms.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'description-of-service',
+    title: 'Description of Service',
+    content: (
+      <>
+        <p>
+          Huttle AI is an AI-powered content creation platform designed for solopreneurs, creators,
+          and small businesses. It provides creative planning, ideation, research, and drafting tools
+          intended to assist users with social media and marketing workflows.
+        </p>
+        <div>
+          <h3 className={headingClassName}>Core platform features include:</h3>
+          <ul className={`${listClassName} mt-3`}>
+            <li>Caption Generator</li>
+            <li>Hashtag Generator</li>
+            <li>Hook Builder</li>
+            <li>CTA Suggester</li>
+            <li>Content Quality Scorer</li>
+            <li>Trend Lab</li>
+            <li>AI Plan Builder</li>
+            <li>Ignite Engine</li>
+            <li>Content Remix Studio</li>
+            <li>Brand Voice</li>
+            <li>Content Vault</li>
+            <li>Visual Brainstormer</li>
+            <li>Niche Intel</li>
+            <li>Full Post Builder</li>
+          </ul>
+        </div>
+        <p>
+          Certain outputs are generated using third-party artificial intelligence models and providers,
+          including xAI Grok, Perplexity AI, and Anthropic Claude. Those outputs are automated and are
+          provided on an as-is basis.
+        </p>
+        <LegalCallout title="AI Output Disclaimer">
+          <p>
+            Huttle AI does not warrant that AI-generated content will be accurate, complete, current,
+            non-infringing, or suitable for any particular purpose, campaign, audience, or platform.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'subscription-plans-and-billing',
+    title: 'Subscription Plans and Billing',
+    content: (
+      <>
+        <p>Huttle AI currently offers the following subscription plans:</p>
+        <ul className={listClassName}>
+          <li>Essentials: $15/month or $150/year</li>
+          <li>Pro: $39/month or $350/year</li>
+          <li>Founders Club: $199/year</li>
+          <li>Builders Club: $249/year</li>
+        </ul>
+        <p>
+          Unless otherwise stated, subscriptions are billed in advance on a recurring monthly or annual
+          basis. The seven-day free trial carries no charge during the trial period, but your
+          subscription will begin automatically when the trial ends unless you cancel before expiration.
+        </p>
+        <p>
+          Monthly plans may be cancelled at any time, and access will continue through the end of the
+          then-current billing period. Annual plans are non-refundable after 30 days from the purchase
+          date, subject to the refund terms below.
+        </p>
+        <p>
+          Huttle AI may change pricing upon at least 30 days&apos; written notice to existing
+          subscribers. Payments are processed by Stripe, and Huttle AI does not store raw credit card
+          data.
+        </p>
+        <p>
+          Failed or declined payments may result in suspension or restriction of service until payment
+          issues are resolved.
+        </p>
+        <LegalCallout title="Grandfathered Pricing">
+          <p>
+            Founders Club and Builders Club pricing is grandfathered for existing members, which means
+            the price paid by those active subscribers will not increase while their qualifying
+            subscription remains in good standing.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'free-trial',
+    title: 'Free Trial',
+    content: (
+      <>
+        <p>
+          Huttle AI may offer a seven-day free trial to eligible new users only. A valid payment method
+          is required to start the trial.
+        </p>
+        <p>
+          Trial eligibility is determined by Huttle AI in its sole discretion, and we may limit,
+          revoke, modify, or discontinue trial offers at any time without notice.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'refund-policy',
+    title: 'Refund Policy',
+    content: (
+      <>
+        <p>
+          Monthly subscriptions are not refundable for partial months or unused time. Cancelling a
+          monthly plan stops future billing only.
+        </p>
+        <p>
+          Annual subscription refund requests submitted within 30 days of purchase will be reviewed on
+          a case-by-case basis. No refunds will be issued after 30 days from the purchase date.
+        </p>
+        <p>
+          Founders Club and Builders Club annual plans are eligible for refund requests only within 14
+          days of purchase.
+        </p>
+        <p>
+          To request a refund, email{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>{' '}
+          with your account email address and the reason for your request. Additional details are
+          available in our{' '}
+          <Link to="/refund-policy" className="text-huttle-primary hover:underline">
+            Refund Policy
+          </Link>
+          .
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'acceptable-use-policy',
+    title: 'Acceptable Use Policy',
+    content: (
+      <>
+        <p>You may not use Huttle AI to:</p>
+        <ul className={listClassName}>
+          <li>Generate spam, misleading content, or deceptive marketing material</li>
+          <li>Violate any applicable law, rule, or regulation</li>
+          <li>Infringe the intellectual property or other rights of any third party</li>
+          <li>Generate defamatory, harassing, threatening, abusive, or unlawful content</li>
+          <li>Reverse-engineer, scrape, extract, or otherwise mine the platform or its data</li>
+          <li>Share account credentials or resell access to the service</li>
+          <li>Use the service to train competing AI models or competing products</li>
+          <li>Circumvent rate limits, usage limits, paywalls, or access controls</li>
+          <li>
+            Generate content that violates the policies of Instagram, TikTok, X/Twitter, YouTube,
+            LinkedIn, Facebook, or Pinterest
+          </li>
+        </ul>
+        <p>
+          Huttle AI reserves the right to investigate violations and suspend or terminate accounts that
+          breach this policy, with or without notice and without refund where permitted by law.
+        </p>
+        <p>
+          You may not access or use the service if you are located in, organized in, or ordinarily
+          resident in a country or territory subject to comprehensive trade sanctions, or if you are a
+          person or entity with whom U.S. persons are prohibited from doing business under applicable
+          export control or sanctions laws.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'ai-generated-content-disclaimer',
+    title: 'AI-Generated Content Disclaimer',
+    content: (
+      <>
+        <p>
+          AI outputs made available through Huttle AI, including captions, hashtags, hooks, plans,
+          blueprints, trend data, and related materials, are generated by third-party AI systems and
+          may contain inaccuracies, inconsistencies, hallucinations, outdated information, or language
+          that requires human review.
+        </p>
+        <p>
+          Huttle AI does not guarantee any marketing outcome, engagement rate, follower growth,
+          conversion result, traffic increase, or business result from the use of AI-generated outputs.
+        </p>
+        <p>
+          You are solely responsible for reviewing, editing, fact-checking, and approving any output
+          before publishing it to social media, email, websites, advertisements, or any other channel.
+        </p>
+        <p>
+          Huttle AI will not be liable for consequences arising from your publication or use of
+          AI-generated content without independent human review.
+        </p>
+        <p>
+          Trend data and insights may be informed by real-time web queries or third-party sources but
+          may not reflect current conditions at the time of use.
+        </p>
+        <LegalCallout tone="yellow" title="Human Review Required">
+          <p>
+            You should review all factual claims, trademark references, platform policy compliance,
+            disclosures, and regulatory requirements before using or publishing any output.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'intellectual-property',
+    title: 'Intellectual Property',
+    content: (
+      <>
+        <p>
+          The Huttle AI platform, including its software, codebase, branding, interface design,
+          workflows, compilations, and proprietary features, is owned by Huttle AI and protected by
+          copyright, trademark, and other applicable laws.
+        </p>
+        <p>
+          Subject to these Terms and the applicable rights of the underlying AI providers, you own the
+          outputs generated for you from your inputs. Ownership and usage of outputs may also be
+          affected by the terms of xAI, Perplexity AI, Anthropic, and any other model provider used in
+          the generation workflow.
+        </p>
+        <p>
+          You grant Huttle AI a non-exclusive, limited license to process your inputs, prompts, and
+          related materials solely for the purpose of operating, maintaining, and delivering the
+          service.
+        </p>
+        <p>
+          You may not claim ownership of the Huttle AI platform itself, its user interface, or any
+          proprietary system architecture, methodologies, or features.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'data-and-privacy',
+    title: 'Data and Privacy',
+    content: (
+      <>
+        <p>
+          Your use of Huttle AI is also governed by our{' '}
+          <Link to="/privacy" className="text-huttle-primary hover:underline">
+            Privacy Policy
+          </Link>
+          , which describes how we collect, use, process, and protect personal information.
+        </p>
+        <p>
+          By using the service, you consent to the data practices described in the Privacy Policy.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'third-party-services',
+    title: 'Third-Party Services',
+    content: (
+      <>
+        <p>
+          Huttle AI integrates with or relies upon third-party services, including Stripe for payments,
+          Supabase for database and authentication services, xAI Grok for AI generation, Perplexity AI
+          for AI and search, Anthropic Claude for AI generation, Mailchimp for email delivery, n8n for
+          automation, and Vercel for hosting and infrastructure.
+        </p>
+        <p>
+          Your use of those services may also be subject to their own terms, policies, and operational
+          practices. Huttle AI is not responsible for the availability, actions, accuracy, security, or
+          conduct of third-party providers.
+        </p>
+        <p>
+          Instagram, TikTok, X/Twitter, YouTube, LinkedIn, Facebook, and Pinterest are not affiliated
+          with, endorsed by, or sponsored by Huttle AI.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'limitation-of-liability',
+    title: 'Limitation of Liability',
+    content: (
+      <>
+        <LegalCallout tone="yellow" title="Liability Cap">
+          <p>
+            TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, HUTTLE AI SHALL NOT BE LIABLE FOR ANY
+            INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING
+            DAMAGES FOR LOSS OF PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS INTERRUPTION.
+          </p>
+          <p>
+            HUTTLE AI&apos;S TOTAL LIABILITY FOR ANY CLAIM ARISING OUT OF OR RELATING TO THE SERVICE OR
+            THESE TERMS SHALL NOT EXCEED THE AMOUNT PAID BY YOU TO HUTTLE AI IN THE THREE MONTHS
+            PRECEDING THE EVENT GIVING RISE TO THE CLAIM.
+          </p>
+          <p>
+            SOME JURISDICTIONS DO NOT ALLOW CERTAIN LIMITATIONS OF LIABILITY. IN THOSE JURISDICTIONS,
+            LIABILITY WILL BE LIMITED TO THE MAXIMUM EXTENT PERMITTED BY LAW.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'disclaimer-of-warranties',
+    title: 'Disclaimer of Warranties',
+    content: (
+      <>
+        <LegalCallout tone="yellow" title="No Warranties">
+          <p>
+            THE SERVICE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; WITHOUT WARRANTIES OF ANY KIND,
+            WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE.
+          </p>
+          <p>
+            HUTTLE AI DOES NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, TIMELY,
+            SECURE, OR FREE OF HARMFUL COMPONENTS.
+          </p>
+          <p>
+            HUTTLE AI DOES NOT WARRANT ANY SPECIFIC MARKETING, CREATOR, OR BUSINESS OUTCOMES FROM USE
+            OF THE SERVICE OR ANY OUTPUT GENERATED THROUGH IT.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'indemnification',
+    title: 'Indemnification',
+    content: (
+      <>
+        <p>
+          You agree to defend, indemnify, and hold harmless Huttle AI and its owners, officers,
+          employees, contractors, affiliates, successors, and agents from and against any claims,
+          liabilities, damages, judgments, losses, costs, and expenses, including reasonable attorneys&apos;
+          fees, arising out of or related to:
+        </p>
+        <ul className={listClassName}>
+          <li>Your use of the service</li>
+          <li>Your violation of these Terms</li>
+          <li>Content you generate, modify, publish, distribute, or rely upon using the platform</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'account-termination',
+    title: 'Account Termination',
+    content: (
+      <>
+        <p>
+          You may cancel your account at any time through the billing portal, where available, or by
+          contacting{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>
+          .
+        </p>
+        <p>
+          Huttle AI may suspend or terminate your account for violations of these Terms, fraud, abuse,
+          chargebacks, misuse of the platform, or non-payment.
+        </p>
+        <p>
+          Upon termination, your right to access the service ceases immediately. Content stored in your
+          Content Vault will be deleted within 30 days following account termination, unless a longer
+          retention period is required by law or operational necessity.
+        </p>
+        <p>
+          Founders Club members who violate these Terms are not entitled to a refund of their annual
+          fee.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'changes-to-terms',
+    title: 'Changes to Terms',
+    content: (
+      <>
+        <p>Huttle AI may update these Terms from time to time.</p>
+        <p>
+          If we make material changes, we will provide notice by email, in-app notice, or other
+          reasonable means at least 14 days before the changes take effect, unless a shorter period is
+          required by law, security needs, or urgent operational circumstances.
+        </p>
+        <p>
+          Your continued use of the service after the effective date of updated Terms constitutes your
+          acceptance of those updated Terms.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'governing-law-and-disputes',
+    title: 'Governing Law and Disputes',
+    content: (
+      <>
+        <p>
+          These Terms are governed by the laws of the State of Georgia, United States, without regard
+          to conflict of laws principles.
+        </p>
+        <p>
+          Any dispute, claim, or controversy arising out of or relating to these Terms or the service
+          shall be resolved by binding arbitration administered by the American Arbitration Association
+          under its applicable rules.
+        </p>
+        <p>
+          Notwithstanding the foregoing, either party may seek injunctive or equitable relief in a
+          court of competent jurisdiction in Georgia to protect confidential information, intellectual
+          property, or other rights pending arbitration.
+        </p>
+        <p>
+          To the fullest extent permitted by law, you waive any right to participate in a class action,
+          collective action, or representative proceeding against Huttle AI.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'general-provisions',
+    title: 'General Provisions',
+    content: (
+      <>
+        <p>
+          These Terms, together with any policies or notices expressly incorporated by reference,
+          constitute the entire agreement between you and Huttle AI regarding the service and supersede
+          prior or contemporaneous understandings on that subject matter.
+        </p>
+        <p>
+          If any provision of these Terms is found unenforceable, the remaining provisions will remain
+          in full force and effect. A failure by Huttle AI to enforce any provision of these Terms will
+          not operate as a waiver of that provision or any other provision.
+        </p>
+        <p>
+          You may not assign or transfer these Terms, or any rights or obligations under them, without
+          Huttle AI&apos;s prior written consent. Huttle AI may assign these Terms in connection with a
+          merger, acquisition, corporate reorganization, or sale of assets.
+        </p>
+        <p>
+          Huttle AI will not be responsible for delays or failures in performance caused by events
+          beyond its reasonable control, including outages, infrastructure failures, labor disputes,
+          natural disasters, governmental actions, internet disruptions, or third-party service
+          interruptions.
+        </p>
+        <p>
+          Any provisions of these Terms that by their nature should survive termination, including
+          intellectual property, payment obligations, disclaimers, indemnities, limitations of
+          liability, dispute resolution, and general provisions, will survive termination.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'contact-information',
+    title: 'Contact Information',
+    content: (
+      <>
+        <p>
+          Legal and general inquiries may be sent to{' '}
+          <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+            support@huttleai.com
+          </a>
+          .
+        </p>
+        <p>Mailing address: Huttle AI, Atlanta, GA, United States.</p>
+        <p>
+          For legal notices, please send written correspondence to the email above with
+          &quot;Legal Notice&quot; in the subject line.
+        </p>
+      </>
+    ),
+  },
+];
 
 export default function TermsOfService() {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-huttle-primary mb-8 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Huttle AI
-        </Link>
-
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Terms of Service</h1>
-        <p className="text-sm text-slate-500 italic mb-10">Last updated: February 2026</p>
-
-        <div className="prose prose-slate max-w-none">
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">1. Acceptance of Terms</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              By accessing or using Huttle AI ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">2. Description of Service</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Huttle AI is an AI-powered content creation platform that helps users plan, create, and optimize social media content. Features include content generation, viral predictions, trend analysis, and scheduling tools.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">3. Account Registration</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">To use certain features, you must create an account. You agree to:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li>Provide accurate and complete information</li>
-              <li>Maintain the security of your account credentials</li>
-              <li>Accept responsibility for all activities under your account</li>
-              <li>Notify us immediately of any unauthorized use</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">4. Subscription and Payments</h2>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li><span className="font-semibold">Founding Member Pricing:</span> $199/year, locked in forever for founding members</li>
-              <li><span className="font-semibold">Regular Pricing:</span> As displayed on our pricing page after the founding member period ends</li>
-              <li>Payments are processed securely through Stripe</li>
-              <li>All fees are non-refundable except as described in our Refund Policy below</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">5. Refund Policy</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Founders Club and Builders Club include a 14-day money-back guarantee. Future Essentials and Pro plans follow the pricing shown on our pricing page after the launch window closes. See our{' '}
-              <Link to="/refund-policy" className="text-huttle-primary hover:underline">
-                Refund Policy
-              </Link>{' '}
-              for full details, or contact <a href="mailto:hello@huttleai.com" className="text-huttle-primary hover:underline">hello@huttleai.com</a>.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">6. Acceptable Use</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">You agree NOT to use the Service to:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li>Violate any laws or regulations</li>
-              <li>Generate content that is illegal, harmful, threatening, abusive, defamatory, or otherwise objectionable</li>
-              <li>Infringe on intellectual property rights of others</li>
-              <li>Attempt to gain unauthorized access to our systems</li>
-              <li>Use the Service to spam or send unsolicited messages</li>
-              <li>Resell or redistribute the Service without permission</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">7. Intellectual Property</h2>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-2 ml-4">
-              <li><span className="font-semibold">Our Content:</span> The Service, including its design, features, and content created by us, is owned by Huttle AI and protected by intellectual property laws</li>
-              <li><span className="font-semibold">Your Content:</span> You retain ownership of content you create using the Service. By using the Service, you grant us a license to process your content solely to provide the Service to you</li>
-              <li><span className="font-semibold">AI-Generated Content:</span> Content generated by our AI tools is yours to use. However, you are responsible for ensuring your use of generated content complies with applicable laws</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">8. AI-Generated Content Disclaimer</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Huttle AI uses third-party AI services (including xAI Grok, Anthropic Claude, and Perplexity) to generate content suggestions, trend analyses, and creative outputs. AI-generated content may not always be accurate, original, or appropriate for your specific use case. You are solely responsible for reviewing, editing, and publishing any AI-generated content. Huttle AI does not guarantee the accuracy, completeness, or suitability of AI-generated outputs.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">9. Disclaimer of Warranties</h2>
-            <p className="text-sm text-slate-600 leading-relaxed mb-3">The Service is provided "as is" and "as available" without warranties of any kind. We do not guarantee that:</p>
-            <ul className="text-sm text-slate-600 leading-relaxed space-y-1 ml-4 list-disc">
-              <li>The Service will be uninterrupted or error-free</li>
-              <li>AI-generated content will be accurate, complete, or suitable for any purpose</li>
-              <li>Viral predictions or trend analysis will guarantee specific results</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">10. Limitation of Liability</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              To the maximum extent permitted by law, Huttle AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">11. Termination</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We may suspend or terminate your account at any time for violation of these Terms. You may cancel your account at any time by contacting us.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">12. Changes to Terms</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              We may modify these Terms at any time. We will notify users of significant changes via email or through the Service. Continued use after changes constitutes acceptance of the new Terms.
-            </p>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">13. Governing Law</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              These Terms shall be governed by the laws of the State of Delaware, United States, without regard to its conflict of law provisions.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-bold text-slate-900 mb-3">14. Contact Us</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              If you have any questions about these Terms, please contact us at{' '}
-              <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">support@huttleai.com</a>
-            </p>
-          </section>
-        </div>
-
-        <div className="mt-12 pt-8 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
-          <span>&copy; 2026 Huttle AI</span>
-          <div className="flex items-center gap-4">
-            <Link to="/privacy" className="hover:text-huttle-primary transition-colors">Privacy Policy</Link>
-            <Link to="/refund-policy" className="hover:text-huttle-primary transition-colors">Refund Policy</Link>
-          </div>
-        </div>
-      </div>
-    </div>
+    <LegalPageLayout
+      title="Terms of Service"
+      lastUpdated="March 17, 2026"
+      effectiveDate="March 17, 2026"
+      intro="These Terms govern your access to and use of huttleai.com and the Huttle AI platform, including any services, content generation features, billing functionality, and related experiences offered by Huttle AI."
+      sections={sections}
+    >
+      <LegalCallout title="Please Review Carefully">
+        <p>
+          These Terms contain important provisions on billing, arbitration, acceptable use, AI content
+          risks, warranty disclaimers, and limits of liability.
+        </p>
+      </LegalCallout>
+    </LegalPageLayout>
   );
 }
