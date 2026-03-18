@@ -20,7 +20,7 @@
  * - AI Plan Builder
  * - Trend Discovery: Deep Dive
  * - Trend Forecaster
- * - Viral Blueprint
+ * - Ignite Engine // HUTTLE AI: updated 3
  * - Social Updates
  * 
  * IN-CODE AI FEATURES (grokAPI.js / perplexityAPI.js):

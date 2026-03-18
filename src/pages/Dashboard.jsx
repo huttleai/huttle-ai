@@ -1,7 +1,8 @@
-import { useContext, useState, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useContext, useState, useEffect, useMemo, useRef } from 'react'; // HUTTLE AI: cache fix
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useBrand } from '../context/BrandContext';
+import { useDashboardCache } from '../context/DashboardContext'; // HUTTLE AI: cache fix
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   TrendingUp,
@@ -35,12 +36,15 @@ import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
 import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getPlatformIcon } from '../components/SocialIcons';
-import { supabase } from '../config/supabase';
 import { getContentLibraryItems } from '../config/supabase';
 import {
   generateDashboardData,
+  getDashboardCache, // HUTTLE AI: cache fix
+  deleteDashboardCache, // HUTTLE AI: cache fix
+  getDashboardGeneratedDate, // HUTTLE AI: cache fix
   trackDashboardGenerationUsage,
 } from '../services/dashboardCacheService';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -96,7 +100,8 @@ const QUICK_CREATE_TOOLS = [
 ];
 
 export default function Dashboard() {
-  const { user, loading: authLoading } = useContext(AuthContext);
+  const { user, userProfile, loading: authLoading } = useContext(AuthContext); // HUTTLE AI: updated 2
+  const { getDashboardSnapshot, loadSessionDashboardSnapshot, setDashboardSnapshot, clearDashboardSnapshot } = useDashboardCache(); // HUTTLE AI: cache fix
   const navigate = useNavigate();
   const { brandProfile } = useBrand();
   const { showToast } = useToast();
@@ -123,8 +128,9 @@ export default function Dashboard() {
   const [selectedHashtagPlatform, setSelectedHashtagPlatform] = useState('All');
   const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
-  const dashboardLoadedRef = useRef(false);
-  const brandProfileRef = useRef(brandProfile);
+  const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
+  const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
+  const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
 
   const copyHashtag = async (hashtag) => {
     try {
@@ -149,58 +155,114 @@ export default function Dashboard() {
     }
   };
 
-  const refreshHashtags = async () => {
-    if (!user?.id || isHashtagsRefreshing) return;
-    setIsHashtagsRefreshing(true);
-    try {
-      const result = await generateDashboardData(user.id, brandProfile, { forceRefreshHashtags: true });
-      if (result.success) {
-        setDashboardData(result.data);
-        if (result.shouldTrackUsage) {
-          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
-        }
-        showToast('Hashtags refreshed!', 'success');
-      } else {
-        showToast('Could not refresh hashtags. Try again.', 'error');
-      }
-    } catch (err) {
-      console.error('[Dashboard] Failed to refresh hashtags:', err);
-      showToast('Could not refresh hashtags. Try again.', 'error');
-    } finally {
-      setIsHashtagsRefreshing(false);
-    }
-  };
+  const applyDashboardPayload = useCallback((nextDashboardData, generatedDate) => { // HUTTLE AI: cache fix
+    if (!user?.id || !nextDashboardData) return; // HUTTLE AI: cache fix
+    setDashboardData(nextDashboardData); // HUTTLE AI: cache fix
+    setDashboardAlerts(Array.isArray(nextDashboardData.daily_alerts) ? nextDashboardData.daily_alerts : []); // HUTTLE AI: cache fix
+    setDashboardError(''); // HUTTLE AI: cache fix
+    setDashboardSnapshot(user.id, { generatedDate, data: nextDashboardData }); // HUTTLE AI: cache fix
+  }, [setDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
-  const retryTrending = async () => {
-    if (!user?.id || isDashboardLoading) return;
-    setIsDashboardLoading(true);
-    setDashboardError('');
-    try {
-      const result = await generateDashboardData(user.id, brandProfile, { forceRefreshTrending: true });
-      if (result.success) {
-        setDashboardData(result.data);
-        if (result.shouldTrackUsage) {
-          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
-        }
-        showToast('Refreshing trends...', 'info');
-      } else {
-        setDashboardError('Unable to load your daily briefing right now. Please try again.');
-      }
-    } catch (error) {
-      console.error('[Dashboard] Failed to refresh trends:', error);
-      setDashboardError('Unable to load your daily briefing right now. Please try again.');
-    } finally {
-      setIsDashboardLoading(false);
-    }
-  };
+  const loadDashboardData = useCallback(async ({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
+    if (!user?.id) return { success: false }; // HUTTLE AI: cache fix
 
-  const [timeGreeting, setTimeGreeting] = useState('');
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setTimeGreeting('Good morning');
-    else if (hour < 17) setTimeGreeting('Good afternoon');
-    else setTimeGreeting('Good evening');
-  }, []);
+    const generatedDate = getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+    const requestId = activeDashboardRequestRef.current + 1; // HUTTLE AI: cache fix
+    activeDashboardRequestRef.current = requestId; // HUTTLE AI: cache fix
+
+    if (forceRefresh) { // HUTTLE AI: cache fix
+      clearDashboardSnapshot(user.id); // HUTTLE AI: cache fix
+      const deleteResult = await deleteDashboardCache(user.id); // HUTTLE AI: cache fix
+      if (!deleteResult.success) { // HUTTLE AI: cache fix
+        console.warn('[Dashboard] Could not clear daily dashboard cache before refresh:', deleteResult.errorMessage); // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+    } else { // HUTTLE AI: cache fix
+      const memorySnapshot = getDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
+      if (memorySnapshot?.data) { // HUTTLE AI: cache fix
+        applyDashboardPayload(memorySnapshot.data, generatedDate); // HUTTLE AI: cache fix
+        hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
+        setIsDashboardLoading(false); // HUTTLE AI: cache fix
+        setIsAlertsLoading(false); // HUTTLE AI: cache fix
+        return { success: true, cacheHit: true, data: memorySnapshot.data }; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+
+      const sessionSnapshot = loadSessionDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
+      if (sessionSnapshot?.data) { // HUTTLE AI: cache fix
+        applyDashboardPayload(sessionSnapshot.data, generatedDate); // HUTTLE AI: cache fix
+        hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
+        setIsDashboardLoading(false); // HUTTLE AI: cache fix
+        setIsAlertsLoading(false); // HUTTLE AI: cache fix
+        return { success: true, cacheHit: true, data: sessionSnapshot.data }; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+
+      const cachedResult = await getDashboardCache(user.id, brandProfileRef.current, { generatedDate }); // HUTTLE AI: cache fix
+      if (activeDashboardRequestRef.current !== requestId) return { success: false, cancelled: true }; // HUTTLE AI: cache fix
+      if (cachedResult.success && cachedResult.cacheHit && cachedResult.data) { // HUTTLE AI: cache fix
+        applyDashboardPayload(cachedResult.data, cachedResult.generatedDate || generatedDate); // HUTTLE AI: cache fix
+        hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
+        setIsDashboardLoading(false); // HUTTLE AI: cache fix
+        setIsAlertsLoading(false); // HUTTLE AI: cache fix
+        return cachedResult; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+
+      if (!cachedResult.success && cachedResult.errorType === 'auth_error') { // HUTTLE AI: cache fix
+        setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+        return cachedResult; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+
+    setDashboardError(''); // HUTTLE AI: cache fix
+    setIsDashboardLoading(true); // HUTTLE AI: cache fix
+    setIsAlertsLoading(true); // HUTTLE AI: cache fix
+
+    try { // HUTTLE AI: cache fix
+      const result = await generateDashboardData(user.id, brandProfileRef.current, { forceRefresh, generatedDate, skipCacheLookup: true }); // HUTTLE AI: cache fix
+      if (activeDashboardRequestRef.current !== requestId) return { success: false, cancelled: true }; // HUTTLE AI: cache fix
+      if (result.success && result.data) { // HUTTLE AI: cache fix
+        applyDashboardPayload(result.data, result.generatedDate || generatedDate); // HUTTLE AI: cache fix
+        hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
+        if (result.shouldTrackUsage) { // HUTTLE AI: cache fix
+          await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation'); // HUTTLE AI: cache fix
+        } // HUTTLE AI: cache fix
+        return result; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+
+      setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+      return result; // HUTTLE AI: cache fix
+    } catch (error) { // HUTTLE AI: cache fix
+      console.error('[Dashboard] Failed to load daily dashboard:', error); // HUTTLE AI: cache fix
+      setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+      return { success: false, error }; // HUTTLE AI: cache fix
+    } finally { // HUTTLE AI: cache fix
+      if (activeDashboardRequestRef.current === requestId) { // HUTTLE AI: cache fix
+        setIsDashboardLoading(false); // HUTTLE AI: cache fix
+        setIsAlertsLoading(false); // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+  }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
+
+  const refreshHashtags = async () => { // HUTTLE AI: cache fix
+    if (!user?.id || isHashtagsRefreshing) return; // HUTTLE AI: cache fix
+    setIsHashtagsRefreshing(true); // HUTTLE AI: cache fix
+    try { // HUTTLE AI: cache fix
+      const result = await loadDashboardData({ forceRefresh: true }); // HUTTLE AI: cache fix
+      if (result?.success) { // HUTTLE AI: cache fix
+        showToast('Dashboard refreshed!', 'success'); // HUTTLE AI: cache fix
+      } else { // HUTTLE AI: cache fix
+        showToast('Could not refresh your dashboard. Try again.', 'error'); // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+    } catch (err) { // HUTTLE AI: cache fix
+      console.error('[Dashboard] Failed to refresh dashboard:', err); // HUTTLE AI: cache fix
+      showToast('Could not refresh your dashboard. Try again.', 'error'); // HUTTLE AI: cache fix
+    } finally { // HUTTLE AI: cache fix
+      setIsHashtagsRefreshing(false); // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+
+  const retryTrending = async () => { // HUTTLE AI: cache fix
+    if (isDashboardLoading) return; // HUTTLE AI: cache fix
+    await refreshHashtags(); // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -255,10 +317,9 @@ export default function Dashboard() {
   }, [subscriptionStatus, showToast, user?.id]);
 
   const isCreator = isCreatorProfile(brandProfile);
-  const personalizedGreeting = getPersonalizedGreeting(
-    brandProfile,
-    user?.user_metadata?.name || user?.user_metadata?.full_name || user?.name || user?.email?.split('@')[0] || 'Creator'
-  );
+  const greetingFirstName = userProfile?.first_name?.trim() || '';
+  const greetingHeadline = greetingFirstName ? `Hey ${greetingFirstName}! 👋` : 'Hey there! 👋';
+  const greetingSubtitle = 'Ready to create something amazing today?';
 
   const getPrimaryContextValue = (value) => {
     if (Array.isArray(value)) return value.find(Boolean)?.toString().trim() || '';
@@ -322,74 +383,27 @@ export default function Dashboard() {
   }, [user?.id]);
 
   useEffect(() => {
-    dashboardLoadedRef.current = false;
-  }, [user?.id]);
+    hasFetchedTodayRef.current = false; // HUTTLE AI: cache fix
+    activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    setDashboardData(null); // HUTTLE AI: cache fix
+    setDashboardAlerts([]); // HUTTLE AI: cache fix
+    setDashboardError(''); // HUTTLE AI: cache fix
+    setIsDashboardLoading(false); // HUTTLE AI: cache fix
+    setIsAlertsLoading(false); // HUTTLE AI: cache fix
+  }, [user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
-    brandProfileRef.current = brandProfile;
-  }, [brandProfile]);
+    brandProfileRef.current = brandProfile; // HUTTLE AI: cache fix
+  }, [brandProfile]); // HUTTLE AI: cache fix
 
   useEffect(() => {
-    let isActive = true;
-
-    const loadDailyDashboard = async () => {
-      if (!isActive || !user?.id) return;
-      setDashboardError('');
-      setIsDashboardLoading(true);
-      try {
-        const generatedResult = await generateDashboardData(user.id, brandProfileRef.current);
-        if (!isActive) return;
-        if (generatedResult.success) {
-          setDashboardData(generatedResult.data);
-          if (generatedResult.shouldTrackUsage) {
-            await trackDashboardGenerationUsage(user.id, 'dashboard_daily_generation');
-          }
-        } else {
-          setDashboardError('Unable to load your daily briefing right now. Please try again.');
-        }
-      } catch (error) {
-        console.error('[Dashboard] Failed to load daily dashboard:', error);
-        setDashboardError('Unable to load your daily briefing right now. Please try again.');
-      } finally {
-        if (isActive) {
-          setIsDashboardLoading(false);
-        }
-      }
-    };
-
-    if (authLoading) return () => { isActive = false; };
-    if (!user) return () => { isActive = false; };
-    if (dashboardLoadedRef.current) return () => { isActive = false; };
-
-    dashboardLoadedRef.current = true;
-    console.log('[Dashboard] Auth ready, loading dashboard...');
-    loadDailyDashboard();
-
-    return () => { isActive = false; };
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadDashboardAlerts = async () => {
-      if (!user?.id) return;
-      setIsAlertsLoading(true);
-      try {
-        const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-        const { data, error } = await supabase
-          .from('social_updates')
-          .select('id, platform, update_title, update_summary, impact_level, fetched_at')
-          .gte('fetched_at', cutoffDate)
-          .order('fetched_at', { ascending: false })
-          .limit(2);
-        if (!isMounted) return;
-        if (error) { setDashboardAlerts([]); return; }
-        setDashboardAlerts(Array.isArray(data) ? data : []);
-      } catch { if (isMounted) setDashboardAlerts([]); }
-      finally { if (isMounted) setIsAlertsLoading(false); }
-    };
-    loadDashboardAlerts();
-    return () => { isMounted = false; };
-  }, [user?.id]);
+    if (authLoading || !user?.id || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
+    console.log('[Dashboard] Auth ready, loading dashboard...'); // HUTTLE AI: cache fix
+    loadDashboardData(); // HUTTLE AI: cache fix
+    return () => { // HUTTLE AI: cache fix
+      activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  }, [authLoading, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
 
   // Social update notifications
   useEffect(() => {
@@ -618,10 +632,10 @@ export default function Dashboard() {
                   <span className="text-xs font-bold uppercase tracking-widest text-green-600">Active Now</span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                  {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
+                  {greetingHeadline}
                 </h1>
-                <p className="text-gray-500 mt-1 text-sm">Ready to create something amazing today?</p>
-                {personalizedGreeting.needsProfile && (
+                <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
+                {hasProfilePersonalization === false && (
                   <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
                     Complete your profile for a personalized experience <ArrowRight className="w-3 h-3" />
                   </Link>
@@ -629,12 +643,11 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">{timeGreeting}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                  {personalizedGreeting.shortMessage} <span className="animate-wave inline-block">👋</span>
+                  {greetingHeadline}
                 </h1>
-                <p className="text-gray-500 mt-1 text-sm">Here's what's happening with your content today.</p>
-                {personalizedGreeting.needsProfile && (
+                <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
+                {hasProfilePersonalization === false && (
                   <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
                     Complete your Brand Voice for a personalized experience <ArrowRight className="w-3 h-3" />
                   </Link>
@@ -762,25 +775,28 @@ export default function Dashboard() {
                   const momentumStyles = getMomentumStyles(trend.momentum);
                   const expandKey = `trend-${index}`;
                   const isExpanded = expandedTrend === expandKey;
-                  const hasExpandableContent = (Array.isArray(trend.content_angles) && trend.content_angles.length > 0);
-                  const trendDescription = trend.description || trend.context;
+                  const sanitizedTrendTopic = sanitizeAIOutput(trend.topic) || 'Untitled trend'; // HUTTLE: sanitized
+                  const sanitizedTrendPlatform = sanitizeAIOutput(trend.relevant_platform) || 'Multi-platform'; // HUTTLE: sanitized
+                  const sanitizedTrendDescription = sanitizeAIOutput(trend.description || trend.context); // HUTTLE: sanitized
+                  const sanitizedTrendAngles = (Array.isArray(trend.content_angles) ? trend.content_angles : []).map((angle) => sanitizeAIOutput(angle)).filter(Boolean); // HUTTLE: sanitized
+                  const hasExpandableContent = sanitizedTrendAngles.length > 0; // HUTTLE: sanitized
                   return (
                     <div
                       key={`${trend.topic}-${index}`}
                       className="rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
                     >
                       <div className="p-4">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex items-start gap-2 min-w-0">
                             <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
-                              {getPlatformIcon(trend.relevant_platform, 'w-4 h-4 text-gray-600')}
+                              {getPlatformIcon(sanitizedTrendPlatform, 'w-4 h-4 text-gray-600')}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm text-gray-900 truncate">{trend.topic}</p>
-                              <span className="text-[11px] text-gray-500 font-medium">{trend.relevant_platform || 'Multi-platform'}</span>
+                              <p className="font-bold text-sm leading-snug text-gray-900 break-words line-clamp-2 sm:line-clamp-none">{sanitizedTrendTopic}</p>
+                              <span className="text-[11px] text-gray-500 font-medium">{sanitizedTrendPlatform}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
                             {trend.from_cache && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
                                 Updated today
@@ -793,27 +809,27 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {trendDescription && (
-                          <p className="text-xs text-gray-700 leading-relaxed mb-3">{trendDescription}</p>
+                        {sanitizedTrendDescription && (
+                          <p className="text-xs text-gray-700 leading-relaxed mb-3">{sanitizedTrendDescription}</p>
                         )}
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/ai-tools?topic=${encodeURIComponent(trend.topic)}`); }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/ai-tools?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }} // HUTTLE: card fix
+                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors"
                           >
                             <Sparkles className="w-3 h-3" /> Create
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/trend-lab?topic=${encodeURIComponent(trend.topic)}`); }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white rounded-lg hover:bg-gray-50 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/trend-lab?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }} // HUTTLE: card fix
+                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Beaker className="w-3 h-3" /> Deep Dive
                           </button>
                           {hasExpandableContent && (
                             <button
-                              onClick={() => setExpandedTrend(isExpanded ? null : expandKey)}
-                              className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                              onClick={() => setExpandedTrend(isExpanded ? null : expandKey)} // HUTTLE: card fix
+                              className="ml-auto inline-flex min-h-11 items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                             >
                               Content Ideas
                               <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
@@ -826,7 +842,7 @@ export default function Dashboard() {
                         <div className="border-t border-gray-100 px-4 pb-4 pt-3 bg-gray-50/50 rounded-b-xl animate-fadeIn">
                           <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Content Angles</p>
                           <ul className="space-y-1.5">
-                            {trend.content_angles.slice(0, 3).map((angle, ai) => (
+                            {sanitizedTrendAngles.slice(0, 3).map((angle, ai) => (
                               <li key={ai} className="text-xs text-gray-700 flex items-start gap-2">
                                 <span className="w-4 h-4 rounded-full bg-huttle-primary/10 text-huttle-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{ai + 1}</span>
                                 <span className="leading-relaxed">{angle}</span>
@@ -1045,18 +1061,23 @@ export default function Dashboard() {
               </div>
             ) : dashboardInsights.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {dashboardInsights.map((insight, i) => (
-                  <div
-                    key={i}
-                    className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4"
-                  >
-                    <span className={`absolute top-3 right-3 text-xs font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(insight.category)}`}>
-                      {insight.category}
-                    </span>
-                    <h4 className="font-bold text-sm text-gray-900 mb-2 pr-16">{insight.headline}</h4>
-                    <p className="text-xs text-gray-700 leading-relaxed">{insight.detail}</p>
-                  </div>
-                ))}
+                {dashboardInsights.map((insight, i) => { // HUTTLE: sanitized
+                  const sanitizedInsightCategory = sanitizeAIOutput(insight.category); // HUTTLE: sanitized
+                  const sanitizedInsightHeadline = sanitizeAIOutput(insight.headline); // HUTTLE: sanitized
+                  const sanitizedInsightDetail = sanitizeAIOutput(insight.detail); // HUTTLE: sanitized
+                  return ( // HUTTLE: sanitized
+                    <div
+                      key={i}
+                      className="relative rounded-xl border border-huttle-100 bg-gradient-to-br from-huttle-50/50 to-cyan-50/40 p-4"
+                    >
+                      <span className={`absolute top-3 right-3 text-xs font-semibold px-2 py-0.5 rounded-full ${getInsightCategoryStyles(sanitizedInsightCategory)}`}>
+                        {sanitizedInsightCategory}
+                      </span>
+                      <h4 className="font-bold text-sm text-gray-900 mb-2 pr-16">{sanitizedInsightHeadline}</h4>
+                      <p className="text-xs text-gray-700 leading-relaxed">{sanitizedInsightDetail}</p>
+                    </div>
+                  ); // HUTTLE: sanitized
+                })}
               </div>
             ) : (
               <p className="text-xs text-gray-500">No daily insights available yet.</p>
@@ -1207,16 +1228,18 @@ export default function Dashboard() {
               )}
               {!isAlertsLoading && dashboardAlerts.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {dashboardAlerts.map((alert) => {
-                    const impact = String(alert.impact_level || 'medium').toLowerCase();
-                    const typeColor = impact === 'high' ? 'bg-red-100 text-red-700' : impact === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700';
+                  {dashboardAlerts.map((alert) => { // HUTTLE: sanitized
+                    const impact = String(alert.impact_level || 'medium').toLowerCase(); // HUTTLE: sanitized
+                    const typeColor = impact === 'high' ? 'bg-red-100 text-red-700' : impact === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700'; // HUTTLE: sanitized
+                    const sanitizedAlertTitle = sanitizeAIOutput(alert.update_title) || 'Platform update'; // HUTTLE: sanitized
+                    const sanitizedAlertSummary = sanitizeAIOutput(alert.update_summary) || 'A new social platform update is available.'; // HUTTLE: sanitized
                     return (
                       <div key={alert.id} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
                         <div className="flex items-start justify-between mb-2 gap-2">
-                          <h4 className="font-semibold text-sm text-gray-900">{alert.update_title || 'Platform update'}</h4>
+                          <h4 className="font-semibold text-sm text-gray-900">{sanitizedAlertTitle}</h4>
                           <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${typeColor}`}>{impact}</span>
                         </div>
-                        <p className="text-xs text-gray-600 mb-3">{alert.update_summary || 'A new social platform update is available.'}</p>
+                        <p className="text-xs text-gray-600 mb-3">{sanitizedAlertSummary}</p>
                         <Link to="/dashboard/social-updates" className="text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark flex items-center gap-1 group">
                           View Update <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                         </Link>

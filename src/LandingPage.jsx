@@ -751,7 +751,7 @@ const BentoGrid = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-6">
           
-          {/* Main Feature: Viral Blueprint - Large */}
+          {/* Main Feature: Ignite Engine - Large */} {/* HUTTLE AI: updated 3 */}
           <motion.div 
             className="col-span-1 md:col-span-2 lg:col-span-2 row-span-2 flex"
             initial={{ opacity: 0, y: 24 }}
@@ -1514,7 +1514,7 @@ export default function LandingPage() {
                 >
                   <div className="phone-float">
                     <img 
-                      src="/viral-blueprint-mockup.png"
+                      src="/ignite-engine-mockup.png" // HUTTLE AI: updated 3
                       alt="Huttle AI Ignite Engine feature"
                       className="w-[140vw] max-w-none sm:w-[120vw] sm:max-w-none md:w-[820px] md:max-w-none lg:w-[920px] xl:w-[1020px] h-auto drop-shadow-2xl"
                     />

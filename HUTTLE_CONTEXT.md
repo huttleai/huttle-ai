@@ -35,7 +35,7 @@
 - **Smart Calendar**: AI-optimized scheduling with timezone support
 - **Trend Discovery**: Real-time trend scanning and forecasting
 - **Content Library**: Centralized repository for all content assets
-- **Viral Blueprint**: Step-by-step guides for creating viral content
+- **Ignite Engine**: Step-by-step guides for creating viral content
 - **Brand Voice Customization**: All AI features adapt to user's niche/industry
 
 ### Target Users
@@ -456,7 +456,7 @@ All user-scoped queries MUST include `.eq('user_id', userId)` for RLS to work co
   - `ai-plan-builder` - Content calendar generation
   - `trend-deep-dive` - Comprehensive trend analysis
   - `trend-forecaster` - 7-day trend predictions
-  - `viral-blueprint` - Viral content blueprints
+  - `ignite-engine` - Ignite Engine briefs
   - `social-updates` - Platform update feed
 
 #### **n8nAPI.js** / **n8nGeneratorAPI.js**
@@ -540,21 +540,21 @@ Defined in `src/config/supabase.js` → `TIER_LIMITS`:
 - 250MB storage
 - 7-day AI Plan Builder
 - Basic AI Power Tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visuals)
-- **No**: Trend Lab, Viral Blueprint, Content Repurposer, Huttle Agent, Trend Forecaster
+- **No**: Trend Lab, Ignite Engine, Content Repurposer, Huttle Agent, Trend Forecaster
 
 #### **Essentials** (`TIERS.ESSENTIALS`)
 - 200 AI generations/month
 - 5GB storage
 - 7 or 14-day AI Plan Builder
 - **Full Trend Lab access**
-- 15 Viral Blueprints/month
+- 15 Ignite Engine briefs/month
 - **No**: Content Repurposer, Huttle Agent, Trend Forecaster
 
 #### **Pro** (`TIERS.PRO`)
 - 800 AI generations/month
 - 25GB storage
 - Unlimited scheduled posts
-- 60 Viral Blueprints/month
+- 60 Ignite Engine briefs/month
 - **All features**: Content Repurposer, Huttle Agent, Trend Forecaster
 
 ### Stripe Integration
@@ -602,7 +602,7 @@ Defined in `src/config/supabase.js` → `TIER_LIMITS`:
 - AI Plan Builder (optional)
 - Trend Discovery Deep Dive (optional)
 - Trend Forecaster (optional)
-- Viral Blueprint (optional)
+- Ignite Engine (optional)
 - Social Updates Feed (optional)
 
 **Configuration**: Set environment variables (see `workflowConstants.js`)

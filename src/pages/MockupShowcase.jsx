@@ -4,7 +4,7 @@ import { Download, Share2, Sparkles } from 'lucide-react';
 /**
  * Mockup Showcase Page
  * 
- * Simple page to display the Viral Blueprint mobile screenshot in an iPhone frame.
+ * Simple page to display the Ignite Engine mobile screenshot in an iPhone frame. // HUTTLE AI: updated 3
  * Perfect for presentations, screenshots, or sharing.
  */
 export default function MockupShowcase() {
@@ -30,7 +30,7 @@ export default function MockupShowcase() {
           </div>
           
           <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4">
-            Viral Blueprint Generator
+            Ignite Engine // HUTTLE AI: updated 3
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
             Mobile Experience Showcase
@@ -40,8 +40,8 @@ export default function MockupShowcase() {
         {/* Main Mockup Display */}
         <div className="flex justify-center mb-12">
           <IPhoneMockup 
-            imageSrc="/viral-blueprint-mobile.png" 
-            imageAlt="Viral Blueprint Generator - Mobile View"
+            imageSrc="/ignite-engine-mobile.png" // HUTTLE AI: updated 3
+            imageAlt="Ignite Engine - Mobile View" // HUTTLE AI: updated 3
             size="medium"
           />
         </div>
@@ -82,11 +82,11 @@ export default function MockupShowcase() {
         {/* Call to Action */}
         <div className="text-center mt-16">
           <a 
-            href="/dashboard/viral-blueprint"
+            href="/dashboard/ignite-engine" // HUTTLE AI: updated 3
             className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
           >
             <Sparkles className="w-5 h-5" />
-            Try Viral Blueprint
+            Try Ignite Engine // HUTTLE AI: updated 3
           </a>
         </div>
 

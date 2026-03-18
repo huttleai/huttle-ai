@@ -8,6 +8,7 @@ import TrendDiscoveryHub from '../components/TrendDiscoveryHub';
 import { useToast } from '../context/ToastContext';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import AlgorithmChecker from '../components/AlgorithmChecker';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 // Trend Lab mixes direct AI routes with workflow-backed features.
 import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
@@ -276,9 +277,9 @@ export default function TrendLab() {
                             {item.confidence}
                           </span>
                         </div>
-                        <h5 className="font-bold text-gray-900 mb-1">{item.trend}</h5>
+                        <h5 className="font-bold text-gray-900 mb-1">{sanitizeAIOutput(item.trend)}</h5>
                         <p className="text-sm text-huttle-cyan font-semibold">
-                          Velocity: {item.velocity}
+                          Velocity: {sanitizeAIOutput(item.velocity)}
                         </p>
                       </div>
                     ))}
@@ -293,7 +294,7 @@ export default function TrendLab() {
                   </h4>
                   <div className="bg-white rounded-lg p-4 border border-huttle-200">
                     <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans mb-4">
-                      {trendForecast.postIdeas}
+                      {sanitizeAIOutput(trendForecast.postIdeas)}
                     </pre>
                     <div className="flex flex-wrap gap-2">
                       <button

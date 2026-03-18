@@ -13,6 +13,7 @@ import { saveContentLibraryItem, supabase } from '../config/supabase';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from './AIUsageMeter';
 import { getPlatformIcon } from './SocialIcons';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const EMPTY_VALUES = new Set([
   'unknown', 'unclear', 'monitor', 'n/a', 'none', 'low',
@@ -32,11 +33,6 @@ function isSectionEmpty(value) {
     return Object.values(value).every(isSectionEmpty);
   }
   return false;
-}
-
-function stripCitations(text) {
-  if (!text || typeof text !== 'string') return text;
-  return text.replace(/\[\d+\]/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 
 function getDeepDiveLoadingMessage(seconds) {
@@ -750,7 +746,7 @@ export default function TrendDiscoveryHub() {
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                         <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Live Results</span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">{scanResults.scan_summary}</p>
+                      <p className="text-sm text-gray-600 mt-1">{sanitizeAIOutput(scanResults.scan_summary)}</p>
                     </div>
                     <button
                       onClick={handleQuickScan}
@@ -765,7 +761,10 @@ export default function TrendDiscoveryHub() {
                   <div className="space-y-3">
                     {scanResults.trends.map((trend, index) => {
                       const momentumMeta = getMomentumMeta(trend.momentum);
-                      const trendTextForLibrary = `${trend.topic}. Why trending: ${trend.why_trending}. Relevance: ${trend.relevance_to_niche}`;
+                      const sanitizedTrendTopic = sanitizeAIOutput(trend.topic) || 'Trend'; // HUTTLE: sanitized
+                      const sanitizedWhyTrending = sanitizeAIOutput(trend.why_trending); // HUTTLE: sanitized
+                      const sanitizedTrendRelevance = sanitizeAIOutput(trend.relevance_to_niche); // HUTTLE: sanitized
+                      const trendTextForLibrary = `${sanitizedTrendTopic}. Why trending: ${sanitizedWhyTrending}. Relevance: ${sanitizedTrendRelevance}`; // HUTTLE: sanitized
                       return (
                         <div
                           key={`${trend.topic}-${index}`}
@@ -774,7 +773,7 @@ export default function TrendDiscoveryHub() {
                           <div className="flex flex-col gap-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div className="flex-1 min-w-[220px]">
-                                <h4 className="text-lg font-bold text-gray-900">{trend.topic}</h4>
+                                <h4 className="text-lg font-bold text-gray-900">{sanitizedTrendTopic}</h4>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${getCategoryStyles(trend.category)}`}>
                                     {trend.category}
@@ -804,8 +803,8 @@ export default function TrendDiscoveryHub() {
                             </div>
 
                             <div className="space-y-2">
-                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Why trending:</span> {trend.why_trending}</p>
-                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Niche relevance:</span> {trend.relevance_to_niche}</p>
+                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Why trending:</span> {sanitizedWhyTrending}</p>
+                              <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">Niche relevance:</span> {sanitizedTrendRelevance}</p>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
@@ -822,14 +821,14 @@ export default function TrendDiscoveryHub() {
 
                             <div className="flex flex-col sm:flex-row gap-2 pt-1">
                               <button
-                                onClick={() => handleDeepDiveFromTrend(trend.topic)}
+                                onClick={() => handleDeepDiveFromTrend(sanitizedTrendTopic)} // HUTTLE: card fix
                                 className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-huttle-primary/50 text-gray-700 rounded-lg text-xs font-semibold transition-all hover:bg-huttle-50"
                               >
                                 <Target className="w-3.5 h-3.5 text-huttle-primary" />
                                 <span>Deep Dive</span>
                               </button>
                               <button
-                                onClick={() => handleCreatePostFromTrend(trend.topic, trend.platforms_active?.[0])}
+                                onClick={() => handleCreatePostFromTrend(sanitizedTrendTopic, trend.platforms_active?.[0])} // HUTTLE: card fix
                                 className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-huttle-primary text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:bg-huttle-primary-dark hover:shadow-md"
                               >
                                 <PenLine className="w-3.5 h-3.5" />
@@ -947,7 +946,7 @@ export default function TrendDiscoveryHub() {
                     <>
                       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                         <div className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                          {audienceInsightsResult.insights}
+                          {sanitizeAIOutput(audienceInsightsResult.insights)}
                         </div>
                       </div>
 
@@ -1091,15 +1090,16 @@ export default function TrendDiscoveryHub() {
                     const showTrendsSection = (sectionsParsed.trend_count ?? activeTrends.length) > 0 && activeTrends.length > 0;
                     const showPlatformSection = (sectionsParsed.platform_count ?? platformActivity.length) > 0 && platformActivity.length > 0;
                     const showCompetitorSection = Boolean(sectionsParsed.has_competitors) && Boolean(report.competitor_landscape);
+                    const sanitizedDeepDiveTopic = sanitizeAIOutput(deepDiveResults.topic) || 'Trend report'; // HUTTLE: sanitized
 
                     return (
                       <div className="space-y-5 animate-fadeIn">
                         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-2">
-                              <h3 className="text-xl font-bold text-gray-900">{deepDiveResults.topic}</h3>
+                              <h3 className="text-xl font-bold text-gray-900">{sanitizedDeepDiveTopic}</h3>
                               {report.overview && (
-                                <p className="text-sm leading-relaxed text-gray-600">{stripCitations(report.overview)}</p>
+                                <p className="text-sm leading-relaxed text-gray-600">{sanitizeAIOutput(report.overview)}</p>
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -1126,46 +1126,49 @@ export default function TrendDiscoveryHub() {
                               </span>
                             </div>
                             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                              {activeTrends.map((trend, index) => (
-                                <div key={`${trend?.name || 'trend'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                    <h5 className="font-semibold text-gray-900">{trend?.name || 'Trend'}</h5>
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      {!isSectionEmpty(trend?.status) && (
-                                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveStatusStyles(trend?.status)}`}>
-                                          {trend.status}
-                                        </span>
-                                      )}
-                                      {!isSectionEmpty(trend?.velocity) && (
-                                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveVelocityStyles(trend?.velocity)}`}>
-                                          {trend.velocity}
-                                        </span>
-                                      )}
+                              {activeTrends.map((trend, index) => {
+                                const sanitizedActiveTrendName = sanitizeAIOutput(trend?.name) || 'Trend'; // HUTTLE: sanitized
+                                return (
+                                  <div key={`${trend?.name || 'trend'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                      <h5 className="font-semibold text-gray-900">{sanitizedActiveTrendName}</h5>
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        {!isSectionEmpty(trend?.status) && (
+                                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveStatusStyles(trend?.status)}`}>
+                                            {trend.status}
+                                          </span>
+                                        )}
+                                        {!isSectionEmpty(trend?.velocity) && (
+                                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getDeepDiveVelocityStyles(trend?.velocity)}`}>
+                                            {trend.velocity}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
+                                    {trend?.primary_platform && (
+                                      <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-700">
+                                        {getPlatformIcon(trend.primary_platform, 'w-3.5 h-3.5 text-gray-700')}
+                                        <span>{trend.primary_platform}</span>
+                                      </div>
+                                    )}
+                                    {trend?.evidence && !isSectionEmpty(trend.evidence) && (
+                                      <div className="mb-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                        {sanitizeAIOutput(trend.evidence)}
+                                      </div>
+                                    )}
+                                    {trend?.why_it_matters && !isSectionEmpty(trend.why_it_matters) && (
+                                      <p className="text-sm text-gray-700">{sanitizeAIOutput(trend.why_it_matters)}</p>
+                                    )}
+                                    <button
+                                      onClick={() => handleCreatePostFromTrend(sanitizedActiveTrendName, trend?.primary_platform)} // HUTTLE: card fix
+                                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-huttle-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
+                                    >
+                                      <PenLine className="h-3.5 w-3.5" />
+                                      Create Content
+                                    </button>
                                   </div>
-                                  {trend?.primary_platform && (
-                                    <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-700">
-                                      {getPlatformIcon(trend.primary_platform, 'w-3.5 h-3.5 text-gray-700')}
-                                      <span>{trend.primary_platform}</span>
-                                    </div>
-                                  )}
-                                  {trend?.evidence && !isSectionEmpty(trend.evidence) && (
-                                    <div className="mb-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                                      {stripCitations(trend.evidence)}
-                                    </div>
-                                  )}
-                                  {trend?.why_it_matters && !isSectionEmpty(trend.why_it_matters) && (
-                                    <p className="text-sm text-gray-700">{stripCitations(trend.why_it_matters)}</p>
-                                  )}
-                                  <button
-                                    onClick={() => handleCreatePostFromTrend(trend?.name || deepDiveResults.topic, trend?.primary_platform)}
-                                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-huttle-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
-                                  >
-                                    <PenLine className="h-3.5 w-3.5" />
-                                    Create Content
-                                  </button>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -1182,7 +1185,7 @@ export default function TrendDiscoveryHub() {
                               <div className="space-y-2">
                                 {meaningfulPlatforms.map((platform, index) => {
                                   const dots = getActivityDots(platform?.activity_level);
-                                  const happeningText = stripCitations(platform?.["what's_happening"] || platform?.whats_happening || platform?.what_s_happening || '');
+                                  const happeningText = sanitizeAIOutput(platform?.["what's_happening"] || platform?.whats_happening || platform?.what_s_happening || ''); // HUTTLE: sanitized
                                   return (
                                     <div key={`${platform?.name || 'platform'}-${index}`} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1223,7 +1226,7 @@ export default function TrendDiscoveryHub() {
                         {showCompetitorSection && !isSectionEmpty(report.competitor_landscape) && (
                           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h4 className="mb-2 font-semibold text-gray-900">Competitor Activity</h4>
-                            <p className="text-sm leading-relaxed text-gray-700">{stripCitations(report.competitor_landscape)}</p>
+                            <p className="text-sm leading-relaxed text-gray-700">{sanitizeAIOutput(report.competitor_landscape)}</p>
                           </div>
                         )}
 
@@ -1234,7 +1237,7 @@ export default function TrendDiscoveryHub() {
                               {report.audience_sentiment.overall_mood}
                             </span>
                             {report.audience_sentiment.detail && !isSectionEmpty(report.audience_sentiment.detail) && (
-                              <p className="mt-2 text-sm text-gray-700">{stripCitations(report.audience_sentiment.detail)}</p>
+                              <p className="mt-2 text-sm text-gray-700">{sanitizeAIOutput(report.audience_sentiment.detail)}</p>
                             )}
                           </div>
                         )}
@@ -1246,7 +1249,7 @@ export default function TrendDiscoveryHub() {
                               {report.timing_window.action_window}
                             </span>
                             {report.timing_window.reasoning && !isSectionEmpty(report.timing_window.reasoning) && (
-                              <p className="mt-2 text-sm text-gray-700">{stripCitations(report.timing_window.reasoning)}</p>
+                              <p className="mt-2 text-sm text-gray-700">{sanitizeAIOutput(report.timing_window.reasoning)}</p>
                             )}
                             {report.timing_window.lifespan && !isSectionEmpty(report.timing_window.lifespan) && (
                               <p className="mt-1 text-sm text-gray-500">Estimated lifespan: {report.timing_window.lifespan}</p>
@@ -1286,7 +1289,7 @@ export default function TrendDiscoveryHub() {
 
                         <div className="grid grid-cols-1 gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-3">
                           <button
-                            onClick={() => handleCreatePostFromTrend(deepDiveResults.topic, report.platform_activity?.[0]?.name || activeTrends?.[0]?.primary_platform)}
+                            onClick={() => handleCreatePostFromTrend(sanitizedDeepDiveTopic, report.platform_activity?.[0]?.name || activeTrends?.[0]?.primary_platform)} // HUTTLE: card fix
                             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-huttle-primary px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-huttle-primary-dark"
                           >
                             <PenLine className="h-4 w-4" />

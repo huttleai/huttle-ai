@@ -277,7 +277,7 @@ export function buildUseAgainTarget(item) {
     return `/dashboard/full-post-builder?topic=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
-  if (source === 'viral_blueprint') {
+  if (source === 'ignite_engine') { // HUTTLE AI: updated 3
     return `/dashboard/ignite-engine?topic=${encodedTopic}&platform=${blueprintPlatform}&postType=${encodedPostType}&audience=${encodedAudience}`;
   }
 

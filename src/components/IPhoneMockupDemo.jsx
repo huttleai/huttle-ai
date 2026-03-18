@@ -39,8 +39,8 @@ export default function IPhoneMockupDemo() {
             <div className="space-y-4">
               <h3 className="text-center font-semibold text-gray-700">Small (iPhone SE)</h3>
               <IPhoneMockup 
-                imageSrc="/viral-blueprint-mobile.png" 
-                imageAlt="Viral Blueprint mobile view"
+                imageSrc="/ignite-engine-mobile.png" // HUTTLE AI: updated 3
+                imageAlt="Ignite Engine mobile view" // HUTTLE AI: updated 3
                 size="small"
               />
             </div>
@@ -49,8 +49,8 @@ export default function IPhoneMockupDemo() {
             <div className="space-y-4">
               <h3 className="text-center font-semibold text-gray-700">Medium (iPhone 13/14)</h3>
               <IPhoneMockup 
-                imageSrc="/viral-blueprint-mobile.png" 
-                imageAlt="Viral Blueprint mobile view"
+                imageSrc="/ignite-engine-mobile.png" // HUTTLE AI: updated 3
+                imageAlt="Ignite Engine mobile view" // HUTTLE AI: updated 3
                 size="medium"
               />
             </div>
@@ -59,8 +59,8 @@ export default function IPhoneMockupDemo() {
             <div className="space-y-4">
               <h3 className="text-center font-semibold text-gray-700">Large (iPhone 14 Pro Max)</h3>
               <IPhoneMockup 
-                imageSrc="/viral-blueprint-mobile.png" 
-                imageAlt="Viral Blueprint mobile view"
+                imageSrc="/ignite-engine-mobile.png" // HUTTLE AI: updated 3
+                imageAlt="Ignite Engine mobile view" // HUTTLE AI: updated 3
                 size="large"
               />
             </div>
@@ -76,8 +76,8 @@ export default function IPhoneMockupDemo() {
 
           <div className="flex justify-center">
             <IPhoneMockup 
-              imageSrc="/viral-blueprint-mobile.png" 
-              imageAlt="Viral Blueprint mobile view"
+              imageSrc="/ignite-engine-mobile.png" // HUTTLE AI: updated 3
+              imageAlt="Ignite Engine mobile view" // HUTTLE AI: updated 3
               showBackground={false}
             />
           </div>
@@ -103,7 +103,7 @@ export default function IPhoneMockupDemo() {
             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
               <h3 className="font-bold text-gray-900 mb-2">2. Add your screenshot to /public/</h3>
               <p className="text-sm text-gray-600">
-                Place your image in the public folder (e.g., <code className="text-blue-600">/public/viral-blueprint-mobile.png</code>)
+                Place your image in the public folder (e.g., <code className="text-blue-600">/public/ignite-engine-mobile.png</code>) {/* HUTTLE AI: updated 3 */}
               </p>
             </div>
 

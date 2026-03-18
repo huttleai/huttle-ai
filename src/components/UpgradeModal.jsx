@@ -66,7 +66,7 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
       ],
       tier: 'Essentials or Pro'
     },
-    viralBlueprint: {
+    igniteEngine: { // HUTTLE AI: updated 3
       title: 'Unlock Ignite Engine',
       description: 'Get AI-powered content strategies with hooks, structure, hashtags, and optimal posting times.',
       preview: '"Generate a complete content brief for your TikTok Reel in seconds"',

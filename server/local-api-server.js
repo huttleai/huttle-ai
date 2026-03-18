@@ -91,7 +91,7 @@ async function setupRoutes() {
   
   // Plan Builder routes
   app.all('/api/plan-builder-proxy', await loadHandler('api/plan-builder-proxy.js'));
-  app.all('/api/viral-blueprint-proxy', await loadHandler('api/viral-blueprint-proxy.js'));
+  app.all('/api/ignite-engine-proxy', await loadHandler('api/ignite-engine-proxy.js')); // HUTTLE AI: updated 3
   app.all('/api/create-plan-builder-job', await loadHandler('api/create-plan-builder-job.js'));
   app.all('/api/get-job-status', await loadHandler('api/get-job-status.js'));
   

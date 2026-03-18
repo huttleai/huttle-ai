@@ -106,7 +106,7 @@ export const HeroSection = () => {
           className="relative w-full max-w-md md:max-w-xl lg:max-w-2xl"
         >
           <img 
-            src="/viral-blueprint-mockup.png" 
+            src="/ignite-engine-mockup.png" // HUTTLE AI: updated 3
             alt="Huttle AI Ignite Engine feature" 
             className="w-full h-auto drop-shadow-2xl"
           />

@@ -59,9 +59,9 @@ fi
 
 echo ""
 
-# Test viral-blueprint-proxy (OPTIONS request for CORS)
-echo "3️⃣  Testing viral-blueprint-proxy (CORS preflight)..."
-RESPONSE=$(curl -s -w "\n%{http_code}" -X OPTIONS $BASE_URL/api/viral-blueprint-proxy)
+# Test ignite-engine-proxy (OPTIONS request for CORS)
+echo "3️⃣  Testing ignite-engine-proxy (CORS preflight)..."
+RESPONSE=$(curl -s -w "\n%{http_code}" -X OPTIONS $BASE_URL/api/ignite-engine-proxy)
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then

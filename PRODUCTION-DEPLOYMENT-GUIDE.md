@@ -144,11 +144,11 @@ If you're using n8n for automation (otherwise, features use fallback data):
 # Backend
 N8N_WEBHOOK_URL_GENERATOR=https://your-n8n.app/webhook/generator
 N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/plan-builder
-N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
+N8N_IGNITE_ENGINE_WEBHOOK=https://your-n8n.app/webhook/ignite-engine
 
 # Frontend
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/plan-builder
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://your-n8n.app/webhook/ignite-engine
 VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
 VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates

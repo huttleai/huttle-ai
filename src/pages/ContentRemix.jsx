@@ -14,6 +14,7 @@ import AIUsageMeter from '../components/AIUsageMeter';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { saveContentLibraryItem } from '../config/supabase';
 import { buildContentVaultPayload } from '../utils/contentVault';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 /**
  * Remix goal options with metadata
@@ -790,7 +791,7 @@ export default function ContentRemix() {
                         {/* Content */}
                         <div className="p-5">
                           <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                            {sanitizeVariationText(variation)}
+                            {sanitizeAIOutput(sanitizeVariationText(variation))}
                           </div>
                         </div>
 

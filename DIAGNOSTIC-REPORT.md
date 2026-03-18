@@ -80,7 +80,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
 # n8n Webhook URLs
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://huttleai.app.n8n.cloud/webhook/plan-builder-async
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://huttleai.app.n8n.cloud/webhook-test/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://huttleai.app.n8n.cloud/webhook-test/ignite-engine
 
 # API Configuration
 VITE_API_URL=/api
@@ -110,7 +110,7 @@ npm run dev:local
 ```
 
 This will start:
-- Local API server on port 3001 (now includes plan-builder-proxy and viral-blueprint-proxy)
+- Local API server on port 3001 (now includes plan-builder-proxy and ignite-engine-proxy)
 - Vite frontend on port 5173
 - Both will run concurrently
 
@@ -151,7 +151,7 @@ npm run dev
 
 **Added routes:**
 - `/api/plan-builder-proxy` → Proxies Plan Builder requests to n8n
-- `/api/viral-blueprint-proxy` → Proxies Viral Blueprint requests to n8n
+- `/api/ignite-engine-proxy` → Proxies Ignite Engine requests to n8n
 - `/api/create-plan-builder-job` → Creates Plan Builder jobs in Supabase
 - `/api/get-job-status` → Checks job status
 
@@ -245,7 +245,7 @@ Make sure you have these in your `.env` file:
 
 ### **Required for Plan Builder:**
 - ✅ `VITE_N8N_PLAN_BUILDER_WEBHOOK` - n8n webhook for Plan Builder
-- ✅ `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` - n8n webhook for Viral Blueprint
+- ✅ `VITE_N8N_IGNITE_ENGINE_WEBHOOK` - n8n webhook for Ignite Engine
 
 ### **Optional (for full feature set):**
 - ⚠️ `VITE_GROK_API_KEY` - xAI Grok API for content generation
@@ -350,7 +350,7 @@ Since you have `vercel dev` on port 3000, stop the `npm run dev` on port 5190:
 
 ### **API Routes Status:**
 - ✅ `/api/plan-builder-proxy` - Available in `vercel dev` and updated local API server
-- ✅ `/api/viral-blueprint-proxy` - Available in `vercel dev` and updated local API server
+- ✅ `/api/ignite-engine-proxy` - Available in `vercel dev` and updated local API server
 - ✅ `/api/create-plan-builder-job` - Available in both
 - ✅ `/api/get-job-status` - Available in both
 
@@ -360,7 +360,7 @@ Since you have `vercel dev` on port 3000, stop the `npm run dev` on port 5190:
 
 **What was wrong:**
 1. Vite dev server trying to proxy to port 3001, but nothing running there
-2. Local API server missing plan-builder-proxy and viral-blueprint-proxy routes
+2. Local API server missing plan-builder-proxy and ignite-engine-proxy routes
 3. No `.env` file with required environment variables
 
 **What was fixed:**

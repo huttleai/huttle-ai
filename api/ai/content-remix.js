@@ -9,6 +9,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
+import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -403,7 +404,8 @@ export default async function handler(req, res) {
     }
 
     const { requestedMode, normalizedMode } = normalizeMode(mode);
-    const systemPrompt = buildSystemPrompt(
+    const brandBlock = buildCreatorBrandBlock({ ...additionalContext, brandVoice }, { ...additionalContext }); // HUTTLE AI: brand context injected
+    const systemPrompt = `${brandBlock}${buildSystemPrompt(
       `${BASE_SYSTEM_PROMPT}
 
 ${NO_FABRICATED_STATS_GUARDRAIL}
@@ -413,7 +415,7 @@ ${READY_TO_USE_GUARDRAIL}`,
         brandVoice,
         platforms: normalizedPlatforms,
       }
-    );
+    )}`;
     const userPrompt = buildUserPrompt({
       originalContent: originalContent.trim(),
       requestedMode,

@@ -8,7 +8,7 @@ export const dashboardRoutes = [
   { label: 'AI Power Tools', href: '/dashboard/ai-tools?tool=caption', testId: 'sidebar-link-ai-power-tools' },
   { label: 'Trend Lab', href: '/dashboard/trend-lab', testId: 'sidebar-link-trend-lab' },
   { label: 'Niche Intel', href: '/dashboard/niche-intel', testId: 'sidebar-link-niche-intel' },
-  { label: 'Viral Blueprint', href: '/dashboard/viral-blueprint', testId: 'sidebar-link-viral-blueprint' },
+  { label: 'Ignite Engine', href: '/dashboard/ignite-engine', testId: 'sidebar-link-ignite-engine' }, // HUTTLE AI: updated 3
   { label: 'Content Remix Studio', href: '/dashboard/content-remix', testId: 'sidebar-link-content-remix-studio' },
   { label: 'Profile', href: '/dashboard/profile', testId: 'sidebar-link-profile' },
   { label: 'Brand Voice', href: '/dashboard/brand-voice', testId: 'sidebar-link-brand-voice' },

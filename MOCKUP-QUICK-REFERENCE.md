@@ -5,7 +5,7 @@
 ### 1. Add Screenshot
 ```bash
 # Save your screenshot here:
-/public/viral-blueprint-mobile.png
+/public/ignite-engine-mobile.png
 ```
 
 ### 2. Import Component
@@ -16,8 +16,8 @@ import IPhoneMockup from '../components/IPhoneMockup';
 ### 3. Use It
 ```jsx
 <IPhoneMockup 
-  imageSrc="/viral-blueprint-mobile.png" 
-  imageAlt="Viral Blueprint Generator"
+  imageSrc="/ignite-engine-mobile.png"
+  imageAlt="Ignite Engine"
 />
 ```
 
@@ -127,7 +127,7 @@ import IPhoneMockup from '../components/IPhoneMockup';
 ## 🐛 Quick Fixes
 
 **Image not showing?**
-- Check: `/public/viral-blueprint-mobile.png` exists
+- Check: `/public/ignite-engine-mobile.png` exists
 - Path must start with `/`
 
 **Too large?**

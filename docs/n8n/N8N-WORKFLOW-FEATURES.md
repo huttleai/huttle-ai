@@ -19,7 +19,7 @@ This document covers the **N8N Workflow** features.
 | Dashboard - Hashtags of the Day | `dashboard-hashtags` | `/webhook/dashboard-hashtags` | Pending |
 | AI Plan Builder | `ai-plan-builder` | `/webhook/ai-plan-builder` | Pending |
 | Trend Forecaster | `trend-forecaster` | `/webhook/trend-forecaster` | Pending |
-| Viral Blueprint | `viral-blueprint` | `/webhook/viral-blueprint` | Pending |
+| Ignite Engine | `ignite-engine` | `/webhook/ignite-engine` | Pending |
 | Social Updates | `social-updates` | `/webhook/social-updates` | Pending |
 
 ## Environment Variables
@@ -37,7 +37,7 @@ VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/ai-plan-builder
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
 
 # Content workflows
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://your-n8n.app/webhook/ignite-engine
 
 # Updates workflows
 VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates
@@ -377,9 +377,9 @@ VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates
 
 ---
 
-## 6. Viral Blueprint
+## 6. Ignite Engine
 
-**Webhook Path:** `/webhook/viral-blueprint`
+**Webhook Path:** `/webhook/ignite-engine`
 
 **Purpose:** Generate step-by-step viral content blueprints.
 
@@ -583,7 +583,7 @@ To test a workflow locally:
 
 1. Set the environment variable:
    ```bash
-   VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=http://localhost:5678/webhook/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=http://localhost:5678/webhook/ignite-engine
    ```
 
 2. Create the workflow in n8n with a Webhook trigger node

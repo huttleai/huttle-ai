@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
+import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 
 const PERPLEXITY_API_KEY =
   process.env.PERPLEXITY_API_KEY ||
@@ -172,21 +173,25 @@ function buildMetadata(report, citations, candidateMetadata, context) {
   };
 }
 
-function buildMessages({ topic, niche, platform, targetAudience, brandVoice }) {
+function buildMessages({ topic, niche, platform, targetAudience, brandVoice, brandData }) {
   const currentDate = new Date().toISOString().slice(0, 10);
   const platformLabel = platform || 'Instagram, TikTok, X';
   const nicheLabel = niche || 'general creator';
   const audienceLabel = targetAudience || 'general audience';
   const brandVoiceLabel = brandVoice || 'clear, practical, creator-friendly';
+  const brandBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
+  const nicheFocusSuffix = niche && targetAudience
+    ? `\n\nFocus results relevant to ${niche} creators targeting ${targetAudience}.`
+    : niche ? `\n\nFocus results relevant to ${niche} creators.` : ''; // HUTTLE AI: brand context injected
 
   return [
     {
       role: 'system',
-      content: 'You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.',
+      content: `${brandBlock}You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
-      content: `Research the topic "${topic}" for a content creator in the ${nicheLabel} niche.\n\nPrimary platforms: ${platformLabel}\nTarget audience: ${audienceLabel}\nBrand voice: ${brandVoiceLabel}\nDate: ${currentDate}\n\nReturn ONLY valid JSON with this exact structure:\n{\n  "report": {\n    "overview": "2-4 sentence real-time summary grounded in current web findings.",\n    "confidence": {\n      "level": "High | Medium | Low"\n    },\n    "active_trends": [\n      {\n        "name": "3-7 word trend name",\n        "status": "Rising | Peaking | Declining | Emerging",\n        "velocity": "Explosive | Steady | Slow Burn",\n        "primary_platform": "Platform name",\n        "evidence": "One concise sentence with current evidence.",\n        "why_it_matters": "One concise actionable insight for creators."\n      }\n    ],\n    "platform_activity": [\n      {\n        "name": "Platform name",\n        "activity_level": "High | Medium | Low",\n        "top_format": "Best-performing content format right now",\n        "what's_happening": "One concise sentence on what is happening on this platform."\n      }\n    ],\n    "competitor_landscape": "Short paragraph on notable competitor or creator behavior around this topic right now.",\n    "audience_sentiment": {\n      "overall_mood": "Positive | Mixed | Negative | Polarized | Curious",\n      "detail": "One concise sentence about current audience response."\n    },\n    "timing_window": {\n      "action_window": "Act now | This week | Monitor",\n      "reasoning": "One concise sentence explaining urgency.",\n      "lifespan": "Estimated lifespan in plain language"\n    }\n  }\n}\n\nRequirements:\n- Use current web information, prioritizing the last 30 days and current platform signals.\n- Keep every field concise and specific.\n- Include 3 to 5 active trends when evidence exists.\n- Include 2 to 4 platform_activity entries.\n- Do not include markdown fences, commentary, or any text outside the JSON object.`,
+      content: `Research the topic "${topic}" for a content creator in the ${nicheLabel} niche.\n\nPrimary platforms: ${platformLabel}\nTarget audience: ${audienceLabel}\nBrand voice: ${brandVoiceLabel}\nDate: ${currentDate}\n\nReturn ONLY valid JSON with this exact structure:\n{\n  "report": {\n    "overview": "2-4 sentence real-time summary grounded in current web findings.",\n    "confidence": {\n      "level": "High | Medium | Low"\n    },\n    "active_trends": [\n      {\n        "name": "3-7 word trend name",\n        "status": "Rising | Peaking | Declining | Emerging",\n        "velocity": "Explosive | Steady | Slow Burn",\n        "primary_platform": "Platform name",\n        "evidence": "One concise sentence with current evidence.",\n        "why_it_matters": "One concise actionable insight for creators."\n      }\n    ],\n    "platform_activity": [\n      {\n        "name": "Platform name",\n        "activity_level": "High | Medium | Low",\n        "top_format": "Best-performing content format right now",\n        "what's_happening": "One concise sentence on what is happening on this platform."\n      }\n    ],\n    "competitor_landscape": "Short paragraph on notable competitor or creator behavior around this topic right now.",\n    "audience_sentiment": {\n      "overall_mood": "Positive | Mixed | Negative | Polarized | Curious",\n      "detail": "One concise sentence about current audience response."\n    },\n    "timing_window": {\n      "action_window": "Act now | This week | Monitor",\n      "reasoning": "One concise sentence explaining urgency.",\n      "lifespan": "Estimated lifespan in plain language"\n    }\n  }\n}\n\nRequirements:\n- Use current web information, prioritizing the last 30 days and current platform signals.\n- Keep every field concise and specific.\n- Include 3 to 5 active trends when evidence exists.\n- Include 2 to 4 platform_activity entries.\n- Do not include markdown fences, commentary, or any text outside the JSON object.${nicheFocusSuffix}`,
     },
   ];
 }
@@ -255,6 +260,7 @@ export default async function handler(req, res) {
       platform: platformLabel,
       targetAudience: toCleanString(brandData?.targetAudience),
       brandVoice: toCleanString(brandData?.brandVoice),
+      brandData, // HUTTLE AI: brand context injected
     });
 
     const controller = new AbortController();

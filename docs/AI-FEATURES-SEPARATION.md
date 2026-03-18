@@ -19,7 +19,7 @@ This document provides a clear overview of how AI features are implemented in Hu
 | AI Plan Builder | N8N Workflow | Workflow | Pending |
 | Trend Deep Dive | N8N Workflow | Workflow | Pending |
 | Trend Forecaster | N8N Workflow | Workflow | Pending |
-| Viral Blueprint | N8N Workflow | Workflow | Pending |
+| Ignite Engine | N8N Workflow | Workflow | Pending |
 | Social Updates | N8N Workflow | Workflow | Pending |
 
 ---
@@ -131,10 +131,10 @@ These features will be powered by n8n workflows. They are designed for complex, 
 - **Why Workflow:** Predictive analysis requiring multiple data sources
 - **Current Fallback:** Perplexity + Grok combined analysis
 
-#### 6. Viral Blueprint
-- **Location:** `src/pages/ViralBlueprint.jsx`
-- **Workflow:** `WORKFLOW_NAMES.VIRAL_BLUEPRINT`
-- **API Function:** `generateViralBlueprint()`
+#### 6. Ignite Engine
+- **Location:** `src/pages/IgniteEngine.jsx`
+- **Workflow:** `WORKFLOW_NAMES.IGNITE_ENGINE`
+- **API Function:** `generateIgniteEngine()`
 - **Why Workflow:** Complex blueprint generation with SEO analysis
 - **Current Fallback:** Mock blueprint generator
 
@@ -162,7 +162,7 @@ These features will be powered by n8n workflows. They are designed for complex, 
 │  │  • Templates                │    │  • AI Plan Builder       [PENDING]  │ │
 │  │  • Smart Scheduling         │    │  • Trend Deep Dive       [PENDING]  │ │
 │  │  • AI Power Tools           │    │  • Trend Forecaster      [PENDING]  │ │
-│  │  • Trend Quick Scan         │    │  • Viral Blueprint       [PENDING]  │ │
+│  │  • Trend Quick Scan         │    │  • Ignite Engine         [PENDING]  │ │
 │  │  • Audience Engine          │    │  • Social Updates        [PENDING]  │ │
 │  │  • Content Remix            │    │                                     │ │
 │  │                             │    │                                     │ │
@@ -179,7 +179,7 @@ These features will be powered by n8n workflows. They are designed for complex, 
 │  /api/ai/n8n-generator.js        │    │  /webhook/ai-plan-builder           │
 │                                  │    │  /webhook/trend-deep-dive           │
 └──────────────┬───────────────────┘    │  /webhook/trend-forecaster          │
-               │                        │  /webhook/viral-blueprint           │
+               │                        │  /webhook/ignite-engine             │
                ▼                        │  /webhook/social-updates            │
 ┌─────────────────────────────────┐    │                                     │
 │        External APIs             │    └─────────────────────────────────────┘

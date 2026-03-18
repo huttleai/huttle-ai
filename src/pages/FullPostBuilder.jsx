@@ -22,6 +22,7 @@ import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { enhanceCaptionWithClaude } from '../services/claudeAPI';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
 
@@ -174,6 +175,21 @@ export default function FullPostBuilder() {
       hasHydratedRef.current = true;
     }
   }, [storageKey, hasExplicitPrefill, prefillGoal, prefillPlatform, prefillTopic]);
+
+  // HUTTLE AI: brand context injected — pre-fill topic from niche and platform from brand profile
+  useEffect(() => {
+    if (!hasHydratedRef.current || hasExplicitPrefill) return;
+    if (!topic.trim() && brandData?.niche) {
+      const niche = Array.isArray(brandData.niche) ? brandData.niche[0] : brandData.niche;
+      if (niche?.trim()) setTopic(niche.trim());
+    }
+    if (platform === 'instagram' && brandData?.platforms?.length > 0) {
+      const firstPlatform = typeof brandData.platforms[0] === 'object'
+        ? brandData.platforms[0].name
+        : brandData.platforms[0];
+      if (firstPlatform) setPlatform(firstPlatform.toLowerCase());
+    }
+  }, [brandData, hasExplicitPrefill]);
 
   // Save draft to localStorage
   useEffect(() => {
@@ -654,7 +670,7 @@ export default function FullPostBuilder() {
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-medium text-gray-900">{hook}</p>
+                            <p className="text-sm font-medium text-gray-900">{sanitizeAIOutput(hook)}</p>
                             {selectedHook === hook && <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />}
                           </div>
                           <span className="text-xs text-gray-400 mt-1 inline-block">{selectedHookType} variation {i + 1}</span>
@@ -787,11 +803,11 @@ export default function FullPostBuilder() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <span className="text-xs font-medium text-gray-400 uppercase">{cta.style}</span>
-                              <p className="text-sm font-medium text-gray-900 mt-0.5">{cta.cta}</p>
+                              <p className="text-sm font-medium text-gray-900 mt-0.5">{sanitizeAIOutput(cta.cta)}</p>
                             </div>
                             {selectedCTA?.cta === cta.cta && <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />}
                           </div>
-                          {cta.tip && <p className="text-xs text-gray-500 mt-1">{cta.tip}</p>}
+                          {cta.tip && <p className="text-xs text-gray-500 mt-1">{sanitizeAIOutput(cta.tip)}</p>}
                         </button>
                       ))}
                     </div>
@@ -883,14 +899,14 @@ export default function FullPostBuilder() {
               {selectedHook && (
                 <div className="bg-huttle-50 border border-huttle-100 rounded-xl px-4 py-3">
                   <span className="text-[10px] font-medium text-huttle-primary uppercase tracking-wide">Hook</span>
-                  <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedHook}</p>
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5">{sanitizeAIOutput(selectedHook)}</p>
                 </div>
               )}
 
               {caption && (
                 <div>
                   <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Caption</span>
-                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{caption}</p>
+                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{sanitizeAIOutput(caption)}</p>
                 </div>
               )}
 
@@ -904,7 +920,7 @@ export default function FullPostBuilder() {
               {selectedCTA && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                   <span className="text-[10px] font-medium text-blue-500 uppercase tracking-wide">CTA — {selectedCTA.style}</span>
-                  <p className="text-sm font-medium text-blue-800 mt-0.5">{selectedCTA.cta}</p>
+                  <p className="text-sm font-medium text-blue-800 mt-0.5">{sanitizeAIOutput(selectedCTA.cta)}</p>
                 </div>
               )}
             </div>

@@ -1,19 +1,19 @@
-# Adding iPhone Mockup to Viral Blueprint Page
+# Adding iPhone Mockup to Ignite Engine Page
 
 ## Quick Integration Example
 
-Here's how to add the mobile mockup showcase to your Viral Blueprint page.
+Here's how to add the mobile mockup showcase to your Ignite Engine page.
 
 ### Option 1: Add as a Section (Recommended)
 
-Add this code to `src/pages/ViralBlueprint.jsx` after the results section (around line 1453):
+Add this code to `src/pages/IgniteEngine.jsx` after the results section (around line 1453):
 
 ```jsx
 import IPhoneMockup from '../components/IPhoneMockup';
 
 // ... existing imports ...
 
-export default function ViralBlueprint() {
+export default function IgniteEngine() {
   // ... existing code ...
 
   return (
@@ -39,7 +39,7 @@ export default function ViralBlueprint() {
               </h2>
               
               <p className="text-lg text-gray-600 leading-relaxed">
-                The Viral Blueprint Generator is fully optimized for mobile devices. 
+                The Ignite Engine experience is fully optimized for mobile devices. 
                 Generate viral content strategies on the go, anywhere, anytime.
               </p>
               
@@ -68,8 +68,8 @@ export default function ViralBlueprint() {
             {/* Right: iPhone Mockup */}
             <div className="flex justify-center">
               <IPhoneMockup 
-                imageSrc="/viral-blueprint-mobile.png" 
-                imageAlt="Viral Blueprint Generator - Mobile Experience"
+                imageSrc="/ignite-engine-mobile.png" 
+                imageAlt="Ignite Engine - Mobile Experience"
                 size="medium"
                 showBackground={false}
               />
@@ -98,14 +98,14 @@ Add this right after the header section (around line 890):
       Works Beautifully on Mobile
     </h2>
     <p className="text-gray-600">
-      Generate viral blueprints from any device
+      Generate Ignite Engine briefs from any device
     </p>
   </div>
   
   <div className="flex justify-center">
     <IPhoneMockup 
-      imageSrc="/viral-blueprint-mobile.png" 
-      imageAlt="Viral Blueprint Generator Mobile View"
+      imageSrc="/ignite-engine-mobile.png" 
+      imageAlt="Ignite Engine Mobile View"
       size="large"
     />
   </div>
@@ -142,7 +142,7 @@ Add this within the results section (after line 1160):
         </div>
         <div className="flex-shrink-0">
           <IPhoneMockup 
-            imageSrc="/viral-blueprint-mobile.png" 
+            imageSrc="/ignite-engine-mobile.png" 
             imageAlt="Mobile Blueprint View"
             size="small"
             showBackground={false}
@@ -172,7 +172,7 @@ import { Check, Sparkles, Smartphone } from 'lucide-react';
 export default function MobileShowcase({ 
   title = "Perfect on Every Device",
   description = "Fully optimized for mobile devices. Generate viral content strategies on the go.",
-  imageSrc = "/viral-blueprint-mobile.png",
+  imageSrc = "/ignite-engine-mobile.png",
   imageAlt = "Mobile view",
   features = [
     "Touch-optimized interface",
@@ -236,10 +236,10 @@ import MobileShowcase from '../components/MobileShowcase';
 
 // In your JSX:
 <MobileShowcase 
-  title="Blueprint Generator on Mobile"
+  title="Ignite Engine on Mobile"
   description="Create viral content strategies from your phone. Perfect for creators on the go."
-  imageSrc="/viral-blueprint-mobile.png"
-  imageAlt="Viral Blueprint Mobile Experience"
+  imageSrc="/ignite-engine-mobile.png"
+  imageAlt="Ignite Engine Mobile Experience"
   features={[
     "Generate blueprints in 60 seconds",
     "Copy scripts with one tap",
@@ -252,7 +252,7 @@ import MobileShowcase from '../components/MobileShowcase';
 
 ## Styling Tips
 
-### Match Viral Blueprint Theme
+### Match Ignite Engine Theme
 
 ```jsx
 <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-gradient-to-br from-white/60 to-gray-50/40 border border-white/60 shadow-elevated p-8">
@@ -260,7 +260,7 @@ import MobileShowcase from '../components/MobileShowcase';
   
   <div className="relative z-10">
     <IPhoneMockup 
-      imageSrc="/viral-blueprint-mobile.png" 
+      imageSrc="/ignite-engine-mobile.png" 
       showBackground={false}
     />
   </div>
@@ -271,7 +271,7 @@ import MobileShowcase from '../components/MobileShowcase';
 
 ```jsx
 <div className="animate-slideUp" style={{ animationDelay: '200ms' }}>
-  <IPhoneMockup imageSrc="/viral-blueprint-mobile.png" />
+  <IPhoneMockup imageSrc="/ignite-engine-mobile.png" />
 </div>
 ```
 
@@ -281,7 +281,7 @@ import MobileShowcase from '../components/MobileShowcase';
 <div className="relative">
   <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-purple-600/20 blur-3xl rounded-full scale-150" />
   <div className="relative">
-    <IPhoneMockup imageSrc="/viral-blueprint-mobile.png" />
+    <IPhoneMockup imageSrc="/ignite-engine-mobile.png" />
   </div>
 </div>
 ```
@@ -290,14 +290,14 @@ import MobileShowcase from '../components/MobileShowcase';
 
 ## Remember to:
 
-1. ✅ Save your screenshot as `/public/viral-blueprint-mobile.png`
+1. ✅ Save your screenshot as `/public/ignite-engine-mobile.png`
 2. ✅ Import the component: `import IPhoneMockup from '../components/IPhoneMockup';`
 3. ✅ Add the `Check` and `Sparkles` icons if using the full examples
 4. ✅ Test on different screen sizes
 
 ---
 
-**That's it!** Your Viral Blueprint page now showcases the beautiful mobile experience. 🎉
+**That's it!** Your Ignite Engine page now showcases the beautiful mobile experience. 🎉
 
 
 

@@ -29,7 +29,7 @@
 | 7 | AI Plan Builder | `/dashboard/plan-builder` | Verified |
 | 8 | AI Power Tools (6 tools) | `/dashboard/ai-tools` | Verified |
 | 9 | Trend Lab + Discovery Hub | `/dashboard/trend-lab` | Verified |
-| 10 | Viral Blueprint (Beta) | `/dashboard/viral-blueprint` | Verified |
+| 10 | Ignite Engine (Beta) | `/dashboard/ignite-engine` | Verified |
 | 11 | Content Remix Studio | `/dashboard/content-remix` | Verified |
 | 12 | User Profile | `/dashboard/profile` | Verified |
 | 13 | Brand Voice | `/dashboard/brand-voice` | Verified |
@@ -64,7 +64,7 @@ Section 4:  Main Dashboard ....................... 3/3  PASSED
 Section 5:  AI Plan Builder ...................... 3/3  PASSED
 Section 6:  AI Power Tools (6 sub-tools) ......... 8/8  PASSED
 Section 7:  Trend Lab ............................ 4/4  PASSED
-Section 8:  Viral Blueprint ...................... 6/6  PASSED
+Section 8:  Ignite Engine ........................ 6/6  PASSED
 Section 9:  Content Remix Studio ................. 4/4  PASSED
 Section 10: Smart Calendar ....................... 1/1  PASSED
 Section 11: Content Library ...................... 1/1  PASSED
@@ -100,7 +100,7 @@ Section 21: Error Boundary & Edge Cases .......... 3/3  PASSED
 |---|------|-------|-------------|
 | 6 | `api/create-portal-session.js` | Leaks Stripe SDK `error.message` to client | Sanitized error response |
 | 7 | `api/subscription-status.js` | Leaks Stripe SDK `error.message` to client | Sanitized error response |
-| 8 | `api/viral-blueprint-proxy.js` | Forwards raw `req.body` to n8n without validation | Added input validation and payload sanitization |
+| 8 | `api/ignite-engine-proxy.js` | Forwards raw `req.body` to n8n without validation | Added input validation and payload sanitization |
 | 9 | `src/components/GuidedTour.jsx` | Queries `has_seen_tour` column that doesn't exist in DB schema — console errors for every user | Added graceful fallback to localStorage when column missing |
 
 ---

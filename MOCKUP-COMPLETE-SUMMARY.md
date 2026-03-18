@@ -31,7 +31,7 @@ I've built a complete iPhone mockup system for displaying your mobile screenshot
 Save your mobile screenshot from the image you shared to:
 
 ```
-/public/viral-blueprint-mobile.png
+/public/ignite-engine-mobile.png
 ```
 
 ### Step 2: View It!
@@ -76,8 +76,8 @@ http://localhost:5173/dashboard/mockup-demo
 import IPhoneMockup from '../components/IPhoneMockup';
 
 <IPhoneMockup 
-  imageSrc="/viral-blueprint-mobile.png" 
-  imageAlt="Viral Blueprint Generator"
+  imageSrc="/ignite-engine-mobile.png" 
+  imageAlt="Ignite Engine"
 />
 ```
 
@@ -127,7 +127,7 @@ import IPhoneMockup from '../components/IPhoneMockup';
 - Visit `/dashboard/mockup-demo` for interactive examples
 - Visit `/dashboard/mockup-showcase` for presentation view
 
-### 2. Viral Blueprint Page
+### 2. Ignite Engine Page
 - Add mobile showcase section
 - Show mobile experience
 - See `VIRAL-BLUEPRINT-MOCKUP-INTEGRATION.md` for examples
@@ -153,7 +153,7 @@ import IPhoneMockup from '../components/IPhoneMockup';
 - **`docs/guides/IPHONE-MOCKUP-GUIDE.md`** - Complete documentation with all features, props, and examples
 
 ### Integration Examples
-- **`VIRAL-BLUEPRINT-MOCKUP-INTEGRATION.md`** - Specific examples for adding to Viral Blueprint page
+- **`VIRAL-BLUEPRINT-MOCKUP-INTEGRATION.md`** - Specific examples for adding to Ignite Engine
 
 ---
 
@@ -264,12 +264,12 @@ import IPhoneMockup from '../components/IPhoneMockup';
 ## 🎓 Next Steps
 
 ### Immediate
-1. ✅ Save your screenshot to `/public/viral-blueprint-mobile.png`
+1. ✅ Save your screenshot to `/public/ignite-engine-mobile.png`
 2. ✅ Visit `/dashboard/mockup-demo` to see it in action
 3. ✅ Visit `/dashboard/mockup-showcase` for presentation view
 
 ### Integration
-4. ✅ Add to Viral Blueprint page (see `VIRAL-BLUEPRINT-MOCKUP-INTEGRATION.md`)
+4. ✅ Add to Ignite Engine page (see `VIRAL-BLUEPRINT-MOCKUP-INTEGRATION.md`)
 5. ✅ Use in landing page or marketing materials
 6. ✅ Create multiple mockups for different features
 

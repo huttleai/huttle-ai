@@ -3,6 +3,7 @@ import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, Shield, ChevronDown, ChevronUp, Wrench, Sparkles } from 'lucide-react';
 import { checkAlgorithmAlignment, lastUpdated } from '../data/algorithmSignals';
 import PlatformSelector from './PlatformSelector';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const scoreColor = (score) => {
   if (score >= 85) return { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', bar: 'bg-emerald-500', label: 'Algorithm-Ready' };
@@ -142,7 +143,7 @@ export default function AlgorithmChecker({
                       </span>
                       <span className="text-xs text-gray-400">{signal.weight}%</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{signal.detail}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{sanitizeAIOutput(signal.detail)}</p>
                   </div>
                 </div>
               ))}
@@ -173,7 +174,7 @@ export default function AlgorithmChecker({
                           .map((signal) => (
                             <div key={signal.id} className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2">
                               <Wrench className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                              <p className="text-xs text-amber-800">{signal.fix}</p>
+                              <p className="text-xs text-amber-800">{sanitizeAIOutput(signal.fix)}</p>
                             </div>
                           ))}
                       </div>

@@ -11,7 +11,7 @@ All API service errors have been resolved. The application is now fully function
 
 ### **Issues Fixed:**
 1. ✅ 500 Internal Server Error on `/api/plan-builder-proxy`
-2. ✅ 500 Internal Server Error on `/api/viral-blueprint-proxy`
+2. ✅ 500 Internal Server Error on `/api/ignite-engine-proxy`
 3. ✅ Missing API routes in local development server
 4. ✅ Environment variables properly configured
 
@@ -32,7 +32,7 @@ All API endpoints are now responding correctly:
 2️⃣  Testing plan-builder-proxy (CORS preflight)...
    ✅ CORS preflight passed (HTTP 200)
 
-3️⃣  Testing viral-blueprint-proxy (CORS preflight)...
+3️⃣  Testing ignite-engine-proxy (CORS preflight)...
    ✅ CORS preflight passed (HTTP 200)
 
 4️⃣  Testing plan-builder-proxy (POST with test data)...
@@ -51,7 +51,7 @@ All API endpoints are now responding correctly:
 
 **Added routes:**
 - `/api/plan-builder-proxy` - Proxies Plan Builder requests to n8n
-- `/api/viral-blueprint-proxy` - Proxies Viral Blueprint requests to n8n
+- `/api/ignite-engine-proxy` - Proxies Ignite Engine requests to n8n
 - `/api/create-plan-builder-job` - Creates Plan Builder jobs in Supabase
 - `/api/get-job-status` - Checks job status
 
@@ -293,7 +293,7 @@ npm run dev:local
 2. ✅ Environment variables configured
 3. ✅ Services running correctly
 4. ▶️ **Test the full AI Plan Builder workflow**
-5. ▶️ **Test Viral Blueprint feature**
+5. ▶️ **Test Ignite Engine feature**
 6. ▶️ **Verify authentication works correctly**
 
 ### **For Development:**

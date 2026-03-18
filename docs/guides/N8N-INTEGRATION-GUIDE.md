@@ -381,7 +381,7 @@ Huttle AI uses two types of AI integrations:
 | Type | Use Case | Examples |
 |------|----------|----------|
 | **In-Code AI** | Real-time, interactive features | AI Power Tools, Audience Engine, Content Remix |
-| **N8N Workflows** | Complex, multi-step operations | Plan Builder, Trend Forecaster, Viral Blueprint |
+| **N8N Workflows** | Complex, multi-step operations | Plan Builder, Trend Forecaster, Ignite Engine |
 
 ### Workflow Features
 
@@ -394,7 +394,7 @@ These features are designed to use n8n workflows:
 | AI Plan Builder | `VITE_N8N_PLAN_BUILDER_WEBHOOK` | `/webhook/ai-plan-builder` |
 | Trend Deep Dive | Direct serverless route | `/api/ai/deep-dive` |
 | Trend Forecaster | `VITE_N8N_TREND_FORECASTER_WEBHOOK` | `/webhook/trend-forecaster` |
-| Viral Blueprint | `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` | `/webhook/viral-blueprint` |
+| Ignite Engine | `VITE_N8N_IGNITE_ENGINE_WEBHOOK` | `/webhook/ignite-engine` |
 | Social Updates | `VITE_N8N_SOCIAL_UPDATES_WEBHOOK` | `/webhook/social-updates` |
 
 ### Environment Variables for Workflows
@@ -406,7 +406,7 @@ Add these to your `.env` when workflows are ready:
 VITE_N8N_DASHBOARD_WEBHOOK=https://your-n8n.app/webhook/dashboard-data
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n.app/webhook/ai-plan-builder
 VITE_N8N_TREND_FORECASTER_WEBHOOK=https://your-n8n.app/webhook/trend-forecaster
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n.app/webhook/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://your-n8n.app/webhook/ignite-engine
 VITE_N8N_SOCIAL_UPDATES_WEBHOOK=https://your-n8n.app/webhook/social-updates
 ```
 

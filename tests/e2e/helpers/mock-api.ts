@@ -448,7 +448,7 @@ export async function setupMockApis(page: Page) {
     });
   });
 
-  await page.route('**/api/viral-blueprint-proxy**', async (route) => {
+  await page.route('**/api/ignite-engine-proxy**', async (route) => { // HUTTLE AI: updated 3
     await fulfillJson(route, {
       blueprint: 'Hook -> proof -> payoff -> CTA',
       directors_cut: [

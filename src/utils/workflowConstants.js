@@ -7,7 +7,7 @@
  * - Dashboard Trending Now & Hashtags of the Day
  * - AI Plan Builder
  * - Trend Forecaster
- * - Viral Blueprint Generator
+ * - Ignite Engine
  * - Social Updates Feed
  * 
  * IN-CODE FEATURES (NOT workflows):
@@ -42,7 +42,7 @@ export const WORKFLOW_NAMES = {
   TREND_FORECASTER: 'trend-forecaster',
   
   // Content workflows
-  VIRAL_BLUEPRINT: 'viral-blueprint',
+  IGNITE_ENGINE: 'ignite-engine', // HUTTLE AI: updated 3
   
   // Updates workflows
   SOCIAL_UPDATES: 'social-updates'
@@ -61,7 +61,7 @@ export const WORKFLOW_ENV_VARS = {
   [WORKFLOW_NAMES.DASHBOARD_HASHTAGS]: 'VITE_N8N_DASHBOARD_WEBHOOK', // Same endpoint, different payload
   [WORKFLOW_NAMES.AI_PLAN_BUILDER]: 'VITE_N8N_PLAN_BUILDER_WEBHOOK',
   [WORKFLOW_NAMES.TREND_FORECASTER]: 'VITE_N8N_TREND_FORECASTER_WEBHOOK',
-  [WORKFLOW_NAMES.VIRAL_BLUEPRINT]: 'VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK',
+  [WORKFLOW_NAMES.IGNITE_ENGINE]: 'VITE_N8N_IGNITE_ENGINE_WEBHOOK', // HUTTLE AI: updated 3
   [WORKFLOW_NAMES.SOCIAL_UPDATES]: 'VITE_N8N_SOCIAL_UPDATES_WEBHOOK'
 };
 
@@ -73,7 +73,7 @@ export const WORKFLOW_WEBHOOKS = {
   [WORKFLOW_NAMES.DASHBOARD_HASHTAGS]: '/webhook/dashboard-hashtags',
   [WORKFLOW_NAMES.AI_PLAN_BUILDER]: '/webhook/ai-plan-builder',
   [WORKFLOW_NAMES.TREND_FORECASTER]: '/webhook/trend-forecaster',
-  [WORKFLOW_NAMES.VIRAL_BLUEPRINT]: '/webhook/viral-blueprint',
+  [WORKFLOW_NAMES.IGNITE_ENGINE]: '/webhook/ignite-engine', // HUTTLE AI: updated 3
   [WORKFLOW_NAMES.SOCIAL_UPDATES]: '/webhook/social-updates'
 };
 
@@ -89,7 +89,7 @@ export const WORKFLOW_WEBHOOKS = {
  * @returns {boolean} True if workflow is configured
  * 
  * @example
- * if (isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT)) {
+ * if (isWorkflowConfigured(WORKFLOW_NAMES.IGNITE_ENGINE)) {
  *   // Use n8n workflow
  * } else {
  *   // Use fallback
@@ -146,7 +146,7 @@ export function getWorkflowUrl(workflowName) {
  * 
  * @example
  * const configured = getConfiguredWorkflows();
- * // Returns: { 'viral-blueprint': 'https://...', 'ai-plan-builder': 'https://...' }
+ * // Returns: { 'ignite-engine': 'https://...', 'ai-plan-builder': 'https://...' }
  */
 export function getConfiguredWorkflows() {
   const configured = {};
@@ -198,7 +198,7 @@ export const WORKFLOW_FALLBACKS = {
   [WORKFLOW_NAMES.AI_PLAN_BUILDER]: FALLBACK_MODES.IN_CODE_AI,
   [WORKFLOW_NAMES.TREND_DEEP_DIVE]: FALLBACK_MODES.IN_CODE_AI,
   [WORKFLOW_NAMES.TREND_FORECASTER]: FALLBACK_MODES.IN_CODE_AI,
-  [WORKFLOW_NAMES.VIRAL_BLUEPRINT]: FALLBACK_MODES.MOCK,
+  [WORKFLOW_NAMES.IGNITE_ENGINE]: FALLBACK_MODES.MOCK, // HUTTLE AI: updated 3
   [WORKFLOW_NAMES.SOCIAL_UPDATES]: FALLBACK_MODES.SUPABASE
 };
 
@@ -268,9 +268,9 @@ export const WORKFLOW_FEATURES = [
     fallback: 'Perplexity + Grok combined analysis'
   },
   {
-    name: 'Viral Blueprint',
-    workflow: WORKFLOW_NAMES.VIRAL_BLUEPRINT,
-    description: 'Step-by-step viral content blueprints',
+    name: 'Ignite Engine', // HUTTLE AI: updated 3
+    workflow: WORKFLOW_NAMES.IGNITE_ENGINE, // HUTTLE AI: updated 3
+    description: 'Step-by-step content briefs with hooks, visuals, and timing', // HUTTLE AI: updated 3
     fallback: 'Mock blueprint generator'
   },
   {

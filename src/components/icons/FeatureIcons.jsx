@@ -432,8 +432,8 @@ export function QualityScorerIcon({ className = "", size = 64 }) {
   );
 }
 
-// Viral Blueprint - Script with sparkles and viral wave
-export function ViralBlueprintIcon({ className = "", size = 64 }) {
+// Ignite Engine - Script with sparkles and viral wave // HUTTLE AI: updated 3
+export function IgniteEngineIcon({ className = "", size = 64 }) { // HUTTLE AI: updated 3
   return (
     <motion.svg
       width={size}
@@ -521,7 +521,7 @@ export function ViralBlueprintIcon({ className = "", size = 64 }) {
 
 // Export all icons as a collection
 export const FeatureIcons = {
-  ViralBlueprint: ViralBlueprintIcon,
+  IgniteEngine: IgniteEngineIcon, // HUTTLE AI: updated 3
   ContentVault: ContentVaultIcon,
   AIPlanBuilder: AIPlanBuilderIcon,
   ContentRemix: ContentRemixIcon,

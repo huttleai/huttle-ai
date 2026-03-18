@@ -629,7 +629,7 @@
     transform: translateY(-1px);
   }
 
-  /* Ignite Button - Viral Blueprint Generator */
+  /* Ignite Button - Ignite Engine */ /* HUTTLE AI: updated 3 */
   @keyframes ignite-glow {
     0%, 100% {
       box-shadow: 
@@ -834,6 +834,16 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  @media (min-width: 640px) { /* HUTTLE: card fix */
+    .sm\:line-clamp-none { /* HUTTLE: card fix */
+      display: block; /* HUTTLE: card fix */
+      -webkit-line-clamp: unset; /* HUTTLE: card fix */
+      line-clamp: unset; /* HUTTLE: card fix */
+      -webkit-box-orient: initial; /* HUTTLE: card fix */
+      overflow: visible; /* HUTTLE: card fix */
+    } /* HUTTLE: card fix */
+  } /* HUTTLE: card fix */
 
   /* Hide scrollbar */
   .scrollbar-hide {

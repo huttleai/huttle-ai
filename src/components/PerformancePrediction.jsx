@@ -6,6 +6,7 @@ import { getTrendContextForPrediction } from '../services/perplexityAPI';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 import PlatformSelector from './PlatformSelector';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const predictionCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
@@ -187,7 +188,7 @@ export default function PerformancePrediction({
                   <span className="text-xs font-medium text-gray-500">Engagement Level</span>
                 </div>
                 <span className={`inline-block px-2.5 py-1 rounded-lg text-sm font-semibold ${engagementColors[result.engagementLevel] || 'text-gray-500 bg-gray-50'}`}>
-                  {result.engagementLevel}
+                  {sanitizeAIOutput(result.engagementLevel)}
                 </span>
               </div>
 
@@ -197,8 +198,8 @@ export default function PerformancePrediction({
                   <BarChart3 className="w-4 h-4 text-gray-400" />
                   <span className="text-xs font-medium text-gray-500">Reach Potential</span>
                 </div>
-                <span className="text-sm font-semibold text-gray-900">{result.reachPotential}</span>
-                <span className="text-xs text-gray-500 ml-1">({result.reachRange})</span>
+                <span className="text-sm font-semibold text-gray-900">{sanitizeAIOutput(result.reachPotential)}</span>
+                <span className="text-xs text-gray-500 ml-1">({sanitizeAIOutput(result.reachRange)})</span>
                 <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
                   <div className={`h-1.5 rounded-full transition-all ${reachColors[result.reachPotential]?.color || 'bg-gray-400'} ${reachColors[result.reachPotential]?.bar || 'w-1/4'}`} />
                 </div>
@@ -213,7 +214,7 @@ export default function PerformancePrediction({
                 <span className={`text-xl font-bold ${(result.platformFitScore || 0) >= 60 ? 'text-teal-600' : 'text-amber-600'}`}>
                   {result.platformFitScore}%
                 </span>
-                <p className="text-xs text-gray-500 mt-1">{result.platformFitNote}</p>
+                <p className="text-xs text-gray-500 mt-1">{sanitizeAIOutput(result.platformFitNote)}</p>
               </div>
 
               {/* Trend Alignment */}
@@ -225,7 +226,7 @@ export default function PerformancePrediction({
                 <span className={`text-xl font-bold ${(result.trendAlignment || 0) >= 60 ? 'text-teal-600' : 'text-amber-600'}`}>
                   {result.trendAlignment}%
                 </span>
-                <p className="text-xs text-gray-500 mt-1">{result.trendAlignmentNote}</p>
+                <p className="text-xs text-gray-500 mt-1">{sanitizeAIOutput(result.trendAlignmentNote)}</p>
               </div>
 
               {/* Best Posting Window */}
@@ -234,7 +235,7 @@ export default function PerformancePrediction({
                   <Clock className="w-4 h-4 text-gray-400" />
                   <span className="text-xs font-medium text-gray-500">Best Posting Window</span>
                 </div>
-                <span className="text-sm font-semibold text-gray-900">{result.bestPostingWindow}</span>
+                <span className="text-sm font-semibold text-gray-900">{sanitizeAIOutput(result.bestPostingWindow)}</span>
               </div>
 
               {/* Confidence */}
@@ -244,15 +245,15 @@ export default function PerformancePrediction({
                   <span className="text-xs font-medium text-gray-500">Prediction Confidence</span>
                 </div>
                 <span className={`text-sm font-semibold ${result.confidence === 'Medium' ? 'text-teal-600' : 'text-amber-600'}`}>
-                  {result.confidence}
+                  {sanitizeAIOutput(result.confidence)}
                 </span>
-                <p className="text-xs text-gray-500 mt-1">{result.confidenceNote}</p>
+                <p className="text-xs text-gray-500 mt-1">{sanitizeAIOutput(result.confidenceNote)}</p>
               </div>
             </div>
 
             {result.reasoning && (
               <div className="bg-gray-50 rounded-xl border border-gray-200 p-3">
-                <p className="text-xs text-gray-600">{result.reasoning}</p>
+                <p className="text-xs text-gray-600">{sanitizeAIOutput(result.reasoning)}</p>
               </div>
             )}
 

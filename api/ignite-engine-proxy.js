@@ -1,12 +1,12 @@
 /**
- * Viral Blueprint Webhook Proxy
- * 
- * Serverless function that proxies Viral Blueprint requests to n8n webhook.
+ * Ignite Engine Webhook Proxy
+ *
+ * Serverless function that proxies Ignite Engine requests to n8n webhook.
  * Now supports the enriched blueprintContext payload with required_sections,
  * excluded_sections, viral_score_weights, etc.
- * 
+ *
  * Environment Variables Required:
- * - N8N_VIRAL_BLUEPRINT_WEBHOOK: n8n webhook endpoint for viral blueprint
+ * - N8N_IGNITE_ENGINE_WEBHOOK: n8n webhook endpoint for Ignite Engine
  * - GROK_API_KEY: server-side Grok key forwarded to the workflow when needed
  */
 
@@ -14,8 +14,8 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 const N8N_WEBHOOK_URL =
-  process.env.N8N_VIRAL_BLUEPRINT_WEBHOOK ||
-  process.env.VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK;
+  process.env.N8N_IGNITE_ENGINE_WEBHOOK || // HUTTLE AI: updated 3
+  process.env.VITE_N8N_IGNITE_ENGINE_WEBHOOK; // HUTTLE AI: updated 3
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
   }
 
   if (!N8N_WEBHOOK_URL) {
-    console.error('[viral-blueprint-proxy] N8N webhook URL not configured', { requestId });
+    console.error('[ignite-engine-proxy] N8N webhook URL not configured', { requestId }); // HUTTLE AI: updated 3
     return res.status(500).json({ error: 'Service not configured. Please try again later.', requestId });
   }
 
@@ -127,8 +127,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
-      console.error('[viral-blueprint-proxy] n8n error response:', errorText, { requestId });
-      return res.status(response.status).json({ 
+      console.error('[ignite-engine-proxy] n8n error response:', errorText, { requestId }); // HUTTLE AI: updated 3
+      return res.status(response.status).json({
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
         requestId
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
         requestId
       });
     }
-    
+
     if (data && typeof data === 'object') {
       return res.status(200).json({ ...data, requestId });
     }
@@ -154,7 +154,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ content: rawResponse, requestId });
 
   } catch (error) {
-    console.error('[viral-blueprint-proxy] Error:', {
+    console.error('[ignite-engine-proxy] Error:', { // HUTTLE AI: updated 3
       name: error.name,
       message: error.message,
     });

@@ -20,13 +20,13 @@ import {
  */
 
 // Animated Preview Components - Use CSS animations for repeating effects
-const ViralBlueprintPreview = () => (
+const IgniteEnginePreview = () => ( // HUTTLE AI: updated 3
   <div className="relative w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 overflow-hidden">
     <div className="flex items-center gap-2 mb-4">
       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
         <Sparkles size={16} className="text-white" />
       </div>
-      <span className="text-white font-semibold text-sm">Viral Blueprint</span>
+      <span className="text-white font-semibold text-sm">Ignite Engine</span> {/* HUTTLE AI: updated 3 */}
     </div>
     
     <div className="space-y-3">
@@ -246,11 +246,11 @@ const AIPlanBuilderPreview = () => (
 // Feature data
 const features = [
   {
-    id: 'viral-blueprint',
-    title: 'Viral Blueprint Generator',
-    description: 'AI analyzes trending content and generates complete scripts with hooks, visuals, keywords, and optimal timing.',
+    id: 'ignite-engine', // HUTTLE AI: updated 3
+    title: 'Ignite Engine', // HUTTLE AI: updated 3
+    description: 'AI analyzes trending content and generates complete briefs with hooks, visuals, keywords, and optimal timing.', // HUTTLE AI: updated 3
     icon: Rocket,
-    preview: ViralBlueprintPreview,
+    preview: IgniteEnginePreview, // HUTTLE AI: updated 3
   },
   {
     id: 'content-vault',

@@ -29,7 +29,7 @@ AggregateError [ECONNREFUSED]
 ### **Problem 2: Missing Routes**
 - Local API server (`server/local-api-server.js`) was missing:
   - `/api/plan-builder-proxy`
-  - `/api/viral-blueprint-proxy`
+  - `/api/ignite-engine-proxy`
   - `/api/create-plan-builder-job`
   - `/api/get-job-status`
 
@@ -39,7 +39,7 @@ AggregateError [ECONNREFUSED]
 
 ### **1. Updated Local API Server**
 - ✅ Added `/api/plan-builder-proxy` route
-- ✅ Added `/api/viral-blueprint-proxy` route
+- ✅ Added `/api/ignite-engine-proxy` route
 - ✅ Added `/api/create-plan-builder-job` route
 - ✅ Added `/api/get-job-status` route
 
@@ -52,7 +52,7 @@ AggregateError [ECONNREFUSED]
 ### **3. Tested All Endpoints**
 - ✅ CORS preflight requests working (200 OK)
 - ✅ POST to `/api/plan-builder-proxy` working (200 OK)
-- ✅ POST to `/api/viral-blueprint-proxy` working (200 OK)
+- ✅ POST to `/api/ignite-engine-proxy` working (200 OK)
 - ✅ Webhook communication with n8n successful
 
 ### **4. Created Helper Tools**
@@ -117,7 +117,7 @@ $ ./test-api.sh
 2️⃣  Testing plan-builder-proxy (CORS preflight)...
    ✅ CORS preflight passed (HTTP 200)
 
-3️⃣  Testing viral-blueprint-proxy (CORS preflight)...
+3️⃣  Testing ignite-engine-proxy (CORS preflight)...
    ✅ CORS preflight passed (HTTP 200)
 
 4️⃣  Testing plan-builder-proxy (POST with test data)...
@@ -167,8 +167,8 @@ $ ./test-api.sh
    - Click "Generate Plan"
    - Check console logs (F12)
 
-4. **Test Viral Blueprint:**
-   - Go to Viral Blueprint page
+4. **Test Ignite Engine:**
+   - Go to Ignite Engine page
    - Enter topic, platform, format
    - Click "Generate Blueprint"
    - Verify it works

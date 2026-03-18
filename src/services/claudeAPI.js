@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { buildPromptBrandSection, getPromptBrandProfile } from '../utils/brandContextBuilder';
+import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
 const CLAUDE_MODEL = 'claude-sonnet-4-6-20250514';
@@ -42,10 +43,11 @@ export async function callClaudeAPI(messages, temperature = 0.7) {
 }
 
 export async function enhanceCaptionWithClaude({ caption, platform, topic, selectedHook }, brandData = null) {
+  const brandBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
   const messages = [
     {
       role: 'system',
-      content: 'You are an expert social media copywriter. Take this caption and enhance it to be more compelling, emotionally resonant, and platform-native while preserving the creator\'s brand voice exactly. Do not change the core message.',
+      content: `${brandBlock}You are an expert social media copywriter. Take this caption and enhance it to be more compelling, emotionally resonant, and platform-native while preserving the creator\'s brand voice exactly. Do not change the core message.`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
@@ -78,10 +80,11 @@ export async function humanizeContentWithClaude(content, brandData = null, platf
   });
   const selectedPlatform = platform || promptProfile.platforms?.[0] || 'instagram';
   const niche = promptProfile.niche || 'Small Business';
+  const brandBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
   const messages = [
     {
       role: 'system',
-      content: 'You are an expert at making AI-generated content sound authentically human.',
+      content: `${brandBlock}You are an expert at making AI-generated content sound authentically human.`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',

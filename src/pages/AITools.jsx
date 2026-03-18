@@ -26,6 +26,7 @@ import HumanizerScore from '../components/HumanizerScore';
 import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { buildContentVaultPayload } from '../utils/contentVault';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 function uniqueNonEmpty(items) {
   return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
@@ -38,6 +39,10 @@ function hasConfiguredNiche(brandData) {
 
   return Boolean(brandData?.niche?.trim());
 }
+
+function renderAIText(value) { // HUTTLE: sanitized
+  return sanitizeAIOutput(value); // HUTTLE: sanitized
+} // HUTTLE: sanitized
 
 function buildCaptionFallbacks(topic, platformLabel, tone) {
   const normalizedTopic = topic?.trim() || 'this idea';
@@ -867,7 +872,7 @@ export default function AITools() {
                   <div className="space-y-3">
                     {generatedCaptions.map((caption, i) => (
                       <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                        <p className="text-xs md:text-sm text-gray-800 whitespace-pre-wrap mb-3">{caption.trim()}</p>
+                        <p className="text-xs md:text-sm text-gray-800 whitespace-pre-wrap mb-3">{renderAIText(caption)}</p>
                         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
                           <button onClick={() => handleCopy(caption.trim(), `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
                             {copiedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
@@ -1076,7 +1081,7 @@ export default function AITools() {
                   <div className="space-y-2">
                     {generatedHooks.map((hook, i) => (
                       <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                        <p className="text-sm text-gray-800 font-medium flex-1">{hook.trim()}</p>
+                        <p className="text-sm text-gray-800 font-medium flex-1">{renderAIText(hook)}</p>
                         <div className="flex items-center gap-1.5 ml-2">
                           <button onClick={() => handleAddToLibrary(hook.trim(), 'hook', { input: hookInput }, `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Save to Vault">
                             {savedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
@@ -1198,7 +1203,7 @@ export default function AITools() {
                   {styledCTAs.platformTip && (
                     <div className="text-xs text-huttle-primary bg-huttle-primary/5 border border-huttle-primary/10 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
                       <Lightbulb className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>{styledCTAs.platformTip}</span>
+                      <span>{renderAIText(styledCTAs.platformTip)}</span>
                     </div>
                   )}
 
@@ -1218,9 +1223,9 @@ export default function AITools() {
                               {item.style}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-800 font-medium mb-2">{item.cta}</p>
+                          <p className="text-sm text-gray-800 font-medium mb-2">{renderAIText(item.cta)}</p>
                           {item.tip && (
-                            <p className="text-xs text-gray-500 mb-3 italic">{item.tip}</p>
+                            <p className="text-xs text-gray-500 mb-3 italic">{renderAIText(item.tip)}</p>
                           )}
                           <div className="flex flex-wrap items-center gap-1.5">
                             <button onClick={() => handleCopy(item.cta, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
@@ -1344,7 +1349,7 @@ export default function AITools() {
                           {contentScore.suggestions.map((suggestion, i) => (
                             <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
                               <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
-                              {suggestion}
+                              {renderAIText(suggestion)}
                             </li>
                           ))}
                         </ul>
@@ -1352,7 +1357,7 @@ export default function AITools() {
                       {contentScore.rewriteExample && (
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <h4 className="font-semibold text-gray-900 mb-2 text-sm">Rewrite Example</h4>
-                          <p className="text-sm text-gray-700">{contentScore.rewriteExample}</p>
+                          <p className="text-sm text-gray-700">{renderAIText(contentScore.rewriteExample)}</p>
                         </div>
                       )}
                     </div>
@@ -1535,7 +1540,7 @@ export default function AITools() {
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded">Prompt {i + 1}</span>
                         </div>
-                        <p className="text-sm text-gray-800 leading-relaxed mb-3">{prompt}</p>
+                        <p className="text-sm text-gray-800 leading-relaxed mb-3">{renderAIText(prompt)}</p>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button onClick={() => handleCopy(prompt, `vb-prompt-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
                             {copiedIndex === `vb-prompt-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
@@ -1569,7 +1574,7 @@ export default function AITools() {
                         {(visualBrainstormResult.guide.shotList || []).map((shot, i) => (
                           <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
-                            {shot}
+                            {renderAIText(shot)}
                           </li>
                         ))}
                       </ul>
@@ -1581,7 +1586,7 @@ export default function AITools() {
                         <span className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center text-amber-600 text-xs font-bold">2</span>
                         Lighting
                       </h5>
-                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.lighting}</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.guide.lighting)}</p>
                     </div>
 
                     {/* Composition */}
@@ -1590,7 +1595,7 @@ export default function AITools() {
                         <span className="w-5 h-5 rounded bg-purple-100 flex items-center justify-center text-purple-600 text-xs font-bold">3</span>
                         Composition
                       </h5>
-                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.composition}</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.guide.composition)}</p>
                     </div>
 
                     {/* Props & Styling */}
@@ -1599,7 +1604,7 @@ export default function AITools() {
                         <span className="w-5 h-5 rounded bg-pink-100 flex items-center justify-center text-pink-600 text-xs font-bold">4</span>
                         Props & Styling
                       </h5>
-                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.propsAndStyling}</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.guide.propsAndStyling)}</p>
                     </div>
 
                     {/* Mood & Color Palette */}
@@ -1608,7 +1613,7 @@ export default function AITools() {
                         <span className="w-5 h-5 rounded bg-green-100 flex items-center justify-center text-green-600 text-xs font-bold">5</span>
                         Mood & Color Palette
                       </h5>
-                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.moodAndPalette}</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.guide.moodAndPalette)}</p>
                     </div>
 
                     {/* Platform Tips */}
@@ -1617,7 +1622,7 @@ export default function AITools() {
                         <span className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">6</span>
                         Platform Tips
                       </h5>
-                      <p className="text-sm text-gray-700">{visualBrainstormResult.guide.platformTips}</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.guide.platformTips)}</p>
                     </div>
 
                     {/* Copy / Save actions */}

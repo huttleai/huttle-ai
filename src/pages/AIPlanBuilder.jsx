@@ -14,6 +14,8 @@ import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
+import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -177,6 +179,13 @@ export default function AIPlanBuilder() {
     showToast('AI Plan generated successfully!', 'success');
   }, [handleJobFailed, showToast]);
 
+  // HUTTLE AI: brand context injected — pre-select platforms from brand profile
+  useEffect(() => {
+    if (selectedPlatforms.length === 0 && brandProfile?.platforms?.length > 0) {
+      setSelectedPlatforms(brandProfile.platforms);
+    }
+  }, [brandProfile?.platforms]);
+
   useEffect(() => {
     const goalParam = searchParams.get('goal');
 
@@ -318,11 +327,13 @@ export default function AIPlanBuilder() {
       setCurrentJobId(jobId);
 
       // Step 2: Trigger n8n webhook with job_id AND form data (fire-and-forget with retry)
+      const brandBlock = buildBrandContext(brandProfile, { first_name: user?.user_metadata?.first_name }); // HUTTLE AI: brand context injected
       const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
         contentGoal: selectedGoal,
         timePeriod: String(selectedPeriod),
         platformFocus: selectedPlatforms,
-        brandVoice: brandVoice
+        brandVoice: brandVoice,
+        brandContext: brandBlock // HUTTLE AI: brand context injected
       });
       
       if (!webhookSuccess) {
@@ -642,13 +653,13 @@ export default function AIPlanBuilder() {
               <CheckCircle className="w-8 h-8 text-green-600" />
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Your Content Strategy</h2>
-                <p className="text-gray-600">Goal: {generatedPlan.goal}</p>
+                <p className="text-gray-600">Goal: {sanitizeAIOutput(generatedPlan.goal)}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-lg p-4 border border-green-200">
                 <h4 className="text-sm font-semibold text-gray-700 mb-1">Platforms</h4>
-                <p className="text-sm font-semibold text-gray-900">{generatedPlan.platforms?.join(', ') || 'Multi-platform'}</p>
+                <p className="text-sm font-semibold text-gray-900">{sanitizeAIOutput(generatedPlan.platforms?.join(', ')) || 'Multi-platform'}</p>
               </div>
               <div className="bg-white rounded-lg p-4 border border-green-200">
                 <h4 className="text-sm font-semibold text-gray-700 mb-1">Days</h4>
@@ -762,11 +773,11 @@ export default function AIPlanBuilder() {
                     </span>
                   </div>
                   
-                  <p className="text-gray-800 mb-4">{post.topic || post.theme || 'Content idea'}</p>
+                  <p className="text-gray-800 mb-4">{sanitizeAIOutput(post.topic || post.theme) || 'Content idea'}</p>
                   
                   <div className="flex flex-wrap gap-3 text-xs text-gray-600 mb-4">
                     <span className="bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
-                      Format: {post.content_type || post.type || 'Post'}
+                      Format: {sanitizeAIOutput(post.content_type || post.type) || 'Post'}
                     </span>
                     <span className="bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
                       Best time: {post.scheduled_time ? formatTo12Hour(post.scheduled_time) : 'TBD'}

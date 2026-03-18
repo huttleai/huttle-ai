@@ -26,10 +26,10 @@ Save your mobile screenshot to the `public` folder:
 
 ```bash
 # Place your screenshot here:
-/public/viral-blueprint-mobile.png
+/public/ignite-engine-mobile.png
 ```
 
-**Note:** The screenshot from your message needs to be saved as `viral-blueprint-mobile.png` in the `/public` folder.
+**Note:** The screenshot from your message needs to be saved as `ignite-engine-mobile.png` in the `/public` folder.
 
 ### Step 2: View the Demo
 
@@ -59,8 +59,8 @@ http://localhost:5173/dashboard/mockup-showcase
 import IPhoneMockup from '../components/IPhoneMockup';
 
 <IPhoneMockup 
-  imageSrc="/viral-blueprint-mobile.png" 
-  imageAlt="Viral Blueprint Generator"
+  imageSrc="/ignite-engine-mobile.png"
+  imageAlt="Ignite Engine"
 />
 ```
 
@@ -86,9 +86,9 @@ import IPhoneMockup from '../components/IPhoneMockup';
 />
 ```
 
-### In Your Viral Blueprint Page
+### In Your Ignite Engine Page
 
-Add this anywhere in `src/pages/ViralBlueprint.jsx`:
+Add this anywhere in `src/pages/IgniteEngine.jsx`:
 
 ```jsx
 import IPhoneMockup from '../components/IPhoneMockup';
@@ -99,8 +99,8 @@ import IPhoneMockup from '../components/IPhoneMockup';
     Mobile Experience
   </h2>
   <IPhoneMockup 
-    imageSrc="/viral-blueprint-mobile.png" 
-    imageAlt="Viral Blueprint Generator - Mobile View"
+    imageSrc="/ignite-engine-mobile.png"
+    imageAlt="Ignite Engine - Mobile View"
   />
 </div>
 ```
@@ -223,7 +223,7 @@ Full documentation available at:
 
 ## 🎉 Next Steps
 
-1. **Save your screenshot** to `/public/viral-blueprint-mobile.png`
+1. **Save your screenshot** to `/public/ignite-engine-mobile.png`
 2. **Visit the demo** at `/dashboard/mockup-demo`
 3. **View the showcase** at `/dashboard/mockup-showcase`
 4. **Use in your pages** - Import and add `<IPhoneMockup />` anywhere!

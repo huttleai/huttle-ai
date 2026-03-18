@@ -6,6 +6,7 @@ import { ToastProvider } from '../context/ToastContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ContentProvider } from '../context/ContentContext';
 import { SubscriptionProvider } from '../context/SubscriptionContext';
+import { DashboardProvider } from '../context/DashboardContext'; // HUTTLE AI: cache fix
 import Sidebar from '../components/Sidebar';
 import TopHeader from '../components/TopHeader';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -155,9 +156,11 @@ export default function DashboardManager({ secureAccountMode = false, onboarding
           <ToastProvider>
             <NotificationProvider>
               <SubscriptionProvider>
-                <ContentProvider>
-                    <AppContent secureAccountMode={secureAccountMode} onboardingMode={onboardingMode} />
-                </ContentProvider>
+                <DashboardProvider> {/* HUTTLE AI: cache fix */}
+                  <ContentProvider> {/* HUTTLE AI: cache fix */}
+                      <AppContent secureAccountMode={secureAccountMode} onboardingMode={onboardingMode} /> {/* HUTTLE AI: cache fix */}
+                  </ContentProvider> {/* HUTTLE AI: cache fix */}
+                </DashboardProvider> {/* HUTTLE AI: cache fix */}
               </SubscriptionProvider>
             </NotificationProvider>
           </ToastProvider>

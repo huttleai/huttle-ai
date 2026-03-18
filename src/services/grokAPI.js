@@ -25,6 +25,7 @@ import {
   buildPromptBrandSection,
   getPromptBrandProfile
 } from '../utils/brandContextBuilder';
+import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import { supabase } from '../config/supabase';
 import { 
@@ -58,6 +59,13 @@ function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}
     NO_PLACEHOLDER_GUARDRAIL,
     readyToUse ? READY_TO_USE_GUARDRAIL : null,
   ].filter(Boolean).join('\n');
+}
+
+// HUTTLE AI: brand context injected — prepend creator brand profile to any system prompt
+function buildSystemPromptWithBrandBlock(basePrompt, brandData) {
+  const brandBlock = buildCreatorBrandBlock(brandData, brandData);
+  const fullPrompt = buildSystemPromptWithBrandBlock(basePrompt, brandData);
+  return brandBlock ? `${brandBlock}\n${fullPrompt}` : fullPrompt;
 }
 
 function resolveCreatorPromptType(promptProfile, brandData = null) {
@@ -365,7 +373,7 @@ export async function generateTrendIdeas(brandData, trendTopic) {
   }
 
   try {
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an expert content creator assistant. Generate creative, engaging content ideas that resonate with the target audience.',
       brandData
     );
@@ -439,7 +447,7 @@ export async function generateCaption(contentData, brandData) {
       tone: promptProfile.tone,
       platforms: promptProfile.platforms,
     });
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are Caption Architect — an elite social media copywriter who has written captions for 7-figure creator brands and Fortune 500 companies. You combine conversion copywriting with deep platform psychology to produce captions that stop the scroll, build connection, and drive measurable action.
 
 CHAIN-OF-THOUGHT (apply internally before every output):
@@ -562,8 +570,9 @@ export async function scoreContentQuality(content, brandData = null) {
   }
 
   try {
+    const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
     const brandContext = brandData ? buildBrandContext(brandData) : '';
-    const brandSection = brandContext ? `\n\nBrand Profile to evaluate against:\n${brandContext}` : '';
+    const brandSection = brandContext ? `\n${creatorBlock}\nBrand Profile to evaluate against:\n${brandContext}` : (creatorBlock || '');
     const promptProfile = getPromptBrandProfile(brandData);
     const primaryPlatform = promptProfile.platforms[0] || 'Instagram';
 
@@ -701,7 +710,7 @@ Provide 2-3 specific improvements and one concrete rewrite example for the weake
 
 export async function generateContentPlan(goals, brandData, days = 7) {
   try {
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an AI content strategist. Create detailed, actionable content calendars that align with brand goals.',
       brandData
     );
@@ -763,7 +772,7 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
     const hookGuidelines = getHookGuidelines(platform);
     const platformData = getPlatform(platform);
 
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are Hook Sniper — a direct response copywriter obsessed with the first 3 seconds of attention. You have reverse-engineered thousands of viral hooks and understand the neurological triggers that halt a thumb mid-scroll. Your hooks create an involuntary "wait, what?" response.
 
 THE 6 ARCHETYPES YOU MASTER:
@@ -873,7 +882,7 @@ export async function generateFullPostHooks({ topic, hookType = 'Question', plat
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: buildSystemPrompt(
+        content: buildSystemPromptWithBrandBlock(
           `You are a professional social media copywriter. Generate hooks that are accurate to current platform behavior and stop-scroll patterns. Each hook must be under 15 words, feel native to the selected platform, and match the creator's brand voice.
 
 OUTPUT RULES:
@@ -961,7 +970,7 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const ctaGuidelines = getCTAGuidelines(platform);
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are a conversion copywriter specializing in social media. Generate CTAs that drive the specific goal selected, feel native to the platform, and match the creator's brand voice and tone.
 
 OUTPUT FORMAT — Return ONLY valid JSON:
@@ -1095,7 +1104,7 @@ export async function generateCTAs(goal, brandData, platform = 'instagram') {
     const ctaGuidelines = getCTAGuidelines(platform);
     const platformData = getPlatform(platform);
 
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are a call-to-action specialist. Create compelling, action-oriented CTAs that drive conversions.
 
 CREATOR-TYPE BRANCHING:
@@ -1197,7 +1206,7 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
       ? (realtimeResearch.research || 'No live research returned.')
       : '';
     const hasRealtimeResearch = Boolean(realtimeResearch.success && liveResearchText.trim());
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are a hashtag ranking specialist for social media growth. Use the live research provided to rank the most current and high-performing hashtags for the topic and platform.
 
 OUTPUT FORMAT — Return ONLY a valid JSON array:
@@ -1299,7 +1308,7 @@ For each item include:
 export async function improveContent(content, suggestions, brandData) {
   try {
     const niche = getNiche(brandData);
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       `You are a content improvement specialist for ${niche}. Enhance content while maintaining brand voice.`,
       brandData
     );
@@ -1349,7 +1358,7 @@ Provide the improved version.`
  */
 export async function polishVoiceTranscript(transcript, brandData, platform = 'social media') {
   try {
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an expert social media content writer. Transform raw voice transcripts into polished, engaging social media captions while preserving the original message and intent.',
       brandData
     );
@@ -1436,7 +1445,7 @@ export async function generateCaptionVariations(originalCaption, brandData, coun
   }
 
   try {
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an expert social media copywriter. Create engaging caption variations that test different hooks, tones, and CTAs while maintaining the core message.',
       brandData
     );
@@ -1539,7 +1548,7 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
     const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
     const baseSystemPrompt = systemPrompts[mode] || systemPrompts.viral;
-    const systemPrompt = buildSystemPrompt(baseSystemPrompt, brandData);
+    const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
 
     const modeLabels = {
       viral: 'maximum viral reach and engagement',
@@ -1643,7 +1652,7 @@ Format: Use "### Platform Name" as headers for each platform section, and clearl
  */
 export async function generatePlatformRemixes(originalContent, brandData, platforms = ['Instagram', 'TikTok', 'X', 'Facebook', 'YouTube']) {
   try {
-    const systemPrompt = buildSystemPrompt(
+    const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an expert cross-platform social media strategist. Adapt content for each platform while maintaining brand voice and maximizing engagement.',
       brandData
     );
@@ -1746,7 +1755,7 @@ export async function generateVisualIdeas(prompt, brandData, platform = 'instagr
         ? 'You are a visual content strategist. Create compelling static image and graphic concepts (photos, carousels, infographics, quote cards) that align with brand identity. Focus exclusively on still imagery — do NOT suggest videos or reels.'
         : 'You are a visual content strategist. Create compelling image and video concepts that align with brand identity.';
 
-    const systemPrompt = buildSystemPrompt(systemRole, brandData);
+    const systemPrompt = buildSystemPromptWithBrandBlock(systemRole, brandData);
 
     const formatGuidance = isVideo
       ? `MEDIA TYPE: VIDEO/MOTION CONTENT ONLY
@@ -1868,7 +1877,7 @@ export async function generateVisualBrainstorm(params, brandData) {
     const platformContext = buildPlatformContext(platform, 'visual');
 
     if (outputType === 'ai-prompt') {
-      const systemPrompt = buildSystemPrompt(
+      const systemPrompt = buildSystemPromptWithBrandBlock(
         `You are Prompt Architect — a specialist in AI-generated visual content with deep expertise in Midjourney, DALL-E 3, Adobe Firefly, and Stable Diffusion. You understand that great image prompts are structured in 5 layers, and you produce prompts that are copy-pasteable and consistently produce professional, on-brand results on the first generation attempt.
 
 THE 5-LAYER PROMPT ARCHITECTURE:
@@ -1935,7 +1944,7 @@ Return ONLY a JSON array of 3 prompt strings, like:
       return { success: true, type: 'ai-prompt', prompts: prompts.slice(0, 3), usage: data.usage };
     } else {
       // Manual shoot guide
-      const systemPrompt = buildSystemPrompt(
+      const systemPrompt = buildSystemPromptWithBrandBlock(
         `You are Creative Director — a photographer and visual storyteller who has directed shoots for editorial brands, lifestyle creators, and product campaigns. You understand that most creators shoot alone with a phone and limited gear, so your guidance is practical, achievable, and immediately actionable. You never give advice that requires a professional crew or studio.
 
 SHOOT GUIDE PILLARS:
@@ -2059,18 +2068,25 @@ export async function scoreHumanness(content, brandData = null) {
   }
 
   try {
+    const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const brandSection = brandContext ? `\n\nBrand Voice Profile:\n${brandContext}` : '';
+    const creatorName = brandData?.brandName || brandData?.firstName || 'this creator';
+    const creatorNiche = brandData?.niche || 'their niche';
+    const creatorTone = brandData?.brandVoice || 'authentic';
+    const creatorAudience = brandData?.targetAudience || 'their audience';
 
     const messages = [
       {
         role: 'system',
-        content: `You are Human Voice Analyst — an expert in distinguishing AI-generated text from authentic human writing. You evaluate content strictly on how natural, human, and voice-consistent it sounds — NOT on grammar, quality, or persuasion.
+        content: `${creatorBlock}You are Human Voice Analyst — an expert in distinguishing AI-generated text from authentic human writing. You evaluate content strictly on how natural, human, and voice-consistent it sounds — NOT on grammar, quality, or persuasion.
+
+Evaluate whether this content sounds authentically like ${creatorName}, a ${creatorNiche} creator with a ${creatorTone} voice targeting ${creatorAudience}.
 
 SCORING DIMENSIONS (each 0–100):
 - sentenceVariety: Do sentences vary in length and structure, or is there a repetitive pattern typical of LLMs?
 - naturalVocabulary: Are there AI-typical phrases like "delve into", "it's important to note", "in today's world", "comprehensive guide", "in conclusion", "Moreover", "Furthermore", "landscape"? Flag each one.
-- voiceConsistency: Does the tone match the provided brand voice profile? Flag any drift.
+- voiceConsistency: Does the tone match the provided brand voice profile? Flag any drift from ${creatorTone} voice.
 - conversationalFlow: Do transitions feel natural or stiff? Does it read like speech or like a textbook?
 
 OVERALL SCORE (0–100):
@@ -2185,11 +2201,12 @@ export async function predictPerformance(content, platform, trendContext, brandD
   }
 
   try {
+    const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
     const brandContext = brandData ? buildBrandContext(brandData) : '';
     const messages = [
       {
         role: 'system',
-        content: `You are Performance Predictor — a data analyst who evaluates social media content against current platform signals and trend alignment. You are cautious and honest. Never claim high confidence. Always label output as AI prediction.
+        content: `${creatorBlock}You are Performance Predictor — a data analyst who evaluates social media content against current platform signals and trend alignment. You are cautious and honest. Never claim high confidence. Always label output as AI prediction.
 
 OUTPUT — Return ONLY valid JSON:
 {
@@ -2281,7 +2298,8 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
   }
 
   try {
-    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
+    const brandContext = brandData ? `${creatorBlock}${buildBrandContext(brandData)}` : '';
     const structuredResearch = normalizeResearchPayload(researchData);
     const researchContext = structuredResearch
       ? JSON.stringify(structuredResearch, null, 2)

@@ -1,6 +1,6 @@
 import { useState, useContext } from 'react';
 import { HelpCircle, Book, Mail, X, Star, Send, MessageSquarePlus, ChevronRight, 
-  LayoutDashboard, FolderOpen, Wand2, Zap, Beaker, Repeat, Waves, Settings, FileText, Target } from 'lucide-react';
+  LayoutDashboard, FolderOpen, Wand2, Zap, Beaker, Repeat, Waves, Settings, FileText, Target, Flame } from 'lucide-react'; // HUTTLE AI: updated 3
 import { AuthContext } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import { useToast } from '../context/ToastContext';
@@ -34,7 +34,7 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations power all of Huttle AI\'s intelligent features. Each plan includes a different monthly pool:\n\n• Essentials ($15/mo): 200 generations/month\n• Pro ($39/mo): 800 generations/month\n\nPro plans also have per-feature sub-limits on advanced tools to ensure fair usage:\n\n• Niche Intel: 5/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Viral Blueprint: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visual Brainstormer): No individual cap — they count toward your monthly total.\n\nYour usage resets at the start of each billing cycle. Track it in the sidebar AI meter or on each feature\'s page.'
+      answer: 'AI generations power all of Huttle AI\'s intelligent features. Each plan includes a different monthly pool:\n\n• Essentials ($15/mo): 200 generations/month\n• Pro ($39/mo): 800 generations/month\n\nPro plans also have per-feature sub-limits on advanced tools to ensure fair usage:\n\n• Niche Intel: 5/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Ignite Engine: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visual Brainstormer): No individual cap — they count toward your monthly total.\n\nYour usage resets at the start of each billing cycle. Track it in the sidebar AI meter or on each feature\'s page.' // HUTTLE AI: updated 3
     },
     {
       question: 'When do my AI generations reset?',
@@ -62,7 +62,7 @@ export default function Help() {
     },
     {
       question: 'What is Brand Voice and how do I set it up?',
-      answer: 'Brand Voice helps AI understand your unique style. Go to Brand Voice page, describe your brand personality, tone, target audience, and key messaging. Select your active social platforms — these power features like Trend Lab, Remix Studio, and Viral Blueprint. The AI will then adapt all generated content to match your brand identity.'
+      answer: 'Brand Voice helps AI understand your unique style. Go to Brand Voice page, describe your brand personality, tone, target audience, and key messaging. Select your active social platforms — these power features like Trend Lab, Remix Studio, and Ignite Engine. The AI will then adapt all generated content to match your brand identity.' // HUTTLE AI: updated 3
     },
     {
       question: 'Is my data secure and private?',
@@ -187,16 +187,16 @@ export default function Help() {
       ]
     },
     { 
-      id: 'viral-blueprint', 
-      name: 'Viral Blueprint', 
-      icon: Zap,
-      description: 'AI-generated complete content blueprint with scripts, visuals, and SEO strategy',
+      id: 'ignite-engine', // HUTTLE AI: updated 3
+      name: 'Ignite Engine', // HUTTLE AI: updated 3
+      icon: Flame, // HUTTLE AI: updated 3
+      description: 'AI-generated complete content brief with scripts, visuals, and SEO strategy', // HUTTLE AI: updated 3
       tips: [
         'Select a platform and format (Reel, Carousel, Thread, Short, etc.) then fill in your goal, topic, and audience',
-        'The blueprint includes Viral Hooks (copy-on-click), a Director\'s Cut with script and visual direction per section',
+        'The brief includes opening hooks, a Director\'s Cut with script and visual direction per section', // HUTTLE AI: updated 3
         'SEO Strategy provides trending keywords and optimized hashtags with a "Copy All Tags" button',
         'Video content includes Audio Vibe recommendations with mood, BPM, and audio suggestions',
-        'A Viral Score gauge (0–100) rates the overall virality potential of your blueprint',
+        'A Viral Score gauge (0–100) rates the overall virality potential of your brief', // HUTTLE AI: updated 3
         'Generation takes 60–90 seconds — available on Essentials and Pro plans'
       ]
     },
@@ -208,7 +208,7 @@ export default function Help() {
       tips: [
         'Describe your brand personality, tone, and preferred writing style',
         'Set your target audience and key messaging pillars',
-        'Select your active social platforms — these power Trend Lab, Remix Studio, and Viral Blueprint',
+        'Select your active social platforms — these power Trend Lab, Remix Studio, and Ignite Engine', // HUTTLE AI: updated 3
         'All AI-generated content across Huttle AI will adapt to your configured voice'
       ]
     },
@@ -246,32 +246,38 @@ export default function Help() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('user_feedback')
+      const message = [ // HUTTLE: sanitized
+        `Type: ${feedbackType}`, // HUTTLE: sanitized
+        feedbackRating ? `Rating: ${feedbackRating}/5` : null, // HUTTLE: sanitized
+        '', // HUTTLE: sanitized
+        feedbackText.trim(), // HUTTLE: sanitized
+      ].filter(Boolean).join('\n'); // HUTTLE: sanitized
+
+      const { error } = await supabase // HUTTLE: sanitized
+        .from('feedback') // HUTTLE: sanitized
         .insert({
-          user_id: user.id,
-          feedback_type: feedbackType,
-          rating: feedbackRating || null,
-          feedback_text: feedbackText.trim(),
-          created_at: new Date().toISOString()
+          user_id: user.id, // HUTTLE: sanitized
+          message, // HUTTLE: sanitized
+          page: window.location.pathname, // HUTTLE: sanitized
+          created_at: new Date().toISOString(), // HUTTLE: sanitized
         })
-        .select()
-        .single();
+        .select() // HUTTLE: sanitized
+        .single(); // HUTTLE: sanitized
 
       if (error) throw error;
 
-      showToast('Thank you for your feedback!', 'success');
-      setFeedbackSubmitted(true);
+      showToast('Thanks for your feedback! 🙌', 'success'); // HUTTLE: sanitized
+      setFeedbackSubmitted(true); // HUTTLE: sanitized
       setTimeout(() => {
-        setShowFeedbackModal(false);
-        setFeedbackSubmitted(false);
-        setFeedbackType('');
-        setFeedbackRating(0);
-        setFeedbackText('');
-      }, 2000);
+        setShowFeedbackModal(false); // HUTTLE: sanitized
+        setFeedbackSubmitted(false); // HUTTLE: sanitized
+        setFeedbackType(''); // HUTTLE: sanitized
+        setFeedbackRating(0); // HUTTLE: sanitized
+        setFeedbackText(''); // HUTTLE: sanitized
+      }, 2000); // HUTTLE: sanitized
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      showToast('Failed to submit feedback. Please try again.', 'error');
+      showToast("Couldn't send feedback. Try again.", 'error'); // HUTTLE: sanitized
     }
   };
 

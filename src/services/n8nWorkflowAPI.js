@@ -8,7 +8,7 @@
  * - Dashboard Trending Now & Hashtags of the Day
  * - AI Plan Builder
  * - Trend Forecaster
- * - Viral Blueprint Generator
+ * - Ignite Engine
  * - Social Updates Feed
  * 
  * DIRECT SERVERLESS FEATURES (also in this file):
@@ -479,11 +479,11 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
 }
 
 // ============================================================================
-// VIRAL BLUEPRINT WORKFLOW
+// IGNITE ENGINE WORKFLOW // HUTTLE AI: updated 3
 // ============================================================================
 
 /**
- * Generate viral blueprint via n8n workflow
+ * Generate Ignite Engine brief via n8n workflow // HUTTLE AI: updated 3
  * 
  * TODO: N8N_WORKFLOW - Implement n8n workflow that:
  * 1. Receives platform, post type, topic, and voice context
@@ -501,9 +501,9 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
  * @param {Object} [params.brandProfile] - Full brand profile
  * @returns {Promise<Object>} Viral blueprint or fallback indicator
  */
-export async function generateViralBlueprint({ platform, postType, topic, voiceContext, brandProfile }) {
+export async function generateIgniteEngine({ platform, postType, topic, voiceContext, brandProfile }) { // HUTTLE AI: updated 3
   // Check if workflow is configured
-  if (!isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT)) {
+  if (!isWorkflowConfigured(WORKFLOW_NAMES.IGNITE_ENGINE)) { // HUTTLE AI: updated 3
     return {
       success: false,
       useFallback: true,
@@ -514,7 +514,7 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
   try {
     const headers = await getAuthHeaders();
     const userId = await getCurrentUserId();
-    const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.VIRAL_BLUEPRINT);
+    const webhookUrl = getWorkflowUrl(WORKFLOW_NAMES.IGNITE_ENGINE); // HUTTLE AI: updated 3
     
     const response = await retryFetch(
       webhookUrl,
@@ -554,7 +554,7 @@ export async function generateViralBlueprint({ platform, postType, topic, voiceC
     };
     
   } catch (error) {
-    console.error('[N8N_WORKFLOW] generateViralBlueprint error:', error);
+    console.error('[N8N_WORKFLOW] generateIgniteEngine error:', error); // HUTTLE AI: updated 3
     return {
       success: false,
       useFallback: true,
@@ -681,7 +681,7 @@ export function getWorkflowStatus() {
     aiPlanBuilder: isWorkflowConfigured(WORKFLOW_NAMES.AI_PLAN_BUILDER),
     trendDeepDive: isWorkflowConfigured(WORKFLOW_NAMES.TREND_DEEP_DIVE),
     trendForecaster: isWorkflowConfigured(WORKFLOW_NAMES.TREND_FORECASTER),
-    viralBlueprint: isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT),
+    igniteEngine: isWorkflowConfigured(WORKFLOW_NAMES.IGNITE_ENGINE), // HUTTLE AI: updated 3
     socialUpdates: isWorkflowConfigured(WORKFLOW_NAMES.SOCIAL_UPDATES)
   };
 }

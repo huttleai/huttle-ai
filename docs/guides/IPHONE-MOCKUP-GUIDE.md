@@ -19,7 +19,7 @@ Place your mobile screenshot in the `/public` folder:
 
 ```
 /public/
-  └── viral-blueprint-mobile.png  (your screenshot)
+  └── ignite-engine-mobile.png  (your screenshot)
 ```
 
 ### 2. Import the Component
@@ -32,8 +32,8 @@ import IPhoneMockup from '../components/IPhoneMockup';
 
 ```jsx
 <IPhoneMockup 
-  imageSrc="/viral-blueprint-mobile.png" 
-  imageAlt="Viral Blueprint Generator mobile view"
+  imageSrc="/ignite-engine-mobile.png"
+  imageAlt="Ignite Engine mobile view"
 />
 ```
 
@@ -90,8 +90,8 @@ import IPhoneMockup from '../components/IPhoneMockup';
 
 ```jsx
 <IPhoneMockup 
-  imageSrc="/viral-blueprint-mobile.png" 
-  imageAlt="Viral Blueprint Generator"
+  imageSrc="/ignite-engine-mobile.png"
+  imageAlt="Ignite Engine"
 />
 ```
 

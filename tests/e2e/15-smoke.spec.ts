@@ -8,7 +8,7 @@ const smokeRoutes = [
   '/dashboard/ai-tools?tool=caption',
   '/dashboard/trend-lab',
   '/dashboard/niche-intel',
-  '/dashboard/viral-blueprint',
+  '/dashboard/ignite-engine', // HUTTLE AI: updated 3
   '/dashboard/content-remix',
   '/dashboard/library',
   '/dashboard/profile',

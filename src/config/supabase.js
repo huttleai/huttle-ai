@@ -124,7 +124,7 @@ export const TIER_LIMITS = {
     huttleAgent: false,
     trendForecaster: false,
     trendLab: false,
-    viralBlueprint: 0,
+    igniteEngine: 0, // HUTTLE AI: updated 3
     fullPostBuilder: false,
     humanizerScore: false,
     performancePrediction: false,
@@ -146,7 +146,7 @@ export const TIER_LIMITS = {
     huttleAgent: false, // Pro only
     trendForecaster: false, // Pro only
     trendLab: true, // Full access
-    viralBlueprint: 15, // 15 blueprints/month
+    igniteEngine: 15, // HUTTLE AI: updated 3
     fullPostBuilder: true,
     humanizerScore: true,
     performancePrediction: true,
@@ -162,7 +162,7 @@ export const TIER_LIMITS = {
     trendQuickScan: 200,
     trendDeepDive: 50,
     contentRemix: 75,
-    viralBlueprint: 60, // 60 blueprints/month
+    igniteEngine: 60, // HUTTLE AI: updated 3
     planBuilder: 20,
     captionGenerator: true,
     hashtagGenerator: true,
@@ -190,7 +190,7 @@ export const TIER_LIMITS = {
     trendQuickScan: 200,
     trendDeepDive: 50,
     contentRemix: 75,
-    viralBlueprint: 60,
+    igniteEngine: 60, // HUTTLE AI: updated 3
     planBuilder: 20,
     captionGenerator: true,
     hashtagGenerator: true,
@@ -217,7 +217,7 @@ export const TIER_LIMITS = {
     trendQuickScan: 200,
     trendDeepDive: 50,
     contentRemix: 75,
-    viralBlueprint: 60,
+    igniteEngine: 60, // HUTTLE AI: updated 3
     planBuilder: 20,
     captionGenerator: true,
     hashtagGenerator: true,
@@ -252,7 +252,7 @@ export const FEATURES = {
   'huttle-agent': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'trend-forecaster': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'trend-lab': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
-  'viral-blueprint': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'ignite-engine': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER], // HUTTLE AI: updated 3
   'ai-plan-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'full-post-builder': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'humanizer-score': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],

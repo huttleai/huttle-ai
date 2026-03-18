@@ -6,7 +6,7 @@ This guide shows you how to build n8n workflows for your **4 advertised features
 
 ## 🎯 Priority Features (In Order)
 
-### 1. **Viral Blueprint** ⭐ HIGHEST PRIORITY
+### 1. **Ignite Engine** ⭐ HIGHEST PRIORITY
 ### 2. **Content Remix Studio**
 ### 3. **AI Plan Builder** 
 ### 4. **Trend Lab** (Quick Scan + Deep Dive)
@@ -19,7 +19,7 @@ This guide shows you how to build n8n workflows for your **4 advertised features
 
 | Feature | Needs n8n? | Has Fallback? | Launch Status |
 |---------|-----------|---------------|---------------|
-| **Viral Blueprint** | ✅ Yes | ✅ Mock generator | Ready (fallback works) |
+| **Ignite Engine** | ✅ Yes | ✅ Mock generator | Ready (fallback works) |
 | **Content Remix** | ✅ Yes | ✅ Generic AI call | Ready (fallback works) |
 | **AI Plan Builder** | ✅ Yes | ✅ Mock plans | Ready (fallback works) |
 | **Trend Lab Quick Scan** | ❌ No | N/A (uses Perplexity API) | **Already works!** |
@@ -33,8 +33,8 @@ This guide shows you how to build n8n workflows for your **4 advertised features
 Add these to your **Vercel project settings** and local `.env` file:
 
 ```bash
-# Viral Blueprint (Priority #1)
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://your-n8n-instance.com/webhook/viral-blueprint
+# Ignite Engine (Priority #1)
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://your-n8n-instance.com/webhook/ignite-engine
 
 # Content Remix Studio (Priority #2)
 VITE_N8N_CONTENT_REMIX_WEBHOOK=https://your-n8n-instance.com/webhook/content-remix
@@ -52,11 +52,11 @@ VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n-instance.com/webhook/plan-builder
 
 ## 📋 Workflow Specifications
 
-### 1. Viral Blueprint Workflow
+### 1. Ignite Engine Workflow
 
 **Purpose**: Generate viral content blueprints with hooks, scripts, visuals, SEO strategy
 
-**Webhook Endpoint**: `/webhook/viral-blueprint`
+**Webhook Endpoint**: `/webhook/ignite-engine`
 
 **Input Payload** (from `ViralBlueprint.jsx`):
 ```json
@@ -399,10 +399,10 @@ Return JSON: {analysis, contentIdeas: [{content, platform}], competitorInsights:
 
 ### Test Each Workflow Individually
 
-1. **Get your webhook URL** from n8n (e.g., `https://your-n8n.com/webhook/viral-blueprint`)
+1. **Get your webhook URL** from n8n (e.g., `https://your-n8n.com/webhook/ignite-engine`)
 2. **Test with curl**:
 ```bash
-curl -X POST https://your-n8n.com/webhook/viral-blueprint \
+curl -X POST https://your-n8n.com/webhook/ignite-engine \
   -H "Content-Type: application/json" \
   -d '{
     "topic": "How to go viral on TikTok",
@@ -425,7 +425,7 @@ If you skip setting up n8n workflows, your app will **automatically use fallback
 
 | Feature | Fallback Behavior |
 |---------|-------------------|
-| Viral Blueprint | Uses `generateMockBlueprint()` with demo templates |
+| Ignite Engine | Uses `generateMockBlueprint()` with demo templates |
 | Content Remix | Uses `generateWithN8n()` fallback (Grok API generic remix) |
 | AI Plan Builder | Returns `mockAIPlans` from local data |
 | Trend Lab Quick Scan | **Already works** (Perplexity API) |
@@ -443,7 +443,7 @@ If you skip setting up n8n workflows, your app will **automatically use fallback
 ✅ Use Grok/Perplexity APIs for core functionality  
 
 ### Phase 2 (Week 1 - Feb 12-18)
-1. Build **Viral Blueprint** workflow (most requested)
+1. Build **Ignite Engine** workflow (most requested)
 2. Build **Content Remix** workflow (second most used)
 3. Deploy and test with real users
 

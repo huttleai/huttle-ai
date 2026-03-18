@@ -1,10 +1,11 @@
 import { useContext, useState, useEffect, useMemo } from 'react';
+import { AuthContext } from '../context/AuthContext'; // HUTTLE AI: updated 1
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 import {
   Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile,
   PenTool, Heart, Info, Eye, TrendingUp, Calendar,
-  MessageSquare, Lightbulb, Clock, Rocket, Target, Zap, Users,
+  MessageSquare, Lightbulb, Clock, Users,
 } from 'lucide-react';
 import { normalizeEnumValue } from '../utils/formatEnumLabel';
 
@@ -139,33 +140,6 @@ const MONETIZATION_GOAL_OPTIONS = [
   { value: 'growing', label: 'Not yet — just growing' },
 ];
 
-const CONTENT_STRENGTHS = [
-  { value: 'storytelling', label: 'Storytelling', icon: PenTool },
-  { value: 'education', label: 'Education', icon: BookOpen },
-  { value: 'entertainment', label: 'Entertainment', icon: Smile },
-  { value: 'visuals', label: 'Visuals', icon: Eye },
-  { value: 'trends', label: 'Trends', icon: TrendingUp },
-  { value: 'authenticity', label: 'Authenticity', icon: Heart },
-];
-
-const CONTENT_CHALLENGES = [
-  { value: 'consistency', label: 'Staying Consistent', icon: Calendar },
-  { value: 'ideas', label: 'Coming Up With Ideas', icon: Lightbulb },
-  { value: 'engagement', label: 'Getting Engagement', icon: MessageSquare },
-  { value: 'growth', label: 'Growing My Audience', icon: TrendingUp },
-  { value: 'time', label: 'Finding Time', icon: Clock },
-  { value: 'quality', label: 'Creating Quality Content', icon: Sparkles },
-];
-
-const EMOTIONAL_TRIGGERS = [
-  { value: 'inspired', label: 'Inspired', icon: Rocket },
-  { value: 'entertained', label: 'Entertained', icon: Smile },
-  { value: 'educated', label: 'Educated', icon: BookOpen },
-  { value: 'connected', label: 'Connected', icon: Users },
-  { value: 'motivated', label: 'Motivated', icon: Target },
-  { value: 'understood', label: 'Understood', icon: Heart },
-];
-
 function normalizeSingleSelect(value, options) {
   if (!value) return '';
   const normalized = normalizeEnumValue(value);
@@ -250,13 +224,12 @@ const inputClasses =
 
 export default function BrandVoice() {
   const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
+  const { userProfile } = useContext(AuthContext); // HUTTLE AI: updated 1
   const { addToast } = useToast();
 
   const toFormData = (source = {}) => ({
-    firstName: source.firstName || '',
     profileType: source.profileType || 'brand',
-    brandName: source.brandName || '',
-    socialHandle: source.socialHandle || '',
+    handle: source.handle || source.socialHandle || '', // HUTTLE AI: updated 1
     niche: source.niche || '',
     subNiche: source.subNiche || '',
     city: source.city || '',
@@ -279,9 +252,6 @@ export default function BrandVoice() {
     monetizationGoal: source.monetizationGoal || '',
     showUpStyle: source.showUpStyle || '',
     creatorArchetype: source.creatorArchetype || '',
-    contentStrengths: normalizeMultiSelect(source.contentStrengths, CONTENT_STRENGTHS),
-    biggestChallenge: normalizeSingleSelect(source.biggestChallenge, CONTENT_CHALLENGES),
-    emotionalTriggers: normalizeMultiSelect(source.emotionalTriggers, EMOTIONAL_TRIGGERS),
   });
 
   const [formData, setFormData] = useState(toFormData(brandData));
@@ -320,9 +290,7 @@ export default function BrandVoice() {
 
   const completeness = useMemo(() => {
     const fields = [
-      { weight: 10, filled: !!formData.firstName },
       { weight: 8, filled: !!formData.profileType },
-      { weight: 10, filled: !!formData.brandName },
       { weight: 8, filled: !!formData.niche },
       { weight: 8, filled: !!formData.targetAudience },
       { weight: 6, filled: formData.platforms?.length > 0 },
@@ -333,9 +301,6 @@ export default function BrandVoice() {
       { weight: 8, filled: !!formData.examplePost },
       { weight: 5, filled: formData.contentToPost?.length > 0 },
       { weight: 5, filled: !!formData.followerCount },
-      { weight: 5, filled: formData.contentStrengths?.length > 0 },
-      { weight: 4, filled: !!formData.biggestChallenge },
-      { weight: 4, filled: formData.emotionalTriggers?.length > 0 },
     ];
     if (!isCreator) {
       fields.push({ weight: 5, filled: !!formData.conversionGoal });
@@ -348,10 +313,6 @@ export default function BrandVoice() {
   }, [formData, isCreator]);
 
   const handleSave = async () => {
-    if (!formData.firstName.trim()) {
-      addToast('First name is required', 'warning');
-      return;
-    }
     setIsSaving(true);
     try {
       const result = await updateBrandData(formData);
@@ -374,6 +335,8 @@ export default function BrandVoice() {
     setFormData(toFormData({}));
     addToast('Form reset successfully', 'info');
   };
+
+  const displayFirstName = userProfile?.first_name?.trim() || ''; // HUTTLE AI: updated 1
 
   const CompletenessRing = ({ className = '' }) => (
     <div className={`flex items-center gap-4 ${className}`}>
@@ -482,35 +445,21 @@ export default function BrandVoice() {
         <div className="card p-6 mb-6">
           <SectionHeader icon={User} title="About You" subtitle="Basic information about you and your brand" />
           <div className="space-y-6">
-            <FieldInput label="First Name" required>
-              <input
-                type="text"
-                value={formData.firstName}
-                onChange={set('firstName')}
-                placeholder="e.g., Sarah"
-                className={`${inputClasses} ${!formData.firstName.trim() ? 'border-red-200' : ''}`}
-              />
-              {!formData.firstName.trim() && (
-                <p className="text-xs text-red-500 mt-1">First name is required</p>
-              )}
-            </FieldInput>
+            {displayFirstName && ( // HUTTLE AI: updated 1
+              <p className="text-sm text-gray-500">
+                Personalizing content for: <span className="font-semibold text-gray-900">{displayFirstName}</span>
+              </p>
+            )}
 
-            <FieldInput label={isCreator ? 'Your Name or Handle' : 'Brand Name'}>
+            <FieldInput
+              label="Your Name or Handle"
+              helper="How you want to be referred to in your content"
+            >
               <input
                 type="text"
-                value={formData.brandName}
-                onChange={set('brandName')}
-                placeholder={isCreator ? 'e.g., Sarah Johnson or @sarahcreates' : 'e.g., Glow MedSpa'}
-                className={inputClasses}
-              />
-            </FieldInput>
-
-            <FieldInput label="Social Media Handle">
-              <input
-                type="text"
-                value={formData.socialHandle}
-                onChange={set('socialHandle')}
-                placeholder="e.g., @sarahcreates"
+                value={formData.handle}
+                onChange={set('handle')}
+                placeholder="e.g. @AnytimeGlow or Glow by Angela"
                 className={inputClasses}
               />
             </FieldInput>
@@ -812,71 +761,6 @@ export default function BrandVoice() {
             </div>
           </div>
         )}
-
-        {/* ── SECTION 8: VIRAL CONTENT STRATEGY (kept as-is) ── */}
-        <div className="card p-6 mb-6">
-          <div className="flex items-center gap-2 mb-6">
-            <Zap className="w-5 h-5 text-huttle-primary" />
-            <h3 className="text-lg font-bold text-gray-900">Viral Content Strategy</h3>
-          </div>
-          <p className="text-sm text-gray-500 mb-6">These settings help AI create content optimized for maximum engagement and virality.</p>
-
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Your Content Strengths
-              </label>
-              <p className="text-sm text-gray-500 mb-3">What are you best at? AI will emphasize these.</p>
-              <ChipSelect
-                options={CONTENT_STRENGTHS}
-                value={formData.contentStrengths}
-                onChange={set('contentStrengths')}
-                multi
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Biggest Challenge
-              </label>
-              <p className="text-sm text-gray-500 mb-3">We'll help you overcome this.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {CONTENT_CHALLENGES.map((challenge) => {
-                  const Icon = challenge.icon;
-                  const active = formData.biggestChallenge === challenge.value;
-                  return (
-                    <button
-                      key={challenge.value}
-                      type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, biggestChallenge: challenge.value }))}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                        active
-                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{challenge.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Emotional Triggers
-              </label>
-              <p className="text-sm text-gray-500 mb-3">How do you want your audience to feel?</p>
-              <ChipSelect
-                options={EMOTIONAL_TRIGGERS}
-                value={formData.emotionalTriggers}
-                onChange={set('emotionalTriggers')}
-                multi
-              />
-            </div>
-          </div>
-        </div>
 
         {/* Save / Reset Buttons */}
         <div className="card p-6 mb-6">

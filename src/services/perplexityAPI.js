@@ -20,6 +20,7 @@ import {
   getBrandVoice,
   getPromptBrandProfile,
 } from '../utils/brandContextBuilder';
+import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { supabase } from '../config/supabase';
 import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
 
@@ -299,7 +300,7 @@ export async function getRealtimeHashtagResearch({ topic, platform = 'instagram'
   try {
     const niche = getNiche(brandData, topic || 'general creator');
     const audience = getTargetAudience(brandData, 'general audience');
-    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
     const currentDate = new Date().toISOString().slice(0, 10);
     const cacheKey = buildCacheKey([topic, platform, currentDate, 'full_post_builder_hashtags']);
 
@@ -374,7 +375,7 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const niche = getNiche(brandData, 'general creator');
     const audience = getTargetAudience(brandData, 'general audience');
     const cacheKey = buildCacheKey([niche, platform, 'trending']);
-    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
 
     const platformList = Array.isArray(brandData?.platforms) && brandData.platforms.length > 0
       ? brandData.platforms.join(', ')
@@ -517,7 +518,7 @@ Include:
 export async function analyzeCompetitors(brandData, competitorNames = []) {
   try {
     const niche = getNiche(brandData);
-    const brandContext = buildBrandContext(brandData);
+    const brandContext = `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}`;
 
     const data = await callPerplexityAPI([
       {
@@ -612,7 +613,7 @@ export async function getAudienceInsights(brandData, demographics = null, platfo
   try {
     const niche = getNiche(brandData);
     const audience = demographics || getTargetAudience(brandData);
-    const brandContext = buildBrandContext(brandData);
+    const brandContext = `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}`;
     const promptProfile = getPromptBrandProfile(brandData);
     const selectedPlatform = platform || promptProfile.platforms?.[0] || 'instagram';
     const userType = promptProfile.creator_type
@@ -930,7 +931,7 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
       query: nicheQuery,
       date: currentDate,
     });
-    const brandContext = brandData ? buildBrandContext(brandData) : '';
+    const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
     const competitorHandles = nicheQuery
       .split(',')
       .map((value) => value.trim())

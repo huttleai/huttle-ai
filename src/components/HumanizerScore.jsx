@@ -5,6 +5,7 @@ import { scoreHumanness } from '../services/grokAPI';
 import { humanizeContentWithClaude } from '../services/claudeAPI';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const scoreColorMap = (score) => {
   if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', bar: 'bg-emerald-500', label: 'Sounds like you' };
@@ -206,7 +207,7 @@ export default function HumanizerScore({
                 </div>
                 <div className="text-right">
                   <span className={`text-2xl font-bold ${scoreColorMap(result.overall).text}`}>{result.overall}</span>
-                  <span className={`block text-xs font-medium ${scoreColorMap(result.overall).text}`}>{result.label}</span>
+                  <span className={`block text-xs font-medium ${scoreColorMap(result.overall).text}`}>{sanitizeAIOutput(result.label)}</span>
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -261,7 +262,7 @@ export default function HumanizerScore({
                             exit={{ height: 0, opacity: 0 }}
                             className="text-xs text-gray-600 mt-2"
                           >
-                            {dim.feedback}
+                            {sanitizeAIOutput(dim.feedback)}
                           </Motion.p>
                         )}
                       </AnimatePresence>
@@ -282,8 +283,8 @@ export default function HumanizerScore({
                   <div key={idx} className="bg-white rounded-xl border border-gray-200 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-red-500 line-through mb-1">&ldquo;{phrase.original}&rdquo;</p>
-                        <p className="text-xs text-emerald-600 font-medium">&ldquo;{phrase.suggestion}&rdquo;</p>
+                        <p className="text-xs text-red-500 line-through mb-1">&ldquo;{sanitizeAIOutput(phrase.original)}&rdquo;</p>
+                        <p className="text-xs text-emerald-600 font-medium">&ldquo;{sanitizeAIOutput(phrase.suggestion)}&rdquo;</p>
                       </div>
                       <button
                         onClick={(e) => {

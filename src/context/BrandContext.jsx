@@ -33,7 +33,7 @@ export function BrandProvider({ children }) {
     profileType: 'brand',
     creatorArchetype: '',
     brandName: '',
-    socialHandle: '',
+    handle: '', // HUTTLE AI: updated 1
     niche: '',
     subNiche: '',
     contentFocus: '',
@@ -140,6 +140,24 @@ export function BrandProvider({ children }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
+        const safeBrandVoicePromise = supabase // HUTTLE AI: updated 1
+          .from('brand_voice')
+          .select('handle')
+          .eq('user_id', user.id)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn('[Brand] Brand voice handle fetch failed (non-blocking):', error.message);
+              return null;
+            }
+
+            return data;
+          })
+          .catch((error) => {
+            console.warn('[Brand] Brand voice handle fetch failed (non-blocking):', error.message);
+            return null;
+          });
+
         // Start preferences in parallel, but never await them for initial brand readiness.
         const safePreferencesPromise = getUserPreferences(user.id).then((result) => {
           if (!result?.success || !result.data) {
@@ -153,6 +171,7 @@ export function BrandProvider({ children }) {
         });
 
         const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+        const brandVoiceData = await safeBrandVoicePromise; // HUTTLE AI: updated 1
         if (error) {
           throw error;
         }
@@ -165,7 +184,7 @@ export function BrandProvider({ children }) {
             profileType: data.profile_type || 'brand',
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
-            socialHandle: data.social_handle || '',
+            handle: brandVoiceData?.handle || data.social_handle || '', // HUTTLE AI: updated 1
             niche: data.niche ? formatEnumArray(data.niche) : '',
             subNiche: data.sub_niche || data.industry || '',
             contentFocus: data.content_focus ? formatEnumArray(data.content_focus) : '',
@@ -271,11 +290,10 @@ export function BrandProvider({ children }) {
         // Complete data with all fields
         const profileData = {
           user_id: user.id,
-          first_name: updated.firstName || null,
           profile_type: updated.profileType || 'brand',
           creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
-          social_handle: updated.socialHandle || null,
+          social_handle: updated.handle || null, // HUTTLE AI: updated 1
           industry: updated.industry || null,
           niche: updated.niche,
           sub_niche: updated.subNiche || null,
@@ -310,15 +328,31 @@ export function BrandProvider({ children }) {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
-          .from('user_profile')
-          .upsert(profileData, {
-            onConflict: 'user_id'
-          });
+        const [{ error: profileError }, { error: brandVoiceError }] = await Promise.all([ // HUTTLE AI: updated 1
+          supabase
+            .from('user_profile')
+            .upsert(profileData, {
+              onConflict: 'user_id'
+            }),
+          supabase
+            .from('brand_voice')
+            .upsert(
+              {
+                user_id: user.id,
+                handle: updated.handle || null,
+              },
+              {
+                onConflict: 'user_id',
+              }
+            ),
+        ]);
 
-        if (error) {
-          console.error('Error saving brand data to Supabase:', error);
-          return { success: false, error: error.message };
+        if (profileError || brandVoiceError) {
+          console.error('Error saving brand data to Supabase:', profileError || brandVoiceError);
+          if (brandVoiceError) {
+            console.error('Error saving brand voice handle to Supabase:', brandVoiceError);
+          }
+          return { success: false, error: (profileError || brandVoiceError).message };
         }
         
         return { success: true };
@@ -338,7 +372,7 @@ export function BrandProvider({ children }) {
       profileType: 'brand',
       creatorArchetype: '',
       brandName: '',
-      socialHandle: '',
+      handle: '', // HUTTLE AI: updated 1
       niche: '',
       subNiche: '',
       contentFocus: '',
@@ -374,7 +408,6 @@ export function BrandProvider({ children }) {
     if (user?.id) {
       try {
         const resetProfileData = {
-          first_name: null,
           profile_type: 'brand',
           creator_archetype: null,
           brand_name: null,
@@ -412,6 +445,22 @@ export function BrandProvider({ children }) {
 
         if (error) {
           console.error('Error resetting brand data in Supabase:', error);
+        }
+
+        const { error: brandVoiceError } = await supabase // HUTTLE AI: updated 1
+          .from('brand_voice')
+          .upsert(
+            {
+              user_id: user.id,
+              handle: null,
+            },
+            {
+              onConflict: 'user_id',
+            }
+          );
+
+        if (brandVoiceError) {
+          console.error('Error resetting brand voice handle in Supabase:', brandVoiceError);
         }
       } catch (error) {
         console.error('Error resetting brand data:', error);

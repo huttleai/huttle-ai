@@ -50,8 +50,10 @@ import {
   getSectionMeta,
 } from '../data/blueprintSchema';
 import { buildN8nSystemPrompt } from '../utils/blueprintPromptBuilder';
+import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
-const N8N_WEBHOOK_URL = '/api/viral-blueprint-proxy';
+const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
 
 const PLATFORMS = [
   {
@@ -148,7 +150,7 @@ export default function IgniteEngine() {
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
-  const blueprintUsage = useAIUsage('viralBlueprint');
+  const blueprintUsage = useAIUsage('igniteEngine'); // HUTTLE AI: updated 3
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -188,9 +190,9 @@ export default function IgniteEngine() {
   const newLabel = hasMismatch ? getBlueprintLabel(selectedPlatform, selectedPostType) : '';
 
   useEffect(() => {
-    const limit = getFeatureLimit('viralBlueprint');
+    const limit = getFeatureLimit('igniteEngine'); // HUTTLE AI: updated 3
     setUsageLimit(limit === -1 ? Infinity : limit);
-    const savedUsage = localStorage.getItem('viralBlueprintUsage');
+    const savedUsage = localStorage.getItem('igniteEngineUsage'); // HUTTLE AI: updated 3
     if (savedUsage) setUsageCount(parseInt(savedUsage, 10));
   }, [userTier, getFeatureLimit]);
 
@@ -237,7 +239,7 @@ export default function IgniteEngine() {
   }, [selectedPlatform, selectedPostType]);
 
   const isFormValid = selectedPlatform && selectedPostType && topic.trim().length > 0 && targetAudience.trim().length > 0;
-  const hasAccess = checkFeatureAccess('viralBlueprint');
+  const hasAccess = checkFeatureAccess('igniteEngine'); // HUTTLE AI: updated 3
   const isAtLimit = usageLimit !== Infinity && usageCount >= usageLimit;
   const voiceContextLabel = isCreator ? 'Personal Brand' : 'Business Authority';
   const VoiceIcon = isCreator ? User : Building;
@@ -271,6 +273,7 @@ export default function IgniteEngine() {
       const viralWeights = getViralScoreWeights(selectedPlatform, selectedPostType);
       const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
 
+      const brandBlock = buildBrandContext(brandProfile, { first_name: brandProfile?.firstName }); // HUTTLE AI: brand context injected
       const briefContext = {
         topic: topic.trim(),
         platform: selectedPlatform,
@@ -287,6 +290,8 @@ export default function IgniteEngine() {
         user_type: brandProfile?.profileType || 'brand',
         brand_name: brandProfile?.brandName || '',
         handle: brandProfile?.socialHandle || '',
+        creator_name: brandProfile?.brandName || brandProfile?.firstName || '', // HUTTLE AI: brand context injected
+        brand_context: brandBlock, // HUTTLE AI: brand context injected
         sub_niche: brandProfile?.subNiche || '',
         city: brandProfile?.city || '',
         audience_pain_point: brandProfile?.audiencePainPoint || '',
@@ -358,7 +363,7 @@ export default function IgniteEngine() {
 
       const newUsage = usageCount + 1;
       setUsageCount(newUsage);
-      localStorage.setItem('viralBlueprintUsage', newUsage.toString());
+      localStorage.setItem('igniteEngineUsage', newUsage.toString()); // HUTTLE AI: updated 3
 
       if (import.meta.env.DEV) {
         const prompt = buildN8nSystemPrompt(briefContext);
@@ -424,7 +429,7 @@ export default function IgniteEngine() {
         name: `Brief - ${topic.slice(0, 50) || selectedPlatform || 'Content'}`,
         contentText: briefText,
         contentType: 'blueprint',
-        toolSource: 'viral_blueprint',
+        toolSource: 'ignite_engine', // HUTTLE AI: updated 3
         toolLabel: 'Ignite Engine',
         topic,
         platform: selectedPlatform,
@@ -847,7 +852,7 @@ export default function IgniteEngine() {
 
                       {bp.scoreReason && (
                         <p className="text-center text-sm text-gray-400 italic mt-6 max-w-lg mx-auto">
-                          {bp.scoreReason}
+                          {sanitizeAIOutput(bp.scoreReason)}
                         </p>
                       )}
 
@@ -873,7 +878,7 @@ export default function IgniteEngine() {
                         <SectionCard icon={<Flame className="w-4 h-4 text-white" />} iconBg="bg-gradient-to-br from-amber-400 to-orange-500" title="Your Opening Hook" action={
                           <CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'hook'} onClick={() => handleCopy(bp.hook, 'hook')} />
                         }>
-                          <p className="text-lg font-semibold text-gray-900 leading-relaxed">{bp.hook}</p>
+                          <p className="text-lg font-semibold text-gray-900 leading-relaxed">{sanitizeAIOutput(bp.hook)}</p>
                           {bp.hookReason && <ReasonCallout text={bp.hookReason} />}
                         </SectionCard>
                       </Motion.div>
@@ -884,7 +889,7 @@ export default function IgniteEngine() {
                         <SectionCard icon={<FileText className="w-4 h-4 text-white" />} iconBg="bg-gradient-to-br from-violet-500 to-purple-600" title="Script" action={
                           <CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'script'} onClick={() => handleCopy(bp.script, 'script')} />
                         }>
-                          <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">{bp.script}</div>
+                          <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">{sanitizeAIOutput(bp.script)}</div>
                           <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5" />
                             Estimated read time: ~{Math.max(1, Math.round(bp.script.split(/\s+/).length / 130))} min
@@ -976,7 +981,7 @@ export default function IgniteEngine() {
       <UpgradeModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
-        feature="viralBlueprint"
+        feature="igniteEngine" // HUTTLE AI: updated 3
       />
     </div>
   );
@@ -1014,7 +1019,7 @@ function CopyBtn({ label, copiedLabel, active, onClick }) {
 function ReasonCallout({ text }) {
   return (
     <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-      <p className="text-sm text-gray-500 italic">💡 {text}</p>
+      <p className="text-sm text-gray-500 italic">💡 {sanitizeAIOutput(text)}</p>
     </div>
   );
 }
@@ -1026,7 +1031,7 @@ function InfoRow({ emoji, label, value }) {
       <span className="text-base flex-shrink-0">{emoji}</span>
       <div>
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
-        <p className="text-sm text-gray-800 mt-0.5">{value}</p>
+        <p className="text-sm text-gray-800 mt-0.5">{sanitizeAIOutput(value)}</p>
       </div>
     </div>
   );
@@ -1041,7 +1046,7 @@ function CaptionCard({ bp, copiedSection, handleCopy }) {
       action={<CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'caption'} onClick={() => handleCopy(bp.caption, 'caption')} />}
     >
       <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
-        <p className="whitespace-pre-wrap text-gray-800 leading-relaxed">{bp.caption}</p>
+        <p className="whitespace-pre-wrap text-gray-800 leading-relaxed">{sanitizeAIOutput(bp.caption)}</p>
       </div>
       {bp.captionReason && <ReasonCallout text={bp.captionReason} />}
     </SectionCard>
@@ -1063,7 +1068,7 @@ function HashtagsCard({ hashtags, copiedSection, handleCopy }) {
               onClick={() => handleCopy(tag, `${prefix}-${i}`)}
               className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold text-gray-700 hover:bg-gray-100 hover:border-gray-300 hover:scale-105 transition-all"
             >
-              {copiedSection === `${prefix}-${i}` ? '✓ Copied' : tag}
+              {copiedSection === `${prefix}-${i}` ? '✓ Copied' : sanitizeAIOutput(tag)}
             </button>
           ))}
         </div>
@@ -1084,7 +1089,7 @@ function HashtagsCard({ hashtags, copiedSection, handleCopy }) {
         {renderRow('Broad', hashtags.broad, 'broad')}
       </div>
       {hashtags.reason && (
-        <p className="text-xs text-gray-400 mt-5">{hashtags.reason}</p>
+        <p className="text-xs text-gray-400 mt-5">{sanitizeAIOutput(hashtags.reason)}</p>
       )}
     </SectionCard>
   );
@@ -1118,17 +1123,17 @@ function PostingIntelCard({ postingIntel }) {
       <div className="space-y-4">
         <div>
           <span className="inline-flex items-center px-4 py-2 rounded-full bg-cyan-50 text-cyan-700 text-sm font-bold border border-cyan-200">
-            {postingIntel.bestTime}
+            {sanitizeAIOutput(postingIntel.bestTime)}
           </span>
           {postingIntel.reason && (
-            <p className="text-xs text-gray-400 mt-2">{postingIntel.reason}</p>
+            <p className="text-xs text-gray-400 mt-2">{sanitizeAIOutput(postingIntel.reason)}</p>
           )}
         </div>
         {postingIntel.frequency && (
           <div className="flex items-center gap-2 text-sm text-gray-700">
             <span>🔁</span>
             <span className="font-medium">Post frequency:</span>
-            <span>{postingIntel.frequency}</span>
+            <span>{sanitizeAIOutput(postingIntel.frequency)}</span>
           </div>
         )}
       </div>
@@ -1143,7 +1148,7 @@ function ProTipCard({ proTip }) {
         <span className="text-xl flex-shrink-0">⚡</span>
         <div>
           <h3 className="font-bold text-gray-900 mb-2">Pro Tip</h3>
-          <p className="text-gray-700 leading-relaxed">{proTip}</p>
+          <p className="text-gray-700 leading-relaxed">{sanitizeAIOutput(proTip)}</p>
         </div>
       </div>
     </div>
@@ -1243,8 +1248,9 @@ function normalizeArray(value) {
 
 async function attemptGrokFallback(platform, contentType, topic, goal, targetAudience, brandProfile) {
   const isVideo = ['Reel', 'Video', 'Short', 'Long-Form'].includes(contentType);
+  const fallbackBrandBlock = buildBrandContext(brandProfile, { first_name: brandProfile?.firstName }); // HUTTLE AI: brand context injected
 
-  const prompt = `You are a content strategist. Generate a ${contentType} content brief for ${platform}.
+  const prompt = `${fallbackBrandBlock}You are a content strategist. Generate a ${contentType} content brief for ${platform}.
 
 Topic: ${topic}
 Goal: ${goal}

@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { TrendingUp, Sparkles } from 'lucide-react';
+import { stripCitations } from '../utils/textHelpers'; // HUTTLE: card fix
 
 export default function TrendCard({ title, description, score, category, onQuickGen }) {
   const [isHovered, setIsHovered] = useState(false);
+  const sanitizedTitle = stripCitations(title); // HUTTLE: card fix
+  const sanitizedDescription = stripCitations(description); // HUTTLE: card fix
+  const sanitizedCategory = stripCitations(category); // HUTTLE: card fix
 
   return (
     <div
@@ -11,7 +15,7 @@ export default function TrendCard({ title, description, score, category, onQuick
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex items-start justify-between mb-2">
-        <h3 className="font-semibold text-gray-900">{title}</h3>
+        <h3 className="font-semibold text-gray-900">{sanitizedTitle}</h3>
         {score && (
           <span className="text-xs font-semibold px-2 py-1 rounded bg-green-100 text-green-700">
             {score}%
@@ -19,12 +23,12 @@ export default function TrendCard({ title, description, score, category, onQuick
         )}
       </div>
       
-      {description && (
-        <p className="text-sm text-gray-600 mb-3">{description}</p>
+      {sanitizedDescription && (
+        <p className="text-sm text-gray-600 mb-3">{sanitizedDescription}</p>
       )}
       
-      {category && (
-        <span className="text-xs text-gray-500">{category}</span>
+      {sanitizedCategory && (
+        <span className="text-xs text-gray-500">{sanitizedCategory}</span>
       )}
 
       {/* Hover Preview */}

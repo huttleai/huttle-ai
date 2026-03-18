@@ -2,6 +2,7 @@ import { supabase, trackUsage } from '../config/supabase';
 import { API_TIMEOUTS } from '../config/apiConfig';
 import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
 import { retryFetch } from '../utils/retryFetch';
+import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 
 const DASHBOARD_CACHE_TABLE = 'daily_dashboard_cache';
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -68,12 +69,12 @@ const HASHTAG_FALLBACK = [
   { tag: '#creatorjourney', volume: 'NICHE', status: 'Niche', type: 'hashtag' },
 ];
 
-function getLocalDateString(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+function getUtcDateString(date = new Date()) { // HUTTLE AI: cache fix
+  const year = date.getUTCFullYear(); // HUTTLE AI: cache fix
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // HUTTLE AI: cache fix
+  const day = String(date.getUTCDate()).padStart(2, '0'); // HUTTLE AI: cache fix
+  return `${year}-${month}-${day}`; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
 function getCurrentMonthYear(date = new Date()) {
   return {
@@ -329,6 +330,7 @@ function buildDashboardBrandContext(brandProfile) {
     showPlatformWideNicheNudge: trendingMode === 'platform_wide' && !rawNiche,
     showBrandVoiceNudge: !hasCompleteBrandVoice,
     brandVoiceNudgeCopy: BRAND_VOICE_NUDGE_COPY,
+    brandProfile, // HUTTLE AI: brand context injected — pass through for AI insight personalization
   };
 }
 
@@ -847,7 +849,7 @@ function buildFallbackAIInsights(context) {
 }
 
 async function fetchPerPlatformWidgetData(type, platform, context, headers, options = {}) {
-  const generatedDate = getLocalDateString();
+  const generatedDate = getUtcDateString(); // HUTTLE AI: cache fix
   const cacheKey = buildPerPlatformCacheKey(context, platform, type, generatedDate);
   const forceRefresh = type === 'hashtags' ? Boolean(options.forceRefreshHashtags) : Boolean(options.forceRefreshTrending);
   const messages = type === 'trending'
@@ -990,6 +992,7 @@ async function fetchAllPlatformWidgets(platforms, context, headers, options = {}
 
 function buildAIInsightsMessages(context) {
   const platformLabels = context.selectedPlatforms.map(formatPlatformLabel);
+  const brandBlock = buildCreatorBrandBlock(context.brandProfile, context.brandProfile); // HUTTLE AI: brand context injected
   const instagramInstruction = context.selectedPlatforms.includes('instagram')
     ? '- If Instagram is selected, discuss Reels versus carousels as a reach/engagement tradeoff without inventing performance multipliers.'
     : '';
@@ -1003,7 +1006,7 @@ function buildAIInsightsMessages(context) {
   return [
     {
       role: 'system',
-      content: 'You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.',
+      content: `${brandBlock}You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
@@ -1039,236 +1042,416 @@ ${linkedinInstruction}
   ];
 }
 
-async function getCachedAIInsights(userId, generatedDate) {
-  const session = await getDashboardSession();
-  if (!session) {
-    console.warn('[Dashboard] No auth session, skipping user data fetch');
-    return null;
-  }
+async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
+  const fallbackInsights = buildFallbackAIInsights(context); // HUTTLE AI: cache fix
 
-  const { data, error } = await supabase
-    .from(DASHBOARD_CACHE_TABLE)
-    .select('generated_date, ai_insights, ai_insight, created_at')
-    .eq('user_id', userId)
-    .eq('generated_date', generatedDate)
-    .maybeSingle();
+  try { // HUTTLE AI: cache fix
+    const response = await retryFetch( // HUTTLE AI: cache fix
+      GROK_PROXY_URL, // HUTTLE AI: cache fix
+      { // HUTTLE AI: cache fix
+        method: 'POST', // HUTTLE AI: cache fix
+        headers, // HUTTLE AI: cache fix
+        body: JSON.stringify({ // HUTTLE AI: cache fix
+          model: 'grok-4-1-fast-reasoning', // HUTTLE AI: cache fix
+          temperature: 0.2, // HUTTLE AI: cache fix
+          messages: buildAIInsightsMessages(context), // HUTTLE AI: cache fix
+        }), // HUTTLE AI: cache fix
+      }, // HUTTLE AI: cache fix
+      { // HUTTLE AI: cache fix
+        timeoutMs: API_TIMEOUTS.STANDARD, // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
+    ); // HUTTLE AI: cache fix
 
-  if (error) {
-    console.warn('Error reading cached AI insights, using fallback generation:', error);
-    return null;
-  }
+    if (!response.ok) { // HUTTLE AI: cache fix
+      throw new Error('Grok insights request failed.'); // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
 
-  if (!data) {
-    return null;
-  }
+    const payload = await response.json(); // HUTTLE AI: cache fix
+    const parsed = parseStructuredJson(payload?.content || ''); // HUTTLE AI: cache fix
+    const normalizedInsights = normalizeInsights(parsed); // HUTTLE AI: cache fix
+    const insights = normalizedInsights.length > 0 ? normalizedInsights : fallbackInsights; // HUTTLE AI: cache fix
 
-  const insights = normalizeInsights(data.ai_insights);
-  if (insights.length === 0 && data.ai_insight) {
-    const legacyInsight = normalizeInsights([data.ai_insight]);
-    if (legacyInsight.length > 0) {
-      return { insights: legacyInsight, createdAt: data.created_at, fromCache: true };
-    }
-  }
+    return { // HUTTLE AI: cache fix
+      insights, // HUTTLE AI: cache fix
+      createdAt: new Date().toISOString(), // HUTTLE AI: cache fix
+      fromCache: false, // HUTTLE AI: cache fix
+      usedFallback: normalizedInsights.length === 0, // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } catch (error) { // HUTTLE AI: cache fix
+    console.warn('Error generating AI insights, using fallback insights:', error); // HUTTLE AI: cache fix
+    return { // HUTTLE AI: cache fix
+      insights: fallbackInsights, // HUTTLE AI: cache fix
+      createdAt: new Date().toISOString(), // HUTTLE AI: cache fix
+      fromCache: false, // HUTTLE AI: cache fix
+      usedFallback: true, // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-  return insights.length > 0
-    ? { insights, createdAt: data.created_at, fromCache: true }
-    : null;
-}
+function buildDashboardMetadata(context, overrides = {}) { // HUTTLE AI: cache fix
+  return { // HUTTLE AI: cache fix
+    selected_platforms: context.selectedPlatforms.map(formatPlatformLabel), // HUTTLE AI: cache fix
+    trending_fallback_message: overrides.trendingFallbackMessage ?? 'Trends are refreshing — check back in a few minutes.', // HUTTLE AI: cache fix
+    hashtags_fallback_message: overrides.hashtagsFallbackMessage ?? 'Hashtags loading — refresh in a moment.', // HUTTLE AI: cache fix
+    hashtags_from_previous_day: overrides.hashtagsFromPreviousDay ?? false, // HUTTLE AI: cache fix
+    trending_mode: context.trendingMode, // HUTTLE AI: cache fix
+    primary_platform_label: context.primaryPlatformLabel, // HUTTLE AI: cache fix
+    show_platform_wide_niche_nudge: context.showPlatformWideNicheNudge, // HUTTLE AI: cache fix
+    show_brand_voice_nudge: context.showBrandVoiceNudge, // HUTTLE AI: cache fix
+    brand_voice_nudge_copy: context.brandVoiceNudgeCopy, // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-async function generateAIInsights(userId, context, headers, generatedDate) {
-  const cachedInsights = await getCachedAIInsights(userId, generatedDate);
-  if (cachedInsights) {
-    return cachedInsights;
-  }
+function buildDashboardDataPayload(context, payload = {}) { // HUTTLE AI: cache fix
+  const metadata = buildDashboardMetadata(context, { // HUTTLE AI: cache fix
+    trendingFallbackMessage: payload.trendingFallbackMessage, // HUTTLE AI: cache fix
+    hashtagsFallbackMessage: payload.hashtagsFallbackMessage, // HUTTLE AI: cache fix
+    hashtagsFromPreviousDay: payload.hashtagsFromPreviousDay, // HUTTLE AI: cache fix
+  }); // HUTTLE AI: cache fix
 
-  const fallbackInsights = buildFallbackAIInsights(context);
+  return { // HUTTLE AI: cache fix
+    trending_topics: ensureArray(payload.trendingTopics), // HUTTLE AI: cache fix
+    hashtags_of_day: ensureArray(payload.hashtagsOfDay), // HUTTLE AI: cache fix
+    ai_insights: normalizeInsights(payload.aiInsights), // HUTTLE AI: cache fix
+    ai_insight: normalizeInsights(payload.aiInsights)[0] || null, // HUTTLE AI: cache fix
+    daily_alerts: ensureArray(payload.dailyAlerts), // HUTTLE AI: cache fix
+    created_at: payload.createdAt || new Date().toISOString(), // HUTTLE AI: cache fix
+    ...metadata, // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-  try {
-    const response = await retryFetch(
-      GROK_PROXY_URL,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'grok-4-1-fast-reasoning',
-          temperature: 0.2,
-          messages: buildAIInsightsMessages(context),
-        }),
-      },
-      {
-        timeoutMs: API_TIMEOUTS.STANDARD,
-      }
-    );
+function normalizeDashboardCacheRow(row, context) { // HUTTLE AI: cache fix
+  const metadata = row?.dashboard_metadata && typeof row.dashboard_metadata === 'object' ? row.dashboard_metadata : {}; // HUTTLE AI: cache fix
+  const normalizedInsights = normalizeInsights(row?.ai_insights); // HUTTLE AI: cache fix
+  const legacyInsights = normalizedInsights.length === 0 && row?.ai_insight ? normalizeInsights([row.ai_insight]) : []; // HUTTLE AI: cache fix
+  const insights = normalizedInsights.length > 0 ? normalizedInsights : legacyInsights; // HUTTLE AI: cache fix
 
-    if (!response.ok) {
-      throw new Error('Grok insights request failed.');
-    }
+  return { // HUTTLE AI: cache fix
+    trending_topics: ensureArray(row?.trending_topics), // HUTTLE AI: cache fix
+    hashtags_of_day: ensureArray(row?.hashtags_of_day), // HUTTLE AI: cache fix
+    ai_insights: insights, // HUTTLE AI: cache fix
+    ai_insight: insights[0] || null, // HUTTLE AI: cache fix
+    daily_alerts: ensureArray(row?.daily_alerts), // HUTTLE AI: cache fix
+    created_at: row?.created_at || new Date().toISOString(), // HUTTLE AI: cache fix
+    ...buildDashboardMetadata(context, { // HUTTLE AI: cache fix
+      trendingFallbackMessage: metadata.trending_fallback_message, // HUTTLE AI: cache fix
+      hashtagsFallbackMessage: metadata.hashtags_fallback_message, // HUTTLE AI: cache fix
+      hashtagsFromPreviousDay: metadata.hashtags_from_previous_day, // HUTTLE AI: cache fix
+    }), // HUTTLE AI: cache fix
+    selected_platforms: Array.isArray(metadata.selected_platforms) ? metadata.selected_platforms : context.selectedPlatforms.map(formatPlatformLabel), // HUTTLE AI: cache fix
+    trending_mode: metadata.trending_mode || context.trendingMode, // HUTTLE AI: cache fix
+    primary_platform_label: metadata.primary_platform_label || context.primaryPlatformLabel, // HUTTLE AI: cache fix
+    show_platform_wide_niche_nudge: typeof metadata.show_platform_wide_niche_nudge === 'boolean' ? metadata.show_platform_wide_niche_nudge : context.showPlatformWideNicheNudge, // HUTTLE AI: cache fix
+    show_brand_voice_nudge: typeof metadata.show_brand_voice_nudge === 'boolean' ? metadata.show_brand_voice_nudge : context.showBrandVoiceNudge, // HUTTLE AI: cache fix
+    brand_voice_nudge_copy: metadata.brand_voice_nudge_copy || context.brandVoiceNudgeCopy, // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-    const payload = await response.json();
-    const parsed = parseStructuredJson(payload?.content || '');
-    const normalizedInsights = normalizeInsights(parsed);
-    const insights = normalizedInsights.length > 0 ? normalizedInsights : fallbackInsights;
-    const createdAt = new Date().toISOString();
+function isMissingDashboardCacheColumnError(error) { // HUTTLE AI: cache fix
+  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase(); // HUTTLE AI: cache fix
+  return error?.code === '42703' || error?.code === 'PGRST204' || message.includes('daily_alerts') || message.includes('dashboard_metadata'); // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-    const { error: upsertError } = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert({
-        user_id: userId,
-        generated_date: generatedDate,
-        ai_insights: insights,
-        ai_insight: insights[0] || null,
-        created_at: createdAt,
-      }, {
-        onConflict: 'user_id,generated_date',
-      });
+async function fetchDailyAlerts() { // HUTTLE AI: cache fix
+  try { // HUTTLE AI: cache fix
+    const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(); // HUTTLE AI: cache fix
+    const { data, error } = await supabase // HUTTLE AI: cache fix
+      .from('social_updates') // HUTTLE AI: cache fix
+      .select('id, platform, update_title, update_summary, impact_level, fetched_at') // HUTTLE AI: cache fix
+      .gte('fetched_at', cutoffDate) // HUTTLE AI: cache fix
+      .order('fetched_at', { ascending: false }) // HUTTLE AI: cache fix
+      .limit(2); // HUTTLE AI: cache fix
 
-    if (upsertError) {
-      console.warn('Error upserting AI insights cache:', upsertError);
-    }
+    if (error) { // HUTTLE AI: cache fix
+      console.warn('[Dashboard] Failed to load daily alerts:', error); // HUTTLE AI: cache fix
+      return []; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
 
-    return {
-      insights,
-      createdAt,
-      fromCache: false,
-      usedFallback: normalizedInsights.length === 0,
-    };
-  } catch (error) {
-    console.warn('Error generating AI insights, using fallback insights:', error);
-    return {
-      insights: fallbackInsights,
-      createdAt: new Date().toISOString(),
-      fromCache: false,
-      usedFallback: true,
-    };
-  }
-}
+    return Array.isArray(data) ? data : []; // HUTTLE AI: cache fix
+  } catch (error) { // HUTTLE AI: cache fix
+    console.warn('[Dashboard] Failed to load daily alerts:', error); // HUTTLE AI: cache fix
+    return []; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-export async function getDashboardCache(userId, brandProfile, options = {}) {
-  return generateDashboardData(userId, brandProfile, options);
-}
+async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: cache fix
+  const { data, error } = await supabase // HUTTLE AI: cache fix
+    .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
+    .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at') // HUTTLE AI: cache fix
+    .eq('user_id', userId) // HUTTLE AI: cache fix
+    .eq('generated_date', generatedDate) // HUTTLE AI: cache fix
+    .maybeSingle(); // HUTTLE AI: cache fix
 
-export async function generateDashboardData(userId, brandProfile, options = {}) {
-  if (!userId) {
-    return { success: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' };
-  }
+  if (error && isMissingDashboardCacheColumnError(error)) { // HUTTLE AI: cache fix
+    const fallbackResult = await supabase // HUTTLE AI: cache fix
+      .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
+      .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, created_at') // HUTTLE AI: cache fix
+      .eq('user_id', userId) // HUTTLE AI: cache fix
+      .eq('generated_date', generatedDate) // HUTTLE AI: cache fix
+      .maybeSingle(); // HUTTLE AI: cache fix
 
-  const session = await getDashboardSession();
-  if (!session) {
-    console.warn('[Dashboard] No auth session, skipping user data fetch');
-    return {
-      success: false,
-      errorType: 'auth_error',
-      errorMessage: 'No active auth session.',
-    };
-  }
+    if (fallbackResult.error) { // HUTTLE AI: cache fix
+      console.warn('[Dashboard] Failed to read daily dashboard cache:', fallbackResult.error); // HUTTLE AI: cache fix
+      return null; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
 
-  const generatedDate = getLocalDateString();
-  const headers = await getAuthHeaders();
-  const context = buildDashboardBrandContext(brandProfile);
-  console.log('[Dashboard] Brand Voice loaded:', {
-    niche: context.niche,
-    trendingMode: context.trendingMode,
-    platforms: context.selectedPlatforms,
-    city: context.city || DEFAULT_CITY,
-  });
+    return fallbackResult.data || null; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
 
-  try {
-    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, options);
-    const aiInsightsResult = await generateAIInsights(userId, context, headers, generatedDate);
+  if (error) { // HUTTLE AI: cache fix
+    console.warn('[Dashboard] Failed to read daily dashboard cache:', error); // HUTTLE AI: cache fix
+    return null; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
 
-    const trendingTopics = platformResults.flatMap(({ platform, trendingResult }) =>
-      ensureArray(trendingResult.items)
-        .map((item) => normalizeTrendItem(item, platform, trendingResult.fromCache, trendingResult.generatedAt))
-        .filter(Boolean)
-    );
+  return data || null; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
-    let hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) =>
-      ensureArray(hashtagResult.items)
-        .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday))
-        .filter(Boolean)
-    );
-    if (hashtagsOfDay.length === 0) {
-      hashtagsOfDay = buildHashtagFallbackItems(context.primaryPlatform).map((item) =>
-        normalizeHashtagItem(item, context.primaryPlatform, false, new Date().toISOString(), false)
-      ).filter(Boolean);
-    }
-    const trendingFallbackMessage = trendingTopics.length === 0
-      ? platformResults.find(({ trendingResult }) => trendingResult.fallbackMessage)?.trendingResult?.fallbackMessage || 'Trends are refreshing — check back in a few minutes.'
-      : '';
-    const hashtagsFallbackMessage = platformResults.find(({ hashtagResult }) => hashtagResult.fallbackMessage)?.hashtagResult?.fallbackMessage || 'Hashtags loading — refresh in a moment.';
-    const hashtagsFromPreviousDay = hashtagsOfDay.some((item) => item.from_yesterday);
+async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { // HUTTLE AI: cache fix
+  const dashboardMetadata = { // HUTTLE AI: cache fix
+    selected_platforms: dashboardData.selected_platforms, // HUTTLE AI: cache fix
+    trending_fallback_message: dashboardData.trending_fallback_message, // HUTTLE AI: cache fix
+    hashtags_fallback_message: dashboardData.hashtags_fallback_message, // HUTTLE AI: cache fix
+    hashtags_from_previous_day: dashboardData.hashtags_from_previous_day, // HUTTLE AI: cache fix
+    trending_mode: dashboardData.trending_mode, // HUTTLE AI: cache fix
+    primary_platform_label: dashboardData.primary_platform_label, // HUTTLE AI: cache fix
+    show_platform_wide_niche_nudge: dashboardData.show_platform_wide_niche_nudge, // HUTTLE AI: cache fix
+    show_brand_voice_nudge: dashboardData.show_brand_voice_nudge, // HUTTLE AI: cache fix
+    brand_voice_nudge_copy: dashboardData.brand_voice_nudge_copy, // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
 
-    const createdAt = [
-      aiInsightsResult?.createdAt,
-      ...platformResults.flatMap(({ trendingResult, hashtagResult }) => [trendingResult.generatedAt, hashtagResult.generatedAt]),
-    ].filter(Boolean).sort().slice(-1)[0] || new Date().toISOString();
+  try { // HUTTLE AI: cache fix
+    const { error } = await supabase // HUTTLE AI: cache fix
+      .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
+      .upsert({ // HUTTLE AI: cache fix
+        user_id: userId, // HUTTLE AI: cache fix
+        generated_date: generatedDate, // HUTTLE AI: cache fix
+        trending_topics: dashboardData.trending_topics, // HUTTLE AI: cache fix
+        hashtags_of_day: dashboardData.hashtags_of_day, // HUTTLE AI: cache fix
+        ai_insights: dashboardData.ai_insights, // HUTTLE AI: cache fix
+        ai_insight: dashboardData.ai_insight, // HUTTLE AI: cache fix
+        daily_alerts: dashboardData.daily_alerts, // HUTTLE AI: cache fix
+        dashboard_metadata: dashboardMetadata, // HUTTLE AI: cache fix
+        created_at: dashboardData.created_at, // HUTTLE AI: cache fix
+      }, { // HUTTLE AI: cache fix
+        onConflict: 'user_id,generated_date', // HUTTLE AI: cache fix
+      }); // HUTTLE AI: cache fix
 
-    const shouldTrackUsage =
-      platformResults.some(({ trendingResult, hashtagResult }) =>
-        (ensureArray(trendingResult.items).length > 0 && !trendingResult.fromCache)
-        || (ensureArray(hashtagResult.items).length > 0 && !hashtagResult.fromCache && !hashtagResult.fromYesterday)
-      )
-      || !aiInsightsResult?.fromCache;
+    if (error && isMissingDashboardCacheColumnError(error)) { // HUTTLE AI: cache fix
+      const fallbackResult = await supabase // HUTTLE AI: cache fix
+        .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
+        .upsert({ // HUTTLE AI: cache fix
+          user_id: userId, // HUTTLE AI: cache fix
+          generated_date: generatedDate, // HUTTLE AI: cache fix
+          trending_topics: dashboardData.trending_topics, // HUTTLE AI: cache fix
+          hashtags_of_day: dashboardData.hashtags_of_day, // HUTTLE AI: cache fix
+          ai_insights: dashboardData.ai_insights, // HUTTLE AI: cache fix
+          ai_insight: dashboardData.ai_insight, // HUTTLE AI: cache fix
+          created_at: dashboardData.created_at, // HUTTLE AI: cache fix
+        }, { // HUTTLE AI: cache fix
+          onConflict: 'user_id,generated_date', // HUTTLE AI: cache fix
+        }); // HUTTLE AI: cache fix
 
-    console.log('[Dashboard] All platforms loaded, rendering...');
+      if (fallbackResult.error) { // HUTTLE AI: cache fix
+        console.warn('[Dashboard] Failed to write daily dashboard cache:', fallbackResult.error); // HUTTLE AI: cache fix
+        return false; // HUTTLE AI: cache fix
+      } // HUTTLE AI: cache fix
 
-    return {
-      success: true,
-      isFallback: Boolean(aiInsightsResult?.usedFallback),
-      generatedDate,
-      shouldTrackUsage,
-      data: {
-        trending_topics: trendingTopics,
-        hashtags_of_day: hashtagsOfDay,
-        ai_insights: aiInsightsResult?.insights || [],
-        ai_insight: aiInsightsResult?.insights?.[0] || null,
-        created_at: createdAt,
-        selected_platforms: context.selectedPlatforms.map(formatPlatformLabel),
-        trending_fallback_message: trendingFallbackMessage,
-        hashtags_fallback_message: hashtagsFallbackMessage,
-        hashtags_from_previous_day: hashtagsFromPreviousDay,
-        trending_mode: context.trendingMode,
-        primary_platform_label: context.primaryPlatformLabel,
-        show_platform_wide_niche_nudge: context.showPlatformWideNicheNudge,
-        show_brand_voice_nudge: context.showBrandVoiceNudge,
-        brand_voice_nudge_copy: context.brandVoiceNudgeCopy,
-      },
-    };
-  } catch (error) {
-    console.error('Error generating dashboard data:', error);
-    const fallbackInsights = buildFallbackAIInsights(context);
+      return true; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
 
-    return {
-      success: true,
-      isFallback: true,
-      generatedDate,
-      shouldTrackUsage: false,
-      data: {
-        trending_topics: [],
-        hashtags_of_day: [],
-        ai_insights: fallbackInsights,
-        ai_insight: fallbackInsights[0] || null,
-        created_at: new Date().toISOString(),
-        selected_platforms: context.selectedPlatforms.map(formatPlatformLabel),
-        trending_fallback_message: 'Trends are refreshing — check back in a few minutes.',
-        hashtags_fallback_message: 'Hashtags loading — refresh in a moment.',
-        hashtags_from_previous_day: false,
-        trending_mode: context.trendingMode,
-        primary_platform_label: context.primaryPlatformLabel,
-        show_platform_wide_niche_nudge: context.showPlatformWideNicheNudge,
-        show_brand_voice_nudge: context.showBrandVoiceNudge,
-        brand_voice_nudge_copy: context.brandVoiceNudgeCopy,
-      },
-    };
-  }
-}
+    if (error) { // HUTTLE AI: cache fix
+      console.warn('[Dashboard] Failed to write daily dashboard cache:', error); // HUTTLE AI: cache fix
+      return false; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+
+    return true; // HUTTLE AI: cache fix
+  } catch (error) { // HUTTLE AI: cache fix
+    console.warn('[Dashboard] Failed to write daily dashboard cache:', error); // HUTTLE AI: cache fix
+    return false; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
+
+export function getDashboardGeneratedDate(date = new Date()) { // HUTTLE AI: cache fix
+  return getUtcDateString(date); // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
+
+export async function getDashboardCache(userId, brandProfile, options = {}) { // HUTTLE AI: cache fix
+  if (!userId) { // HUTTLE AI: cache fix
+    return { success: false, cacheHit: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  const session = await getDashboardSession(); // HUTTLE AI: cache fix
+  if (!session) { // HUTTLE AI: cache fix
+    console.warn('[Dashboard] No auth session, skipping user data fetch'); // HUTTLE AI: cache fix
+    return { // HUTTLE AI: cache fix
+      success: false, // HUTTLE AI: cache fix
+      cacheHit: false, // HUTTLE AI: cache fix
+      errorType: 'auth_error', // HUTTLE AI: cache fix
+      errorMessage: 'No active auth session.', // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  const generatedDate = options.generatedDate || getUtcDateString(); // HUTTLE AI: cache fix
+  const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
+  const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
+
+  if (!cachedRow) { // HUTTLE AI: cache fix
+    return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  return { // HUTTLE AI: cache fix
+    success: true, // HUTTLE AI: cache fix
+    cacheHit: true, // HUTTLE AI: cache fix
+    generatedDate, // HUTTLE AI: cache fix
+    data: normalizeDashboardCacheRow(cachedRow, context), // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
+
+export async function generateDashboardData(userId, brandProfile, options = {}) { // HUTTLE AI: cache fix
+  if (!userId) { // HUTTLE AI: cache fix
+    return { success: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  const forceRefresh = Boolean(options.forceRefresh); // HUTTLE AI: cache fix
+  const normalizedOptions = { // HUTTLE AI: cache fix
+    ...options, // HUTTLE AI: cache fix
+    forceRefreshTrending: forceRefresh || Boolean(options.forceRefreshTrending), // HUTTLE AI: cache fix
+    forceRefreshHashtags: forceRefresh || Boolean(options.forceRefreshHashtags), // HUTTLE AI: cache fix
+  }; // HUTTLE AI: cache fix
+
+  if (!forceRefresh && !normalizedOptions.skipCacheLookup) { // HUTTLE AI: cache fix
+    const cachedResult = await getDashboardCache(userId, brandProfile, normalizedOptions); // HUTTLE AI: cache fix
+    if (cachedResult.success && cachedResult.cacheHit) { // HUTTLE AI: cache fix
+      return { // HUTTLE AI: cache fix
+        success: true, // HUTTLE AI: cache fix
+        cacheHit: true, // HUTTLE AI: cache fix
+        generatedDate: cachedResult.generatedDate, // HUTTLE AI: cache fix
+        shouldTrackUsage: false, // HUTTLE AI: cache fix
+        data: cachedResult.data, // HUTTLE AI: cache fix
+      }; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+
+    if (!cachedResult.success && cachedResult.errorType === 'auth_error') { // HUTTLE AI: cache fix
+      return cachedResult; // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  const session = await getDashboardSession(); // HUTTLE AI: cache fix
+  if (!session) { // HUTTLE AI: cache fix
+    console.warn('[Dashboard] No auth session, skipping user data fetch'); // HUTTLE AI: cache fix
+    return { // HUTTLE AI: cache fix
+      success: false, // HUTTLE AI: cache fix
+      errorType: 'auth_error', // HUTTLE AI: cache fix
+      errorMessage: 'No active auth session.', // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+
+  const generatedDate = normalizedOptions.generatedDate || getUtcDateString(); // HUTTLE AI: cache fix
+  const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
+  const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
+  console.log('[Dashboard] Brand Voice loaded:', { // HUTTLE AI: cache fix
+    niche: context.niche, // HUTTLE AI: cache fix
+    trendingMode: context.trendingMode, // HUTTLE AI: cache fix
+    platforms: context.selectedPlatforms, // HUTTLE AI: cache fix
+    city: context.city || DEFAULT_CITY, // HUTTLE AI: cache fix
+  }); // HUTTLE AI: cache fix
+
+  try { // HUTTLE AI: cache fix
+    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, normalizedOptions); // HUTTLE AI: cache fix
+    const [aiInsightsResult, dailyAlerts] = await Promise.all([ // HUTTLE AI: cache fix
+      generateAIInsights(context, headers), // HUTTLE AI: cache fix
+      fetchDailyAlerts(), // HUTTLE AI: cache fix
+    ]); // HUTTLE AI: cache fix
+
+    const trendingTopics = platformResults.flatMap(({ platform, trendingResult }) => // HUTTLE AI: cache fix
+      ensureArray(trendingResult.items) // HUTTLE AI: cache fix
+        .map((item) => normalizeTrendItem(item, platform, trendingResult.fromCache, trendingResult.generatedAt)) // HUTTLE AI: cache fix
+        .filter(Boolean) // HUTTLE AI: cache fix
+    ); // HUTTLE AI: cache fix
+
+    let hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) => // HUTTLE AI: cache fix
+      ensureArray(hashtagResult.items) // HUTTLE AI: cache fix
+        .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday)) // HUTTLE AI: cache fix
+        .filter(Boolean) // HUTTLE AI: cache fix
+    ); // HUTTLE AI: cache fix
+
+    if (hashtagsOfDay.length === 0) { // HUTTLE AI: cache fix
+      hashtagsOfDay = buildHashtagFallbackItems(context.primaryPlatform) // HUTTLE AI: cache fix
+        .map((item) => normalizeHashtagItem(item, context.primaryPlatform, false, new Date().toISOString(), false)) // HUTTLE AI: cache fix
+        .filter(Boolean); // HUTTLE AI: cache fix
+    } // HUTTLE AI: cache fix
+
+    const trendingFallbackMessage = trendingTopics.length === 0 // HUTTLE AI: cache fix
+      ? platformResults.find(({ trendingResult }) => trendingResult.fallbackMessage)?.trendingResult?.fallbackMessage || 'Trends are refreshing — check back in a few minutes.' // HUTTLE AI: cache fix
+      : ''; // HUTTLE AI: cache fix
+    const hashtagsFallbackMessage = platformResults.find(({ hashtagResult }) => hashtagResult.fallbackMessage)?.hashtagResult?.fallbackMessage || 'Hashtags loading — refresh in a moment.'; // HUTTLE AI: cache fix
+    const hashtagsFromPreviousDay = hashtagsOfDay.some((item) => item.from_yesterday); // HUTTLE AI: cache fix
+
+    const createdAt = [ // HUTTLE AI: cache fix
+      aiInsightsResult?.createdAt, // HUTTLE AI: cache fix
+      ...platformResults.flatMap(({ trendingResult, hashtagResult }) => [trendingResult.generatedAt, hashtagResult.generatedAt]), // HUTTLE AI: cache fix
+    ].filter(Boolean).sort().slice(-1)[0] || new Date().toISOString(); // HUTTLE AI: cache fix
+
+    const shouldTrackUsage = // HUTTLE AI: cache fix
+      platformResults.some(({ trendingResult, hashtagResult }) => // HUTTLE AI: cache fix
+        (ensureArray(trendingResult.items).length > 0 && !trendingResult.fromCache) // HUTTLE AI: cache fix
+        || (ensureArray(hashtagResult.items).length > 0 && !hashtagResult.fromCache && !hashtagResult.fromYesterday) // HUTTLE AI: cache fix
+      ) // HUTTLE AI: cache fix
+      || !aiInsightsResult?.fromCache; // HUTTLE AI: cache fix
+
+    const dashboardData = buildDashboardDataPayload(context, { // HUTTLE AI: cache fix
+      trendingTopics, // HUTTLE AI: cache fix
+      hashtagsOfDay, // HUTTLE AI: cache fix
+      aiInsights: aiInsightsResult?.insights || [], // HUTTLE AI: cache fix
+      dailyAlerts, // HUTTLE AI: cache fix
+      createdAt, // HUTTLE AI: cache fix
+      trendingFallbackMessage, // HUTTLE AI: cache fix
+      hashtagsFallbackMessage, // HUTTLE AI: cache fix
+      hashtagsFromPreviousDay, // HUTTLE AI: cache fix
+    }); // HUTTLE AI: cache fix
+
+    await writeDailyDashboardCache(userId, generatedDate, dashboardData); // HUTTLE AI: cache fix
+    console.log('[Dashboard] All platforms loaded, rendering...'); // HUTTLE AI: cache fix
+
+    return { // HUTTLE AI: cache fix
+      success: true, // HUTTLE AI: cache fix
+      cacheHit: false, // HUTTLE AI: cache fix
+      isFallback: Boolean(aiInsightsResult?.usedFallback), // HUTTLE AI: cache fix
+      generatedDate, // HUTTLE AI: cache fix
+      shouldTrackUsage, // HUTTLE AI: cache fix
+      data: dashboardData, // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } catch (error) { // HUTTLE AI: cache fix
+    console.error('Error generating dashboard data:', error); // HUTTLE AI: cache fix
+    const fallbackInsights = buildFallbackAIInsights(context); // HUTTLE AI: cache fix
+    const dashboardData = buildDashboardDataPayload(context, { // HUTTLE AI: cache fix
+      trendingTopics: [], // HUTTLE AI: cache fix
+      hashtagsOfDay: [], // HUTTLE AI: cache fix
+      aiInsights: fallbackInsights, // HUTTLE AI: cache fix
+      dailyAlerts: [], // HUTTLE AI: cache fix
+      createdAt: new Date().toISOString(), // HUTTLE AI: cache fix
+      trendingFallbackMessage: 'Trends are refreshing — check back in a few minutes.', // HUTTLE AI: cache fix
+      hashtagsFallbackMessage: 'Hashtags loading — refresh in a moment.', // HUTTLE AI: cache fix
+      hashtagsFromPreviousDay: false, // HUTTLE AI: cache fix
+    }); // HUTTLE AI: cache fix
+
+    return { // HUTTLE AI: cache fix
+      success: true, // HUTTLE AI: cache fix
+      cacheHit: false, // HUTTLE AI: cache fix
+      isFallback: true, // HUTTLE AI: cache fix
+      generatedDate, // HUTTLE AI: cache fix
+      shouldTrackUsage: false, // HUTTLE AI: cache fix
+      data: dashboardData, // HUTTLE AI: cache fix
+    }; // HUTTLE AI: cache fix
+  } // HUTTLE AI: cache fix
+} // HUTTLE AI: cache fix
 
 export async function deleteDashboardCache(userId) {
   if (!userId) {
     return { success: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' };
   }
 
-  const generatedDate = getLocalDateString();
+  const generatedDate = getUtcDateString(); // HUTTLE AI: cache fix
 
   try {
     const { error } = await supabase

@@ -1,5 +1,5 @@
 /**
- * Blueprint Schema — Single source of truth for all Viral Blueprint content types.
+ * Blueprint Schema — Single source of truth for all Ignite Engine content types. // HUTTLE AI: updated 3
  *
  * Every platform + content_type combination declares its REQUIRED, OPTIONAL,
  * and EXCLUDED sections. Helper functions derive labels, score-weights, and

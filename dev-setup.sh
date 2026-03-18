@@ -23,7 +23,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
 # n8n Webhook URLs
 VITE_N8N_PLAN_BUILDER_WEBHOOK=https://huttleai.app.n8n.cloud/webhook/plan-builder-async
-VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK=https://huttleai.app.n8n.cloud/webhook-test/viral-blueprint
+VITE_N8N_IGNITE_ENGINE_WEBHOOK=https://huttleai.app.n8n.cloud/webhook-test/ignite-engine
 
 # API Configuration
 VITE_API_URL=/api

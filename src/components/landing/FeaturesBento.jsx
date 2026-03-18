@@ -54,7 +54,7 @@ export const BentoFeatures = () => {
           animate={isInView ? "show" : "hidden"}
           className="grid grid-cols-1 md:grid-cols-4 gap-6"
         >
-          {/* Main Feature: Viral Blueprint - Large */}
+          {/* Main Feature: Ignite Engine - Large */} {/* HUTTLE AI: updated 3 */}
           <motion.div 
             variants={cardVariants}
             whileHover={{ scale: 1.01, boxShadow: '0 0 0 1px rgba(1,186,210,0.3), 0 8px 32px rgba(1,186,210,0.1)' }}
@@ -76,12 +76,12 @@ export const BentoFeatures = () => {
             </div>
             <div className="mt-auto z-10 flex-1 flex items-end justify-center pt-8">
               <img 
-                src="/viral-blueprint-mockup.png" 
+                src="/ignite-engine-mockup.png" // HUTTLE AI: updated 3
                 alt="Ignite Engine" 
                 className="w-full max-w-[300px] rounded-t-2xl shadow-2xl translate-y-8 group-hover:translate-y-4 transition-transform duration-700 ease-out border border-white/10" 
                 onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentNode.innerHTML = '<div class="w-full h-40 bg-[#0a0f14] rounded-t-2xl border-t border-x border-white/10 translate-y-8 group-hover:translate-y-4 transition-transform duration-700"></div>';
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentNode.innerHTML = '<div class="w-full h-40 bg-[#0a0f14] rounded-t-2xl border-t border-x border-white/10 translate-y-8 group-hover:translate-y-4 transition-transform duration-700"></div>';
                 }}
               />
             </div>

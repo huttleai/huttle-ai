@@ -15,6 +15,7 @@ import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
 import { useNavigate } from 'react-router-dom';
+import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -284,17 +285,17 @@ export default function NicheIntel() {
                     {analysis.trendingThemes.map((theme, i) => (
                       <div key={i} className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-gray-900 text-sm">{theme.name}</span>
+                          <span className="font-medium text-gray-900 text-sm">{sanitizeAIOutput(theme.name)}</span>
                           <div className="flex items-center gap-2">
                             {theme.bestFormat && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{theme.bestFormat}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{sanitizeAIOutput(theme.bestFormat)}</span>
                             )}
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${MOMENTUM_COLORS[theme.momentum] || 'bg-gray-100 text-gray-600'}`}>
-                              {theme.momentum}
+                              {sanitizeAIOutput(theme.momentum)}
                             </span>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-600">{theme.why}</p>
+                        <p className="text-xs text-gray-600">{sanitizeAIOutput(theme.why)}</p>
                       </div>
                     ))}
                   </div>
@@ -310,7 +311,7 @@ export default function NicheIntel() {
                   <div className="space-y-2">
                     {analysis.hookPatterns.map((hook, i) => (
                       <div key={i} className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-                        <p className="text-sm text-amber-900 font-medium flex-1">{hook}</p>
+                        <p className="text-sm text-amber-900 font-medium flex-1">{sanitizeAIOutput(hook)}</p>
                         <button
                           onClick={() => handleCopyHook(hook, `hook-${i}`)}
                           className="ml-2 text-amber-500 hover:text-amber-600 flex-shrink-0"
@@ -333,12 +334,12 @@ export default function NicheIntel() {
                     {analysis.contentGaps.map((gap, i) => (
                       <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900 text-sm">{gap.topic}</span>
+                          <span className="font-medium text-gray-900 text-sm">{sanitizeAIOutput(gap.topic)}</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 font-medium">
-                            {gap.label || 'Untapped Opportunity'}
+                            {sanitizeAIOutput(gap.label) || 'Untapped Opportunity'}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-600">{gap.reason}</p>
+                        <p className="text-xs text-gray-600">{sanitizeAIOutput(gap.reason)}</p>
                       </div>
                     ))}
                   </div>
@@ -357,22 +358,22 @@ export default function NicheIntel() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-gray-900 text-sm">{idea.title}</span>
+                              <span className="font-medium text-gray-900 text-sm">{sanitizeAIOutput(idea.title)}</span>
                               {idea.format && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{idea.format}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{sanitizeAIOutput(idea.format)}</span>
                               )}
                               {idea.momentum && (
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${MOMENTUM_COLORS[idea.momentum] || 'bg-gray-100 text-gray-600'}`}>
-                                  {idea.momentum}
+                                  {sanitizeAIOutput(idea.momentum)}
                                 </span>
                               )}
                             </div>
-                            {idea.hook && <p className="text-xs text-gray-600 italic">&ldquo;{idea.hook}&rdquo;</p>}
-                            {idea.whyThisWorks && <p className="text-xs text-gray-500 mt-2">{idea.whyThisWorks}</p>}
+                            {idea.hook && <p className="text-xs text-gray-600 italic">&ldquo;{sanitizeAIOutput(idea.hook)}&rdquo;</p>}
+                            {idea.whyThisWorks && <p className="text-xs text-gray-500 mt-2">{sanitizeAIOutput(idea.whyThisWorks)}</p>}
                             {Array.isArray(idea.hashtags) && idea.hashtags.length > 0 && (
-                              <p className="text-[10px] text-indigo-500 mt-2">{idea.hashtags.join(' ')}</p>
+                              <p className="text-[10px] text-indigo-500 mt-2">{sanitizeAIOutput(idea.hashtags.join(' '))}</p>
                             )}
-                            {idea.platformFit && <span className="text-[10px] text-gray-400 mt-1 inline-block">Best on {idea.platformFit}</span>}
+                            {idea.platformFit && <span className="text-[10px] text-gray-400 mt-1 inline-block">Best on {sanitizeAIOutput(idea.platformFit)}</span>}
                           </div>
                           <button
                             onClick={() => handleBuildPost(idea)}
