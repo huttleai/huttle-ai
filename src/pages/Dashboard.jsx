@@ -98,7 +98,7 @@ const QUICK_CREATE_TOOLS = [
 export default function Dashboard() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
-  const { brandProfile, loading: isBrandProfileLoading } = useBrand();
+  const { brandProfile } = useBrand();
   const { showToast } = useToast();
   const { addNotification, addSocialUpdate } = useNotifications();
   const {
@@ -125,7 +125,6 @@ export default function Dashboard() {
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
   const dashboardLoadedRef = useRef(false);
   const brandProfileRef = useRef(brandProfile);
-  const brandLoadingRef = useRef(isBrandProfileLoading);
 
   const copyHashtag = async (hashtag) => {
     try {
@@ -331,20 +330,9 @@ export default function Dashboard() {
   }, [brandProfile]);
 
   useEffect(() => {
-    brandLoadingRef.current = isBrandProfileLoading;
-  }, [isBrandProfileLoading]);
-
-  useEffect(() => {
     let isActive = true;
 
-    const waitForBrandProfile = async () => {
-      while (isActive && brandLoadingRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    };
-
     const loadDailyDashboard = async () => {
-      await waitForBrandProfile();
       if (!isActive || !user?.id) return;
       setDashboardError('');
       setIsDashboardLoading(true);

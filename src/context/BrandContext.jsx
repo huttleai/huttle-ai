@@ -92,6 +92,30 @@ export function BrandProvider({ children }) {
       }
     };
 
+    const mergePreferencesIntoBrandData = (baseData, userPreferences = {}) => ({
+      ...baseData,
+      contentFocus: userPreferences.content_focus
+        ? formatEnumArray(userPreferences.content_focus)
+        : baseData.contentFocus,
+      city: userPreferences.city || baseData.city,
+      growthStage: userPreferences.growth_stage
+        ? normalizeOptionalEnum(userPreferences.growth_stage)
+        : baseData.growthStage,
+      creatorType: userPreferences.creator_type
+        ? normalizeOptionalEnum(userPreferences.creator_type)
+        : baseData.creatorType,
+    });
+
+    const applyPreferenceOverrides = (userPreferences) => {
+      if (!isActive || !userPreferences) return;
+
+      setBrandData((currentBrandData) => {
+        const mergedBrandData = mergePreferencesIntoBrandData(currentBrandData, userPreferences);
+        localStorage.setItem('brandData', JSON.stringify(mergedBrandData));
+        return mergedBrandData;
+      });
+    };
+
     const fetchBrandData = async (retryCount = 0) => {
       let shouldRetry = false;
 
@@ -116,35 +140,26 @@ export function BrandProvider({ children }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        // Run preferences independently — never let it block or fail the main load
-        const safePreferencesPromise = getUserPreferences(user.id).catch((e) => {
+        // Start preferences in parallel, but never await them for initial brand readiness.
+        const safePreferencesPromise = getUserPreferences(user.id).then((result) => {
+          if (!result?.success || !result.data) {
+            return null;
+          }
+
+          return result.data;
+        }).catch((e) => {
           console.warn('[Brand] Preferences fetch failed (non-blocking):', e.message);
-          return { success: false, data: null };
+          return null;
         });
 
-        const [profileResult, preferencesResult] = await Promise.allSettled([
-          Promise.race([queryPromise, timeoutPromise]),
-          safePreferencesPromise,
-        ]);
-
-        // Extract profile data — if the query itself failed, throw to trigger retry
-        if (profileResult.status === 'rejected') {
-          throw profileResult.reason;
-        }
-
-        const { data, error } = profileResult.value;
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
         if (error) {
           throw error;
         }
 
-        const userPreferences = preferencesResult.status === 'fulfilled'
-            && preferencesResult.value?.success && preferencesResult.value.data
-          ? preferencesResult.value.data
-          : {};
-
         if (data) {
           // Map user_profile fields to brandData structure
-          // Apply formatEnumLabel to convert snake_case values to human-readable labels
+          // Apply formatEnumLabel to convert snake_case values to human-readable labels.
           const mappedData = {
             firstName: data.first_name || '',
             profileType: data.profile_type || 'brand',
@@ -153,17 +168,11 @@ export function BrandProvider({ children }) {
             socialHandle: data.social_handle || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
             subNiche: data.sub_niche || data.industry || '',
-            contentFocus: userPreferences.content_focus
-              ? formatEnumArray(userPreferences.content_focus)
-              : (data.content_focus ? formatEnumArray(data.content_focus) : ''),
-            city: userPreferences.city || data.city || '',
+            contentFocus: data.content_focus ? formatEnumArray(data.content_focus) : '',
+            city: data.city || '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
-            growthStage: userPreferences.growth_stage
-              ? normalizeOptionalEnum(userPreferences.growth_stage)
-              : (data.growth_stage ? normalizeOptionalEnum(data.growth_stage) : ''),
-            creatorType: userPreferences.creator_type
-              ? normalizeOptionalEnum(userPreferences.creator_type)
-              : (data.creator_type ? normalizeOptionalEnum(data.creator_type) : null),
+            growthStage: data.growth_stage ? normalizeOptionalEnum(data.growth_stage) : '',
+            creatorType: data.creator_type ? normalizeOptionalEnum(data.creator_type) : null,
             targetAudience: Array.isArray(data.target_audience)
               ? formatEnumArray(data.target_audience)
               : (data.target_audience ? formatEnumArray(data.target_audience) : ''),
@@ -201,6 +210,7 @@ export function BrandProvider({ children }) {
           }
           // Also sync to localStorage as backup
           localStorage.setItem('brandData', JSON.stringify(mappedData));
+          void safePreferencesPromise.then(applyPreferenceOverrides);
         } else {
           // No profile row exists — create a minimal default row so future queries succeed
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
@@ -213,6 +223,7 @@ export function BrandProvider({ children }) {
           }
 
           applyLocalBrandFallback();
+          void safePreferencesPromise.then(applyPreferenceOverrides);
         }
       } catch (error) {
         if (retryCount === 0) {

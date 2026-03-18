@@ -11,6 +11,27 @@
 import { supabase } from '../config/supabase';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const SAFE_SUBSCRIPTION_DEFAULT = {
+  subscription: null,
+  plan: 'free',
+  tier: 'free',
+  status: 'unknown',
+  currentPeriodEnd: null,
+  trialEnd: null,
+  cancelAtPeriodEnd: false,
+  degraded: true,
+};
+
+function buildSubscriptionStatusResult(overrides = {}) {
+  return {
+    success: false,
+    unauthorized: false,
+    shouldRetry: false,
+    statusCode: 0,
+    ...SAFE_SUBSCRIPTION_DEFAULT,
+    ...overrides,
+  };
+}
 
 // Note: Most Stripe operations should happen on your backend for security
 // This file provides client-side helpers for Stripe Checkout and Portal
@@ -281,60 +302,74 @@ export async function createPortalSession() {
 /**
  * Get current subscription status
  */
-export async function getSubscriptionStatus() {
+export async function getSubscriptionStatus(options = {}) {
+  const { signal } = options;
+
   try {
     const headers = await getAuthHeaders();
     if (!headers.Authorization) {
-      return {
-        success: false,
+      return buildSubscriptionStatusResult({
         unauthorized: true,
-        shouldRetry: false,
         statusCode: 401,
-        subscription: null,
         plan: null,
+        tier: null,
         status: 'inactive',
-        currentPeriodEnd: null,
-        trialEnd: null,
-        cancelAtPeriodEnd: false,
-      };
+        degraded: false,
+      });
     }
 
-    const response = await fetch('/api/subscription-status', {
-      method: 'GET',
-      headers,
-    });
+    let response;
+    try {
+      response = await fetch('/api/subscription-status', {
+        method: 'GET',
+        headers,
+        signal,
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return buildSubscriptionStatusResult({
+          shouldRetry: false,
+          error: 'Subscription status request was aborted.',
+        });
+      }
+
+      console.error('Subscription Status Error:', error);
+      return buildSubscriptionStatusResult({
+        shouldRetry: true,
+        error: error.message || 'Failed to fetch subscription status.',
+      });
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
-        return {
-          success: false,
+        return buildSubscriptionStatusResult({
           unauthorized: true,
-          shouldRetry: false,
           statusCode: 401,
-          subscription: null,
           plan: null,
+          tier: null,
           status: 'inactive',
-          currentPeriodEnd: null,
-          trialEnd: null,
-          cancelAtPeriodEnd: false,
-        };
+          degraded: false,
+        });
       }
 
-      return {
-        success: false,
-        unauthorized: false,
+      return buildSubscriptionStatusResult({
         shouldRetry: response.status >= 500 || response.status === 408 || response.status === 429,
         statusCode: response.status,
-        subscription: null,
-        plan: null,
-        status: 'inactive',
-        currentPeriodEnd: null,
-        trialEnd: null,
-        cancelAtPeriodEnd: false,
-      };
+        error: `Subscription status request failed with ${response.status}.`,
+      });
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      console.error('Subscription status parse error:', error);
+      return buildSubscriptionStatusResult({
+        shouldRetry: true,
+        statusCode: response.status,
+        error: 'Subscription status response was invalid JSON.',
+      });
+    }
     
     return {
       success: true,
@@ -342,26 +377,20 @@ export async function getSubscriptionStatus() {
       shouldRetry: false,
       statusCode: response.status,
       subscription: data.subscription,
-      plan: data.plan,
+      plan: data.plan ?? SAFE_SUBSCRIPTION_DEFAULT.plan,
+      tier: data.tier ?? data.plan ?? SAFE_SUBSCRIPTION_DEFAULT.tier,
       status: data.status,
       currentPeriodEnd: data.currentPeriodEnd,
       trialEnd: data.trialEnd,
       cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+      degraded: false,
     };
   } catch (error) {
     console.error('Subscription Status Error:', error);
-    return {
-      success: false,
-      unauthorized: false,
-      shouldRetry: true,
-      statusCode: 0,
-      subscription: null,
-      plan: null,
-      status: 'inactive',
-      currentPeriodEnd: null,
-      trialEnd: null,
-      cancelAtPeriodEnd: false,
-    };
+    return buildSubscriptionStatusResult({
+      shouldRetry: error?.name !== 'AbortError',
+      error: error.message || 'Subscription status request failed.',
+    });
   }
 }
 

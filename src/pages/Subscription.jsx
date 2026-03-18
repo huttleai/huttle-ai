@@ -1,6 +1,6 @@
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { Award, CalendarCheck, Check, CreditCard, Crown, ExternalLink, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
-import { createCheckoutSession, createPortalSession, getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
+import { createCheckoutSession, createPortalSession, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -128,13 +128,16 @@ export default function Subscription() {
     refreshSubscription,
     hasPaidAccess,
     getTierDisplayName,
+    loading: subscriptionLoading,
+    subscriptionError,
+    isSubscriptionDegraded,
   } = useSubscription();
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
 
   const [loading, setLoading] = useState(null);
-  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const checkoutResetTimeoutRef = useRef(null);
 
   const demoMode = isDemoMode() || contextDemoMode;
   const showDemoControls = import.meta.env.DEV && demoMode;
@@ -142,27 +145,23 @@ export default function Subscription() {
   const currentPlanDetails = PLAN_DETAILS[userTier] || null;
 
   useEffect(() => {
-    const fetchSubscriptionInfo = async () => {
-      if (!user) return;
-      const result = await getSubscriptionStatus();
-      if (result.success) {
-        setSubscriptionInfo(result.subscription || null);
-      }
-    };
-
-    fetchSubscriptionInfo();
-  }, [user]);
-
-  useEffect(() => {
     if (user?.id) {
       refreshSubscription();
     }
   }, [user?.id, refreshSubscription]);
 
+  useEffect(() => () => {
+    if (checkoutResetTimeoutRef.current) {
+      window.clearTimeout(checkoutResetTimeoutRef.current);
+      checkoutResetTimeoutRef.current = null;
+    }
+  }, []);
+
   const renewalDate = useMemo(
-    () => formatDate(subscription?.currentPeriodEnd || subscriptionInfo?.currentPeriodEnd),
-    [subscription?.currentPeriodEnd, subscriptionInfo?.currentPeriodEnd]
+    () => formatDate(subscription?.currentPeriodEnd),
+    [subscription?.currentPeriodEnd]
   );
+  const isResolvingSubscription = subscriptionLoading && !subscription && !isSubscriptionDegraded;
 
   const handleCheckout = async (planId, billingCycle = 'annual') => {
     setLoading(planId);
@@ -192,7 +191,10 @@ export default function Subscription() {
       }
 
       if (result.success && result.url) {
-        setTimeout(() => setLoading(null), 5000);
+        checkoutResetTimeoutRef.current = window.setTimeout(() => {
+          setLoading(null);
+          checkoutResetTimeoutRef.current = null;
+        }, 5000);
       } else {
         addToast('Checkout session created but no redirect URL was returned.', 'error');
         setLoading(null);
@@ -305,8 +307,35 @@ export default function Subscription() {
           </div>
         )}
 
-        {hasPaidAccess ? (
+        {isResolvingSubscription ? (
+          <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+            <div className="flex items-start gap-3">
+              <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-huttle-primary flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-900">Checking your billing status</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Your subscription page is loading. If Stripe is slow, we&apos;ll keep this page available with safe defaults.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : hasPaidAccess ? (
           <div className="max-w-4xl mx-auto space-y-8">
+            {isSubscriptionDegraded && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-900">Billing status is temporarily unavailable</p>
+                  <p className="text-sm text-amber-800">
+                    {subscriptionError || 'We could not fully refresh your Stripe data. Showing your latest available access state.'}
+                  </p>
+                </div>
+                <button onClick={() => refreshSubscription()} className="text-sm font-semibold text-amber-900 hover:text-amber-700">
+                  Retry
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center gap-4">
               <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${currentPlanDetails?.iconGradient || 'from-huttle-primary to-cyan-400'} flex items-center justify-center shadow-lg`}>
                 {isLaunchTier ? <Award className="w-7 h-7 text-white" /> : <CreditCard className="w-7 h-7 text-white" />}
@@ -429,6 +458,21 @@ export default function Subscription() {
           </div>
         ) : (
           <div className="space-y-12">
+            {isSubscriptionDegraded && (
+              <div className="max-w-5xl mx-auto rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-red-900">We couldn&apos;t load your subscription status</p>
+                  <p className="text-sm text-red-700">
+                    {subscriptionError || 'Billing is temporarily unavailable, so we are showing the safe free-tier fallback instead of a blank page.'}
+                  </p>
+                </div>
+                <button onClick={() => refreshSubscription()} className="text-sm font-semibold text-red-900 hover:text-red-700">
+                  Retry
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
                 <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
@@ -539,7 +583,7 @@ export default function Subscription() {
         onDowngrade={handleDowngrade}
         currentTier={userTier}
         isLoading={loading === 'cancel'}
-        renewalDate={subscriptionInfo?.currentPeriodEnd}
+        renewalDate={subscription?.currentPeriodEnd}
       />
     </div>
   );

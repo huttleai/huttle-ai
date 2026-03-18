@@ -8,6 +8,7 @@ export default function ProtectedRoute({ children }) {
   const authContext = useContext(AuthContext);
   const location = useLocation();
   const { loading: subLoading, hasPaidAccess } = useSubscription();
+  const isSubscriptionRoute = location.pathname === '/dashboard/subscription';
 
   // Safety check
   if (!authContext) {
@@ -19,7 +20,7 @@ export default function ProtectedRoute({ children }) {
 
   // RACE CONDITION FIX: Wait for loading to complete before making auth decisions
   // This prevents redirecting users who are in the middle of Magic Link authentication
-  if (loading || subLoading) {
+  if (loading || (subLoading && !isSubscriptionRoute)) {
     return <LoadingSpinner />;
   }
 
