@@ -604,11 +604,11 @@ export default function Dashboard() {
   }, [isDashboardLoading, dashboardError, dashboardData?.created_at, normalizedNiche]);
 
   return (
-    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-14 lg:pt-16 px-4 sm:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-14 lg:pt-14 px-4 sm:px-6 lg:px-8 pb-12">
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
-      <MotionDiv className="relative mb-6 pt-6" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
+      <MotionDiv className="relative mb-6 pt-2 sm:pt-3" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             {isCreator ? (
