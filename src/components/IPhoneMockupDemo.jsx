@@ -9,7 +9,7 @@ import { Smartphone, Download, Share2 } from 'lucide-react';
  */
 export default function IPhoneMockupDemo() {
   return (
-    <div className="flex-1 min-h-screen bg-gray-50/50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-gray-50/50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
       <div className="max-w-6xl mx-auto space-y-12">
         
         {/* Header */}

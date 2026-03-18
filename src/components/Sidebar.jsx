@@ -10,7 +10,6 @@ import {
   Settings,
   HelpCircle,
   Menu,
-  X,
   Newspaper,
   LogOut,
   Zap,
@@ -127,11 +126,12 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className={`${isCompactViewport ? 'fixed' : 'hidden'} top-14 left-4 z-50 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-gray-200/50 bg-white/90 p-3 backdrop-blur-sm transition-all duration-200 hover:bg-white hover:shadow-lg`}
+        className={`${isCompactViewport ? 'fixed flex' : 'hidden'} top-0 left-0 z-50 h-12 w-12 items-center justify-center transition-all duration-200 active:scale-95`}
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
         aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
         data-testid="sidebar-mobile-toggle"
       >
-        {isMobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
+        <Menu className="w-5 h-5 text-gray-700" />
       </button>
 
       {isCompactViewport && isMobileOpen && (
@@ -160,7 +160,7 @@ export default function Sidebar() {
           className="relative flex flex-col h-full p-5 overflow-y-auto scrollbar-thin"
           style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
         >
-          <div className="flex items-center justify-between mb-8 mt-1">
+          <div className="flex items-center mb-8 mt-1">
             <div
               className="cursor-pointer group"
               onClick={() => { navigate('/dashboard'); setIsMobileOpen(false); }}
@@ -171,13 +171,6 @@ export default function Sidebar() {
                 className="h-8 w-auto transition-all duration-200 group-hover:scale-105"
               />
             </div>
-            <button
-              onClick={() => setIsMobileOpen(false)}
-              className={`${isCompactViewport ? 'flex' : 'hidden'} min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-3 text-gray-500 transition-colors hover:bg-gray-100`}
-              aria-label="Close navigation"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           <nav className="flex-1 space-y-6">

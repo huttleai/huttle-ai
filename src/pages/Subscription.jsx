@@ -274,7 +274,7 @@ export default function Subscription() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="max-w-6xl mx-auto">
         {isPastDue && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">

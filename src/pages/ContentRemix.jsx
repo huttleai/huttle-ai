@@ -456,7 +456,7 @@ export default function ContentRemix() {
   ];
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-24 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
 
       <div className="relative z-10 max-w-3xl mx-auto">

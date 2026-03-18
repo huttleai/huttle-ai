@@ -587,7 +587,7 @@ export default function ContentLibrary() {
   const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
 
   return (
-    <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pb-10 pt-24 sm:px-6 lg:ml-64 lg:px-8 lg:pt-20">
+    <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pb-10 pt-14 sm:px-6 lg:ml-64 lg:px-8 lg:pt-20">
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
