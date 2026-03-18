@@ -203,7 +203,7 @@ export default function FoundersPage() {
     { 
       icon: Sparkles, 
       title: "All Pro Features", 
-      desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" 
+      desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" 
     },
     { 
       icon: Shield, 
@@ -323,7 +323,7 @@ export default function FoundersPage() {
                 <p className="text-sm font-medium text-slate-900 mb-4">Also included:</p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    "Viral Blueprint Generator",
+                    "Ignite Engine",
                     "AI Power Tools",
                     "Content Remix Studio",
                     "AI Power Tools",

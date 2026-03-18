@@ -18,7 +18,7 @@ export const SocialProofBar = () => {
     { name: "Daily Social Updates", subtitle: "Fresh Content Ideas" },
     { name: "Trend Discovery", subtitle: "Viral Opportunities" },
     { name: "Content Library", subtitle: "Organized Assets" },
-    { name: "Viral Blueprint", subtitle: "Complete Scripts" },
+    { name: "Ignite Engine", subtitle: "Complete Scripts" },
   ];
 
   return (
@@ -169,7 +169,7 @@ export const FAQSection = () => {
   const faqs = [
     {
       question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Ignite Engine, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
     },
     {
       question: "What happens when the Founding Member offer ends?",

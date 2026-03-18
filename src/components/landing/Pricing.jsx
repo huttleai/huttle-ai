@@ -91,7 +91,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 {[
                   'All Pro features forever',
                   'Rate locked — never increases',
-                  'Viral Blueprint & AI Plan Builder',
+                  'Ignite Engine & AI Plan Builder',
                   'Content Remix Studio & Trend Lab',
                   'AI Power Tools (captions, hooks, CTAs)',
                   'Content Vault for all your assets',

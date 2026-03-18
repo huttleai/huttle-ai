@@ -69,7 +69,7 @@ export const BentoFeatures = () => {
                   <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <h3 className="text-2xl md:text-3xl font-bold mb-3 text-white leading-tight">Viral Blueprint Generator</h3>
+              <h3 className="text-2xl md:text-3xl font-bold mb-3 text-white leading-tight">Ignite Engine</h3>
               <p className="text-base leading-relaxed text-slate-400">
                 Tell us your topic and platform. We research what's trending, write a step-by-step script with hooks, visuals, and keywords — in 30 seconds.
               </p>
@@ -77,7 +77,7 @@ export const BentoFeatures = () => {
             <div className="mt-auto z-10 flex-1 flex items-end justify-center pt-8">
               <img 
                 src="/viral-blueprint-mockup.png" 
-                alt="Viral Blueprint" 
+                alt="Ignite Engine" 
                 className="w-full max-w-[300px] rounded-t-2xl shadow-2xl translate-y-8 group-hover:translate-y-4 transition-transform duration-700 ease-out border border-white/10" 
                 onError={(e) => {
                   e.target.style.display = 'none';

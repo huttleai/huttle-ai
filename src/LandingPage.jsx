@@ -383,7 +383,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
               {[
                 { title: "Lifetime Price Lock", desc: "$199/year forever, even when prices increase" },
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
-                { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
+                { title: "All Pro Features", desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
                 { title: "14-Day Money-Back Guarantee", desc: "" },
               ].map((item, i) => (
@@ -444,7 +444,7 @@ const SocialProofMarquee = () => {
     { name: "Daily Social Updates", subtitle: "Fresh Content Ideas" },
     { name: "Trend Discovery", subtitle: "Viral Opportunities" },
     { name: "Content Library", subtitle: "Organized Assets" },
-    { name: "Viral Blueprint", subtitle: "Complete Scripts" },
+    { name: "Ignite Engine", subtitle: "Complete Scripts" },
   ];
 
   return (
@@ -763,7 +763,7 @@ const BentoGrid = () => {
               <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#01bad2]/5 rounded-full blur-3xl group-hover:bg-[#01bad2]/10 transition-colors duration-500" />
               <div className="mb-6 z-10">
                 <Rocket size={28} className="text-[#01bad2] mb-6 group-hover:scale-110 transition-transform duration-500" />
-                <h3 className="text-2xl md:text-3xl font-bold mb-3 text-slate-900 leading-tight">Viral Blueprint Generator</h3>
+                <h3 className="text-2xl md:text-3xl font-bold mb-3 text-slate-900 leading-tight">Ignite Engine</h3>
                 <p className="text-base leading-relaxed text-slate-500">Tell us your topic and platform. We research what's trending, write a step-by-step script with hooks, visuals, and keywords — in 30 seconds.</p>
               </div>
             </div>
@@ -968,7 +968,7 @@ const FAQSectionComponent = () => {
   const faqs = [
     {
       question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Viral Blueprint Generator, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Ignite Engine, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
     },
     {
       question: "What happens when the Founding Member offer ends?",
@@ -1098,7 +1098,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'All Pro features forever',
                   'Rate locked — never increases',
                   '800 AI generations/month',
-                  'Viral Blueprint & AI Plan Builder',
+                  'Ignite Engine & AI Plan Builder',
                   'Content Remix Studio & Trend Lab',
                   'AI Power Tools (captions, hooks, CTAs)',
                   'Content Vault for all your creations',
@@ -1515,7 +1515,7 @@ export default function LandingPage() {
                   <div className="phone-float">
                     <img 
                       src="/viral-blueprint-mockup.png"
-                      alt="Huttle AI Viral Blueprint feature"
+                      alt="Huttle AI Ignite Engine feature"
                       className="w-[140vw] max-w-none sm:w-[120vw] sm:max-w-none md:w-[820px] md:max-w-none lg:w-[920px] xl:w-[1020px] h-auto drop-shadow-2xl"
                     />
                   </div>

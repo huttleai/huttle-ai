@@ -227,7 +227,7 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
               {[
                 { title: "Lifetime Price Lock", desc: "$199/year forever, even when prices increase" },
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
-                { title: "All Pro Features", desc: "Viral Blueprint, Content Remix Studio, Trend Deep Dive, and more" },
+                { title: "All Pro Features", desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
                 { title: "14-Day Money-Back Guarantee", desc: "Not satisfied? Email hello@huttleai.com within 14 days for a full refund" },
               ].map((item, i) => (

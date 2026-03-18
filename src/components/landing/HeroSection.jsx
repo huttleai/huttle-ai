@@ -107,7 +107,7 @@ export const HeroSection = () => {
         >
           <img 
             src="/viral-blueprint-mockup.png" 
-            alt="Huttle AI Viral Blueprint feature" 
+            alt="Huttle AI Ignite Engine feature" 
             className="w-full h-auto drop-shadow-2xl"
           />
         </motion.div>

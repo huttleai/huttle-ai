@@ -54,7 +54,7 @@ export default function Login() {
   };
 
   const features = [
-    { icon: Sparkles, text: 'Viral Blueprint Generator' },
+    { icon: Sparkles, text: 'Ignite Engine' },
     { icon: Shuffle, text: 'Content Remix Studio' },
     { icon: TrendingUp, text: 'Trend Lab & forecasting' },
     { icon: Zap, text: 'AI Plan Builder' },
