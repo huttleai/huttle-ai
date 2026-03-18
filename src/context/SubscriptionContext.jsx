@@ -37,6 +37,7 @@ function normalizeTier(plan) {
   if (!plan) return null;
 
   const normalizedPlan = String(plan).toLowerCase();
+  if (normalizedPlan === 'free') return TIERS.FREE;
   if (normalizedPlan === 'essentials') return TIERS.ESSENTIALS;
   if (normalizedPlan === 'pro') return TIERS.PRO;
   if (normalizedPlan === 'builder' || normalizedPlan === 'builders' || normalizedPlan === 'builders_club') {
@@ -79,10 +80,10 @@ export function SubscriptionProvider({ children }) {
   // Get actual user ID from AuthContext
   const userId = user?.id || null;
 
-  const applySubscriptionFallback = useCallback(({ status = 'inactive', degraded = false, error = null } = {}) => {
+  const applySubscriptionFallback = useCallback(({ status = 'inactive', tier = null, degraded = false, error = null } = {}) => {
     setSubscription(null);
     setSubscriptionStatus(status);
-    setUserTier(null);
+    setUserTier(tier);
     setSubscriptionError(error);
     setIsSubscriptionDegraded(degraded);
   }, []);
@@ -214,6 +215,7 @@ export function SubscriptionProvider({ children }) {
       abortController.abort();
       applySubscriptionFallback({
         status: 'unknown',
+        tier: TIERS.FREE,
         degraded: true,
         error: 'Billing status is temporarily unavailable. Showing free-tier defaults.',
       });
@@ -229,7 +231,7 @@ export function SubscriptionProvider({ children }) {
       if (!session?.access_token) {
         retryCountRef.current = 0;
         clearSubscriptionTimers();
-        applySubscriptionFallback();
+        applySubscriptionFallback({ tier: TIERS.FREE });
         return;
       }
 
@@ -242,25 +244,30 @@ export function SubscriptionProvider({ children }) {
       abortControllerRef.current = null;
       if (timedOut) return;
 
-      if (stripeResult?.unauthorized || stripeResult?.statusCode === 401) {
-        retryCountRef.current = 0;
-        clearSubscriptionTimers();
-        applySubscriptionFallback();
-        return;
-      }
-
       if (!databaseResult.success) {
         console.error('Error loading subscription from database:', databaseResult.error);
       }
 
       const databaseSubscription = databaseResult.subscription;
+      const hasActiveDatabaseSubscription = Boolean(
+        databaseSubscription && ACTIVE_ACCESS_STATUSES.has(databaseSubscription.status)
+      );
+
+      if ((stripeResult?.unauthorized || stripeResult?.statusCode === 401) && !hasActiveDatabaseSubscription) {
+        retryCountRef.current = 0;
+        clearSubscriptionTimers();
+        applySubscriptionFallback({ tier: TIERS.FREE });
+        return;
+      }
+
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
       const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
-      const nextTier = databaseTier
-        || (stripeSubscription && ACTIVE_ACCESS_STATUSES.has(nextStatus)
-          ? normalizeTier(stripeSubscription.plan || stripeResult.plan)
-          : null);
+      const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
+      const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
+      const nextTier = hasActiveSubscription
+        ? (databaseTier || resolvedStripeTier || TIERS.FREE)
+        : TIERS.FREE;
       const nextSubscription = stripeSubscription
         ? {
             ...stripeSubscription,
@@ -307,6 +314,7 @@ export function SubscriptionProvider({ children }) {
       console.error('Error loading subscription:', error);
       applySubscriptionFallback({
         status: 'unknown',
+        tier: TIERS.FREE,
         degraded: true,
         error: 'Billing status is temporarily unavailable. Showing free-tier defaults.',
       });
@@ -472,6 +480,7 @@ export function SubscriptionProvider({ children }) {
 
   const getTierDisplayName = (tier) => {
     const names = {
+      [TIERS.FREE]: 'Free',
       [TIERS.ESSENTIALS]: 'Essentials',
       [TIERS.PRO]: 'Pro',
       [TIERS.BUILDER]: 'Builders Club',
@@ -482,6 +491,7 @@ export function SubscriptionProvider({ children }) {
 
   const getTierColor = (tier) => {
     const colors = {
+      [TIERS.FREE]: 'text-gray-600',
       [TIERS.ESSENTIALS]: 'text-huttle-primary',
       [TIERS.PRO]: 'text-purple-600',
       [TIERS.BUILDER]: 'text-sky-600',
@@ -516,7 +526,7 @@ export function SubscriptionProvider({ children }) {
       return 'Your subscription has ended. Choose a plan to get back to creating content.';
     }
 
-    if (!userTier) {
+    if (!userTier || userTier === TIERS.FREE) {
       return 'Choose a plan to unlock Huttle AI.';
     }
 

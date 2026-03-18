@@ -7,6 +7,16 @@
  * - STRIPE_SECRET_KEY: Your Stripe secret key
  */
 
+// STRIPE ENVIRONMENT VARIABLES
+// SANDBOX (testing):
+//   STRIPE_SECRET_KEY = sk_test_...
+//   STRIPE_WEBHOOK_SECRET = whsec_... (test)
+//   VITE_STRIPE_PUBLISHABLE_KEY = pk_test_...
+// LIVE (production):
+//   STRIPE_SECRET_KEY = sk_live_...
+//   STRIPE_WEBHOOK_SECRET = whsec_... (live)
+//   VITE_STRIPE_PUBLISHABLE_KEY = pk_live_...
+
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
@@ -14,6 +24,10 @@ import { normalizePlanId, resolvePlanId } from './_utils/stripePlans.js';
 
 // Validate and initialize Stripe
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const mode = process.env.STRIPE_SECRET_KEY
+  ?.startsWith('sk_test') ? 'TEST' : 'LIVE';
+console.log('[Stripe] Running in', mode, 'mode');
+
 if (!STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is not configured');
 }

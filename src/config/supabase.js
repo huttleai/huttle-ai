@@ -94,6 +94,7 @@ export const TABLES = {
 
 // Subscription tiers
 export const TIERS = {
+  FREE: 'free',
   ESSENTIALS: 'essentials',
   PRO: 'pro',
   FOUNDER: 'founder',
@@ -111,6 +112,28 @@ export function getTierAccessLevel(userTier) {
 
 // Tier limits based on Huttle AI's paid-only plans.
 export const TIER_LIMITS = {
+  [TIERS.FREE]: {
+    aiGenerations: 0,
+    captionGenerator: false,
+    hashtagGenerator: false,
+    hookBuilder: false,
+    ctaSuggester: false,
+    qualityScorer: false,
+    visualBrainstormer: false,
+    contentRepurposer: false,
+    huttleAgent: false,
+    trendForecaster: false,
+    trendLab: false,
+    viralBlueprint: 0,
+    fullPostBuilder: false,
+    humanizerScore: false,
+    performancePrediction: false,
+    algorithmChecker: false,
+    nicheIntel: 0,
+    aiPlanBuilderDays: 0,
+    storageLimit: 0,
+    scheduledPostsLimit: 0,
+  },
   [TIERS.ESSENTIALS]: {
     aiGenerations: 150,
     captionGenerator: true,
