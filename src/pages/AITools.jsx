@@ -72,7 +72,7 @@ export default function AITools() {
   const { addToast: showToast } = useToast();
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { userTier, getFeatureLimit } = useSubscription();
+  const { userTier, getFeatureLimit, checkFeatureAccess } = useSubscription();
   const { saveGeneratedContent } = useContent();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -175,6 +175,15 @@ export default function AITools() {
     return true;
   };
 
+  const ensureFeatureAccess = (featureKey, featureName) => {
+    if (checkFeatureAccess(featureKey)) {
+      return true;
+    }
+
+    showToast(`${featureName} is not available on your current plan.`, 'warning');
+    return false;
+  };
+
   const incrementAIUsage = () => {
     const newUsage = aiGensUsed + 1;
     setAiGensUsed(newUsage);
@@ -244,6 +253,8 @@ export default function AITools() {
 
   // Caption Generator Handler
   const handleGenerateCaptions = async () => {
+    if (!ensureFeatureAccess('captionGenerator', 'Caption Generator')) return;
+
     if (!captionInput.trim()) {
       showToast('Please enter a post idea or keywords', 'warning');
       return;
@@ -328,6 +339,8 @@ export default function AITools() {
 
   // Hashtag Generator Handler
   const handleGenerateHashtags = async () => {
+    if (!ensureFeatureAccess('hashtagGenerator', 'Hashtag Generator')) return;
+
     if (!hashtagInput.trim()) {
       showToast('Please enter keywords or describe your content', 'warning');
       return;
@@ -380,6 +393,8 @@ export default function AITools() {
 
   // Hook Builder Handler
   const handleGenerateHooks = async () => {
+    if (!ensureFeatureAccess('hookBuilder', 'Hook Builder')) return;
+
     if (!hookInput.trim()) {
       showToast('Please enter your idea or theme', 'warning');
       return;
@@ -412,6 +427,8 @@ export default function AITools() {
 
   // CTA Suggester Handler (redesigned)
   const handleGenerateCTAs = async () => {
+    if (!ensureFeatureAccess('ctaSuggester', 'CTA Suggester')) return;
+
     if (!ctaPromoting.trim()) {
       showToast('Please describe what you\'re promoting', 'warning');
       return;
@@ -420,6 +437,8 @@ export default function AITools() {
       showToast('Please select a goal', 'warning');
       return;
     }
+
+    if (!checkAIUsage()) return;
 
     setIsLoadingCTAs(true);
     setStyledCTAs(null);
@@ -497,6 +516,8 @@ export default function AITools() {
 
   // Content Quality Scorer Handler
   const handleScoreContent = async () => {
+    if (!ensureFeatureAccess('qualityScorer', 'Content Scorer')) return;
+
     if (!contentToScore.trim()) {
       showToast('Please paste your content to score', 'warning');
       return;
@@ -563,6 +584,8 @@ export default function AITools() {
 
   // Visual Brainstormer Handler (redesigned)
   const handleGenerateVisualBrainstorm = async () => {
+    if (!ensureFeatureAccess('visualBrainstormer', 'Visual Brainstormer')) return;
+
     if (!visualPrompt.trim()) {
       showToast('Please describe what your content is about', 'warning');
       return;
@@ -571,6 +594,8 @@ export default function AITools() {
       showToast('Please choose an output type', 'warning');
       return;
     }
+
+    if (!checkAIUsage()) return;
 
     setIsLoadingVisualIdeas(true);
     setVisualBrainstormResult(null);
