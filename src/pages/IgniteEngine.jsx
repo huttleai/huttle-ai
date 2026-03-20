@@ -1325,6 +1325,7 @@ Return ONLY valid JSON with this exact structure:
 
 Make content specific, actionable, and optimized for ${platform} ${contentType}. Output ONLY raw JSON.`;
 
+  try {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
 
@@ -1335,7 +1336,7 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
-      model: 'grok-3-fast',
+      model: 'grok-4.1-fast-reasoning',
       temperature: 0.7,
       messages: [
         { role: 'system', content: 'You are a content strategist. Return only valid JSON.' },
@@ -1344,7 +1345,15 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
     }),
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    try {
+      const errData = await res.json();
+      console.error('Grok fallback failed:', errData?.message || res.status);
+    } catch {
+      console.error('Grok fallback failed:', res.status);
+    }
+    return null;
+  }
 
   const grokData = await res.json();
   const raw = grokData.content || '';
@@ -1355,6 +1364,10 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
     const parsed = JSON.parse(jsonMatch[0]);
     return normalizeN8nResponse(parsed);
   } catch {
+    return null;
+  }
+  } catch (e) {
+    console.error('Grok fallback failed:', e?.message || e);
     return null;
   }
 }

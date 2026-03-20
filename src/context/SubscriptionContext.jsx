@@ -70,6 +70,8 @@ export function SubscriptionProvider({ children }) {
   const [usage, setUsage] = useState({});
   const [storageUsage, setStorageUsage] = useState(0);
   const [loading, setLoading] = useState(true);
+  /** True after the first subscription resolution for the current session (blocks ProtectedRoute until then; background polls do not flip this). */
+  const [subscriptionReady, setSubscriptionReady] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState(null);
   const [isSubscriptionDegraded, setIsSubscriptionDegraded] = useState(false);
   const retryCountRef = useRef(0);
@@ -81,6 +83,10 @@ export function SubscriptionProvider({ children }) {
   
   // Get actual user ID from AuthContext
   const userId = user?.id || null;
+
+  useEffect(() => {
+    setSubscriptionReady(false);
+  }, [userId]);
 
   const applySubscriptionFallback = useCallback(({ status = 'inactive', tier = null, degraded = false, error = null } = {}) => {
     setSubscription(null);
@@ -159,6 +165,7 @@ export function SubscriptionProvider({ children }) {
       setSubscriptionError(null);
       setIsSubscriptionDegraded(false);
       setLoading(false);
+      setSubscriptionReady(true);
       return;
     }
 
@@ -171,6 +178,7 @@ export function SubscriptionProvider({ children }) {
       clearSubscriptionTimers();
       applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
       setLoading(false);
+      setSubscriptionReady(true);
       return;
     }
 
@@ -179,6 +187,7 @@ export function SubscriptionProvider({ children }) {
       clearSubscriptionTimers();
       applySubscriptionFallback();
       setLoading(false);
+      setSubscriptionReady(false);
       return;
     }
 
@@ -351,6 +360,7 @@ export function SubscriptionProvider({ children }) {
       if (!timedOut) {
         setLoading(false);
       }
+      setSubscriptionReady(true);
     }
   }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, authLoading, clearRequestTimeout, clearSubscriptionTimers, profileChecked, sessionConfirmed, skipAuth, userId]);
 
@@ -586,6 +596,7 @@ export function SubscriptionProvider({ children }) {
     hasPaidAccess,
     usage,
     loading,
+    subscriptionReady,
     subscriptionError,
     isSubscriptionDegraded,
     checkFeatureAccess,
@@ -610,7 +621,7 @@ export function SubscriptionProvider({ children }) {
   }), [
     userTier, userId, subscription, subscriptionStatus, isTrialing, isPastDue,
     isFounder, isBuilder, isAnnualFounder, isCancelScheduled,
-    trialEndsAt, trialDaysRemaining, hasPaidAccess, usage, loading,
+    trialEndsAt, trialDaysRemaining, hasPaidAccess, usage, loading, subscriptionReady,
     subscriptionError, isSubscriptionDegraded, checkFeatureAccess, getFeatureLimit,
     checkAndTrackUsage, refreshUsage, getAuthoritativeRemainingUsage,
     getTierDisplayName, getTierColor, getStorageLimit, getStorageUsage,

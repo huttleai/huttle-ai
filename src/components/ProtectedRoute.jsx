@@ -6,7 +6,7 @@ import LoadingSpinner from './LoadingSpinner';
 
 export default function ProtectedRoute({ children }) {
   const authContext = useContext(AuthContext);
-  const { loading: subLoading } = useSubscription();
+  const { subscriptionReady } = useSubscription();
 
   // Safety check
   if (!authContext) {
@@ -18,7 +18,7 @@ export default function ProtectedRoute({ children }) {
 
   // RACE CONDITION FIX: Wait for loading to complete before making auth decisions
   // This prevents redirecting users who are in the middle of Magic Link authentication
-  if (loading || subLoading) {
+  if (loading || (user && !subscriptionReady)) {
     return <LoadingSpinner />;
   }
 

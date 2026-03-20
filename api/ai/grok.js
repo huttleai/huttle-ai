@@ -9,21 +9,21 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
-// Local dev sometimes only sets VITE_GROK_API_KEY — accept it as fallback for the proxy only.
-const GROK_API_KEY = process.env.GROK_API_KEY || process.env.VITE_GROK_API_KEY;
+const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 const DEFAULT_MODEL = 'grok-4.1-fast-reasoning';
-const ALLOWED_MODELS = new Set([
-  'grok-4.1-fast-reasoning',
-  'grok-3-fast',
-  'grok-3-mini-fast',
-]);
+
+/** CORS for this route only (Vercel serverless; no reliance on VITE_ env). */
+function setGrokCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -196,21 +196,21 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
 }
 
 export default async function handler(req, res) {
-  // Set secure CORS headers
-  setCorsHeaders(req, res);
+  setGrokCorsHeaders(res);
 
-  // Handle preflight requests
-  if (handlePreflight(req, res)) return;
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: true, message: 'Method not allowed' });
   }
 
   try {
     // Verify Grok API key is configured
     if (!GROK_API_KEY) {
       logError('grok.missing_api_key');
-      return res.status(500).json({ error: 'AI service not configured' });
+      return res.status(500).json({ error: true, message: 'AI service not configured' });
     }
 
     // Authenticate user
@@ -230,7 +230,8 @@ export default async function handler(req, res) {
     // This prevents unauthorized usage of expensive AI API credits
     if (!userId) {
       return res.status(401).json({ 
-        error: 'Authentication required to use AI features. Please log in.' 
+        error: true, 
+        message: 'Authentication required to use AI features. Please log in.' 
       });
     }
 
@@ -247,7 +248,8 @@ export default async function handler(req, res) {
     if (!rateLimit.allowed) {
       logInfo('grok.rate_limited', { userId, remaining: rateLimit.remaining });
       return res.status(429).json({ 
-        error: 'Rate limit exceeded. Please wait before making more requests.',
+        error: true,
+        message: 'Rate limit exceeded. Please wait before making more requests.',
         retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
       });
     }
@@ -256,7 +258,7 @@ export default async function handler(req, res) {
     const {
       messages,
       temperature = 0.7,
-      model,
+      max_tokens,
       cache,
       personalized,
       targetAudience,
@@ -265,11 +267,10 @@ export default async function handler(req, res) {
     } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
+      return res.status(400).json({ error: true, message: 'Messages array is required' });
     }
 
-    const requestedModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
-    const safeModel = requestedModel;
+    const safeModel = DEFAULT_MODEL;
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -281,7 +282,7 @@ export default async function handler(req, res) {
 
     // Validate messages array size to prevent abuse
     if (messages.length > 20) {
-      return res.status(400).json({ error: 'Too many messages in request (max 20)' });
+      return res.status(400).json({ error: true, message: 'Too many messages in request (max 20)' });
     }
 
     if (cache?.key && !forceCacheRefresh) {
@@ -306,6 +307,7 @@ export default async function handler(req, res) {
         model: safeModel,
         messages,
         temperature: safeTemperature,
+        ...(max_tokens && { max_tokens: Number(max_tokens) || 1024 }),
       })
     });
 
@@ -314,16 +316,19 @@ export default async function handler(req, res) {
       logError('grok.upstream_error', { status: response.status, errorText });
       if (response.status === 403) {
         return res.status(502).json({
-          error: 'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.'
+          error: true,
+          message: 'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.'
         });
       }
       if (response.status === 400) {
         return res.status(502).json({
-          error: 'Grok API rejected the request. The model name may be invalid or the request was malformed.'
+          error: true,
+          message: 'Grok API rejected the request. The model name may be invalid or the request was malformed.'
         });
       }
       return res.status(502).json({ 
-        error: 'AI service error. Please try again.' 
+        error: true,
+        message: 'AI service error. Please try again.' 
       });
     }
 
@@ -348,7 +353,8 @@ export default async function handler(req, res) {
   } catch (error) {
     logError('grok.proxy_error', { error: error.message });
     return res.status(500).json({ 
-      error: 'An unexpected error occurred. Please try again.' 
+      error: true,
+      message: 'An unexpected error occurred. Please try again.' 
     });
   }
 }

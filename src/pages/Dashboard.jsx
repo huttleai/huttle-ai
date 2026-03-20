@@ -192,11 +192,6 @@ export default function Dashboard() {
     }
   };
 
-  const refreshTrendingDashboard = async () => {
-    if (isDashboardLoading) return;
-    await loadDashboardData({ forceRefresh: true });
-  };
-
   const applyDashboardPayload = useCallback((nextDashboardData, generatedDate) => { // HUTTLE AI: cache fix
     if (!user?.id || !nextDashboardData) return; // HUTTLE AI: cache fix
     setDashboardData(nextDashboardData); // HUTTLE AI: cache fix
@@ -967,23 +962,13 @@ export default function Dashboard() {
                       <span>{trendWidgetTimestamp}</span>
                       <span
                         className="inline-flex items-center"
-                        title="Trends refresh daily. Click refresh for the latest data."
+                        title="Trends refresh daily on the schedule shown above."
                       >
                         <Info className="w-3.5 h-3.5 text-gray-400" aria-hidden />
                       </span>
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={refreshTrendingDashboard}
-                  disabled={isDashboardLoading}
-                  className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
-                  data-testid="dashboard-refresh-trending"
-                >
-                  {isDashboardLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                  Refresh
-                </button>
               </div>
 
               {!hasProfilePersonalization && (

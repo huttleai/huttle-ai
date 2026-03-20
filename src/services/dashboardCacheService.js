@@ -141,12 +141,36 @@ const HASHTAG_FALLBACK = [
   { tag: '#creatorjourney', volume: 'NICHE', status: 'Niche', type: 'hashtag' },
 ];
 
-function getUtcDateString(date = new Date()) { // HUTTLE AI: cache fix
-  const year = date.getUTCFullYear(); // HUTTLE AI: cache fix
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // HUTTLE AI: cache fix
-  const day = String(date.getUTCDate()).padStart(2, '0'); // HUTTLE AI: cache fix
-  return `${year}-${month}-${day}`; // HUTTLE AI: cache fix
-} // HUTTLE AI: cache fix
+const DASHBOARD_SCHEDULE_TZ = 'America/New_York';
+/** Hour (0–23) in Eastern time; before this, the dashboard "day" is the previous calendar date. */
+const DASHBOARD_DAY_START_HOUR_ET = 6;
+
+function getEasternWallClockParts(date) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: DASHBOARD_SCHEDULE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(date);
+  const map = Object.fromEntries(
+    parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value])
+  );
+  return {
+    y: Number(map.year),
+    m: Number(map.month),
+    d: Number(map.day),
+    h: Number(map.hour),
+  };
+}
+
+function subtractOneCalendarDay(y, m, d) {
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
 
 function getCurrentMonthYear(date = new Date()) {
   return {
@@ -669,7 +693,7 @@ Return ONLY JSON: { "niche_angle": "...", "hook_starter": "..." }`;
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4-1-fast-reasoning',
+          model: 'grok-4.1-fast-reasoning',
           temperature: 0.2,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -1039,7 +1063,7 @@ function buildFallbackAIInsights(context) {
 }
 
 async function fetchSingleTrendingSlice(variant, platform, context, headers, options, generatedDate) {
-  const today = getUtcDateString();
+  const today = generatedDate || getDashboardGeneratedDate();
   const messages = variant === 'global'
     ? buildPlatformWideTrendingMessages(platform, today)
     : buildNicheSpecificTrendingMessages(platform, brandDataFromTrendingContext(context), today);
@@ -1169,7 +1193,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
 }
 
 async function fetchPerPlatformWidgetData(type, platform, context, headers, options = {}) {
-  const generatedDate = getUtcDateString(); // HUTTLE AI: cache fix
+  const generatedDate = options.generatedDate || getDashboardGeneratedDate(); // HUTTLE AI: cache fix
 
   if (type === 'trending') {
     return fetchMergedTrendingForPlatform(platform, context, headers, options, generatedDate);
@@ -1355,7 +1379,7 @@ async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
         method: 'POST', // HUTTLE AI: cache fix
         headers, // HUTTLE AI: cache fix
         body: JSON.stringify({ // HUTTLE AI: cache fix
-          model: 'grok-4-1-fast-reasoning', // HUTTLE AI: cache fix
+          model: 'grok-4.1-fast-reasoning', // HUTTLE AI: cache fix
           temperature: 0.2, // HUTTLE AI: cache fix
           messages: buildAIInsightsMessages(context), // HUTTLE AI: cache fix
         }), // HUTTLE AI: cache fix
@@ -1366,7 +1390,11 @@ async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
     ); // HUTTLE AI: cache fix
 
     if (!response.ok) { // HUTTLE AI: cache fix
-      throw new Error('Grok insights request failed.'); // HUTTLE AI: cache fix
+      const errJson = await response.json().catch(() => ({})); // HUTTLE AI: cache fix
+      throw new Error( // HUTTLE AI: cache fix
+        (errJson?.message && typeof errJson.message === 'string' && errJson.message) // HUTTLE AI: cache fix
+          || 'Grok insights request failed.', // HUTTLE AI: cache fix
+      ); // HUTTLE AI: cache fix
     } // HUTTLE AI: cache fix
 
     const payload = await response.json(); // HUTTLE AI: cache fix
@@ -1817,9 +1845,18 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
   } // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
-export function getDashboardGeneratedDate(date = new Date()) { // HUTTLE AI: cache fix
-  return getUtcDateString(date); // HUTTLE AI: cache fix
-} // HUTTLE AI: cache fix
+/**
+ * YYYY-MM-DD key for daily dashboard cache: Eastern calendar date, rolling at 6:00 AM America/New_York.
+ * @param {Date} [date]
+ * @returns {string}
+ */
+export function getDashboardGeneratedDate(date = new Date()) {
+  let { y, m, d, h } = getEasternWallClockParts(date);
+  if (h < DASHBOARD_DAY_START_HOUR_ET) {
+    ({ y, m, d } = subtractOneCalendarDay(y, m, d));
+  }
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
 
 export async function getDashboardCache(userId, brandProfile, options = {}) { // HUTTLE AI: cache fix
   if (!userId) { // HUTTLE AI: cache fix
@@ -1837,7 +1874,7 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
     }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
-  const generatedDate = options.generatedDate || getUtcDateString(); // HUTTLE AI: cache fix
+  const generatedDate = options.generatedDate || getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
 
@@ -1892,12 +1929,13 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
     }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
-  const generatedDate = normalizedOptions.generatedDate || getUtcDateString(); // HUTTLE AI: cache fix
+  const generatedDate = normalizedOptions.generatedDate || getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
+  const optionsWithGeneratedDate = { ...normalizedOptions, generatedDate }; // HUTTLE AI: cache fix
 
   try { // HUTTLE AI: cache fix
-    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, normalizedOptions); // HUTTLE AI: cache fix
+    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, optionsWithGeneratedDate); // HUTTLE AI: cache fix
     const [aiInsightsResult, dailyAlerts] = await Promise.all([ // HUTTLE AI: cache fix
       generateAIInsights(context, headers), // HUTTLE AI: cache fix
       fetchDailyAlerts(), // HUTTLE AI: cache fix
@@ -1996,7 +2034,7 @@ export async function deleteDashboardCache(userId) {
     return { success: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' };
   }
 
-  const generatedDate = getUtcDateString(); // HUTTLE AI: cache fix
+  const generatedDate = getDashboardGeneratedDate();
 
   try {
     const { error } = await supabase

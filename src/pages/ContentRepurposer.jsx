@@ -132,7 +132,7 @@ export default function ContentRepurposer() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4-1-fast-reasoning',
+          model: 'grok-4.1-fast-reasoning',
           messages: [
             {
               role: 'system',
@@ -174,6 +174,10 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       });
 
       const data = await response.json();
+      if (!response.ok) {
+        const msg = data?.message && typeof data.message === 'string' ? data.message : 'Repurposing request failed';
+        throw new Error(msg);
+      }
       // SECURITY: Updated to use proxy response format
       const content = data.content || data.choices?.[0]?.message?.content || '';
 

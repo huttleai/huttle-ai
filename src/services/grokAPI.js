@@ -210,6 +210,12 @@ async function getAuthHeaders() {
   return headers;
 }
 
+function getGrokProxyErrorMessage(errorData, status) {
+  if (errorData?.message && typeof errorData.message === 'string') return errorData.message;
+  if (typeof errorData?.error === 'string') return errorData.error;
+  return `API error: ${status}`;
+}
+
 /**
  * Make a request to the Grok API via the secure proxy
  */
@@ -228,7 +234,7 @@ async function callGrokAPI(messages, temperature = 0.7) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `API error: ${response.status}`);
+    throw new Error(getGrokProxyErrorMessage(errorData, response.status));
   }
 
   return response.json();

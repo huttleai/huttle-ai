@@ -81,6 +81,12 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   return response.json();
 }
 
+function getGrokProxyErrorMessage(errorData, status) {
+  if (errorData?.message && typeof errorData.message === 'string') return errorData.message;
+  if (typeof errorData?.error === 'string') return errorData.error;
+  return `API error: ${status}`;
+}
+
 async function callGrokAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders();
 
@@ -100,7 +106,7 @@ async function callGrokAPI(messages, temperature = 0.2, options = {}) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `API error: ${response.status}`);
+    throw new Error(getGrokProxyErrorMessage(errorData, response.status));
   }
 
   return response.json();

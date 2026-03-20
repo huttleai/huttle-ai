@@ -211,7 +211,7 @@ Return ONLY valid JSON matching the structure specified.`;
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: 'grok-3-mini',
+      model: 'grok-4.1-fast-reasoning',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -221,7 +221,12 @@ Return ONLY valid JSON matching the structure specified.`;
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const errData = await response.json().catch(() => ({}));
+    const msg =
+      errData?.message && typeof errData.message === 'string'
+        ? errData.message
+        : `API error: ${response.status}`;
+    throw new Error(msg);
   }
 
   const data = await response.json();
