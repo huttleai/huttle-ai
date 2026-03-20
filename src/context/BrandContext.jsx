@@ -5,9 +5,12 @@ import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/f
 
 export const BrandContext = createContext();
 
-/** Columns needed for brand voice / profile — avoid select('*') for performance. */
+/**
+ * Columns on `user_profile` only. Do not add `content_focus`, `growth_stage`, or `creator_type` here —
+ * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
+ */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,content_focus,city,industry,growth_stage,creator_type,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers';
 
 const QUERY_TIMEOUT_MS = 5000;
 
@@ -91,6 +94,8 @@ export function BrandProvider({ children }) {
   const [brandFetchComplete, setBrandFetchComplete] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const prevUserIdRef = useRef(null);
+  const brandDataRef = useRef(brandData);
+  brandDataRef.current = brandData;
 
   const normalizeOptionalEnum = (value) => {
     if (!value || typeof value !== 'string') return '';
@@ -133,6 +138,21 @@ export function BrandProvider({ children }) {
       setBrandData(createEmptyBrandData());
     };
 
+    /** After a failed profile fetch/insert, prefer cached brand data so the UI is not wiped. */
+    const applyFetchFailureFallback = () => {
+      if (!isActive) return;
+      const savedBrand = localStorage.getItem('brandData');
+      if (savedBrand) {
+        try {
+          setBrandData(JSON.parse(savedBrand));
+          return;
+        } catch (e) {
+          console.warn('[Brand] Could not parse cached brand data after fetch failure:', e.message);
+        }
+      }
+      applyEmptyBrandFallback();
+    };
+
     const mergePreferencesIntoBrandData = (baseData, userPreferences = {}) => ({
       ...baseData,
       contentFocus: userPreferences.content_focus
@@ -146,16 +166,6 @@ export function BrandProvider({ children }) {
         ? normalizeOptionalEnum(userPreferences.creator_type)
         : baseData.creatorType,
     });
-
-    const applyPreferenceOverrides = (userPreferences) => {
-      if (!isActive || !userPreferences) return;
-
-      setBrandData((currentBrandData) => {
-        const mergedBrandData = mergePreferencesIntoBrandData(currentBrandData, userPreferences);
-        localStorage.setItem('brandData', JSON.stringify(mergedBrandData));
-        return mergedBrandData;
-      });
-    };
 
     const fetchBrandData = async () => {
       if (!user) {
@@ -194,6 +204,12 @@ export function BrandProvider({ children }) {
           throw error;
         }
 
+        /** Merge prefs in the same tick as profile data so a slow prefs fetch cannot overwrite in-progress edits. */
+        const userPreferences = await safePreferencesPromise;
+        if (!isActive) {
+          return;
+        }
+
         if (data && data.user_id) {
           const mappedData = {
             firstName: data.first_name || '',
@@ -201,13 +217,13 @@ export function BrandProvider({ children }) {
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
             handle: data.social_handle || '',
-            niche: data.niche ? formatEnumArray(data.niche) : '',
-            subNiche: data.sub_niche || data.industry || '',
-            contentFocus: data.content_focus ? formatEnumArray(data.content_focus) : '',
+            niche: data.niche || '',
+            subNiche: data.sub_niche || '',
+            contentFocus: '',
             city: data.city || '',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
-            growthStage: data.growth_stage ? normalizeOptionalEnum(data.growth_stage) : '',
-            creatorType: data.creator_type ? normalizeOptionalEnum(data.creator_type) : null,
+            growthStage: '',
+            creatorType: null,
             targetAudience: Array.isArray(data.target_audience)
               ? formatEnumArray(data.target_audience)
               : (data.target_audience ? formatEnumArray(data.target_audience) : ''),
@@ -233,11 +249,14 @@ export function BrandProvider({ children }) {
             emotionalTriggers: data.emotional_triggers || [],
           };
 
+          const mergedData = userPreferences
+            ? mergePreferencesIntoBrandData(mappedData, userPreferences)
+            : mappedData;
+
           if (isActive) {
-            setBrandData(mappedData);
+            setBrandData(mergedData);
           }
-          localStorage.setItem('brandData', JSON.stringify(mappedData));
-          void safePreferencesPromise.then(applyPreferenceOverrides);
+          localStorage.setItem('brandData', JSON.stringify(mergedData));
         } else {
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
@@ -248,14 +267,20 @@ export function BrandProvider({ children }) {
             console.warn('[Brand] Default row insert failed (non-critical):', insertError.message);
           }
 
-          applyEmptyBrandFallback();
-          void safePreferencesPromise.then(applyPreferenceOverrides);
+          applyFetchFailureFallback();
+          if (isActive && userPreferences) {
+            setBrandData((current) => {
+              const merged = mergePreferencesIntoBrandData(current, userPreferences);
+              localStorage.setItem('brandData', JSON.stringify(merged));
+              return merged;
+            });
+          }
         }
       } catch (error) {
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
           console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
         }
-        applyEmptyBrandFallback();
+        applyFetchFailureFallback();
       } finally {
         setLoading(false);
         if (isActive) {
@@ -272,8 +297,9 @@ export function BrandProvider({ children }) {
   }, [userId, reloadTrigger]);
 
   const updateBrandData = useCallback(async (newData) => {
-    const updated = { ...brandData, ...newData };
+    const updated = { ...brandDataRef.current, ...newData };
     setBrandData(updated);
+    brandDataRef.current = updated;
 
     localStorage.setItem('brandData', JSON.stringify(updated));
 
@@ -286,7 +312,10 @@ export function BrandProvider({ children }) {
           creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
           social_handle: updated.handle || null,
-          industry: updated.industry || null,
+          city: updated.city || null,
+          industry: updated.industry
+            ? normalizeOptionalEnum(updated.industry) || String(updated.industry).trim() || null
+            : null,
           niche: updated.niche,
           sub_niche: updated.subNiche || null,
           target_audience: updated.targetAudience,
@@ -342,6 +371,10 @@ export function BrandProvider({ children }) {
 
         if (!prefResult?.success) {
           console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
+          return {
+            success: true,
+            preferencesError: prefResult?.error || 'Could not sync preferences (growth stage, creator type, etc.)',
+          };
         }
 
         return { success: true };
@@ -352,7 +385,7 @@ export function BrandProvider({ children }) {
     }
 
     return { success: true };
-  }, [brandData, user?.id]);
+  }, [user?.id]);
 
   const resetBrandData = useCallback(async () => {
     const resetData = createEmptyBrandData();

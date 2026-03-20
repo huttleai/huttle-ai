@@ -417,7 +417,7 @@ function CollapsibleSection({
 }
 
 export default function BrandVoice() {
-  const { brandData, updateBrandData, refreshBrandData, brandFetchComplete } = useContext(BrandContext);
+  const { brandData, updateBrandData, brandFetchComplete } = useContext(BrandContext);
   const { user, updateUser } = useContext(AuthContext);
   const { addToast } = useToast();
   const { userTier } = useSubscription();
@@ -430,6 +430,8 @@ export default function BrandVoice() {
   const autoExpandDoneRef = useRef(false);
   const debounceRef = useRef(null);
   const [saveUi, setSaveUi] = useState('idle');
+  const formRef = useRef(null);
+  formRef.current = formData;
 
   const isFoundingMember = ['founders', 'founder', 'builder', 'builders'].includes(userTier);
 
@@ -453,6 +455,8 @@ export default function BrandVoice() {
 
   useEffect(() => {
     if (!brandFetchComplete) return;
+    const dirtyNow = JSON.stringify(formRef.current) !== baselineRef.current;
+    if (dirtyNow) return;
     const runExpand = !autoExpandDoneRef.current;
     syncFromBrandData(brandData, runExpand);
   }, [brandData, brandFetchComplete, syncFromBrandData]);
@@ -475,9 +479,6 @@ export default function BrandVoice() {
       || user?.user_metadata?.name
       || ''
   );
-
-  const formRef = useRef(formData);
-  formRef.current = formData;
 
   const persistForm = useCallback(
     async ({ isManual = false, successToast = null } = {}) => {
@@ -503,6 +504,12 @@ export default function BrandVoice() {
           setSaveUi('idle');
           return;
         }
+        if (result?.preferencesError) {
+          addToast(
+            `Profile saved, but some settings didn’t sync: ${result.preferencesError}. Try again or check your connection.`,
+            'warning'
+          );
+        }
         const fn = fd.firstName?.trim();
         if (fn) {
           await updateUser({
@@ -511,7 +518,6 @@ export default function BrandVoice() {
             first_name: fn,
           });
         }
-        refreshBrandData();
         baselineRef.current = JSON.stringify(fd);
         setSaveUi('saved');
         if (successToast) {
@@ -523,7 +529,7 @@ export default function BrandVoice() {
         setSaveUi('idle');
       }
     },
-    [addToast, updateBrandData, updateUser, refreshBrandData]
+    [addToast, updateBrandData, updateUser]
   );
 
   useEffect(() => {
@@ -720,7 +726,12 @@ export default function BrandVoice() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setField({ creatorKind: CREATOR_KIND.solo })}
+                  onClick={() =>
+                    setField({
+                      creatorKind: CREATOR_KIND.solo,
+                      goals: [],
+                    })
+                  }
                   className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
                     formData.creatorKind === CREATOR_KIND.solo
                       ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
@@ -736,7 +747,12 @@ export default function BrandVoice() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setField({ creatorKind: CREATOR_KIND.brand })}
+                  onClick={() =>
+                    setField({
+                      creatorKind: CREATOR_KIND.brand,
+                      goals: [],
+                    })
+                  }
                   className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
                     formData.creatorKind === CREATOR_KIND.brand
                       ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
