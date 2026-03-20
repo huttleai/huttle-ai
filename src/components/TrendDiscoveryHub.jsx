@@ -499,7 +499,7 @@ export default function TrendDiscoveryHub() {
       if (result.success) {
         setSavedTrendIndex('deep-report');
         setTimeout(() => setSavedTrendIndex(null), 2000);
-        showToast('Report saved to Content Library!', 'success');
+        showToast('Report saved to Content Vault!', 'success');
       } else {
         showToast('Failed to save report. Please try again.', 'error');
       }
@@ -533,7 +533,7 @@ export default function TrendDiscoveryHub() {
       if (result.success) {
         setSavedTrendIndex(itemIndex);
         setTimeout(() => setSavedTrendIndex(null), 2000);
-        showToast('Added to Content Library!', 'success');
+        showToast('Added to Content Vault!', 'success');
       } else {
         showToast('Failed to add to library', 'error');
         console.error('Error saving to library:', result.error);

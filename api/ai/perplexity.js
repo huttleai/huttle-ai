@@ -522,10 +522,14 @@ export default async function handler(req, res) {
     }
 
     const safeModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
-    const requestedSearchContext = webSearchOptions?.search_context_size;
-    const safeSearchContextSize = ALLOWED_SEARCH_CONTEXT_SIZES.has(requestedSearchContext)
-      ? requestedSearchContext
-      : (cache?.type === 'niche_intel' ? 'high' : 'low');
+    const bodySearchSize = req.body?.search_context_size;
+    const requestedSearchContext = ALLOWED_SEARCH_CONTEXT_SIZES.has(bodySearchSize)
+      ? bodySearchSize
+      : (ALLOWED_SEARCH_CONTEXT_SIZES.has(webSearchOptions?.search_context_size)
+        ? webSearchOptions.search_context_size
+        : null);
+    const safeSearchContextSize = requestedSearchContext
+      || (cache?.type === 'niche_intel' ? 'high' : 'low');
 
     // Validate temperature range
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.2, 0), 2);

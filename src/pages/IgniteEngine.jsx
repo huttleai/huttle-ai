@@ -52,6 +52,7 @@ import {
 import { buildN8nSystemPrompt } from '../utils/blueprintPromptBuilder';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { getCachedTrends } from '../services/dashboardCacheService';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
 
@@ -170,6 +171,7 @@ export default function IgniteEngine() {
   const [goal, setGoal] = useState('Grow Followers');
   const [topic, setTopic] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
+  const [trendingExtras, setTrendingExtras] = useState(null);
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -292,6 +294,8 @@ export default function IgniteEngine() {
         handle: brandProfile?.socialHandle || '',
         creator_name: brandProfile?.brandName || brandProfile?.firstName || '', // HUTTLE AI: brand context injected
         brand_context: brandBlock, // HUTTLE AI: brand context injected
+        trending_format_type: trendingExtras?.format_type || '',
+        trending_niche_angle: trendingExtras?.niche_angle || '',
         sub_niche: brandProfile?.subNiche || '',
         city: brandProfile?.city || '',
         audience_pain_point: brandProfile?.audiencePainPoint || '',
@@ -364,12 +368,6 @@ export default function IgniteEngine() {
       const newUsage = usageCount + 1;
       setUsageCount(newUsage);
       localStorage.setItem('igniteEngineUsage', newUsage.toString()); // HUTTLE AI: updated 3
-
-      if (import.meta.env.DEV) {
-        const prompt = buildN8nSystemPrompt(briefContext);
-        console.log('=== PASTE THIS INTO N8N IGNITE ENGINE GENERATOR ===');
-        console.log(prompt);
-      }
 
       showToast('Ignite Engine brief generated!', 'success');
       setCurrentView('results');
@@ -683,8 +681,34 @@ export default function IgniteEngine() {
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <Lightbulb className={`w-5 h-5 transition-colors duration-300 ${topic ? 'text-orange-500' : 'text-gray-400'}`} />
                       </div>
-                      <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., AI automation for real estate agents" className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-lg shadow-sm placeholder:text-gray-400 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/10 transition-all outline-none group-hover:border-gray-300" disabled={!selectedPostType} />
+                      <input type="text" value={topic} onChange={(e) => { setTopic(e.target.value); setTrendingExtras(null); }} placeholder="e.g., AI automation for real estate agents" className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-lg shadow-sm placeholder:text-gray-400 focus:border-gray-900 focus:ring-4 focus:ring-gray-900/10 transition-all outline-none group-hover:border-gray-300" disabled={!selectedPostType} />
                     </div>
+                    {brandProfile?.niche && Array.isArray(getCachedTrends()) && getCachedTrends().length > 0 && (
+                      <div className="mt-3" data-testid="ignite-trending-chips">
+                        <p className="text-xs font-medium text-gray-500 mb-2">Or build from a trending topic:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {getCachedTrends().slice(0, 3).map((tr, idx) => {
+                            const pl = String(tr.relevant_platform || '').toLowerCase();
+                            const platformMatch = PLATFORMS.find((p) => pl.includes(p.id.toLowerCase()) || (p.id === 'X' && (pl.includes('x') || pl.includes('twitter'))));
+                            return (
+                              <button
+                                key={`${tr.topic}-${idx}`}
+                                type="button"
+                                onClick={() => {
+                                  setTopic(sanitizeAIOutput(tr.topic || tr.title) || '');
+                                  setTrendingExtras({ format_type: tr.format_type || '', niche_angle: tr.niche_angle || '' });
+                                  if (platformMatch) setSelectedPlatform(platformMatch.id);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 hover:border-orange-400 text-gray-800"
+                              >
+                                <Flame className="w-3.5 h-3.5 text-orange-500" aria-hidden />
+                                {sanitizeAIOutput(tr.topic || tr.title)} · {tr.relevant_platform || 'IG'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">

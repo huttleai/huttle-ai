@@ -417,7 +417,7 @@ function CollapsibleSection({
 }
 
 export default function BrandVoice() {
-  const { brandData, updateBrandData, refreshBrandData, loading } = useContext(BrandContext);
+  const { brandData, updateBrandData, refreshBrandData, brandFetchComplete } = useContext(BrandContext);
   const { user, updateUser } = useContext(AuthContext);
   const { addToast } = useToast();
   const { userTier } = useSubscription();
@@ -452,10 +452,10 @@ export default function BrandVoice() {
   );
 
   useEffect(() => {
-    if (!brandData || loading) return;
+    if (!brandFetchComplete) return;
     const runExpand = !autoExpandDoneRef.current;
     syncFromBrandData(brandData, runExpand);
-  }, [brandData, loading, syncFromBrandData]);
+  }, [brandData, brandFetchComplete, syncFromBrandData]);
 
   useEffect(() => {
     autoExpandDoneRef.current = false;
@@ -527,7 +527,7 @@ export default function BrandVoice() {
   );
 
   useEffect(() => {
-    if (loading) return;
+    if (!brandFetchComplete) return;
     const dirty = JSON.stringify(formData) !== baselineRef.current;
     if (!dirty) {
       setSaveUi((s) => (s === 'pending' ? 'idle' : s));
@@ -548,7 +548,7 @@ export default function BrandVoice() {
         debounceRef.current = null;
       }
     };
-  }, [formData, loading, persistForm]);
+  }, [formData, brandFetchComplete, persistForm]);
 
   useEffect(() => {
     if (saveUi !== 'saved') return;
@@ -602,14 +602,6 @@ export default function BrandVoice() {
       return { ...prev, toneChips: [...cur, value] };
     });
   };
-
-  if (loading && !brandData) {
-    return (
-      <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-huttle-primary" />
-      </div>
-    );
-  }
 
   return (
     <div

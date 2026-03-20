@@ -84,7 +84,7 @@ export default async function handler(req, res) {
   }
 
   // Validate request body
-  const { job_id, contentGoal, timePeriod, platformFocus, brandVoice } = req.body || {};
+  const { job_id, contentGoal, timePeriod, platformFocus, brandVoice, trendContext } = req.body || {};
 
   if (!job_id) {
     console.error('[plan-builder-proxy] Missing job_id in request body', { requestId });
@@ -119,7 +119,8 @@ export default async function handler(req, res) {
       contentGoal: contentGoal || 'Grow followers',
       timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
       platformFocus,
-      brandVoice: brandVoice || ''
+      brandVoice: brandVoice || '',
+      trendContext: typeof trendContext === 'string' ? trendContext : ''
     };
 
     // Forward request to n8n webhook

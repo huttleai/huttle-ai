@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Lightbulb, PenTool, PenLine, Hash, MessageSquare, Check, ChevronLeft,
-  ChevronRight, Copy, FolderPlus, RotateCcw, RefreshCw, X, Sparkles,
+  ChevronRight, Copy, FolderPlus, RotateCcw, RefreshCw, X, Sparkles, TrendingUp,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
@@ -19,7 +19,7 @@ import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { generateFullPostHooks, generateCaption, generateHashtags, generateStyledCTAs, scoreContentQuality } from '../services/grokAPI';
 import { saveContentLibraryItem } from '../config/supabase';
 import { getPlatform } from '../utils/platformGuidelines';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { enhanceCaptionWithClaude } from '../services/claudeAPI';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -80,13 +80,16 @@ function hasConfiguredNiche(brandData) {
 }
 
 export default function FullPostBuilder() {
-  const { brandData, loading: isBrandLoading } = useContext(BrandContext);
+  const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
   const { featureUsed, featureLimit, trackFeatureUsage } = useAIUsage('fullPostBuilder');
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const trendingContextRef = useRef(null);
+  const [trendingBanner, setTrendingBanner] = useState(null);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -131,15 +134,57 @@ export default function FullPostBuilder() {
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}:${user?.id || 'guest'}`, [user?.id]);
   const hasHydratedRef = useRef(false);
+  const pendingTrendingRef = useRef(null);
+  const appliedTrendingRef = useRef(false);
+  if (location.state?.source === 'trending') {
+    pendingTrendingRef.current = location.state;
+  }
 
   const prefillTopic = searchParams.get('topic')?.trim() || '';
   const prefillPlatform = searchParams.get('platform')?.trim() || '';
   const prefillGoal = searchParams.get('goal')?.trim() || '';
   const hasExplicitPrefill = Boolean(prefillTopic || prefillPlatform || prefillGoal);
 
-  // Hydrate from URL params and local draft.
+  // Hydrate from URL params, trending navigation state, and local draft.
   useEffect(() => {
     try {
+      const t = pendingTrendingRef.current;
+      if (t?.source === 'trending' && !appliedTrendingRef.current) {
+        appliedTrendingRef.current = true;
+        pendingTrendingRef.current = null;
+        trendingContextRef.current = t;
+        setTrendingBanner(t);
+        setTopic(t.topic || '');
+        setPlatform(t.platform ? String(t.platform).toLowerCase() : 'instagram');
+        setGoal('engagement');
+        setSelectedHookType(HOOK_TYPES[0]);
+        if (t.hook) {
+          setHooks([t.hook]);
+          setSelectedHook(t.hook);
+          setCurrentStep(1);
+        } else {
+          setHooks([]);
+          setSelectedHook(null);
+          setCurrentStep(0);
+        }
+        setCaption('');
+        setHashtags([]);
+        setCtas([]);
+        setSelectedCTA(null);
+        setShowFinalPanel(false);
+        setQualityScore(null);
+        setHumanScore(null);
+        setAlgorithmScore(null);
+        navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+        hasHydratedRef.current = true;
+        return;
+      }
+
+      if (appliedTrendingRef.current) {
+        hasHydratedRef.current = true;
+        return;
+      }
+
       const draft = JSON.parse(localStorage.getItem(storageKey) || 'null');
       const shouldStartFresh = hasExplicitPrefill;
 
@@ -175,11 +220,13 @@ export default function FullPostBuilder() {
     } finally {
       hasHydratedRef.current = true;
     }
-  }, [storageKey, hasExplicitPrefill, prefillGoal, prefillPlatform, prefillTopic]);
+  }, [storageKey, hasExplicitPrefill, prefillGoal, prefillPlatform, prefillTopic, location.pathname, location.search, navigate]);
 
   // HUTTLE AI: brand context injected — pre-fill topic from niche and platform from brand profile
   useEffect(() => {
-    if (!hasHydratedRef.current || hasExplicitPrefill) return;
+    if (!hasHydratedRef.current || hasExplicitPrefill || trendingBanner) return;
+    // Ref guard: same flush as trending hydrate can leave trendingBanner false in this closure while topic is still empty
+    if (trendingContextRef.current?.source === 'trending') return;
     if (!topic.trim() && brandData?.niche) {
       const niche = Array.isArray(brandData.niche) ? brandData.niche[0] : brandData.niche;
       if (niche?.trim()) setTopic(niche.trim());
@@ -190,7 +237,7 @@ export default function FullPostBuilder() {
         : brandData.platforms[0];
       if (firstPlatform) setPlatform(firstPlatform.toLowerCase());
     }
-  }, [brandData, hasExplicitPrefill]);
+  }, [brandData, hasExplicitPrefill, trendingBanner]);
 
   // Save draft to localStorage
   useEffect(() => {
@@ -246,10 +293,14 @@ export default function FullPostBuilder() {
       const usage = await trackFeatureUsage({ step: 'hooks' });
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingHooks(false); return; }
 
+      const tc = trendingContextRef.current;
       const res = await generateFullPostHooks({
         topic,
         hookType: selectedHookType,
         platform,
+        formatType: tc?.format_type,
+        nicheAngle: tc?.niche_angle,
+        trendDescription: tc?.description,
       }, brandData);
 
       if (res.success && res.hooks) {
@@ -273,12 +324,16 @@ export default function FullPostBuilder() {
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingCaption(false); return; }
 
       let captionText;
+      const tc = trendingContextRef.current;
       const res = await generateCaption({
         topic,
         platform,
         selectedHook,
         goal: GOALS.find(g => g.id === goal)?.label || goal,
         tone: brandData?.brandVoice || '',
+        formatType: tc?.format_type,
+        nicheAngle: tc?.niche_angle,
+        trendDescription: tc?.description,
       }, brandData);
       if (res.success && res.caption) {
         const captions = res.caption.split(/\d+\.\s+/).filter(c => c.trim());
@@ -595,6 +650,29 @@ export default function FullPostBuilder() {
               transition={{ duration: 0.25, ease: 'easeInOut' }}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 animate-fadeIn"
             >
+              {trendingBanner && (
+                <div
+                  data-testid="trending-context-banner"
+                  className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50/90 dark:bg-cyan-950/40 dark:border-cyan-800 px-4 py-3 text-sm text-gray-800 dark:text-gray-100"
+                >
+                  <div className="flex items-start gap-2">
+                    <TrendingUp className="w-4 h-4 text-cyan-600 flex-shrink-0 mt-0.5" aria-hidden />
+                    <div>
+                      <p className="font-semibold">
+                        Building from trending topic: &quot;{sanitizeAIOutput(trendingBanner.topic)}&quot;
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                        Format: {trendingBanner.format_type || '—'} | Platform: {getPlatform(trendingBanner.platform || platform)?.name || trendingBanner.platform}
+                      </p>
+                      {trendingBanner.niche_angle && (
+                        <p className="text-xs mt-2 text-gray-700 dark:text-gray-200">
+                          Tip: {sanitizeAIOutput(trendingBanner.niche_angle)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
                 <span className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center text-sm font-bold text-huttle-primary">{currentStep + 1}</span>
                 {STEPS[currentStep].description}
@@ -641,7 +719,7 @@ export default function FullPostBuilder() {
                       <span className="text-xs text-gray-700">Brand voice: <strong>{brandData.brandVoice}</strong></span>
                     </div>
                   )}
-                  {!isBrandLoading && !isBrandVoiceComplete && (
+                  {!isBrandVoiceComplete && (
                     <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
                       Add your Brand Voice for more personalized results →
                     </a>
@@ -912,7 +990,6 @@ export default function FullPostBuilder() {
                 <button
                   onClick={handleNext}
                   disabled={
-                    isBrandLoading ||
                     (currentStep === 0 && !topic.trim()) ||
                     (currentStep === 1 && !selectedHook) ||
                     (currentStep === 2 && !caption.trim()) ||
@@ -920,7 +997,7 @@ export default function FullPostBuilder() {
                   }
                   className="flex items-center gap-2 px-6 py-3 bg-huttle-primary text-white rounded-xl font-semibold text-sm hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
                 >
-                  {isBrandLoading ? 'Loading Brand Voice...' : currentStep === 4 ? 'Finish' : 'Next'} <ChevronRight className="w-4 h-4" />
+                  {currentStep === 4 ? 'Finish' : 'Next'} <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </Motion.div>

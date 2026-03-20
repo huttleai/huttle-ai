@@ -65,8 +65,8 @@ Copy this checklist and mark each one as you verify it:
 ## ✅ Optional Variables (Nice to Have)
 
 - [ ] **VITE_N8N_WEBHOOK_URL** (if using n8n)
-- [ ] **VITE_GROK_API_KEY** (if using Grok AI)
-- [ ] **VITE_PERPLEXITY_API_KEY** (if using Perplexity AI)
+- [ ] **GROK_API_KEY** (server-side only — Grok via `/api/ai/grok`; do **not** use `VITE_GROK_API_KEY`)
+- [ ] **PERPLEXITY_API_KEY** (server-side only — do **not** use `VITE_PERPLEXITY_API_KEY`)
 
 ---
 

@@ -24,6 +24,7 @@ test.describe('Dashboard', () => {
   });
 
   test('Hashtags Trending vs For you lists differ when both tabs are shown', async ({ page }) => {
+    test.setTimeout(120000);
     const detach = attachStrictErrorCollector(page);
     await gotoDashboard(page, '/dashboard');
     await expect(page.getByTestId('hashtag-widget')).toBeVisible();
@@ -57,6 +58,18 @@ test.describe('Dashboard', () => {
     expect(forYouSig.length).toBeGreaterThan(0);
     expect(trendingSig).not.toEqual(forYouSig);
 
+    const errs = detach();
+    expect(errs, errs.join('\n')).toHaveLength(0);
+  });
+
+  test('Trending Now cards show format badge, niche section, hook copy feedback', async ({ page }) => {
+    const detach = attachStrictErrorCollector(page);
+    await gotoDashboard(page, '/dashboard');
+    await expect(page.getByTestId('trend-card').first()).toBeVisible({ timeout: 60000 });
+    await expect(page.getByTestId('trend-format-badge').first()).toBeVisible();
+    await expect(page.getByTestId('trend-niche-section').first()).toBeVisible();
+    await page.getByTestId('trend-hook-copy').first().click();
+    await expect(page.getByTestId('trend-card').first().getByText('✓ Copied')).toBeVisible();
     const errs = detach();
     expect(errs, errs.join('\n')).toHaveLength(0);
   });

@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { getCachedTrends } from '../services/dashboardCacheService';
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -311,13 +312,19 @@ export default function AIPlanBuilder() {
     setJobStatus('pending');
 
     try {
+      const cachedTrends = getCachedTrends();
+      const trendContext = Array.isArray(cachedTrends) && cachedTrends.length > 0
+        ? `Current trending topics in the user's niche:\n${cachedTrends.slice(0, 4).map((t) => `- "${t.title || t.topic}" (${t.format_type || 'short-form'}, ${t.momentum || 'steady'})`).join('\n')}\nIncorporate 1-2 of these trending topics into the content plan where they naturally fit.`
+        : '';
+
       // Step 1: Create job directly in Supabase
       const { jobId, error: createError } = await createJobDirectly({
         goal: selectedGoal,
         duration: selectedPeriod,
         platforms: selectedPlatforms,
         niche: brandProfile?.niche || 'general',
-        brandVoice: brandVoice
+        brandVoice: brandVoice,
+        trendContext,
       });
 
       if (createError || !jobId) {
@@ -333,7 +340,8 @@ export default function AIPlanBuilder() {
         timePeriod: String(selectedPeriod),
         platformFocus: selectedPlatforms,
         brandVoice: brandVoice,
-        brandContext: brandBlock // HUTTLE AI: brand context injected
+        brandContext: brandBlock, // HUTTLE AI: brand context injected
+        trendContext,
       });
       
       if (!webhookSuccess) {

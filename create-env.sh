@@ -71,15 +71,15 @@ NODE_ENV=development
 # VITE_SKIP_AUTH=false
 
 # ============================================================================
-# AI API KEYS (OPTIONAL - for full feature set)
+# AI API KEYS — SERVER-SIDE ONLY (local api/ proxies — NEVER use VITE_ prefix)
 # ============================================================================
 # xAI Grok API Key (for content generation and AI chat)
 # Get from: https://console.x.ai
-VITE_GROK_API_KEY=your_grok_api_key_here
+GROK_API_KEY=your_grok_api_key_here
 
 # Perplexity API Key (for trend discovery and research)
 # Get from: https://www.perplexity.ai/settings/api
-VITE_PERPLEXITY_API_KEY=your_perplexity_api_key_here
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
 
 # ============================================================================
 # STRIPE PAYMENT CONFIGURATION (OPTIONAL - for subscriptions)
@@ -125,9 +125,9 @@ echo ""
 echo "   Get these from:"
 echo "   https://supabase.com/dashboard/project/khtaqmfhlmnwwzkpfgev/settings/api"
 echo ""
-echo "   OPTIONAL (for full features):"
-echo "   - VITE_GROK_API_KEY (for AI content generation)"
-echo "   - VITE_PERPLEXITY_API_KEY (for trend discovery)"
+echo "   OPTIONAL (for full features, server-side — see .env.example):"
+echo "   - GROK_API_KEY (for AI content generation via /api/ai/*)"
+echo "   - PERPLEXITY_API_KEY (for trend discovery via /api/ai/*)"
 echo "   - Stripe keys (for payment processing)"
 echo ""
 echo "3. Save the file"

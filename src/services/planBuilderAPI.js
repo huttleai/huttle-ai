@@ -45,9 +45,10 @@ function safeJsonParse(value) {
  * @param {string[]} params.platforms - Selected platforms
  * @param {string} params.niche - User's niche/industry
  * @param {string} params.brandVoice - Brand voice description
+ * @param {string} [params.trendContext] - Optional trending topics context for the plan prompt
  * @returns {Promise<{jobId?: string, error?: Error}>}
  */
-export async function createJobDirectly({ goal, duration, platforms, niche, brandVoice }) {
+export async function createJobDirectly({ goal, duration, platforms, niche, brandVoice, trendContext }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -67,6 +68,7 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
           platforms,
           niche: niche || 'general',
           brandVoice: brandVoice || '',
+          trendContext: trendContext || '',
           requestedAt: new Date().toISOString()
         },
         created_at: new Date().toISOString()
@@ -132,7 +134,8 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     contentGoal: formData.contentGoal || formData.goal || 'Grow followers',
     timePeriod: String(formData.timePeriod || formData.duration || '7'),
     platformFocus: formData.platformFocus || formData.platforms || [],
-    brandVoice: formData.brandVoice || ''
+    brandVoice: formData.brandVoice || '',
+    trendContext: formData.trendContext || ''
   };
 
   for (let attempt = 0; attempt <= retries; attempt++) {

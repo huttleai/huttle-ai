@@ -3,18 +3,24 @@ import {
   ArrowRight,
   Calendar,
   Check,
+  ChevronDown,
   Copy,
   Edit3,
+  FileText,
   FolderPlus,
+  Hash,
   Layers,
   Loader2,
+  MessageSquare,
   Plus,
   Search,
   Sparkles,
   Star,
   Trash2,
+  TrendingUp,
   Wand2,
   X,
+  Zap,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -46,6 +52,28 @@ import {
   mapContentRowToVaultItem,
   PLATFORM_OPTIONS,
 } from '../utils/contentVault';
+
+/** Display-only labels for vault content types (not persisted). */
+const DISPLAY_NAMES = {
+  opening_line: 'Caption',
+  caption: 'Caption',
+  hashtags: 'Hashtags',
+  hashtag: 'Hashtags',
+  hook: 'Hook',
+  cta: 'CTA',
+  image_description: 'Visual Ideas',
+  visual: 'Visual Ideas',
+  'visual-prompt': 'Visual Ideas',
+  score: 'Quality Score',
+  plan: 'Content Plan',
+  blueprint: 'Blueprint',
+  remix: 'Remix',
+};
+
+function getContentTypeDisplayLabel(contentType) {
+  const key = String(contentType || '').toLowerCase();
+  return DISPLAY_NAMES[key] || CONTENT_TYPE_CONFIG[key]?.singular || (key ? key : 'Saved');
+}
 import { getUserKits } from '../services/postKitService';
 
 function formatDate(value) {
@@ -358,7 +386,7 @@ function EmptyState({ hasContent, onClearFilters, onCreate, onCreateManual }) {
           onClick={hasContent ? onClearFilters : onCreate}
           className="inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
         >
-          {hasContent ? 'Clear Filters' : 'Generate with AI'}
+          {hasContent ? 'Clear Filters' : 'Open AI Power Tools'}
         </button>
         {!hasContent && (
           <button
@@ -416,6 +444,19 @@ export default function ContentLibrary() {
   const [selectedKitId, setSelectedKitId] = useState(null);
   const [kitPlatformFilter, setKitPlatformFilter] = useState('all');
   const [showPostKitCreate, setShowPostKitCreate] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    const handlePointerDown = (event) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [createMenuOpen]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1035,15 +1076,72 @@ export default function ContentLibrary() {
                 />
               </div>
 
-              <button
-                type="button"
-                data-testid="vault-create-post-button"
-                onClick={() => setIsCreatePostOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-4 py-3 text-sm font-medium text-white transition-all hover:opacity-95 shadow-sm"
-              >
-                <Plus className="h-4 w-4" />
-                + Create Post
-              </button>
+              <div className="relative" ref={createMenuRef}>
+                <button
+                  type="button"
+                  data-testid="vault-create-post-button"
+                  onClick={() => setCreateMenuOpen((open) => !open)}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-4 py-3 text-sm font-medium text-white transition-all hover:opacity-95 shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create
+                  <ChevronDown className={`h-4 w-4 transition-transform ${createMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {createMenuOpen && (
+                  <div
+                    className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl"
+                    role="menu"
+                    aria-label="Create content options"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="vault-write-post-manually"
+                      onClick={() => {
+                        setIsCreatePostOpen(true);
+                        setCreateMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
+                    >
+                      <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>Write post manually</span>
+                    </button>
+                    <div className="mx-2 border-t border-gray-100" aria-hidden />
+                    <Link
+                      to="/dashboard/ai-tools?tab=captions"
+                      onClick={() => setCreateMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                      <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>New Caption</span>
+                    </Link>
+                    <Link
+                      to="/dashboard/ai-tools?tab=hashtags"
+                      onClick={() => setCreateMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                      <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>New Hashtags</span>
+                    </Link>
+                    <Link
+                      to="/dashboard/ai-tools?tab=hooks"
+                      onClick={() => setCreateMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                      <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>New Hook</span>
+                    </Link>
+                    <Link
+                      to="/dashboard/full-post-builder"
+                      onClick={() => setCreateMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                    >
+                      <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>Build Full Post</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -1211,19 +1309,53 @@ export default function ContentLibrary() {
         )}
 
         {hasNoVaultItems && (
-          <EmptyState
-            hasContent={false}
-            onClearFilters={resetFilters}
-            onCreate={() => navigate('/dashboard/ai-tools')}
-            onCreateManual={() => setIsCreatePostOpen(true)}
-          />
+          <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+            <h3 className="text-xl font-semibold text-gray-900">Your content starts here</h3>
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
+              Create captions, hooks, hashtags and more with AI Power Tools — everything you make gets saved here.
+            </p>
+            <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:justify-center lg:gap-6">
+              <Link
+                to="/dashboard/ai-tools?tab=captions"
+                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
+              >
+                <MessageSquare className="h-8 w-8 text-[#01BAD2]" />
+                <p className="mt-4 font-semibold text-gray-900">Create a Caption</p>
+                <p className="mt-1 text-sm text-gray-500">Generate engaging captions for any platform</p>
+              </Link>
+              <Link
+                to="/dashboard/full-post-builder"
+                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
+              >
+                <FileText className="h-8 w-8 text-[#01BAD2]" />
+                <p className="mt-4 font-semibold text-gray-900">Build a Full Post</p>
+                <p className="mt-1 text-sm text-gray-500">Step-by-step post builder with hooks, captions & CTAs</p>
+              </Link>
+              <Link
+                to="/dashboard/trend-lab"
+                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
+              >
+                <TrendingUp className="h-8 w-8 text-[#01BAD2]" />
+                <p className="mt-4 font-semibold text-gray-900">Explore Trends</p>
+                <p className="mt-1 text-sm text-gray-500">Discover what&apos;s trending in your niche</p>
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCreatePostOpen(true)}
+              className="mt-8 inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+            >
+              <Plus className="h-4 w-4" />
+              Write a Post Manually
+            </button>
+          </div>
         )}
 
         {hasNoResults && (
           <EmptyState
             hasContent
             onClearFilters={resetFilters}
-            onCreate={() => navigate('/dashboard/ai-tools')}
+            onCreate={() => navigate('/dashboard/ai-tools?tab=captions')}
             onCreateManual={() => setIsCreatePostOpen(true)}
           />
         )}
@@ -1232,6 +1364,7 @@ export default function ContentLibrary() {
           <div className="columns-1 gap-5 md:columns-2">
             {filteredItems.map((item) => {
               const contentConfig = CONTENT_TYPE_CONFIG[item.contentType] || CONTENT_TYPE_CONFIG.legacy;
+              const typeLabel = getContentTypeDisplayLabel(item.contentType);
               const platformOption = getPlatformOption(item.platform);
               const PlatformIcon = platformOption?.icon;
               const isExpanded = expandedIds.includes(item.id);
@@ -1268,7 +1401,7 @@ export default function ContentLibrary() {
                         <Check className="h-3 w-3" />
                       </button>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${contentConfig.badgeClass}`}>
-                        {contentConfig.singular}
+                        {typeLabel}
                       </span>
                     </div>
 
@@ -1343,7 +1476,7 @@ export default function ContentLibrary() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setDeleteTarget({ id: item.id, name: item.name || contentConfig.singular });
+                        setDeleteTarget({ id: item.id, name: item.name || typeLabel });
                       }}
                       className="rounded-full border border-red-100 px-3 py-2 text-xs font-medium text-red-500 transition-all hover:bg-red-50"
                     >
@@ -1392,7 +1525,7 @@ export default function ContentLibrary() {
             <div className="space-y-6 px-6 py-6">
               <div className="flex flex-wrap gap-2">
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${(CONTENT_TYPE_CONFIG[activeItem.contentType] || CONTENT_TYPE_CONFIG.legacy).badgeClass}`}>
-                  {(CONTENT_TYPE_CONFIG[activeItem.contentType] || CONTENT_TYPE_CONFIG.legacy).singular}
+                  {getContentTypeDisplayLabel(activeItem.contentType)}
                 </span>
                 {activeItem.platform && (
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">

@@ -35,7 +35,7 @@ function hasConfiguredNiche(brandData) {
 }
 
 export default function NicheIntel() {
-  const { brandData, loading: isBrandLoading } = useContext(BrandContext);
+  const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
@@ -257,20 +257,20 @@ export default function NicheIntel() {
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
             />
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
-            {!isBrandLoading && !isBrandVoiceComplete && (
+            {!isBrandVoiceComplete && (
               <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
                 Add your Brand Voice for more personalized results →
               </a>
             )}
             <button
               onClick={handleAnalyze}
-              disabled={loading || !canGenerate || isBrandLoading}
+              disabled={loading || !canGenerate}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-huttle-primary text-white rounded-xl font-semibold text-sm hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
             >
               {loading ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing your niche...</>
               ) : (
-                <><Search className="w-4 h-4" /> {isBrandLoading ? 'Loading Brand Voice...' : 'Analyze Now'}</>
+                <><Search className="w-4 h-4" /> Analyze Now</>
               )}
             </button>
           </div>

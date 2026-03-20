@@ -1,3 +1,24 @@
+/**
+ * HUTTLE AI — Playwright E2E Test Configuration
+ *
+ * Recommended test workflows:
+ *
+ * Option A (cleanest — let Playwright start the server):
+ *   1. Stop any dev server on port 5173
+ *   2. Run: npm run test:e2e
+ *   Playwright starts its own VITE_SKIP_AUTH=true dev server.
+ *
+ * Option B (keep your dev server running):
+ *   1. Start dev server: VITE_SKIP_AUTH=true npm run dev
+ *   2. Run: PW_REUSE_SERVER=1 npm run test:e2e
+ *
+ * Option C (custom port):
+ *   1. Start: VITE_SKIP_AUTH=true npx vite --port 5179
+ *   2. Run: PLAYWRIGHT_BASE_URL=http://localhost:5179 PW_REUSE_SERVER=1 npm run test:e2e
+ *
+ * IMPORTANT: The dev server MUST run with VITE_SKIP_AUTH=true for
+ * dashboard tests to pass (they bypass real Supabase auth).
+ */
 import fs from 'fs';
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';

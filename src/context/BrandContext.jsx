@@ -4,8 +4,12 @@ import { AuthContext } from './AuthContext';
 import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/formatEnumLabel';
 
 export const BrandContext = createContext();
-const BRAND_FETCH_RETRY_LIMIT = 2;
-const BRAND_FETCH_RETRY_DELAY_MS = 10000;
+
+/** Columns needed for brand voice / profile — avoid select('*') for performance. */
+const USER_PROFILE_SELECT =
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,content_focus,city,industry,growth_stage,creator_type,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers';
+
+const QUERY_TIMEOUT_MS = 5000;
 
 function createEmptyBrandData() {
   return {
@@ -71,6 +75,7 @@ export function useBrand() {
     resetBrandData: context.resetBrandData,
     refreshBrandData: context.refreshBrandData,
     loading: context.loading,
+    brandFetchComplete: context.brandFetchComplete,
     // Convenience helpers for profile type
     isCreator: context.brandData?.profileType === 'creator',
     isBrand: isBusinessProfileType(context.brandData?.profileType),
@@ -80,11 +85,11 @@ export function useBrand() {
 export function BrandProvider({ children }) {
   const { user } = useContext(AuthContext);
   const [brandData, setBrandData] = useState(createEmptyBrandData);
-  const [loading, setLoading] = useState(true);
-  // Track if we need to force reload (e.g., after onboarding completes)
+  /** Background profile fetch — never used to block primary UI; optional spinners only. */
+  const [loading, setLoading] = useState(false);
+  /** True after first fetch attempt finishes (success, timeout, or error) for the current user. */
+  const [brandFetchComplete, setBrandFetchComplete] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
-  const brandFetchRetryCountRef = useRef(0);
-  // Track the previous user ID so we can detect account switches
   const prevUserIdRef = useRef(null);
 
   const normalizeOptionalEnum = (value) => {
@@ -93,28 +98,24 @@ export function BrandProvider({ children }) {
     return normalized || value.trim();
   };
 
-  // Detect user switches and clear stale localStorage to prevent cross-user data bleed
   const userId = user?.id ?? null;
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     prevUserIdRef.current = userId;
 
     if (prevId && userId && prevId !== userId) {
-      // A different user just logged in — wipe the previous user's cached brand data
-      // so it doesn't appear in the onboarding quiz or brand voice page.
       localStorage.removeItem('brandData');
       setBrandData(createEmptyBrandData());
+      setBrandFetchComplete(false);
     } else if (!userId && prevId) {
-      // User logged out — clear cached data
       localStorage.removeItem('brandData');
       setBrandData(createEmptyBrandData());
+      setBrandFetchComplete(true);
     }
   }, [userId]);
 
-  // Load brand data from Supabase user_profile table
   useEffect(() => {
     let isActive = true;
-    let retryTimeoutId = null;
 
     const applyLocalBrandFallback = () => {
       const savedBrand = localStorage.getItem('brandData');
@@ -158,27 +159,27 @@ export function BrandProvider({ children }) {
 
     const fetchBrandData = async () => {
       if (!user) {
-        // Fallback to localStorage if no user
         if (isActive) {
           applyLocalBrandFallback();
-          setLoading(false);
+          setBrandFetchComplete(true);
         }
         return;
       }
 
+      setBrandFetchComplete(false);
+      setLoading(true);
+
       try {
-        const QUERY_TIMEOUT_MS = 15000;
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Brand data query timed out')), QUERY_TIMEOUT_MS);
         });
 
         const queryPromise = supabase
           .from('user_profile')
-          .select('*')
+          .select(USER_PROFILE_SELECT)
           .eq('user_id', user.id)
           .maybeSingle();
 
-        // Start preferences in parallel, but never await them for initial brand readiness.
         const safePreferencesPromise = getUserPreferences(user.id).then((result) => {
           if (!result?.success || !result.data) {
             return null;
@@ -188,13 +189,12 @@ export function BrandProvider({ children }) {
         }).catch(() => null);
 
         const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
         if (error) {
           throw error;
         }
 
         if (data && data.user_id) {
-          // Map user_profile fields to brandData structure
-          // Apply formatEnumLabel to convert snake_case values to human-readable labels.
           const mappedData = {
             firstName: data.first_name || '',
             profileType: data.profile_type || 'brand',
@@ -214,26 +214,19 @@ export function BrandProvider({ children }) {
             brandVoice: data.brand_voice_preference ? formatEnumLabel(data.brand_voice_preference) : '',
             platforms: data.preferred_platforms || [],
             goals: data.content_goals || [],
-            // Audience expansion
             audiencePainPoint: data.audience_pain_point || '',
             audienceActionTrigger: data.audience_action_trigger || '',
-            // Voice expansion
             toneChips: data.tone_chips || [],
             writingStyle: data.writing_style || '',
             examplePost: data.example_post || '',
-            // Content expansion
             contentToPost: data.content_to_post || [],
             contentToAvoid: data.content_to_avoid || '',
-            // Growth
             followerCount: data.follower_count || '',
-            // Business-only
             primaryOffer: data.primary_offer || '',
             conversionGoal: data.conversion_goal || '',
-            // Creator-only
             contentPersona: data.content_persona || '',
             monetizationGoal: data.monetization_goal || '',
             showUpStyle: data.show_up_style || '',
-            // Viral content strategy fields
             contentStrengths: data.content_strengths || [],
             biggestChallenge: data.biggest_challenge ? normalizeOptionalEnum(data.biggest_challenge) : '',
             hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
@@ -243,13 +236,9 @@ export function BrandProvider({ children }) {
           if (isActive) {
             setBrandData(mappedData);
           }
-          // Also sync to localStorage as backup
           localStorage.setItem('brandData', JSON.stringify(mappedData));
           void safePreferencesPromise.then(applyPreferenceOverrides);
         } else {
-          // No profile row exists yet — insert a minimal placeholder row so future
-          // upserts work. Do NOT fall back to localStorage here because that may
-          // contain a previous user's data (the "Angela" cross-user bleed bug).
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
             .from('user_profile')
@@ -263,63 +252,40 @@ export function BrandProvider({ children }) {
           void safePreferencesPromise.then(applyPreferenceOverrides);
         }
       } catch (error) {
-        if (brandFetchRetryCountRef.current < BRAND_FETCH_RETRY_LIMIT) {
-          brandFetchRetryCountRef.current += 1;
-          if (import.meta.env.DEV) {
-            console.info(
-              `[Brand] Profile load slow (${error?.message || 'unknown'}), retry ${brandFetchRetryCountRef.current}/${BRAND_FETCH_RETRY_LIMIT} in ${BRAND_FETCH_RETRY_DELAY_MS / 1000}s`
-            );
-          }
-          retryTimeoutId = setTimeout(() => {
-            if (isActive) {
-              void fetchBrandData();
-            }
-          }, BRAND_FETCH_RETRY_DELAY_MS);
-          return;
-        }
-
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
           console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
         }
-        console.error('[Brand] Brand data load failed after max retries:', error.message);
         applyEmptyBrandFallback();
       } finally {
-        if (isActive && !retryTimeoutId) {
-          setLoading(false);
+        setLoading(false);
+        if (isActive) {
+          setBrandFetchComplete(true);
         }
       }
     };
 
-    setLoading(true);
-    fetchBrandData();
+    void fetchBrandData();
 
     return () => {
       isActive = false;
-      if (retryTimeoutId) clearTimeout(retryTimeoutId);
     };
-  // Only re-fetch when the logged-in user ID changes or a manual reload is triggered.
-  // Using user?.id (primitive string) instead of the user object reference prevents
-  // spurious re-fetches on every TOKEN_REFRESHED event (which creates a new object).
   }, [userId, reloadTrigger]);
 
   const updateBrandData = useCallback(async (newData) => {
     const updated = { ...brandData, ...newData };
     setBrandData(updated);
-    
-    // Save to localStorage immediately (for offline support)
+
     localStorage.setItem('brandData', JSON.stringify(updated));
 
-    // Save to Supabase if user is authenticated
     if (user?.id) {
       try {
-        // Complete data with all fields
         const profileData = {
           user_id: user.id,
           first_name: updated.firstName?.trim() || null,
           profile_type: normalizeProfileTypeForDb(updated.profileType),
           creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
-          social_handle: updated.handle || null, // HUTTLE AI: updated 1
+          social_handle: updated.handle || null,
           industry: updated.industry || null,
           niche: updated.niche,
           sub_niche: updated.subNiche || null,
@@ -327,26 +293,19 @@ export function BrandProvider({ children }) {
           brand_voice_preference: updated.brandVoice,
           preferred_platforms: updated.platforms,
           content_goals: updated.goals,
-          // Audience expansion
           audience_pain_point: updated.audiencePainPoint || null,
           audience_action_trigger: updated.audienceActionTrigger || null,
-          // Voice expansion
           tone_chips: updated.toneChips || [],
           writing_style: updated.writingStyle || null,
           example_post: updated.examplePost || null,
-          // Content expansion
           content_to_post: updated.contentToPost || [],
           content_to_avoid: updated.contentToAvoid || null,
-          // Growth
           follower_count: updated.followerCount || null,
-          // Business-only
           primary_offer: updated.primaryOffer || null,
           conversion_goal: updated.conversionGoal || null,
-          // Creator-only
           content_persona: updated.contentPersona || null,
           monetization_goal: updated.monetizationGoal || null,
           show_up_style: updated.showUpStyle || null,
-          // Viral content strategy fields
           content_strengths: updated.contentStrengths || [],
           biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
           hook_style_preference: normalizeOptionalEnum(updated.hookStylePreference) || null,
@@ -391,8 +350,7 @@ export function BrandProvider({ children }) {
         return { success: false, error: error.message };
       }
     }
-    
-    // Not authenticated — saved to localStorage only
+
     return { success: true };
   }, [brandData, user?.id]);
 
@@ -448,14 +406,20 @@ export function BrandProvider({ children }) {
     }
   }, [user?.id]);
 
-  // Force reload brand data from Supabase (useful after onboarding)
   const refreshBrandData = useCallback(() => {
     setReloadTrigger(prev => prev + 1);
   }, []);
 
   const value = useMemo(
-    () => ({ brandData, updateBrandData, resetBrandData, refreshBrandData, loading }),
-    [brandData, updateBrandData, resetBrandData, refreshBrandData, loading]
+    () => ({
+      brandData,
+      updateBrandData,
+      resetBrandData,
+      refreshBrandData,
+      loading,
+      brandFetchComplete,
+    }),
+    [brandData, updateBrandData, resetBrandData, refreshBrandData, loading, brandFetchComplete]
   );
 
   return (
@@ -464,4 +428,3 @@ export function BrandProvider({ children }) {
     </BrandContext.Provider>
   );
 }
-

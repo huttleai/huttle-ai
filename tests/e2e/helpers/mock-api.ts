@@ -28,6 +28,44 @@ const demoBrandData = {
   emotionalTriggers: ['confidence', 'curiosity'],
 };
 
+/** Matches USER_PROFILE_SELECT — seeded GET so BrandContext keeps a real niche (niche_specific trending + chips). */
+const demoUserProfileRow = {
+  user_id: 'dev-user-123',
+  first_name: 'Sean',
+  profile_type: 'brand',
+  creator_archetype: null,
+  brand_name: 'Huttle AI',
+  social_handle: null,
+  niche: 'AI tools, creator growth, SaaS marketing',
+  sub_niche: null,
+  content_focus: null,
+  city: null,
+  industry: 'technology',
+  growth_stage: null,
+  creator_type: null,
+  target_audience: 'Founders, marketers, and creators',
+  brand_voice_preference: 'confident_practical_punchy',
+  preferred_platforms: ['Instagram', 'TikTok', 'X', 'YouTube'],
+  content_goals: ['grow_followers', 'drive_engagement'],
+  audience_pain_point: null,
+  audience_action_trigger: null,
+  tone_chips: [],
+  writing_style: null,
+  example_post: null,
+  content_to_post: [],
+  content_to_avoid: null,
+  follower_count: null,
+  primary_offer: null,
+  conversion_goal: null,
+  content_persona: null,
+  monetization_goal: null,
+  show_up_style: null,
+  content_strengths: ['education', 'storytelling'],
+  biggest_challenge: 'consistency',
+  hook_style_preference: 'bold_claim',
+  emotional_triggers: ['confidence', 'curiosity'],
+};
+
 const demoSavedContent = [
   {
     id: 101,
@@ -199,6 +237,12 @@ export async function seedDemoState(page: Page) {
   await page.addInitScript(
     ({ brandData, savedContent, socialUpdates }) => {
       window.localStorage.setItem('brandData', JSON.stringify(brandData));
+      // When Supabase returns no profile row, BrandContext may reset brand platforms — keep
+      // usePreferredPlatforms fallback populated so flows like Content Remix E2E still work.
+      window.localStorage.setItem(
+        'preferredPlatforms',
+        JSON.stringify(Array.isArray(brandData.platforms) ? brandData.platforms : [])
+      );
       window.localStorage.setItem('savedContent', JSON.stringify(savedContent));
       window.localStorage.setItem(
         'userSettings',
@@ -265,6 +309,26 @@ export async function mockAllAPIs(page: Page, options?: { subscription?: Record<
 
   await page.route('**/api/ai/grok**', async (route) => {
     const body = parseJson(route.request().postData());
+    const text = JSON.stringify(body).toLowerCase();
+    // Dashboard "For you" hashtag tab (personalized JSON array; plain #tag string breaks parseStructuredJson)
+    if (body.personalized && text.includes('specifically relevant')) {
+      const forYou = [
+        { hashtag: '#saas', volume: 'high', description: 'SaaS niche' },
+        { hashtag: '#aigrowth', volume: 'high', description: 'AI growth' },
+        { hashtag: '#creatorfam', volume: 'medium', description: 'Creators' },
+        { hashtag: '#marketing', volume: 'medium', description: 'Marketing' },
+        { hashtag: '#growthtips', volume: 'medium', description: 'Growth' },
+        { hashtag: '#founder', volume: 'medium', description: 'Founder' },
+        { hashtag: '#content', volume: 'medium', description: 'Content' },
+        { hashtag: '#b2b', volume: 'niche', description: 'B2B' },
+      ];
+      await fulfillJson(route, {
+        success: true,
+        content: JSON.stringify(forYou),
+        usage: { total_tokens: 321 },
+      });
+      return;
+    }
     await fulfillJson(route, {
       success: true,
       content: buildGrokContent(body),
@@ -275,6 +339,44 @@ export async function mockAllAPIs(page: Page, options?: { subscription?: Record<
   await page.route('**/api/ai/perplexity**', async (route) => {
     const body = parseJson(route.request().postData());
     const msg = JSON.stringify(body.messages ?? []).toLowerCase();
+    const dashboardTrendGlobal = msg.includes('viral content formats') && msg.includes('engagement patterns');
+    const dashboardTrendNiche = msg.includes('content strategist who specializes') || msg.includes('hook_starter');
+
+    if (dashboardTrendGlobal || dashboardTrendNiche) {
+      const items = dashboardTrendNiche
+        ? [
+            {
+              title: 'Niche tutorial reel',
+              description: 'Step-by-step reels for this niche are outperforming static posts in discovery.',
+              format_type: 'talking head with B-roll cuts',
+              momentum: 'peaking',
+              why_its_working: 'Watch time from replays increases distribution for educational niches.',
+              confidence: 'high',
+              category: 'format_trend',
+              niche_angle: 'Film a 20s walkthrough of your client onboarding with captions on every beat.',
+              hook_starter: 'Stop scrolling — this saves founders three hours a week.',
+            },
+          ]
+        : [
+            {
+              title: 'Lip-sync explainers',
+              description: 'Short explainers synced to trending audio are getting strong saves platform-wide.',
+              format_type: 'lip-sync + text overlay',
+              momentum: 'rising',
+              why_its_working: 'Early engagement signals boost Explore placement for sub-40s clips.',
+              confidence: 'high',
+              category: 'format_trend',
+            },
+          ];
+      await fulfillJson(route, {
+        success: true,
+        content: JSON.stringify(items),
+        structuredData: items,
+        citations: ['https://example.com/trend-source'],
+        usage: { total_tokens: 220 },
+      });
+      return;
+    }
     if (msg.includes('scan for the top 5 trends')) {
       await fulfillJson(route, {
         success: true,
@@ -293,6 +395,26 @@ export async function mockAllAPIs(page: Page, options?: { subscription?: Record<
           pain_points: ['inconsistent posting', 'weak hooks'],
         }),
         usage: { total_tokens: 180 },
+      });
+      return;
+    }
+    if (msg.includes('top 8 universally popular hashtags')) {
+      const trendingWidget = [
+        { hashtag: '#fyp', volume: 'high', description: 'Discovery' },
+        { hashtag: '#reels', volume: 'high', description: 'Reels' },
+        { hashtag: '#viral', volume: 'medium', description: 'Viral' },
+        { hashtag: '#creator', volume: 'high', description: 'Creator' },
+        { hashtag: '#explore', volume: 'medium', description: 'Explore' },
+        { hashtag: '#growth', volume: 'medium', description: 'Growth' },
+        { hashtag: '#content', volume: 'medium', description: 'Content' },
+        { hashtag: '#trending', volume: 'high', description: 'Trending' },
+      ];
+      await fulfillJson(route, {
+        success: true,
+        content: JSON.stringify(trendingWidget),
+        structuredData: trendingWidget,
+        citations: ['https://example.com/hashtag-source'],
+        usage: { total_tokens: 150 },
       });
       return;
     }
@@ -469,7 +591,7 @@ export async function mockAllAPIs(page: Page, options?: { subscription?: Record<
   await page.route('**/rest/v1/user_profile*', async (route) => {
     const method = route.request().method();
     if (method === 'GET') {
-      await fulfillJson(route, []);
+      await fulfillJson(route, [demoUserProfileRow]);
       return;
     }
     await fulfillJson(route, [{}], 201);

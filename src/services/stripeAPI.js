@@ -412,15 +412,13 @@ export async function getBillingInvoices() {
   }
 }
 
-export async function cancelSubscription({ stripeSubscriptionId = null } = {}) {
+export async function cancelSubscription() {
   try {
     const headers = await getAuthHeaders();
     const response = await fetch('/api/cancel-subscription', {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        stripe_subscription_id: stripeSubscriptionId,
-      }),
+      body: JSON.stringify({}),
     });
 
     const data = await parseJsonResponse(response, 'Failed to cancel subscription');

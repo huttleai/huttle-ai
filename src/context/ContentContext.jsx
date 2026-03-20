@@ -202,7 +202,7 @@ export function ContentProvider({ children }) {
       });
 
       if (result.success) {
-        addToast('Saved to Content Library!', 'success');
+        addToast('Saved to Content Vault!', 'success');
         return result;
       } else {
         addToast('Failed to save to library: ' + (result.error || 'Unknown error'), 'error');

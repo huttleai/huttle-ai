@@ -257,7 +257,7 @@ Format as JSON with fields: content, hashtags, tips, hooks`
       if (result.success) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
-        addToast('Saved to Content Library!', 'success');
+        addToast('Saved to Content Vault!', 'success');
       } else {
         addToast('Failed to save to library', 'error');
         console.error('Error saving to library:', result.error);

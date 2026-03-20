@@ -17,7 +17,7 @@ export const SocialProofBar = () => {
     { name: "Trend Lab", subtitle: "Real-Time Insights" },
     { name: "Daily Social Updates", subtitle: "Fresh Content Ideas" },
     { name: "Trend Discovery", subtitle: "Viral Opportunities" },
-    { name: "Content Library", subtitle: "Organized Assets" },
+    { name: "Content Vault", subtitle: "Organized Assets" },
     { name: "Ignite Engine", subtitle: "Complete Scripts" },
   ];
 

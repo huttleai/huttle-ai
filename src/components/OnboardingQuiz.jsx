@@ -264,10 +264,6 @@ export default function OnboardingQuiz({ onComplete }) {
       growth_stage: formData.growth_stage || 'building_momentum',
     };
 
-    // Only derive first name from the authenticated user's own metadata.
-    // Do NOT use brandData.firstName here — BrandContext may have loaded stale
-    // localStorage data from a previous user session before the new user's
-    // Supabase profile row was created, causing the "Angela" cross-user bug.
     const firstName = getFirstNameFromUser(user) || null;
     const profileType = getProfileType(nextFormData.creator_type);
 

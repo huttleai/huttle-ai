@@ -66,7 +66,7 @@ const ALL_FEATURES = [
     description: 'Discover trending topics'
   },
   {
-    name: 'Content Library',
+    name: 'Content Vault',
     key: 'content-library',
     tiers: ['essentials', 'pro', 'founder', 'builder'],
     description: 'Store and organize your content',

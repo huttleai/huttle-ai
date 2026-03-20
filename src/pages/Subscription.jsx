@@ -274,9 +274,7 @@ export default function Subscription() {
         }
       }
 
-      const result = await cancelSubscription({
-        stripeSubscriptionId: subscription?.stripe_subscription_id || subscription?.stripeSubscriptionId,
-      });
+      const result = await cancelSubscription();
       if (!result.success) {
         addToast(result.error || 'Failed to cancel your subscription. Please try again.', 'error');
       } else {

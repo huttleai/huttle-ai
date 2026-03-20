@@ -24,7 +24,7 @@ That's it! Your Huttle AI app is now running! 🎉
 - **Dashboard** - Overview with all AI widgets (Trending Now, Keywords of the Day, Trend Forecaster, Daily Alerts, etc.)
 - **Trend Lab** - AI-powered trend discovery with 5 sub-features (Trend Radar, Audience Insights, Virality Simulator, Remix Engine, Trend Alerts)
 - **Smart Calendar** - AI-optimized scheduling & automation
-- **Content Library** - Centralized content repository
+- **Content Vault** - Centralized content repository
 - **AI Plan Builder** - Generate 7-14 day content calendars
 - **Huttle Agent** - AI-powered chat assistant (Beta)
 - **Profile** - User account settings
@@ -55,17 +55,19 @@ cp .env.example .env
 
 Or manually create `.env` with this content:
 
+See `.env.example` for the full template. **Important:** AI keys (`GROK_API_KEY`, `PERPLEXITY_API_KEY`, `ANTHROPIC_API_KEY`) are **server-side only** (Vercel `/api/*`). Do not use `VITE_` prefixes for secrets—the client calls `/api/ai/*` proxies.
+
 ```env
-# xAI Grok API (for content generation and AI features)
-VITE_GROK_API_KEY=your_grok_api_key_here
+# Client (safe in bundle)
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_STRIPE_PUBLISHABLE_KEY=...
 
-# Perplexity API (for trend scanning)
-VITE_PERPLEXITY_API_KEY=your_perplexity_api_key_here
-
-# Stripe API (for payments)
-VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
-VITE_STRIPE_PRICE_ESSENTIALS=price_xxx
-VITE_STRIPE_PRICE_PRO=price_yyy
+# Server-only (Vercel env — never VITE_)
+GROK_API_KEY=...
+PERPLEXITY_API_KEY=...
+STRIPE_SECRET_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 ### 2. Restart the dev server
@@ -150,7 +152,7 @@ huttle-ai/
 3. **Trend Lab** - Scans trends in user's niche
 4. **AI Plan Builder** - Generates content calendar
 5. **Smart Calendar** - Schedules posts
-6. **Content Library** - Stores all assets
+6. **Content Vault** - Stores all assets
 
 ### Personalization
 All AI features use data from **Brand Voice** page:
@@ -207,6 +209,9 @@ npm run preview
 
 # Run linter
 npm run lint
+
+# E2E tests (see top-of-file comment in playwright.config.ts for port 5173 / VITE_SKIP_AUTH workflows)
+npm run test:e2e
 ```
 
 ## 🎨 Customization

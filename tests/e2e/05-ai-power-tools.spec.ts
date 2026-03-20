@@ -25,4 +25,24 @@ test.describe('AI Power Tools', () => {
     await page.getByRole('button', { name: /Generate Hashtags/i }).click();
     await expect(page.getByTestId('save-hashtag-set-vault')).toBeVisible({ timeout: 45000 });
   });
+
+  test('Caption Generator shows trending chips from dashboard cache and fills topic', async ({ page }) => {
+    await gotoDashboard(page, '/dashboard');
+    await expect(page.getByTestId('trend-card').first()).toBeVisible({ timeout: 60000 });
+    // Client-side nav only — full page load would clear module-level trend cache
+    await page.getByTestId('sidebar-link-ai-power-tools').click();
+    await expect(page.getByTestId('caption-trending-chips')).toBeVisible({ timeout: 15000 });
+    await page.getByTestId('caption-trending-chips').getByRole('button').first().click();
+    await expect(page.getByTestId('caption-topic-input')).not.toHaveValue('');
+  });
+
+  test('Hook Builder shows trending hooks strip from cache and Use this fills input', async ({ page }) => {
+    await gotoDashboard(page, '/dashboard');
+    await expect(page.getByTestId('trend-card').first()).toBeVisible({ timeout: 60000 });
+    await page.getByTestId('sidebar-link-ai-power-tools').click();
+    await page.getByRole('button', { name: /^Hooks$/ }).click();
+    await expect(page.getByTestId('hooks-trending-strip')).toBeVisible({ timeout: 15000 });
+    await page.getByTestId('hooks-trending-strip').getByRole('button', { name: 'Use this' }).first().click();
+    await expect(page.getByPlaceholder(/why consistency matters in fitness/i)).not.toHaveValue('');
+  });
 });

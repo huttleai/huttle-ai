@@ -29,6 +29,9 @@ import {
   RotateCcw,
   X,
   Flame,
+  Info,
+  Camera,
+  ChevronDown,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -47,7 +50,9 @@ import {
   trackDashboardGenerationUsage,
   fetchDashboardForYouHashtags,
   fetchDashboardTrendingHashtags,
+  setCachedTrends,
 } from '../services/dashboardCacheService';
+import { formatRelativeTime } from '../utils/formatRelativeTime';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
 const fadeUp = {
@@ -177,12 +182,30 @@ export default function Dashboard() {
     }
   };
 
+  const copyTrendHook = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedTrendHookKey(key);
+      setTimeout(() => setCopiedTrendHookKey(null), 2000);
+    } catch {
+      showToast('Failed to copy', 'error');
+    }
+  };
+
+  const refreshTrendingDashboard = async () => {
+    if (isDashboardLoading) return;
+    await loadDashboardData({ forceRefresh: true });
+  };
+
   const applyDashboardPayload = useCallback((nextDashboardData, generatedDate) => { // HUTTLE AI: cache fix
     if (!user?.id || !nextDashboardData) return; // HUTTLE AI: cache fix
     setDashboardData(nextDashboardData); // HUTTLE AI: cache fix
     setDashboardAlerts(Array.isArray(nextDashboardData.daily_alerts) ? nextDashboardData.daily_alerts : []); // HUTTLE AI: cache fix
     setDashboardError(''); // HUTTLE AI: cache fix
     setDashboardSnapshot(user.id, { generatedDate, data: nextDashboardData }); // HUTTLE AI: cache fix
+    if (Array.isArray(nextDashboardData.trending_topics)) {
+      setCachedTrends(nextDashboardData.trending_topics);
+    }
   }, [setDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
   const loadDashboardData = useCallback(async ({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
@@ -335,7 +358,7 @@ export default function Dashboard() {
     [dashboardData]
   );
   const displayedDashboardTrendingTopics = useMemo(
-    () => dashboardTrendingTopics.slice(0, 6),
+    () => dashboardTrendingTopics.slice(0, 8),
     [dashboardTrendingTopics]
   );
   const dashboardInsights = useMemo(() => {
@@ -343,8 +366,13 @@ export default function Dashboard() {
     if (arr.length > 0) return arr;
     return dashboardData?.ai_insight ? [dashboardData.ai_insight] : [];
   }, [dashboardData]);
-  const [expandedTrend, setExpandedTrend] = useState(null);
 
+  const trendWidgetTimestamp = useMemo(() => {
+    const ts = dashboardData?.created_at;
+    if (isDashboardLoading) return 'Generating fresh data...';
+    if (!ts) return '';
+    return `Updated ${formatRelativeTime(ts)}`;
+  }, [dashboardData?.created_at, isDashboardLoading]);
   const hasNicheConfigured = Boolean(normalizedNiche || normalizedIndustry);
   const hashtagPersonalization = useMemo(
     () => getHashtagPersonalizationContext(brandProfile),
@@ -432,7 +460,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (authLoading || !user?.id || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
-    console.log('[Dashboard] Auth ready, loading dashboard...'); // HUTTLE AI: cache fix
     loadDashboardData(); // HUTTLE AI: cache fix
     return () => { // HUTTLE AI: cache fix
       activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
@@ -461,10 +488,32 @@ export default function Dashboard() {
 
   const getMomentumStyles = (momentum) => {
     const value = (momentum || '').toLowerCase();
-    if (value === 'rising') return { indicator: '↑', textClass: 'text-emerald-600', bgClass: 'bg-emerald-50' };
-    if (value === 'declining') return { indicator: '↓', textClass: 'text-red-600', bgClass: 'bg-red-50' };
-    return { indicator: '•', textClass: 'text-amber-600', bgClass: 'bg-amber-50' };
+    if (value === 'rising') return { indicator: '↑', textClass: 'text-emerald-600', bgClass: 'bg-emerald-50', label: 'Rising' };
+    if (value === 'peaking') return { indicator: '⚡', textClass: 'text-violet-600', bgClass: 'bg-violet-50', label: 'Peaking' };
+    if (value === 'steady') return { indicator: '→', textClass: 'text-slate-600', bgClass: 'bg-slate-50', label: 'Steady' };
+    if (value === 'declining') return { indicator: '↓', textClass: 'text-red-600', bgClass: 'bg-red-50', label: 'Declining' };
+    return { indicator: '•', textClass: 'text-amber-600', bgClass: 'bg-amber-50', label: 'Trending' };
   };
+
+  const normalizePlatformIdForBuilder = (trend) => {
+    const raw = trend?.platform;
+    if (typeof raw === 'string' && raw.length && !String(raw).includes(' ')) {
+      const v = raw.toLowerCase();
+      if (['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin', 'twitter', 'x'].includes(v)) {
+        return v === 'x' ? 'twitter' : v;
+      }
+    }
+    const label = String(trend?.relevant_platform || '').toLowerCase();
+    if (label.includes('tiktok')) return 'tiktok';
+    if (label.includes('facebook')) return 'facebook';
+    if (label.includes('youtube')) return 'youtube';
+    if (label.includes('linkedin')) return 'linkedin';
+    if (label.includes('x') || label.includes('twitter')) return 'twitter';
+    return 'instagram';
+  };
+
+  const [trendMobileDetailsOpen, setTrendMobileDetailsOpen] = useState({});
+  const [copiedTrendHookKey, setCopiedTrendHookKey] = useState(null);
 
   const getInsightCategoryStyles = (category) => {
     const normalized = (category || '').toLowerCase();
@@ -900,12 +949,12 @@ export default function Dashboard() {
         <motion.div custom={3} initial="hidden" animate="visible" variants={fadeUp} className="lg:col-span-2" data-testid="trending-widget">
           <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm h-full">
             <div className="p-5">
-              <div className="flex items-start justify-between gap-3 mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                     <TrendingUp className="w-5 h-5 text-huttle-primary" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="font-bold text-gray-900">Trending Now</h2>
                     <p className="text-xs text-gray-500">
                       {dashboardTrendingMode === 'platform_wide'
@@ -914,8 +963,27 @@ export default function Dashboard() {
                           ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
                           : 'General trends across platforms'}
                     </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
+                      <span>{trendWidgetTimestamp}</span>
+                      <span
+                        className="inline-flex items-center"
+                        title="Trends refresh daily. Click refresh for the latest data."
+                      >
+                        <Info className="w-3.5 h-3.5 text-gray-400" aria-hidden />
+                      </span>
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={refreshTrendingDashboard}
+                  disabled={isDashboardLoading}
+                  className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+                  data-testid="dashboard-refresh-trending"
+                >
+                  {isDashboardLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  Refresh
+                </button>
               </div>
 
               {!hasProfilePersonalization && (
@@ -966,16 +1034,23 @@ export default function Dashboard() {
 
                 {!isDashboardLoading && !dashboardError && displayedDashboardTrendingTopics.map((trend, index) => {
                   const momentumStyles = getMomentumStyles(trend.momentum);
-                  const expandKey = `trend-${index}`;
-                  const isExpanded = expandedTrend === expandKey;
-                  const sanitizedTrendTopic = sanitizeAIOutput(trend.topic) || 'Untitled trend'; // HUTTLE: sanitized
-                  const sanitizedTrendPlatform = sanitizeAIOutput(trend.relevant_platform) || 'Multi-platform'; // HUTTLE: sanitized
-                  const sanitizedTrendDescription = sanitizeAIOutput(trend.description || trend.context); // HUTTLE: sanitized
-                  const sanitizedTrendAngles = (Array.isArray(trend.content_angles) ? trend.content_angles : []).map((angle) => sanitizeAIOutput(angle)).filter(Boolean); // HUTTLE: sanitized
-                  const hasExpandableContent = sanitizedTrendAngles.length > 0; // HUTTLE: sanitized
+                  const cardKey = `trend-${index}`;
+                  const sanitizedTrendTopic = sanitizeAIOutput(trend.topic) || 'Untitled trend';
+                  const sanitizedTrendPlatform = sanitizeAIOutput(trend.relevant_platform) || 'Multi-platform';
+                  const sanitizedTrendDescription = sanitizeAIOutput(trend.description || trend.context);
+                  const formatBadge = sanitizeAIOutput(trend.format_type);
+                  const nicheAngle = sanitizeAIOutput(trend.niche_angle);
+                  const hookLine = sanitizeAIOutput(trend.hook_starter);
+                  const whyLine = sanitizeAIOutput(trend.why_its_working);
+                  const platformId = normalizePlatformIdForBuilder(trend);
+                  const trendType = (trend.trend_type || 'global').toLowerCase();
+                  const mobileOpen = Boolean(trendMobileDetailsOpen[cardKey]);
+                  const confidenceHigh = trend.confidence === 'high';
+
                   return (
                     <div
                       key={`${trend.topic}-${index}`}
+                      data-testid="trend-card"
                       className="rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
                     >
                       <div className="p-4">
@@ -985,65 +1060,133 @@ export default function Dashboard() {
                               {getPlatformIcon(sanitizedTrendPlatform, 'w-4 h-4 text-gray-600')}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm leading-snug text-gray-900 break-words line-clamp-2 sm:line-clamp-none">{sanitizedTrendTopic}</p>
-                              <span className="text-[11px] text-gray-500 font-medium">{sanitizedTrendPlatform}</span>
+                              <p className="font-bold text-sm leading-snug text-gray-900 dark:text-gray-100 break-words line-clamp-2 sm:line-clamp-none">{sanitizedTrendTopic}</p>
+                              {formatBadge && (
+                                <span
+                                  data-testid="trend-format-badge"
+                                  className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-300"
+                                >
+                                  <Camera className="w-3 h-3" aria-hidden />
+                                  {formatBadge}
+                                </span>
+                              )}
+                              <span className="block text-[11px] text-gray-500 font-medium mt-0.5">{sanitizedTrendPlatform}</span>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
-                            {trend.from_cache && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
-                                Updated today
+                            {trend._isSampleTrend && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-100">
+                                Sample
                               </span>
                             )}
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${momentumStyles.bgClass} ${momentumStyles.textClass}`}>
                               <span>{momentumStyles.indicator}</span>
-                              <span className="capitalize">{trend.momentum}</span>
+                              <span className="capitalize">{momentumStyles.label || trend.momentum}</span>
                             </span>
                           </div>
                         </div>
 
                         {sanitizedTrendDescription && (
-                          <p className="text-xs text-gray-700 leading-relaxed mb-3">{sanitizedTrendDescription}</p>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-3">{sanitizedTrendDescription}</p>
+                        )}
+
+                        <div className="md:hidden mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setTrendMobileDetailsOpen((prev) => ({ ...prev, [cardKey]: !prev[cardKey] }))}
+                            className="text-xs font-semibold text-huttle-primary flex items-center gap-1"
+                          >
+                            {mobileOpen ? 'Hide details ▾' : 'See details ▸'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+
+                        {nicheAngle && (
+                          <div
+                            data-testid="trend-niche-section"
+                            className={`mb-3 rounded-lg border border-cyan-100 dark:border-cyan-900/40 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2.5 ${mobileOpen ? 'block' : 'hidden md:block'}`}
+                          >
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-800 dark:text-cyan-200 mb-1">FOR YOUR NICHE</p>
+                            <p className="text-xs text-gray-800 dark:text-gray-100 leading-relaxed">{nicheAngle}</p>
+                          </div>
+                        )}
+
+                        {hookLine && (
+                          <div className={`mb-3 rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2.5 ${mobileOpen ? 'block' : 'hidden md:block'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Your hook</p>
+                                <p data-testid="trend-hook-text" className="text-xs font-mono text-gray-900 dark:text-gray-100 leading-snug">&quot;{hookLine}&quot;</p>
+                              </div>
+                              <button
+                                type="button"
+                                data-testid="trend-hook-copy"
+                                onClick={() => copyTrendHook(cardKey, hookLine)}
+                                className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-gray-900 border border-gray-200 text-[10px] font-semibold text-gray-700"
+                              >
+                                {copiedTrendHookKey === cardKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                {copiedTrendHookKey === cardKey ? '✓ Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {whyLine && (
+                          <p className={`text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex gap-1.5 ${mobileOpen ? 'flex' : 'hidden md:flex'}`}>
+                            <span aria-hidden>⚡</span>
+                            <span>{whyLine}</span>
+                          </p>
                         )}
 
                         <div className="flex flex-wrap items-center gap-2">
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/ai-tools?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }} // HUTTLE: card fix
+                            type="button"
+                            data-testid="trend-create-button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate('/dashboard/full-post-builder', {
+                                state: {
+                                  source: 'trending',
+                                  topic: sanitizedTrendTopic,
+                                  platform: platformId,
+                                  format_type: trend.format_type || null,
+                                  hook: hookLine || null,
+                                  niche_angle: nicheAngle || null,
+                                  description: sanitizedTrendDescription || null,
+                                },
+                              });
+                            }}
                             className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-colors"
                           >
                             <Sparkles className="w-3 h-3" /> Create
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/trend-lab?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }} // HUTTLE: card fix
-                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white rounded-lg hover:bg-gray-50 transition-colors"
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/trend-lab?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }}
+                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white dark:bg-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Beaker className="w-3 h-3" /> Deep Dive
                           </button>
-                          {hasExpandableContent && (
-                            <button
-                              onClick={() => setExpandedTrend(isExpanded ? null : expandKey)} // HUTTLE: card fix
-                              className="ml-auto inline-flex min-h-11 items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-                            >
-                              Content Ideas
-                              <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                          )}
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between text-[10px] text-gray-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${confidenceHigh ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                            {confidenceHigh ? 'high' : 'medium'} confidence
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 font-semibold ${
+                              trendType === 'niche'
+                                ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200'
+                                : trendType === 'hybrid'
+                                  ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                            }`}
+                          >
+                            {trendType}
+                          </span>
                         </div>
                       </div>
-
-                      {isExpanded && hasExpandableContent && (
-                        <div className="border-t border-gray-100 px-4 pb-4 pt-3 bg-gray-50/50 rounded-b-xl animate-fadeIn">
-                          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Content Angles</p>
-                          <ul className="space-y-1.5">
-                            {sanitizedTrendAngles.slice(0, 3).map((angle, ai) => (
-                              <li key={ai} className="text-xs text-gray-700 flex items-start gap-2">
-                                <span className="w-4 h-4 rounded-full bg-huttle-primary/10 text-huttle-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{ai + 1}</span>
-                                <span className="leading-relaxed">{angle}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

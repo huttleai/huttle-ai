@@ -269,27 +269,31 @@ export function buildUseAgainTarget(item) {
   );
 
   if (source === 'manual' || source === 'manual_post') {
-    return `/dashboard/ai-tools?tool=caption&input=${encodedContent}`;
+    return `/dashboard/ai-tools?tab=captions&input=${encodedContent}`;
   }
 
   if (source === 'caption_generator') {
-    return `/dashboard/ai-tools?tool=caption&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+    return `/dashboard/ai-tools?tab=captions&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
   if (source === 'hook_builder') {
-    return `/dashboard/ai-tools?tool=hooks&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+    return `/dashboard/ai-tools?tab=hooks&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
   if (source === 'hashtag_generator') {
-    return `/dashboard/ai-tools?tool=hashtags&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+    return `/dashboard/ai-tools?tab=hashtags&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
   if (source === 'cta_suggester') {
-    return `/dashboard/ai-tools?tool=cta&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+    return `/dashboard/ai-tools?tab=ctas&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
   }
 
   if (source === 'visual_brainstorm') {
-    return `/dashboard/ai-tools?tool=visual-brainstorm&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+    return `/dashboard/ai-tools?tab=visuals&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+
+  if (source === 'content_scorer' || source === 'scorer') {
+    return `/dashboard/ai-tools?tab=scorer&input=${encodedContent}`;
   }
 
   if (source === 'full_post_builder' || source === 'full-post-builder') {
@@ -312,5 +316,22 @@ export function buildUseAgainTarget(item) {
     return `/dashboard/plan-builder?goal=${encodedGoal}`;
   }
 
-  return '/dashboard/ai-tools';
+  const byType = String(item.contentType || '').toLowerCase();
+  if (byType === 'caption') {
+    return `/dashboard/ai-tools?tab=captions&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+  if (byType === 'hashtag') {
+    return `/dashboard/ai-tools?tab=hashtags&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+  if (byType === 'hook') {
+    return `/dashboard/ai-tools?tab=hooks&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+  if (byType === 'cta') {
+    return `/dashboard/ai-tools?tab=ctas&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+  if (byType === 'full_post') {
+    return `/dashboard/full-post-builder?topic=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;
+  }
+
+  return '/dashboard/ai-tools?tab=captions';
 }

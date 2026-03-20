@@ -17,6 +17,7 @@ test.describe('Content Vault', () => {
 
     await expect(page.getByTestId('vault-create-post-button')).toBeVisible();
     await page.getByTestId('vault-create-post-button').click();
+    await page.getByTestId('vault-write-post-manually').click();
     await expect(page.getByTestId('vault-create-post-modal')).toBeVisible();
     await expect(page.getByPlaceholder(/Write your post/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Save to Vault/i }).first()).toBeVisible();

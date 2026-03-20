@@ -125,7 +125,6 @@ export function normalizeNiche(raw) {
 
 export function buildCacheKey(...input) {
   const cacheKey = formatCacheKey(resolveCacheKeyInput(input));
-  console.log('[Cache Key]', cacheKey);
   return cacheKey;
 }
 

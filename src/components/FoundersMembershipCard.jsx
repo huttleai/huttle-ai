@@ -56,9 +56,7 @@ export default function FoundersMembershipCard({ subscription, user, onCancelled
     setIsCancelling(true);
 
     try {
-      const result = await cancelSubscription({
-        stripeSubscriptionId: subscription?.stripe_subscription_id || subscription?.stripeSubscriptionId,
-      });
+      const result = await cancelSubscription();
       if (!result.success) {
         throw new Error(result.error || 'Could not cancel your membership.');
       }

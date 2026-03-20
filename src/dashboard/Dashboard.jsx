@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useContext } from 'react';
+import { lazy, Suspense, useContext } from 'react';
 import { AuthProvider, AuthContext } from '../context/AuthContext';
 import { BrandProvider } from '../context/BrandContext';
 import { ToastProvider } from '../context/ToastContext';
@@ -11,28 +11,38 @@ import Sidebar from '../components/Sidebar';
 import TopHeader from '../components/TopHeader';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
-import Dashboard from '../pages/Dashboard';
-import ContentLibrary from '../pages/ContentLibrary';
-import AIPlanBuilder from '../pages/AIPlanBuilder';
-import TrendLab from '../pages/TrendLab';
-import IgniteEngine from '../pages/IgniteEngine';
-import ContentRemix from '../pages/ContentRemix';
-import BrandVoice from '../pages/BrandVoice';
-import Subscription from '../pages/Subscription';
-import Settings from '../pages/Settings';
-import Help from '../pages/Help';
-import SocialUpdates from '../pages/SocialUpdates';
-import AITools from '../pages/AITools';
-import FullPostBuilder from '../pages/FullPostBuilder';
-import NicheIntel from '../pages/NicheIntel';
+import LoadingSpinner from '../components/LoadingSpinner';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
 import Security from '../pages/Security';
 import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
-import IPhoneMockupDemo from '../components/IPhoneMockupDemo';
-import MockupShowcase from '../pages/MockupShowcase';
 import useNotificationGenerator from '../hooks/useNotificationGenerator';
+
+const Dashboard = lazy(() => import('../pages/Dashboard'));
+const ContentLibrary = lazy(() => import('../pages/ContentLibrary'));
+const AIPlanBuilder = lazy(() => import('../pages/AIPlanBuilder'));
+const TrendLab = lazy(() => import('../pages/TrendLab'));
+const IgniteEngine = lazy(() => import('../pages/IgniteEngine'));
+const ContentRemix = lazy(() => import('../pages/ContentRemix'));
+const BrandVoice = lazy(() => import('../pages/BrandVoice'));
+const Subscription = lazy(() => import('../pages/Subscription'));
+const Settings = lazy(() => import('../pages/Settings'));
+const Help = lazy(() => import('../pages/Help'));
+const SocialUpdates = lazy(() => import('../pages/SocialUpdates'));
+const AITools = lazy(() => import('../pages/AITools'));
+const FullPostBuilder = lazy(() => import('../pages/FullPostBuilder'));
+const NicheIntel = lazy(() => import('../pages/NicheIntel'));
+const IPhoneMockupDemo = lazy(() => import('../components/IPhoneMockupDemo'));
+const MockupShowcase = lazy(() => import('../pages/MockupShowcase'));
+
+function DashboardRouteFallback() {
+  return (
+    <div className="flex min-h-[50vh] flex-1 items-center justify-center pt-14 lg:ml-64">
+      <LoadingSpinner text="Loading…" />
+    </div>
+  );
+}
 
 function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   const authContext = useContext(AuthContext);
@@ -107,32 +117,32 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
       <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
         <Sidebar />
         <TopHeader />
-        <Routes>
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
-          <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
-          <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
-          <Route path="/ignite-engine" element={<ProtectedRoute><IgniteEngine /></ProtectedRoute>} />
-          <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
-          <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
-          <Route path="/full-post-builder" element={<ProtectedRoute><FullPostBuilder /></ProtectedRoute>} />
-          <Route path="/niche-intel" element={<ProtectedRoute><NicheIntel /></ProtectedRoute>} />
-          {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
-          {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}
-          <Route path="/profile" element={<Navigate to="/dashboard/brand-voice" replace />} />
-          <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />
-          <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
-          <Route path="/social-updates" element={<ProtectedRoute><SocialUpdates /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-          <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
-          <Route path="/mockup-demo" element={<ProtectedRoute><IPhoneMockupDemo /></ProtectedRoute>} />
-          <Route path="/mockup-showcase" element={<ProtectedRoute><MockupShowcase /></ProtectedRoute>} />
-          <Route path="login" element={<Navigate to="/dashboard" replace />} />
-          <Route path="signup" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <Suspense fallback={<DashboardRouteFallback />}>
+          <Routes>
+            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
+            <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
+            <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
+            <Route path="/ignite-engine" element={<ProtectedRoute><IgniteEngine /></ProtectedRoute>} />
+            <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
+            <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
+            <Route path="/full-post-builder" element={<ProtectedRoute><FullPostBuilder /></ProtectedRoute>} />
+            <Route path="/niche-intel" element={<ProtectedRoute><NicheIntel /></ProtectedRoute>} />
+            <Route path="/profile" element={<Navigate to="/dashboard/brand-voice" replace />} />
+            <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />
+            <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
+            <Route path="/social-updates" element={<ProtectedRoute><SocialUpdates /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+            <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+            <Route path="/mockup-demo" element={<ProtectedRoute><IPhoneMockupDemo /></ProtectedRoute>} />
+            <Route path="/mockup-showcase" element={<ProtectedRoute><MockupShowcase /></ProtectedRoute>} />
+            <Route path="login" element={<Navigate to="/dashboard" replace />} />
+            <Route path="signup" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Suspense>
       </div>
     );
   }

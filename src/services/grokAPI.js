@@ -499,6 +499,12 @@ VAGUE INPUT FALLBACK: If the topic is absent, one word, or clearly incomplete, g
       {
         role: 'user',
         content: `${brandSection}
+${contentData.formatType || contentData.nicheAngle || contentData.trendDescription ? `
+TRENDING CONTEXT (match this format and angle in structure and pacing):
+${contentData.formatType ? `- Production format: ${contentData.formatType}` : ''}
+${contentData.nicheAngle ? `- Niche angle: ${contentData.nicheAngle}` : ''}
+${contentData.trendDescription ? `- Trend brief: ${contentData.trendDescription}` : ''}
+` : ''}
 
 Write ${isSingleCaptionMode ? '1 compelling social media caption' : '4 compelling social media captions'} about: "${contentData.topic}". 
 
@@ -873,11 +879,23 @@ Number them 1-4 and return only the hooks.`
   }
 }
 
-export async function generateFullPostHooks({ topic, hookType = 'Question', platform = 'instagram' }, brandData) {
+export async function generateFullPostHooks(
+  { topic, hookType = 'Question', platform = 'instagram', formatType, nicheAngle, trendDescription },
+  brandData
+) {
   try {
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const platformData = getPlatform(platform);
     const safeHookType = HOOK_TYPE_ALIASES[hookType] || hookType;
+
+    const trendBlock = formatType || nicheAngle || trendDescription
+      ? `
+TRENDING CONTEXT (hooks must fit this format and angle):
+${formatType ? `- Format: ${formatType}` : ''}
+${nicheAngle ? `- Niche angle: ${nicheAngle}` : ''}
+${trendDescription ? `- Brief: ${trendDescription}` : ''}
+`
+      : '';
 
     const data = await callGrokAPI([
       {
@@ -900,7 +918,7 @@ ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
       {
         role: 'user',
         content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
-
+${trendBlock}
 Generate 4 ${safeHookType} hooks for this full-post workflow.
 
 Topic: "${topic}"

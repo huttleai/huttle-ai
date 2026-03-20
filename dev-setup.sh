@@ -32,11 +32,11 @@ LOCAL_API_PORT=3001
 # Development Mode
 NODE_ENV=development
 
-# xAI Grok API
-VITE_GROK_API_KEY=your_grok_api_key_here
+# xAI Grok API (server-side — used by local/Vercel /api/ai/* proxies only)
+GROK_API_KEY=your_grok_api_key_here
 
-# Perplexity API
-VITE_PERPLEXITY_API_KEY=your_perplexity_api_key_here
+# Perplexity API (server-side)
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
 
 # Stripe API
 VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
@@ -49,8 +49,8 @@ EOF
     echo "⚠️  IMPORTANT: Edit .env file and add your actual API keys:"
     echo "   - VITE_SUPABASE_ANON_KEY"
     echo "   - SUPABASE_SERVICE_ROLE_KEY"
-    echo "   - VITE_GROK_API_KEY (optional)"
-    echo "   - VITE_PERPLEXITY_API_KEY (optional)"
+    echo "   - GROK_API_KEY (optional, server-side)"
+    echo "   - PERPLEXITY_API_KEY (optional, server-side)"
     echo "   - Stripe keys (optional)"
     echo ""
 else
