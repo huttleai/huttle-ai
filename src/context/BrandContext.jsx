@@ -11,6 +11,22 @@ const USER_PROFILE_SELECT =
 
 const QUERY_TIMEOUT_MS = 5000;
 
+function areBrandValuesEqual(currentValue, incomingValue) {
+  if (Array.isArray(currentValue) || Array.isArray(incomingValue)) {
+    if (!Array.isArray(currentValue) || !Array.isArray(incomingValue)) {
+      return false;
+    }
+
+    if (currentValue.length !== incomingValue.length) {
+      return false;
+    }
+
+    return currentValue.every((value, index) => value === incomingValue[index]);
+  }
+
+  return currentValue === incomingValue;
+}
+
 function createEmptyBrandData() {
   return {
     firstName: '',
@@ -272,6 +288,16 @@ export function BrandProvider({ children }) {
   }, [userId, reloadTrigger]);
 
   const updateBrandData = useCallback(async (newData) => {
+    const changedKeys = new Set(
+      Object.entries(newData || {})
+        .filter(([key, incomingValue]) => !areBrandValuesEqual(brandData?.[key], incomingValue))
+        .map(([key]) => key)
+    );
+
+    if (changedKeys.size === 0) {
+      return { success: true };
+    }
+
     const updated = { ...brandData, ...newData };
     setBrandData(updated);
 
@@ -279,7 +305,7 @@ export function BrandProvider({ children }) {
 
     if (user?.id) {
       try {
-        const profileData = {
+        const completeProfileData = {
           user_id: user.id,
           first_name: updated.firstName?.trim() || null,
           profile_type: normalizeProfileTypeForDb(updated.profileType),
@@ -313,15 +339,60 @@ export function BrandProvider({ children }) {
           updated_at: new Date().toISOString(),
         };
 
-        const { error: profileError } = await supabase
-          .from('user_profile')
-          .upsert(profileData, {
-            onConflict: 'user_id'
-          });
+        const profileFieldMap = {
+          firstName: 'first_name',
+          profileType: 'profile_type',
+          creatorArchetype: 'creator_archetype',
+          brandName: 'brand_name',
+          handle: 'social_handle',
+          industry: 'industry',
+          niche: 'niche',
+          subNiche: 'sub_niche',
+          targetAudience: 'target_audience',
+          brandVoice: 'brand_voice_preference',
+          platforms: 'preferred_platforms',
+          goals: 'content_goals',
+          audiencePainPoint: 'audience_pain_point',
+          audienceActionTrigger: 'audience_action_trigger',
+          toneChips: 'tone_chips',
+          writingStyle: 'writing_style',
+          examplePost: 'example_post',
+          contentToPost: 'content_to_post',
+          contentToAvoid: 'content_to_avoid',
+          followerCount: 'follower_count',
+          primaryOffer: 'primary_offer',
+          conversionGoal: 'conversion_goal',
+          contentPersona: 'content_persona',
+          monetizationGoal: 'monetization_goal',
+          showUpStyle: 'show_up_style',
+          contentStrengths: 'content_strengths',
+          biggestChallenge: 'biggest_challenge',
+          hookStylePreference: 'hook_style_preference',
+          emotionalTriggers: 'emotional_triggers',
+        };
 
-        if (profileError) {
-          console.error('Error saving brand data to Supabase:', profileError);
-          return { success: false, error: profileError.message };
+        const profilePatch = {
+          user_id: user.id,
+          updated_at: completeProfileData.updated_at,
+        };
+
+        Object.entries(profileFieldMap).forEach(([brandKey, profileColumn]) => {
+          if (changedKeys.has(brandKey)) {
+            profilePatch[profileColumn] = completeProfileData[profileColumn];
+          }
+        });
+
+        if (Object.keys(profilePatch).length > 2) {
+          const { error: profileError } = await supabase
+            .from('user_profile')
+            .upsert(profilePatch, {
+              onConflict: 'user_id'
+            });
+
+          if (profileError) {
+            console.error('Error saving brand data to Supabase:', profileError);
+            return { success: false, error: profileError.message };
+          }
         }
 
         const nicheForPrefs =
@@ -331,17 +402,37 @@ export function BrandProvider({ children }) {
               ? String(updated.niche)
               : null;
 
-        const prefResult = await saveUserPreferences(user.id, {
+        const completePreferencesData = {
           creator_type: updated.creatorType || null,
           city: updated.city || null,
           growth_stage: normalizeOptionalEnum(updated.growthStage) || null,
           content_focus: nicheForPrefs,
           target_audience: updated.targetAudience || null,
           platforms: Array.isArray(updated.platforms) ? updated.platforms : [],
+        };
+
+        const preferenceFieldMap = {
+          creatorType: 'creator_type',
+          city: 'city',
+          growthStage: 'growth_stage',
+          niche: 'content_focus',
+          targetAudience: 'target_audience',
+          platforms: 'platforms',
+        };
+
+        const preferencesPatch = {};
+        Object.entries(preferenceFieldMap).forEach(([brandKey, preferenceColumn]) => {
+          if (changedKeys.has(brandKey)) {
+            preferencesPatch[preferenceColumn] = completePreferencesData[preferenceColumn];
+          }
         });
 
-        if (!prefResult?.success) {
-          console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
+        if (Object.keys(preferencesPatch).length > 0) {
+          const prefResult = await saveUserPreferences(user.id, preferencesPatch);
+
+          if (!prefResult?.success) {
+            console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
+          }
         }
 
         return { success: true };
