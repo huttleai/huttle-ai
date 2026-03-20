@@ -1,4 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Page, Route } from '@playwright/test';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function fixture(name: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(__dirname, '../../fixtures/mock-responses', name), 'utf-8')) as Record<
+    string,
+    unknown
+  >;
+}
 
 const demoBrandData = {
   firstName: 'Sean',
@@ -66,28 +78,27 @@ const demoSocialUpdates = [
 
 function parseJson(postData: string | null) {
   if (!postData) return {};
-
   try {
-    return JSON.parse(postData);
+    return JSON.parse(postData) as Record<string, unknown>;
   } catch {
     return {};
   }
 }
 
 function buildHooksResponse() {
-  return '1. Most creators are doing this backwards.\n2. This one shift changed our content results fast.\n3. If your posts are stalling, start here.';
+  return (fixture('grok-hooks.json') as { hooks: string }).hooks;
 }
 
 function buildCaptionResponse() {
-  return 'Most creators do not need more ideas. They need a system that turns one insight into multiple high-conviction posts.\n\nStart with a strong hook, make the takeaway painfully clear, and give people one next step.\n\nSave this and use it in your next draft.';
+  return (fixture('grok-caption.json') as { captions: string }).captions;
 }
 
 function buildHashtagResponse() {
-  return '#contentstrategy #creatorgrowth #aitools #socialmediamarketing #founderbrand #growthmarketing #contenttips';
+  return '#contentstrategy #creatorgrowth #aitools #socialmediamarketing #founderbrand #growthmarketing #contenttips #nichebrand #audiencegrowth #reelsstrategy #shortform';
 }
 
 function buildCtaResponse() {
-  return '1. Save this for your next content sprint.\n2. DM me the word SYSTEM and I will send the framework.\n3. Which part of your workflow needs the biggest upgrade?';
+  return '1. Save this for your next content sprint.\n2. DM me the word SYSTEM and I will send the framework.\n3. Comment READY for a checklist.\n4. Follow for part two tomorrow.\n5. Share this with a founder who needs it.';
 }
 
 function buildScoreResponse() {
@@ -100,85 +111,50 @@ function buildScoreResponse() {
   });
 }
 
-function buildContentRemixResponse() {
-  return {
+function buildContentRemixResponse(mode: string) {
+  const base = {
     success: true,
     content: [
-      '### Instagram',
-      'Variation 1: Turn one founder lesson into a save-worthy carousel with a bold first slide and a punchy takeaway.',
-      '',
-      'Variation 2: Open with the hard truth founders avoid, then break the lesson into three quick, screenshot-ready insights.',
-      '',
-      'Variation 3: Reframe the lesson as a founder confession with a short story and a comments CTA.',
+      mode === 'sales'
+        ? '### Instagram\nSales Conversion: lead with pain, proof, then a booking CTA.'
+        : '### Instagram\nViral Reach: pattern interrupt, fast beats, retention CTA.',
       '',
       '### TikTok',
-      'Variation 1: Lead with a pattern interrupt, deliver the founder lesson in fast beats, and close with "want part 2?"',
-      '',
-      'Variation 2: Use a creator-style mini rant that flips into one tactical founder takeaway people can steal today.',
-      '',
-      'Variation 3: Open with "if I were starting over" and turn the lesson into a quick-hit script built for retention.',
-      '',
-      '### X',
-      'Variation 1: Turn the insight into a sharp thread opener followed by concise founder lessons and one CTA to bookmark.',
-      '',
-      'Variation 2: Write it like a contrarian founder take with one clean example and a reply-driving close.',
-      '',
-      'Variation 3: Frame it as a compact operating principle founders can quote, share, and reuse.',
-      '',
-      '### YouTube',
-      'Variation 1: Expand the lesson into a curiosity-led short-form script with a stronger payoff in the final line.',
-      '',
-      'Variation 2: Position it like a quick founder tutorial with one mistake, one fix, and one next step.',
-      '',
-      'Variation 3: Use a more narrative hook that promises a concrete founder outcome before delivering the lesson.',
+      mode === 'sales'
+        ? 'Sales Conversion: short demo + one next step.'
+        : 'Viral Reach: rant-to-lesson structure for shares.',
     ].join('\n'),
     sections: [
       {
         platform: 'Instagram',
-        variations: [
-          'Turn one founder lesson into a save-worthy carousel with a bold first slide and a punchy takeaway.',
-          'Open with the hard truth founders avoid, then break the lesson into three quick, screenshot-ready insights.',
-          'Reframe the lesson as a founder confession with a short story and a comments CTA.',
-        ],
+        variations:
+          mode === 'sales'
+            ? ['Lead with pain, add proof, close with one CTA.']
+            : ['Pattern interrupt, then deliver the insight fast.'],
       },
       {
         platform: 'TikTok',
-        variations: [
-          'Lead with a pattern interrupt, deliver the founder lesson in fast beats, and close with "want part 2?"',
-          'Use a creator-style mini rant that flips into one tactical founder takeaway people can steal today.',
-          'Open with "if I were starting over" and turn the lesson into a quick-hit script built for retention.',
-        ],
-      },
-      {
-        platform: 'X',
-        variations: [
-          'Turn the insight into a sharp thread opener followed by concise founder lessons and one CTA to bookmark.',
-          'Write it like a contrarian founder take with one clean example and a reply-driving close.',
-          'Frame it as a compact operating principle founders can quote, share, and reuse.',
-        ],
-      },
-      {
-        platform: 'YouTube',
-        variations: [
-          'Expand the lesson into a curiosity-led short-form script with a stronger payoff in the final line.',
-          'Position it like a quick founder tutorial with one mistake, one fix, and one next step.',
-          'Use a more narrative hook that promises a concrete founder outcome before delivering the lesson.',
-        ],
+        variations:
+          mode === 'sales'
+            ? ['Demo the fix in 20 seconds.']
+            : ['Open with tension, end with curiosity.'],
       },
     ],
     metadata: {
       model: 'claude-sonnet-4-6-20250514',
-      requestedMode: 'viral',
-      normalizedMode: 'viral_reach',
-      platformCount: 4,
+      requestedMode: mode,
+      normalizedMode: mode === 'sales' ? 'sales_conversion' : 'viral_reach',
+      platformCount: 2,
     },
     usage: { input_tokens: 180, output_tokens: 420 },
   };
+  return base;
 }
 
 function buildJsonContentResponse() {
   return JSON.stringify({
-    content: 'Creators do not need more hours. They need a repeatable system that turns one insight into three strong posts.',
+    content:
+      'Creators do not need more hours. They need a repeatable system that turns one insight into three strong posts.',
     hashtags: '#creatorgrowth #contentstrategy #aitools',
     tips: ['Lead with a sharp tension point.', 'Keep the CTA singular.'],
     hooks: ['Your content problem is probably a workflow problem.', 'Most creators are optimizing the wrong step.'],
@@ -186,58 +162,7 @@ function buildJsonContentResponse() {
 }
 
 function buildDeepDiveResponse() {
-  return {
-    success: true,
-    report: {
-      overview: 'Creator workflow automation is gaining traction across short-form platforms, especially where proof-based education is outperforming generic advice.',
-      confidence: {
-        level: 'High',
-      },
-      active_trends: [
-        {
-          name: 'Workflow proof posts',
-          status: 'Rising',
-          velocity: 'Steady',
-          primary_platform: 'Instagram',
-          evidence: 'Creators are packaging systems into before-and-after breakdowns and save-focused carousel formats.',
-          why_it_matters: 'Concrete proof angles make AI and productivity content feel more credible and easier to share.',
-        },
-      ],
-      platform_activity: [
-        {
-          name: 'Instagram',
-          activity_level: 'High',
-          top_format: 'Carousels',
-          "what's_happening": 'Educational system breakdowns with strong first-slide hooks are driving saves and shares.',
-        },
-        {
-          name: 'TikTok',
-          activity_level: 'Medium',
-          top_format: 'Short talking-head videos',
-          "what's_happening": 'Fast workflow recaps and creator process clips are pulling attention when they lead with a clear pain point.',
-        },
-      ],
-      competitor_landscape: 'Top creator-education accounts are leaning into repeatable frameworks, proof screenshots, and lightweight behind-the-scenes process content.',
-      audience_sentiment: {
-        overall_mood: 'Positive',
-        detail: 'Audiences respond well when the advice feels practical, current, and immediately usable.',
-      },
-      timing_window: {
-        action_window: 'This week',
-        reasoning: 'The topic still has momentum, but creators are rewarding fast execution and fresh examples.',
-        lifespan: 'Likely relevant for the next 1-2 weeks',
-      },
-    },
-    citations: ['https://example.com/deep-dive'],
-    metadata: {
-      processed_at: '2026-03-10T12:00:00.000Z',
-      sections_parsed: {
-        trend_count: 1,
-        platform_count: 2,
-        has_competitors: true,
-      },
-    },
-  };
+  return fixture('perplexity-deep-dive.json') as Record<string, unknown>;
 }
 
 function buildGrokContent(body: Record<string, unknown>) {
@@ -250,7 +175,24 @@ function buildGrokContent(body: Record<string, unknown>) {
   if (text.includes('cta')) return buildCtaResponse();
   if (text.includes('score') || text.includes('quality')) return buildScoreResponse();
 
-  return 'Generated content for Huttle AI test coverage.';
+  return buildCaptionResponse();
+}
+
+function perplexityTrendsJsonString() {
+  return JSON.stringify(fixture('perplexity-trends.json'));
+}
+
+async function fulfillJson(route: Route, body: unknown, status = 200) {
+  await route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Default subscription mock — override per test with page.route if needed */
+export function getDefaultSubscriptionMock() {
+  return fixture('stripe-subscription.json');
 }
 
 export async function seedDemoState(page: Page) {
@@ -301,18 +243,28 @@ export async function seedDemoState(page: Page) {
   );
 }
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: 'application/json',
-    body: JSON.stringify(body),
-  });
-}
+/**
+ * Intercepts all external-ish API routes so E2E never hits real AI, Stripe, or n8n.
+ */
+export async function mockAllAPIs(page: Page, options?: { subscription?: Record<string, unknown> }) {
+  const subBody = options?.subscription ?? getDefaultSubscriptionMock();
 
-export async function setupMockApis(page: Page) {
+  // Broad Supabase REST stub — register first; table-specific routes below override by URL.
+  await page.route('**/rest/v1/**', async (route) => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      await fulfillJson(route, []);
+      return;
+    }
+    if (method === 'DELETE') {
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+    await fulfillJson(route, [{}], 201);
+  });
+
   await page.route('**/api/ai/grok**', async (route) => {
     const body = parseJson(route.request().postData());
-
     await fulfillJson(route, {
       success: true,
       content: buildGrokContent(body),
@@ -321,6 +273,29 @@ export async function setupMockApis(page: Page) {
   });
 
   await page.route('**/api/ai/perplexity**', async (route) => {
+    const body = parseJson(route.request().postData());
+    const msg = JSON.stringify(body.messages ?? []).toLowerCase();
+    if (msg.includes('scan for the top 5 trends')) {
+      await fulfillJson(route, {
+        success: true,
+        content: perplexityTrendsJsonString(),
+        citations: ['https://example.com/trend-source'],
+        usage: { total_tokens: 210 },
+      });
+      return;
+    }
+    if (msg.includes('audience insight') || msg.includes('demographic')) {
+      await fulfillJson(route, {
+        success: true,
+        content: JSON.stringify({
+          demographics: 'Creators 25-44, US/UK heavy.',
+          interests: ['workflow systems', 'short-form video'],
+          pain_points: ['inconsistent posting', 'weak hooks'],
+        }),
+        usage: { total_tokens: 180 },
+      });
+      return;
+    }
     await fulfillJson(route, {
       success: true,
       content:
@@ -332,7 +307,6 @@ export async function setupMockApis(page: Page) {
 
   await page.route('**/api/ai/claude**', async (route) => {
     const body = parseJson(route.request().postData());
-
     await fulfillJson(route, {
       success: true,
       content: buildGrokContent(body),
@@ -340,8 +314,15 @@ export async function setupMockApis(page: Page) {
     });
   });
 
+  await page.route('**/api/ignite-engine-proxy**', async (route) => {
+    const ignite = fixture('claude-ignite.json') as Record<string, unknown>;
+    await fulfillJson(route, ignite);
+  });
+
   await page.route('**/api/ai/content-remix**', async (route) => {
-    await fulfillJson(route, buildContentRemixResponse());
+    const body = parseJson(route.request().postData());
+    const mode = String(body.mode ?? 'viral').toLowerCase();
+    await fulfillJson(route, buildContentRemixResponse(mode.includes('sales') ? 'sales' : 'viral'));
   });
 
   await page.route('**/api/ai/n8n-generator**', async (route) => {
@@ -374,13 +355,56 @@ export async function setupMockApis(page: Page) {
     });
   });
 
-  await page.route('**/api/subscription-status**', async (route) => {
+  await page.route('**/api/create-payment-method-update-session**', async (route) => {
     await fulfillJson(route, {
-      subscription: 'sub_mock_founder',
-      plan: 'founder',
-      status: 'active',
-      currentPeriodEnd: '2026-12-31T00:00:00.000Z',
-      cancelAtPeriodEnd: false,
+      url: 'https://billing.stripe.com/payment-method/mock',
+    });
+  });
+
+  await page.route('**/api/subscription-status**', async (route) => {
+    await fulfillJson(route, subBody);
+  });
+
+  await page.route('**/api/billing-summary**', async (route) => {
+    await fulfillJson(route, {
+      summary: {
+        subscription: { id: 'sub_mock', status: 'active', tier: 'pro' },
+        paymentMethod: { brand: 'visa', last4: '4242' },
+        invoicesEnabled: true,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    });
+  });
+
+  await page.route('**/api/billing-invoices**', async (route) => {
+    await fulfillJson(route, {
+      invoices: [
+        {
+          id: 'in_mock_1',
+          number: 'INV-0001',
+          status: 'paid',
+          amount_paid: 3900,
+          currency: 'usd',
+          created: Math.floor(Date.now() / 1000) - 86400 * 7,
+          hosted_invoice_url: 'https://invoice.stripe.com/mock',
+        },
+      ],
+    });
+  });
+
+  await page.route('**/api/cancel-subscription**', async (route) => {
+    await fulfillJson(route, {
+      success: true,
+      cancel_at_period_end: true,
+      current_period_end: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+  });
+
+  await page.route('**/api/change-subscription-plan**', async (route) => {
+    await fulfillJson(route, {
+      success: true,
+      mode: 'immediate',
+      message: 'Plan updated (mock).',
     });
   });
 
@@ -403,63 +427,20 @@ export async function setupMockApis(page: Page) {
   });
 
   await page.route('**/api/get-job-status**', async (route) => {
+    const planJson = fixture('claude-plan-builder.json');
     await fulfillJson(route, {
       success: true,
       job: {
         id: '550e8400-e29b-41d4-a716-446655440000',
         type: 'plan_builder',
         status: 'completed',
-        result: {
-          goal: 'Grow followers',
-          period: '7',
-          totalPosts: 4,
-          platforms: ['Instagram', 'TikTok'],
-          contentMix: {
-            educational: 2,
-            authority: 1,
-            conversion: 1,
-          },
-          schedule: [
-            {
-              day: 1,
-              posts: [
-                {
-                  topic: 'Three systems creators can steal this week',
-                  content_type: 'Reel',
-                  reasoning: 'High save potential with a strong educational angle.',
-                  platform: 'Instagram',
-                },
-              ],
-            },
-            {
-              day: 3,
-              posts: [
-                {
-                  topic: 'The fastest way to improve retention in 15 seconds',
-                  content_type: 'Short',
-                  reasoning: 'Short-form proof content aligns with growth goals.',
-                  platform: 'TikTok',
-                },
-              ],
-            },
-          ],
-        },
+        result: planJson,
       },
     });
   });
 
-  await page.route('**/api/ignite-engine-proxy**', async (route) => { // HUTTLE AI: updated 3
-    await fulfillJson(route, {
-      blueprint: 'Hook -> proof -> payoff -> CTA',
-      directors_cut: [
-        'Open with tension.',
-        'Show one sharp proof point.',
-        'End with a simple action.',
-      ],
-      seo_keywords: ['creator workflow', 'content system'],
-      suggested_hashtags: ['#creatorgrowth', '#contentsystem', '#shortformtips'],
-      viral_score: 92,
-    });
+  await page.route('**/api/save-onboarding**', async (route) => {
+    await fulfillJson(route, { success: true });
   });
 
   await page.route('**/api/subscribe-waitlist**', async (route) => {
@@ -467,6 +448,10 @@ export async function setupMockApis(page: Page) {
       success: true,
       message: 'Successfully joined the waitlist!',
     });
+  });
+
+  await page.route('**/*.app.n8n.cloud/**', async (route) => {
+    await fulfillJson(route, { success: true });
   });
 
   await page.route('**/rest/v1/social_updates*', async (route) => {
@@ -483,63 +468,40 @@ export async function setupMockApis(page: Page) {
 
   await page.route('**/rest/v1/user_profile*', async (route) => {
     const method = route.request().method();
-
     if (method === 'GET') {
       await fulfillJson(route, []);
       return;
     }
+    await fulfillJson(route, [{}], 201);
+  });
 
+  await page.route('**/rest/v1/user_preferences*', async (route) => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      await fulfillJson(route, {});
+      return;
+    }
     await fulfillJson(route, [{}], 201);
   });
 
   await page.route('**/rest/v1/jobs*', async (route) => {
     const method = route.request().method();
-
+    const planJson = fixture('claude-plan-builder.json');
     if (method === 'POST') {
-      await fulfillJson(route, [
-        {
-          id: '550e8400-e29b-41d4-a716-446655440000',
-          status: 'queued',
-        },
-      ], 201);
+      await fulfillJson(route, [{ id: '550e8400-e29b-41d4-a716-446655440000', status: 'queued' }], 201);
       return;
     }
-
     await fulfillJson(route, [
       {
         id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'completed',
-        result: {
-          goal: 'Grow followers',
-          period: '7',
-          totalPosts: 4,
-          platforms: ['Instagram', 'TikTok'],
-          contentMix: {
-            educational: 2,
-            authority: 1,
-            conversion: 1,
-          },
-          schedule: [
-            {
-              day: 1,
-              posts: [
-                {
-                  topic: 'Three systems creators can steal this week',
-                  content_type: 'Reel',
-                  reasoning: 'High save potential with a strong educational angle.',
-                  platform: 'Instagram',
-                },
-              ],
-            },
-          ],
-        },
+        result: planJson,
       },
     ]);
   });
 
   await page.route('**/rest/v1/content_library*', async (route) => {
     const method = route.request().method();
-
     if (method === 'GET') {
       await fulfillJson(route, [
         {
@@ -554,7 +516,11 @@ export async function setupMockApis(page: Page) {
       ]);
       return;
     }
-
-    await fulfillJson(route, [{ id: 'vault-1' }], 201);
+    await fulfillJson(route, [{ id: 'vault-new' }], 201);
   });
+}
+
+/** @deprecated use mockAllAPIs */
+export async function setupMockApis(page: Page) {
+  await mockAllAPIs(page);
 }

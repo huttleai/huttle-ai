@@ -17,7 +17,6 @@ import AIPlanBuilder from '../pages/AIPlanBuilder';
 import TrendLab from '../pages/TrendLab';
 import IgniteEngine from '../pages/IgniteEngine';
 import ContentRemix from '../pages/ContentRemix';
-import Profile from '../pages/Profile';
 import BrandVoice from '../pages/BrandVoice';
 import Subscription from '../pages/Subscription';
 import Settings from '../pages/Settings';
@@ -121,7 +120,7 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
           <Route path="/niche-intel" element={<ProtectedRoute><NicheIntel /></ProtectedRoute>} />
           {/* <Route path="/repurposer" element={<ProtectedRoute><ContentRepurposer /></ProtectedRoute>} /> */} {/* Temporarily disabled - uncomment to re-enable */}
           {/* <Route path="/agent" element={<ProtectedRoute><HuttleAgent /></ProtectedRoute>} /> */} {/* Temporarily disabled - kept in backend for future implementation */}
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/profile" element={<Navigate to="/dashboard/brand-voice" replace />} />
           <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />
           <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
           <Route path="/social-updates" element={<ProtectedRoute><SocialUpdates /></ProtectedRoute>} />

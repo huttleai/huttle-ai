@@ -13,12 +13,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "clean": "rm -rf node_modules/.vite .vite dist",
-    "fresh": "npm run clean && vite",
-    "test:e2e": "npx playwright test",
-    "test:e2e:smoke": "npx playwright test tests/e2e/15-smoke.spec.ts",
-    "test:e2e:ui": "npx playwright test --ui",
-    "test:e2e:report": "npx playwright show-report",
-    "test:e2e:headed": "npx playwright test --headed"
+    "fresh": "npm run clean && npm run dev:local",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/20-smoke.spec.ts",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:mobile": "playwright test --project=mobile"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

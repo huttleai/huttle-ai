@@ -5,8 +5,7 @@ import {
   Wand2,
   Beaker,
   Bot,
-  User,
-  Waves,
+  UserCog,
   Settings,
   HelpCircle,
   Menu,
@@ -90,8 +89,7 @@ export default function Sidebar() {
     { 
       section: 'ACCOUNT', 
       items: [
-        { name: 'Profile', icon: User, path: '/dashboard/profile', color: 'from-slate-500 to-gray-600' },
-        { name: 'Brand Voice', icon: Waves, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500' },
+        { name: 'Brand Profile', icon: UserCog, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500' },
         { name: 'Social Updates', icon: Newspaper, path: '/dashboard/social-updates', color: 'from-orange-500 to-red-500' },
         { name: 'Settings', icon: Settings, path: '/dashboard/settings', color: 'from-gray-500 to-slate-600' },
         { name: 'Help', icon: HelpCircle, path: '/dashboard/help', color: 'from-blue-400 to-cyan-500' }

@@ -1,36 +1,52 @@
-import { useContext, useState, useEffect, useMemo } from 'react';
-import { AuthContext } from '../context/AuthContext'; // HUTTLE AI: updated 1
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BrandContext } from '../context/BrandContext';
+import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import {
-  Mic2, Save, Sparkles, Briefcase, User, Check, BookOpen, Smile,
-  PenTool, Heart, Info, Eye, TrendingUp, Calendar,
-  MessageSquare, Lightbulb, Clock, Users,
+  User,
+  Target,
+  Users,
+  MessageSquare,
+  Share2,
+  Rocket,
+  ChevronDown,
+  Check,
+  X,
+  Briefcase,
+  Sparkles,
+  Save,
 } from 'lucide-react';
 import { normalizeEnumValue } from '../utils/formatEnumLabel';
+import { formatDisplayName } from '../utils/brandContextBuilder';
+import { getBrandProfileSectionCompletion } from '../hooks/useBrandProfileSectionCompletion';
+import {
+  InstagramIconMono,
+  FacebookIconMono,
+  TikTokIconMono,
+  TwitterXIconMono,
+  YouTubeIconMono,
+  LinkedInIconMono,
+} from '../components/SocialIcons';
 
-const PROFILE_TYPES = [
-  {
-    value: 'brand',
-    label: 'Brand / Business',
-    description: 'Small business, agency, or company',
-    icon: Briefcase,
-  },
-  {
-    value: 'creator',
-    label: 'Solo Creator',
-    description: 'Building your personal brand',
-    icon: Sparkles,
-  },
-];
+const SECTION_ORDER = ['aboutYou', 'yourNiche', 'yourAudience', 'yourVoice', 'yourPlatforms', 'yourGoals'];
+
+const MAX_PLATFORMS = 4;
+const MAX_TONE = 3;
+
+const CREATOR_KIND = {
+  solo: 'solo_creator',
+  brand: 'brand_business',
+};
 
 const PLATFORMS = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'tiktok', label: 'TikTok' },
-  { value: 'youtube', label: 'YouTube' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'twitter', label: 'X (Twitter)' },
+  { id: 'instagram', label: 'Instagram', Icon: InstagramIconMono },
+  { id: 'tiktok', label: 'TikTok', Icon: TikTokIconMono },
+  { id: 'youtube', label: 'YouTube', Icon: YouTubeIconMono },
+  { id: 'facebook', label: 'Facebook', Icon: FacebookIconMono },
+  { id: 'linkedin', label: 'LinkedIn', Icon: LinkedInIconMono },
+  { id: 'x', label: 'X (Twitter)', Icon: TwitterXIconMono },
 ];
 
 const BRAND_GOALS = [
@@ -50,41 +66,44 @@ const CREATOR_GOALS = [
 ];
 
 const AUDIENCE_ACTION_OPTIONS = [
-  { value: 'good_deal', label: 'A good deal / offer' },
-  { value: 'social_proof', label: 'Social proof / results' },
-  { value: 'education', label: 'Education / knowing more' },
-  { value: 'feeling_understood', label: 'Feeling understood' },
-  { value: 'fomo', label: 'FOMO / trending content' },
+  { value: 'fomo', label: 'Fear of missing out' },
+  { value: 'social_proof', label: 'Social proof' },
+  { value: 'education', label: 'Education / awareness' },
+  { value: 'feeling_understood', label: 'Desire for transformation' },
+  { value: 'good_deal', label: 'Limited-time urgency' },
 ];
 
 const TONE_OPTIONS = [
   { value: 'professional', label: 'Professional' },
   { value: 'conversational', label: 'Conversational' },
-  { value: 'humorous', label: 'Humorous' },
   { value: 'inspirational', label: 'Inspirational' },
   { value: 'educational', label: 'Educational' },
   { value: 'bold', label: 'Bold' },
   { value: 'warm', label: 'Warm' },
+  { value: 'witty', label: 'Witty' },
+  { value: 'empathetic', label: 'Empathetic' },
+  { value: 'humorous', label: 'Humorous' },
   { value: 'luxury', label: 'Luxury' },
   { value: 'raw_authentic', label: 'Raw/Authentic' },
   { value: 'motivational', label: 'Motivational' },
 ];
 
 const WRITING_STYLE_OPTIONS = [
-  { value: 'short_punchy', label: 'Short and punchy' },
+  { value: 'short_punchy', label: 'Short & Punchy' },
+  { value: 'data_facts', label: 'Detailed & Informative' },
   { value: 'storytelling', label: 'Storytelling' },
-  { value: 'data_facts', label: 'Data and facts' },
+  { value: 'how_to', label: 'Listicle / Tips' },
+  { value: 'conversational_casual', label: 'Conversational / Casual' },
   { value: 'question_based', label: 'Question-based' },
-  { value: 'how_to', label: 'How-to/instructional' },
 ];
 
 const CONTENT_TO_POST_OPTIONS = [
-  { value: 'behind_scenes', label: 'Behind the scenes' },
+  { value: 'behind_scenes', label: 'Behind the Scenes' },
   { value: 'results', label: 'Results/transformations' },
-  { value: 'educational_tips', label: 'Educational tips' },
+  { value: 'educational_tips', label: 'Tips & How-tos' },
   { value: 'trending', label: 'Trending topics' },
-  { value: 'personal_stories', label: 'Personal stories' },
-  { value: 'product_spotlight', label: 'Product/service spotlights' },
+  { value: 'personal_stories', label: 'Personal Stories' },
+  { value: 'product_spotlight', label: 'Promotions' },
   { value: 'testimonials', label: 'Testimonials' },
   { value: 'polls_questions', label: 'Polls/questions' },
 ];
@@ -140,29 +159,135 @@ const MONETIZATION_GOAL_OPTIONS = [
   { value: 'growing', label: 'Not yet — just growing' },
 ];
 
-function normalizeSingleSelect(value, options) {
+const GROWTH_STAGE_OPTIONS = [
+  { value: 'just_starting_out', label: 'Just Starting Out' },
+  { value: 'building_momentum', label: 'Building Momentum' },
+  { value: 'established', label: 'Established' },
+  { value: 'large_audience', label: 'Large Audience' },
+];
+
+function normalizePlatformId(raw) {
+  if (!raw) return raw;
+  const v = String(raw).toLowerCase();
+  if (v === 'twitter') return 'x';
+  return v;
+}
+
+function normalizePlatformList(arr) {
+  if (!Array.isArray(arr)) return [];
+  return [...new Set(arr.map(normalizePlatformId))];
+}
+
+function deriveCreatorKind(source = {}) {
+  const ct = source.creatorType;
+  if (ct) {
+    const n = normalizeEnumValue(ct);
+    if (n === 'solo_creator' || n === 'brand_business') return n;
+  }
+  const raw = String(ct || '').toLowerCase();
+  if (raw.includes('solo')) return CREATOR_KIND.solo;
+  if (raw.includes('brand')) return CREATOR_KIND.brand;
+
+  const pt = String(source.profileType || '').toLowerCase();
+  if (pt === 'creator') return CREATOR_KIND.solo;
+  return CREATOR_KIND.brand;
+}
+
+function toFormData(source = {}) {
+  const kind = deriveCreatorKind(source);
+  return {
+    firstName: source.firstName || '',
+    creatorKind: kind,
+    brandName: source.brandName || '',
+    handle: source.handle || '',
+    niche: source.niche || '',
+    subNiche: source.subNiche || '',
+    city: source.city || '',
+    industry: source.industry || '',
+    growthStage: source.growthStage || '',
+    targetAudience: source.targetAudience || '',
+    brandVoice: source.brandVoice || '',
+    platforms: normalizePlatformList(source.platforms || []),
+    goals: source.goals || [],
+    audiencePainPoint: source.audiencePainPoint || '',
+    audienceActionTrigger: source.audienceActionTrigger || '',
+    toneChips: source.toneChips || [],
+    writingStyle: source.writingStyle || '',
+    examplePost: source.examplePost || '',
+    contentToPost: source.contentToPost || [],
+    contentToAvoid: source.contentToAvoid || '',
+    followerCount: source.followerCount || '',
+    primaryOffer: source.primaryOffer || '',
+    conversionGoal: source.conversionGoal || '',
+    contentPersona: source.contentPersona || '',
+    monetizationGoal: source.monetizationGoal || '',
+    showUpStyle: source.showUpStyle || '',
+    creatorArchetype: source.creatorArchetype || '',
+    contentStrengths: source.contentStrengths || [],
+    biggestChallenge: source.biggestChallenge || '',
+    hookStylePreference: source.hookStylePreference || '',
+    emotionalTriggers: source.emotionalTriggers || [],
+  };
+}
+
+function buildBrandUpdatePayload(fd) {
+  return {
+    firstName: fd.firstName?.trim() || '',
+    profileType: fd.creatorKind === CREATOR_KIND.solo ? 'creator' : 'business',
+    creatorType: fd.creatorKind,
+    brandName: fd.brandName,
+    handle: fd.handle,
+    niche: fd.niche,
+    subNiche: fd.subNiche,
+    city: fd.city,
+    industry: fd.industry,
+    growthStage: fd.growthStage,
+    targetAudience: fd.targetAudience,
+    brandVoice: fd.brandVoice,
+    platforms: fd.platforms,
+    goals: fd.goals,
+    audiencePainPoint: fd.audiencePainPoint,
+    audienceActionTrigger: fd.audienceActionTrigger,
+    toneChips: fd.toneChips,
+    writingStyle: fd.writingStyle,
+    examplePost: fd.examplePost,
+    contentToPost: fd.contentToPost,
+    contentToAvoid: fd.contentToAvoid,
+    followerCount: fd.followerCount,
+    primaryOffer: fd.primaryOffer,
+    conversionGoal: fd.conversionGoal,
+    contentPersona: fd.contentPersona,
+    monetizationGoal: fd.monetizationGoal,
+    showUpStyle: fd.showUpStyle,
+    creatorArchetype: fd.creatorArchetype,
+    contentStrengths: fd.contentStrengths,
+    biggestChallenge: fd.biggestChallenge,
+    hookStylePreference: fd.hookStylePreference,
+    emotionalTriggers: fd.emotionalTriggers,
+  };
+}
+
+function normalizeWritingStyle(value, options) {
   if (!value) return '';
   const normalized = normalizeEnumValue(value);
   return options.some((o) => o.value === normalized) ? normalized : '';
 }
 
-function normalizeMultiSelect(values, options) {
-  if (!Array.isArray(values)) return [];
-  const valid = new Set(options.map((o) => o.value));
-  return values.map((v) => normalizeEnumValue(v)).filter((v) => valid.has(v));
-}
-
-function SectionHeader({ icon: Icon, title, subtitle }) {
+function FieldInput({ label, required, helper, children }) {
   return (
-    <div className="mb-6">
-      <div className="flex items-center gap-2 mb-1">
-        {Icon && <Icon className="w-5 h-5 text-huttle-primary" />}
-        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-      </div>
-      {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+    <div>
+      <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {helper && <p className="text-xs text-gray-400 mb-2">{helper}</p>}
+      {children}
     </div>
   );
 }
+
+const inputClasses =
+  'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm';
 
 function ChipSelect({ options, value, onChange, multi = false }) {
   const isSelected = (optionValue) =>
@@ -191,7 +316,7 @@ function ChipSelect({ options, value, onChange, multi = false }) {
             key={option.value}
             type="button"
             onClick={() => handleClick(option.value)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
               active
                 ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                 : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
@@ -206,452 +331,825 @@ function ChipSelect({ options, value, onChange, multi = false }) {
   );
 }
 
-function FieldInput({ label, required, helper, children }) {
+function sectionToTestId(key) {
+  return key.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+}
+
+function CollapsibleSection({
+  sectionKey,
+  title,
+  subtitle,
+  icon: Icon,
+  complete,
+  isOpen,
+  onToggle,
+  children,
+  onSave,
+  saveDisabled = false,
+  saveTestId,
+}) {
+  const testSeg = sectionToTestId(sectionKey);
   return (
-    <div>
-      <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-        {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {helper && <p className="text-xs text-gray-400 mb-2">{helper}</p>}
-      {children}
+    <div
+      className="card overflow-hidden mb-4 md:mb-6"
+      data-testid={`brand-profile-section-${testSeg}`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 md:gap-4 px-4 py-4 md:px-6 md:py-4 min-h-[48px] text-left hover:bg-gray-50/80 transition-colors"
+        data-testid={`brand-profile-section-toggle-${testSeg}`}
+        aria-expanded={isOpen}
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-huttle-primary/10">
+          <Icon className="w-5 h-5 text-huttle-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-gray-900">{title}</p>
+          <p className="text-xs md:text-sm text-gray-500 truncate">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {complete ? (
+            <Check className="w-5 h-5 text-green-500" data-testid={`brand-profile-section-complete-${testSeg}`} />
+          ) : (
+            <X className="w-5 h-5 text-red-500" data-testid={`brand-profile-section-incomplete-${testSeg}`} />
+          )}
+          <ChevronDown
+            className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
+        </div>
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-6 pt-0 md:px-6 border-t border-gray-100">
+              {children}
+              {onSave && (
+                <div className="mt-6 flex flex-col-reverse gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSave();
+                    }}
+                    disabled={saveDisabled}
+                    data-testid={saveTestId}
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-huttle-primary px-5 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Changes
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-const inputClasses =
-  'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/50 focus:border-huttle-primary outline-none transition-all shadow-sm';
-
 export default function BrandVoice() {
-  const { brandData, updateBrandData, refreshBrandData } = useContext(BrandContext);
-  const { userProfile } = useContext(AuthContext); // HUTTLE AI: updated 1
+  const { brandData, updateBrandData, refreshBrandData, loading } = useContext(BrandContext);
+  const { user, updateUser } = useContext(AuthContext);
   const { addToast } = useToast();
+  const { userTier } = useSubscription();
 
-  const toFormData = (source = {}) => ({
-    profileType: source.profileType || 'brand',
-    handle: source.handle || source.socialHandle || '', // HUTTLE AI: updated 1
-    niche: source.niche || '',
-    subNiche: source.subNiche || '',
-    city: source.city || '',
-    industry: source.industry || '',
-    targetAudience: source.targetAudience || '',
-    brandVoice: source.brandVoice || '',
-    platforms: source.platforms || [],
-    goals: source.goals || [],
-    audiencePainPoint: source.audiencePainPoint || '',
-    audienceActionTrigger: source.audienceActionTrigger || '',
-    toneChips: source.toneChips || [],
-    writingStyle: source.writingStyle || '',
-    examplePost: source.examplePost || '',
-    contentToPost: source.contentToPost || [],
-    contentToAvoid: source.contentToAvoid || '',
-    followerCount: source.followerCount || '',
-    primaryOffer: source.primaryOffer || '',
-    conversionGoal: source.conversionGoal || '',
-    contentPersona: source.contentPersona || '',
-    monetizationGoal: source.monetizationGoal || '',
-    showUpStyle: source.showUpStyle || '',
-    creatorArchetype: source.creatorArchetype || '',
-  });
+  const [formData, setFormData] = useState(() => toFormData({}));
+  const [openSections, setOpenSections] = useState(() =>
+    Object.fromEntries(SECTION_ORDER.map((k) => [k, false]))
+  );
+  const baselineRef = useRef('');
+  const autoExpandDoneRef = useRef(false);
+  const debounceRef = useRef(null);
+  const [saveUi, setSaveUi] = useState('idle');
 
-  const [formData, setFormData] = useState(toFormData(brandData));
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const isFoundingMember = ['founders', 'founder', 'builder', 'builders'].includes(userTier);
 
-  useEffect(() => {
-    if (brandData) setFormData(toFormData(brandData));
-  }, [brandData]);
+  const syncFromBrandData = useCallback(
+    (source, runAutoExpand = false) => {
+      const next = toFormData(source);
+      setFormData(next);
+      baselineRef.current = JSON.stringify(next);
+      if (runAutoExpand && !autoExpandDoneRef.current) {
+        autoExpandDoneRef.current = true;
+        const { sections, completedCount, totalCount } = getBrandProfileSectionCompletion(next, user);
+        const anyIncomplete = completedCount < totalCount;
+        const firstIncomplete = SECTION_ORDER.find((k) => !sections[k].complete);
+        if (anyIncomplete && firstIncomplete) {
+          setOpenSections((o) => ({ ...o, [firstIncomplete]: true }));
+        }
+      }
+    },
+    [user]
+  );
 
   useEffect(() => {
-    setHasUnsavedChanges(JSON.stringify(formData) !== JSON.stringify(toFormData(brandData)));
-  }, [formData, brandData]);
+    if (!brandData || loading) return;
+    const runExpand = !autoExpandDoneRef.current;
+    syncFromBrandData(brandData, runExpand);
+  }, [brandData, loading, syncFromBrandData]);
 
-  const isCreator = formData.profileType === 'creator';
-  const goals = isCreator ? CREATOR_GOALS : BRAND_GOALS;
+  useEffect(() => {
+    autoExpandDoneRef.current = false;
+  }, [user?.id]);
 
-  const set = (key) => (e) => {
-    const val = typeof e === 'string' || Array.isArray(e) ? e : e?.target?.value ?? '';
-    setFormData((prev) => ({ ...prev, [key]: val }));
+  const isDirty = JSON.stringify(formData) !== baselineRef.current;
+  const saveDisabled = !isDirty || saveUi === 'saving';
+
+  const completion = useMemo(
+    () => getBrandProfileSectionCompletion(formData, user),
+    [formData, user]
+  );
+
+  const displayName = formatDisplayName(
+    formData.firstName
+      || user?.user_metadata?.first_name
+      || user?.user_metadata?.name
+      || ''
+  );
+
+  const formRef = useRef(formData);
+  formRef.current = formData;
+
+  const persistForm = useCallback(
+    async ({ isManual = false, successToast = null } = {}) => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      const fd = formRef.current;
+      const dirty = JSON.stringify(fd) !== baselineRef.current;
+      if (!dirty) {
+        if (isManual) {
+          addToast('No changes to save.', 'info');
+        }
+        setSaveUi((s) => (s === 'pending' || s === 'saving' ? 'idle' : s));
+        return;
+      }
+
+      setSaveUi('saving');
+      try {
+        const result = await updateBrandData(buildBrandUpdatePayload(fd));
+        if (result?.success === false) {
+          addToast(result.error || 'Could not save. Try again.', 'error');
+          setSaveUi('idle');
+          return;
+        }
+        const fn = fd.firstName?.trim();
+        if (fn) {
+          await updateUser({
+            name: fn,
+            full_name: fn,
+            first_name: fn,
+          });
+        }
+        refreshBrandData();
+        baselineRef.current = JSON.stringify(fd);
+        setSaveUi('saved');
+        if (successToast) {
+          addToast(successToast, 'success');
+        }
+      } catch (e) {
+        console.error(e);
+        addToast('Save failed. Changes are kept locally.', 'error');
+        setSaveUi('idle');
+      }
+    },
+    [addToast, updateBrandData, updateUser, refreshBrandData]
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    const dirty = JSON.stringify(formData) !== baselineRef.current;
+    if (!dirty) {
+      setSaveUi((s) => (s === 'pending' ? 'idle' : s));
+      return;
+    }
+
+    setSaveUi((s) => (s === 'saving' ? s : 'pending'));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void persistForm({ isManual: false });
+    }, 1500);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, [formData, loading, persistForm]);
+
+  useEffect(() => {
+    if (saveUi !== 'saved') return;
+    const t = setTimeout(() => setSaveUi('idle'), 2000);
+    return () => clearTimeout(t);
+  }, [saveUi]);
+
+  const setField = (patch) => {
+    setFormData((prev) => ({ ...prev, ...patch }));
   };
 
-  const setCapitalized = (key) => (e) => {
-    const raw = e.target.value;
-    setFormData((prev) => ({ ...prev, [key]: raw.charAt(0).toUpperCase() + raw.slice(1) }));
+  const isBusiness = formData.creatorKind === CREATOR_KIND.brand;
+  const goalsMeta = isBusiness ? BRAND_GOALS : CREATOR_GOALS;
+
+  const toggleSection = (key) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const toggleArray = (key) => (val) => {
+  const togglePlatform = (id) => {
+    const p = normalizePlatformId(id);
+    setFormData((prev) => {
+      const has = prev.platforms.includes(p);
+      if (!has && prev.platforms.length >= MAX_PLATFORMS) {
+        addToast(`Choose up to ${MAX_PLATFORMS} platforms.`, 'warning');
+        return prev;
+      }
+      const platforms = has ? prev.platforms.filter((x) => x !== p) : [...prev.platforms, p];
+      return { ...prev, platforms };
+    });
+  };
+
+  const toggleGoal = (val) => {
     setFormData((prev) => ({
       ...prev,
-      [key]: prev[key].includes(val)
-        ? prev[key].filter((v) => v !== val)
-        : [...prev[key], val],
+      goals: prev.goals.includes(val)
+        ? prev.goals.filter((v) => v !== val)
+        : [...prev.goals, val],
     }));
   };
 
-  const completeness = useMemo(() => {
-    const fields = [
-      { weight: 8, filled: !!formData.profileType },
-      { weight: 8, filled: !!formData.niche },
-      { weight: 8, filled: !!formData.targetAudience },
-      { weight: 6, filled: formData.platforms?.length > 0 },
-      { weight: 5, filled: formData.goals?.length > 0 },
-      { weight: 6, filled: !!formData.audiencePainPoint },
-      { weight: 8, filled: formData.toneChips?.length > 0 },
-      { weight: 6, filled: !!formData.writingStyle },
-      { weight: 8, filled: !!formData.examplePost },
-      { weight: 5, filled: formData.contentToPost?.length > 0 },
-      { weight: 5, filled: !!formData.followerCount },
-    ];
-    if (!isCreator) {
-      fields.push({ weight: 5, filled: !!formData.conversionGoal });
-    } else {
-      fields.push({ weight: 5, filled: !!formData.contentPersona });
-    }
-    const total = fields.reduce((s, f) => s + f.weight, 0);
-    const filled = fields.reduce((s, f) => s + (f.filled ? f.weight : 0), 0);
-    return Math.round((filled / total) * 100);
-  }, [formData, isCreator]);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const result = await updateBrandData(formData);
-      if (result?.success === false) {
-        addToast(result.error || 'Failed to save. Please try again.', 'error');
-        return;
+  const toggleTone = (value) => {
+    setFormData((prev) => {
+      const cur = prev.toneChips || [];
+      if (cur.includes(value)) {
+        return { ...prev, toneChips: cur.filter((v) => v !== value) };
       }
-      refreshBrandData();
-      setHasUnsavedChanges(false);
-      addToast(isCreator ? 'Creator profile saved!' : 'Brand voice saved!', 'success');
-    } catch (error) {
-      console.error('Error saving brand data:', error);
-      addToast('Something went wrong. Your changes are saved locally and will sync when the connection is restored.', 'error');
-    } finally {
-      setIsSaving(false);
-    }
+      if (cur.length >= MAX_TONE) {
+        addToast(`Pick up to ${MAX_TONE} tones.`, 'warning');
+        return prev;
+      }
+      return { ...prev, toneChips: [...cur, value] };
+    });
   };
 
-  const handleReset = () => {
-    setFormData(toFormData({}));
-    addToast('Form reset successfully', 'info');
-  };
-
-  const displayFirstName = userProfile?.first_name?.trim() || ''; // HUTTLE AI: updated 1
-
-  const CompletenessRing = ({ className = '' }) => (
-    <div className={`flex items-center gap-4 ${className}`}>
-      <div className="relative w-12 h-12">
-        <svg className="w-12 h-12 transform -rotate-90">
-          <circle cx="24" cy="24" r="20" fill="none" stroke="#f3f4f6" strokeWidth="4" />
-          <circle
-            cx="24" cy="24" r="20" fill="none"
-            stroke={isCreator ? '#01bad2' : '#0ea5e9'}
-            strokeWidth="4" strokeLinecap="round"
-            strokeDasharray={`${completeness * 1.256} 125.6`}
-            className="transition-all duration-700 ease-out"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-xs font-bold ${completeness === 100 ? 'text-green-600' : 'text-gray-700'}`}>
-            {completeness}%
-          </span>
-        </div>
+  if (loading && !brandData) {
+    return (
+      <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-huttle-primary" />
       </div>
-      <div className="text-sm">
-        <p className="font-semibold text-gray-900">Profile Status</p>
-        <p className={`text-xs ${completeness === 100 ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
-          {completeness === 100 ? 'Complete!' : 'In Progress'}
-        </p>
-      </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              {isCreator ? <Sparkles className="w-7 h-7 text-huttle-primary" /> : <Mic2 className="w-7 h-7 text-huttle-primary" />}
+    <div
+      className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-24 md:pb-28"
+      data-testid="brand-profile-page"
+    >
+      <div className="mb-6 md:mb-8 max-w-3xl">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-start gap-3 md:gap-4">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
+              <User className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-display font-bold text-gray-900 transition-all">
-                {isCreator ? 'Creator Voice' : 'Brand Voice'}
-              </h1>
-              <p className="text-base text-gray-500 transition-all">
-                {isCreator
-                  ? 'Customize AI to match your unique style and personality'
-                  : 'Customize all AI features to your brand, niche, and industry'}
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Brand Profile</h1>
+                {isFoundingMember && (
+                  <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    🏆 FOUNDING MEMBER
+                  </span>
+                )}
+              </div>
+              <p className="text-sm md:text-base text-gray-500">
+                Everything the AI needs to personalize your content
+              </p>
+              <p className="mt-1 text-sm text-gray-600">
+                {displayName ? `Hi, ${displayName}` : ''}
+                {user?.email ? (
+                  <span className="text-gray-400">
+                    {displayName ? ' · ' : ''}
+                    {user.email}
+                  </span>
+                ) : null}
               </p>
             </div>
           </div>
-          <div className="hidden sm:flex">
-            <div className="bg-white p-2 pr-4 rounded-xl border border-gray-100 shadow-sm">
-              <CompletenessRing />
+          <div className="flex flex-col items-start gap-2 md:items-end">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm" data-testid="brand-profile-save-status">
+              {isDirty && saveUi === 'pending' && (
+                <span className="inline-flex items-center gap-1.5 text-amber-700 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" data-testid="brand-profile-unsaved-dot" />
+                  Unsaved changes
+                </span>
+              )}
+              {saveUi === 'saving' && (
+                <span className="text-gray-500 animate-pulse">Saving...</span>
+              )}
+              {saveUi === 'saved' && (
+                <span className="text-green-600 font-medium">Saved ✓</span>
+              )}
             </div>
+          </div>
+        </div>
+
+        <div
+          className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+          data-testid="brand-profile-summary-bar"
+        >
+          {completion.completedCount === completion.totalCount ? (
+            <p className="text-sm font-semibold text-green-600">All sections complete ✓</p>
+          ) : (
+            <p className="text-sm font-medium text-gray-800">
+              {completion.completedCount} of {completion.totalCount} sections complete
+            </p>
+          )}
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-[#01BAD2] transition-all duration-500"
+              style={{
+                width: `${(completion.completedCount / completion.totalCount) * 100}%`,
+              }}
+            />
           </div>
         </div>
       </div>
 
       <div className="max-w-3xl">
-        {/* Profile Type Toggle */}
-        <div className="card p-6 mb-6">
-          <label className="block text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-            I create content as a:
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {PROFILE_TYPES.map((type) => {
-              const Icon = type.icon;
-              const isSelected = formData.profileType === type.value;
-              return (
-                <button
-                  key={type.value}
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, profileType: type.value }))}
-                  className={`group relative flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left ${
-                    isSelected
-                      ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
-                      : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 ${
-                    isSelected
-                      ? 'bg-huttle-primary text-white shadow-lg shadow-huttle-primary/30'
-                      : 'bg-gray-50 text-gray-400 group-hover:bg-huttle-primary/10 group-hover:text-huttle-primary'
-                  }`}>
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-bold text-lg transition-colors ${isSelected ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>
-                      {type.label}
-                    </p>
-                    <p className="text-sm text-gray-500 truncate">{type.description}</p>
-                  </div>
-                  {isSelected && (
-                    <div className="absolute top-4 right-4">
-                      <div className="w-6 h-6 bg-huttle-primary rounded-full flex items-center justify-center shadow-sm">
-                        <Check className="w-3.5 h-3.5 text-white" />
-                      </div>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Section 1 — About You */}
+        <CollapsibleSection
+          sectionKey="aboutYou"
+          title="About You"
+          subtitle="Your identity and how we address you"
+          icon={User}
+          complete={completion.sections.aboutYou.complete}
+          isOpen={openSections.aboutYou}
+          onToggle={() => toggleSection('aboutYou')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'About you saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-about-you"
+        >
+          <div className="space-y-6 pt-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  First name <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => setField({ firstName: e.target.value })}
+                  className={inputClasses}
+                  placeholder="First name"
+                  data-testid="brand-profile-first-name"
+                />
+              </label>
+              <div>
+                <span className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">Email</span>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700 text-sm">
+                  {user?.email || '—'}
+                </div>
+              </div>
+            </div>
 
-        {/* ── SECTION 1: ABOUT YOU / YOUR BRAND ── */}
-        <div className="card p-6 mb-6">
-          <SectionHeader icon={User} title="About You" subtitle="Basic information about you and your brand" />
-          <div className="space-y-6">
-            {displayFirstName && ( // HUTTLE AI: updated 1
-              <p className="text-sm text-gray-500">
-                Personalizing content for: <span className="font-semibold text-gray-900">{displayFirstName}</span>
-              </p>
+            <FieldInput label="Creator type" required helper="How you use Huttle AI">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setField({ creatorKind: CREATOR_KIND.solo })}
+                  className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
+                    formData.creatorKind === CREATOR_KIND.solo
+                      ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                  data-testid="brand-profile-creator-solo"
+                >
+                  <Sparkles className="w-6 h-6 text-huttle-primary" />
+                  <div>
+                    <p className="font-bold text-gray-900">Solo Creator</p>
+                    <p className="text-xs text-gray-500">Personal brand &amp; audience</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setField({ creatorKind: CREATOR_KIND.brand })}
+                  className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
+                    formData.creatorKind === CREATOR_KIND.brand
+                      ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                  data-testid="brand-profile-creator-brand"
+                >
+                  <Briefcase className="w-6 h-6 text-huttle-primary" />
+                  <div>
+                    <p className="font-bold text-gray-900">Brand / Business</p>
+                    <p className="text-xs text-gray-500">Company or client work</p>
+                  </div>
+                </button>
+              </div>
+            </FieldInput>
+
+            {isBusiness && (
+              <FieldInput label="Business name" helper="Shown in AI-generated content">
+                <input
+                  type="text"
+                  value={formData.brandName}
+                  onChange={(e) => setField({ brandName: e.target.value })}
+                  className={inputClasses}
+                  placeholder="Your business name"
+                  data-testid="brand-profile-business-name"
+                />
+              </FieldInput>
             )}
 
-            <FieldInput
-              label="Your Name or Handle"
-              helper="How you want to be referred to in your content"
-            >
+            <FieldInput label="Your name or handle" helper="How you sign posts or DMs">
               <input
                 type="text"
                 value={formData.handle}
-                onChange={set('handle')}
-                placeholder="e.g. @AnytimeGlow or Glow by Angela"
+                onChange={(e) => setField({ handle: e.target.value })}
                 className={inputClasses}
+                placeholder="@handle or display name"
+                data-testid="brand-profile-handle"
               />
             </FieldInput>
 
-            <FieldInput label={isCreator ? 'Content Focus' : 'Niche'}>
-              <input
-                type="text"
-                value={formData.niche}
-                onChange={setCapitalized('niche')}
-                placeholder={isCreator ? 'e.g., Lifestyle, Fitness, Comedy' : 'e.g., Medical Spa, Fitness, Beauty'}
-                className={inputClasses}
-              />
-            </FieldInput>
-
-            <FieldInput label="Sub-niche" helper="Optional — narrow down your niche further">
-              <input
-                type="text"
-                value={formData.subNiche}
-                onChange={setCapitalized('subNiche')}
-                placeholder="e.g., Anti-aging treatments, Beginner fitness"
-                className={inputClasses}
-              />
-            </FieldInput>
-
-            <FieldInput label="City" helper="Used to localize dashboard trends and hashtags when available.">
+            <FieldInput label="City" helper="Local trends and hashtags when available">
               <input
                 type="text"
                 value={formData.city}
-                onChange={setCapitalized('city')}
-                placeholder="e.g., Atlanta"
+                onChange={(e) => setField({ city: e.target.value })}
+                className={inputClasses}
+                placeholder="e.g. Atlanta"
+              />
+            </FieldInput>
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 2 — Niche */}
+        <CollapsibleSection
+          sectionKey="yourNiche"
+          title="Your Niche"
+          subtitle="What you talk about and your stage"
+          icon={Target}
+          complete={completion.sections.yourNiche.complete}
+          isOpen={openSections.yourNiche}
+          onToggle={() => toggleSection('yourNiche')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'Niche & stage saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-your-niche"
+        >
+          <div className="space-y-6 pt-4">
+            <FieldInput label={isBusiness ? 'Content focus / niche' : 'Content focus / niche'} required>
+              <input
+                type="text"
+                value={formData.niche}
+                onChange={(e) =>
+                  setField({
+                    niche: e.target.value ? e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1) : '',
+                  })
+                }
+                className={inputClasses}
+                placeholder="Your main topic or industry focus"
+                data-testid="brand-profile-niche"
+              />
+            </FieldInput>
+            <FieldInput label="Sub-niche" helper="Optional — narrow your positioning">
+              <input
+                type="text"
+                value={formData.subNiche}
+                onChange={(e) =>
+                  setField({
+                    subNiche: e.target.value ? e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1) : '',
+                  })
+                }
                 className={inputClasses}
               />
             </FieldInput>
-
+            {isBusiness && (
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Industry / business type
+                </label>
+                <ChipSelect
+                  options={BUSINESS_TYPE_OPTIONS}
+                  value={(() => {
+                    const raw = formData.industry || '';
+                    const n = normalizeEnumValue(raw);
+                    return BUSINESS_TYPE_OPTIONS.some((o) => o.value === n) ? n : '';
+                  })()}
+                  onChange={(v) => setField({ industry: v })}
+                />
+              </div>
+            )}
             <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Primary Platforms
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Growth stage
               </label>
+              <ChipSelect
+                options={GROWTH_STAGE_OPTIONS}
+                value={formData.growthStage}
+                onChange={(v) => setField({ growthStage: v })}
+              />
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 3 — Audience */}
+        <CollapsibleSection
+          sectionKey="yourAudience"
+          title="Your Audience"
+          subtitle="Who you serve and what they struggle with"
+          icon={Users}
+          complete={completion.sections.yourAudience.complete}
+          isOpen={openSections.yourAudience}
+          onToggle={() => toggleSection('yourAudience')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'Audience saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-your-audience"
+        >
+          <div className="space-y-6 pt-4">
+            <FieldInput label="Target audience" required>
+              <textarea
+                value={formData.targetAudience}
+                onChange={(e) =>
+                  setField({
+                    targetAudience: e.target.value
+                      ? e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1)
+                      : '',
+                  })
+                }
+                rows={3}
+                className={`${inputClasses} resize-none`}
+                placeholder="Who you're speaking to"
+              />
+            </FieldInput>
+            <FieldInput label="Their biggest pain point" required>
+              <input
+                type="text"
+                value={formData.audiencePainPoint}
+                onChange={(e) =>
+                  setField({
+                    audiencePainPoint: e.target.value
+                      ? e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1)
+                      : '',
+                  })
+                }
+                className={inputClasses}
+                data-testid="brand-profile-pain-point"
+              />
+            </FieldInput>
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                What triggers them to act
+              </label>
+              <ChipSelect
+                options={AUDIENCE_ACTION_OPTIONS}
+                value={formData.audienceActionTrigger}
+                onChange={(v) => setField({ audienceActionTrigger: v })}
+              />
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 4 — Voice */}
+        <CollapsibleSection
+          sectionKey="yourVoice"
+          title="Your Voice"
+          subtitle="Tone, format, and boundaries"
+          icon={MessageSquare}
+          complete={completion.sections.yourVoice.complete}
+          isOpen={openSections.yourVoice}
+          onToggle={() => toggleSection('yourVoice')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'Voice & content saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-your-voice"
+        >
+          <div className="space-y-6 pt-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Tone <span className="text-red-500">*</span>
+              </label>
+              <p className="text-xs text-gray-400 mb-3">Select up to {MAX_TONE}</p>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map((p) => {
-                  const active = formData.platforms.includes(p.value);
+                {TONE_OPTIONS.map((option) => {
+                  const active = formData.toneChips.includes(option.value);
                   return (
                     <button
-                      key={p.value}
+                      key={option.value}
                       type="button"
-                      onClick={() => toggleArray('platforms')(p.value)}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                      onClick={() => toggleTone(option.value)}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
                         active
                           ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      {p.label}
+                      {option.label}
                     </button>
                   );
                 })}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 2: YOUR AUDIENCE ── */}
-        <div className="card p-6 mb-6">
-          <SectionHeader icon={Users} title="Your Audience" subtitle="Help the AI understand who you're talking to" />
-          <div className="space-y-6">
-            <FieldInput label={isCreator ? 'Who they are' : 'Who they are'}>
-              <textarea
-                value={formData.targetAudience}
-                onChange={setCapitalized('targetAudience')}
-                placeholder="e.g., Women 25-45 interested in skincare"
-                rows="3"
-                className={`${inputClasses} resize-none`}
-              />
-            </FieldInput>
-
-            <FieldInput
-              label="Their biggest pain point"
-              helper="What keeps them up at night related to your niche?"
-            >
-              <input
-                type="text"
-                value={formData.audiencePainPoint}
-                onChange={setCapitalized('audiencePainPoint')}
-                placeholder="e.g., They want smooth skin but fear pain and cost"
-                className={inputClasses}
-              />
-            </FieldInput>
-
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                What makes them act
-              </label>
-              <ChipSelect
-                options={AUDIENCE_ACTION_OPTIONS}
-                value={formData.audienceActionTrigger}
-                onChange={set('audienceActionTrigger')}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 3: YOUR VOICE ── */}
-        <div className="card p-6 mb-6">
-          <SectionHeader icon={Mic2} title="Your Voice" subtitle="Define how the AI should sound when writing for you" />
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                Tone
-              </label>
-              <p className="text-xs text-gray-400 mb-3">Select all that apply</p>
-              <ChipSelect
-                options={TONE_OPTIONS}
-                value={formData.toneChips}
-                onChange={set('toneChips')}
-                multi
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                Writing Style
+                Writing style <span className="text-red-500">*</span>
               </label>
               <ChipSelect
                 options={WRITING_STYLE_OPTIONS}
-                value={formData.writingStyle}
-                onChange={set('writingStyle')}
+                value={normalizeWritingStyle(formData.writingStyle, WRITING_STYLE_OPTIONS)}
+                onChange={(v) => setField({ writingStyle: v })}
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                A post that sounds like you
-              </label>
-              <p className="text-xs text-gray-400 mb-2">
-                Paste a caption or post you've written that felt like you. This is the single most useful thing you can give the AI — it will mirror your exact style.
-              </p>
+            <FieldInput label="Example post" helper="Paste a post that sounds like you">
               <textarea
                 value={formData.examplePost}
-                onChange={set('examplePost')}
-                placeholder="Paste your example here..."
-                rows="4"
+                onChange={(e) => setField({ examplePost: e.target.value })}
+                rows={4}
                 className={`${inputClasses} resize-none`}
               />
-              <div className="mt-2 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-huttle-50/60 border border-huttle-primary/10">
-                <Sparkles className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-gray-600">
-                  The AI will match your sentence length, emoji style, punctuation, and vocabulary from this example.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION 4: YOUR CONTENT ── */}
-        <div className="card p-6 mb-6">
-          <SectionHeader icon={PenTool} title="Your Content" subtitle="What kind of content you want to create" />
-          <div className="space-y-6">
+            </FieldInput>
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                Content I want to post more of
+                Content you want to post
               </label>
               <ChipSelect
                 options={CONTENT_TO_POST_OPTIONS}
                 value={formData.contentToPost}
-                onChange={set('contentToPost')}
+                onChange={(v) => setField({ contentToPost: v })}
                 multi
               />
             </div>
-
             <FieldInput label="Content to avoid" helper="Optional">
               <input
                 type="text"
                 value={formData.contentToAvoid}
-                onChange={set('contentToAvoid')}
-                placeholder="e.g., Nothing too salesy, no dancing trends"
+                onChange={(e) => setField({ contentToAvoid: e.target.value })}
                 className={inputClasses}
               />
             </FieldInput>
+          </div>
+        </CollapsibleSection>
 
+        {/* Section 5 — Platforms */}
+        <CollapsibleSection
+          sectionKey="yourPlatforms"
+          title="Your Platforms"
+          subtitle="Where you publish (up to four)"
+          icon={Share2}
+          complete={completion.sections.yourPlatforms.complete}
+          isOpen={openSections.yourPlatforms}
+          onToggle={() => toggleSection('yourPlatforms')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'Platforms saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-your-platforms"
+        >
+          <div className="space-y-6 pt-4">
             <div>
-              <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Content Goals
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Primary platforms <span className="text-red-500">*</span>
               </label>
+              <p className="text-xs text-gray-400 mb-3">Maximum {MAX_PLATFORMS}</p>
               <div className="flex flex-wrap gap-2">
-                {goals.map((g) => {
+                {PLATFORMS.map(({ id, label, Icon }) => {
+                  const active = formData.platforms.includes(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => togglePlatform(id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
+                        active
+                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      data-testid={`brand-profile-platform-${id}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Current following
+              </label>
+              <ChipSelect
+                options={FOLLOWER_COUNT_OPTIONS}
+                value={formData.followerCount}
+                onChange={(v) => setField({ followerCount: v })}
+              />
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* Section 6 — Goals */}
+        <CollapsibleSection
+          sectionKey="yourGoals"
+          title="Your Goals"
+          subtitle={isBusiness ? 'Offers and conversions' : 'Persona and monetization'}
+          icon={Rocket}
+          complete={completion.sections.yourGoals.complete}
+          isOpen={openSections.yourGoals}
+          onToggle={() => toggleSection('yourGoals')}
+          onSave={() =>
+            void persistForm({ isManual: true, successToast: 'Goals saved.' })
+          }
+          saveDisabled={saveDisabled}
+          saveTestId="brand-profile-save-section-your-goals"
+        >
+          <div className="space-y-6 pt-4">
+            {isBusiness ? (
+              <>
+                <FieldInput label="Primary offer" helper="What do you sell or offer?">
+                  <input
+                    type="text"
+                    value={formData.primaryOffer}
+                    onChange={(e) => setField({ primaryOffer: e.target.value })}
+                    className={inputClasses}
+                    data-testid="brand-profile-primary-offer"
+                  />
+                </FieldInput>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    Conversion goal
+                  </label>
+                  <ChipSelect
+                    options={CONVERSION_GOAL_OPTIONS}
+                    value={formData.conversionGoal}
+                    onChange={(v) => setField({ conversionGoal: v })}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    Content persona
+                  </label>
+                  <ChipSelect
+                    options={CONTENT_PERSONA_OPTIONS}
+                    value={formData.contentPersona}
+                    onChange={(v) => setField({ contentPersona: v })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    Monetization goal
+                  </label>
+                  <ChipSelect
+                    options={MONETIZATION_GOAL_OPTIONS}
+                    value={formData.monetizationGoal}
+                    onChange={(v) => setField({ monetizationGoal: v })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    How you show up
+                  </label>
+                  <ChipSelect
+                    options={SHOW_UP_OPTIONS}
+                    value={formData.showUpStyle}
+                    onChange={(v) => setField({ showUpStyle: v })}
+                  />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Content goals
+              </label>
+              <p className="text-xs text-gray-400 mb-3">Optional — multi-select</p>
+              <div className="flex flex-wrap gap-2">
+                {goalsMeta.map((g) => {
                   const active = formData.goals.includes(g.value);
                   return (
                     <button
                       key={g.value}
                       type="button"
-                      onClick={() => toggleArray('goals')(g.value)}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
+                      onClick={() => toggleGoal(g.value)}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
                         active
                           ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
                           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
@@ -664,169 +1162,21 @@ export default function BrandVoice() {
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        {/* ── SECTION 5: GROWTH ── */}
-        <div className="card p-6 mb-6">
-          <SectionHeader icon={TrendingUp} title="Growth" subtitle="Helps AI calibrate strategy for your stage of growth" />
-          <div>
-            <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Your current following
-            </label>
-            <ChipSelect
-              options={FOLLOWER_COUNT_OPTIONS}
-              value={formData.followerCount}
-              onChange={set('followerCount')}
-            />
-          </div>
-        </div>
-
-        {/* ── SECTION 6: BUSINESS DETAILS (business only) ── */}
-        {!isCreator && (
-          <div className="card p-6 mb-6 animate-fadeIn">
-            <SectionHeader icon={Briefcase} title="Business Details" subtitle="Tell the AI about your business so it can optimize for conversions" />
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                  What you sell
-                </label>
-                <ChipSelect
-                  options={BUSINESS_TYPE_OPTIONS}
-                  value={formData.industry}
-                  onChange={set('industry')}
-                />
-              </div>
-
-              <FieldInput label="Your main offer">
-                <input
-                  type="text"
-                  value={formData.primaryOffer}
-                  onChange={set('primaryOffer')}
-                  placeholder="e.g., Laser hair removal packages from $199"
-                  className={inputClasses}
-                />
-              </FieldInput>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                  Primary conversion goal
-                </label>
-                <ChipSelect
-                  options={CONVERSION_GOAL_OPTIONS}
-                  value={formData.conversionGoal}
-                  onChange={set('conversionGoal')}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── SECTION 7: CREATOR DETAILS (creator only) ── */}
-        {isCreator && (
-          <div className="card p-6 mb-6 animate-fadeIn">
-            <SectionHeader icon={Sparkles} title="Creator Details" subtitle="Help the AI understand your creative style" />
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                  How you show up
-                </label>
-                <ChipSelect
-                  options={SHOW_UP_OPTIONS}
-                  value={formData.showUpStyle}
-                  onChange={set('showUpStyle')}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                  Your content persona
-                </label>
-                <ChipSelect
-                  options={CONTENT_PERSONA_OPTIONS}
-                  value={formData.contentPersona}
-                  onChange={set('contentPersona')}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                  Monetization goal
-                </label>
-                <ChipSelect
-                  options={MONETIZATION_GOAL_OPTIONS}
-                  value={formData.monetizationGoal}
-                  onChange={set('monetizationGoal')}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Save / Reset Buttons */}
-        <div className="card p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges || isSaving}
-              className={`flex-1 px-6 py-3 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 ${
-                !hasUnsavedChanges || isSaving
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                  : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark hover:shadow-lg hover:shadow-huttle-primary/20'
-              }`}
-            >
-              {isSaving ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-gray-300 border-t-white rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  {isCreator ? 'Save Creator Voice' : 'Save Brand Voice'}
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-
-          {hasUnsavedChanges && (
-            <p className="mt-4 text-sm text-amber-600 flex items-center justify-center gap-1.5 font-medium bg-amber-50 py-2 rounded-lg border border-amber-100">
-              <Info className="w-4 h-4" />
-              You have unsaved changes
-            </p>
-          )}
-        </div>
-
-        {/* Mobile Completeness */}
-        <div className="sm:hidden card p-4 mb-6">
-          <CompletenessRing />
-          <p className="text-sm text-gray-500 mt-2">
-            {completeness === 100
-              ? 'Your profile is complete!'
-              : 'Complete your profile for better AI suggestions'}
-          </p>
-        </div>
-
-        {/* How This Helps */}
-        <div className="rounded-xl border p-5 md:p-6 bg-gradient-to-r from-huttle-50/50 to-cyan-50/50 border-huttle-primary/20 transition-all duration-500">
-          <div className="flex items-start gap-3">
-            <Sparkles className="w-5 h-5 flex-shrink-0 mt-1 text-huttle-primary" />
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-2">How This Helps</h3>
-              <p className="text-sm text-gray-700">
-                {isCreator
-                  ? 'Your creator profile personalizes all AI-generated content across Huttle AI. Trend Lab and AI Plan Builder will match your unique voice and connect authentically with your community.'
-                  : 'Your brand settings personalize all AI-generated content across Huttle AI. Trend Lab and AI Plan Builder will tailor suggestions specifically to your niche and voice.'}
-              </p>
-            </div>
-          </div>
+        <div className="sticky bottom-4 z-10 mt-10 flex justify-center pb-[env(safe-area-inset-bottom)] md:justify-end">
+          <button
+            type="button"
+            data-testid="brand-profile-save-all"
+            disabled={saveDisabled}
+            onClick={() =>
+              void persistForm({ isManual: true, successToast: 'All changes saved.' })
+            }
+            className="inline-flex min-h-[52px] w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-huttle-primary px-8 py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+          >
+            <Save className="w-5 h-5" />
+            Save Changes
+          </button>
         </div>
       </div>
     </div>

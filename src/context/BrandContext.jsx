@@ -1,12 +1,63 @@
-import { createContext, useState, useEffect, useContext } from 'react';
-import { supabase, getUserPreferences } from '../config/supabase';
+import { createContext, useState, useEffect, useContext, useRef, useMemo, useCallback } from 'react';
+import { supabase, getUserPreferences, saveUserPreferences } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { formatEnumLabel, formatEnumArray, normalizeEnumValue } from '../utils/formatEnumLabel';
 
 export const BrandContext = createContext();
+const BRAND_FETCH_RETRY_LIMIT = 2;
+const BRAND_FETCH_RETRY_DELAY_MS = 10000;
+
+function createEmptyBrandData() {
+  return {
+    firstName: '',
+    profileType: 'business',
+    creatorArchetype: '',
+    brandName: '',
+    handle: '',
+    niche: '',
+    subNiche: '',
+    contentFocus: '',
+    city: '',
+    industry: '',
+    growthStage: '',
+    creatorType: null,
+    targetAudience: '',
+    brandVoice: '',
+    platforms: [],
+    goals: [],
+    audiencePainPoint: '',
+    audienceActionTrigger: '',
+    toneChips: [],
+    writingStyle: '',
+    examplePost: '',
+    contentToPost: [],
+    contentToAvoid: '',
+    followerCount: '',
+    primaryOffer: '',
+    conversionGoal: '',
+    contentPersona: '',
+    monetizationGoal: '',
+    showUpStyle: '',
+    contentStrengths: [],
+    biggestChallenge: '',
+    hookStylePreference: '',
+    emotionalTriggers: [],
+  };
+}
 
 function isBusinessProfileType(profileType) {
-  return !profileType || profileType === 'brand' || profileType === 'business';
+  return (
+    !profileType
+    || profileType === 'brand'
+    || profileType === 'business'
+    || profileType === 'brand_business'
+  );
+}
+
+function normalizeProfileTypeForDb(profileType) {
+  const p = String(profileType || '').toLowerCase();
+  if (p === 'creator' || p === 'solo_creator') return 'creator';
+  return 'business';
 }
 
 export function useBrand() {
@@ -27,58 +78,38 @@ export function useBrand() {
 }
 
 export function BrandProvider({ children }) {
-  const { user, userProfile, needsOnboarding } = useContext(AuthContext);
-  const [brandData, setBrandData] = useState({
-    firstName: '',
-    profileType: 'brand',
-    creatorArchetype: '',
-    brandName: '',
-    handle: '', // HUTTLE AI: updated 1
-    niche: '',
-    subNiche: '',
-    contentFocus: '',
-    city: '',
-    industry: '',
-    growthStage: '',
-    creatorType: null,
-    targetAudience: '',
-    brandVoice: '',
-    platforms: [],
-    goals: [],
-    // Audience expansion
-    audiencePainPoint: '',
-    audienceActionTrigger: '',
-    // Voice expansion
-    toneChips: [],
-    writingStyle: '',
-    examplePost: '',
-    // Content expansion
-    contentToPost: [],
-    contentToAvoid: '',
-    // Growth
-    followerCount: '',
-    // Business-only
-    primaryOffer: '',
-    conversionGoal: '',
-    // Creator-only
-    contentPersona: '',
-    monetizationGoal: '',
-    showUpStyle: '',
-    // Viral content strategy fields
-    contentStrengths: [],
-    biggestChallenge: '',
-    hookStylePreference: '',
-    emotionalTriggers: [],
-  });
+  const { user } = useContext(AuthContext);
+  const [brandData, setBrandData] = useState(createEmptyBrandData);
   const [loading, setLoading] = useState(true);
   // Track if we need to force reload (e.g., after onboarding completes)
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  const brandFetchRetryCountRef = useRef(0);
+  // Track the previous user ID so we can detect account switches
+  const prevUserIdRef = useRef(null);
 
   const normalizeOptionalEnum = (value) => {
     if (!value || typeof value !== 'string') return '';
     const normalized = normalizeEnumValue(value);
     return normalized || value.trim();
   };
+
+  // Detect user switches and clear stale localStorage to prevent cross-user data bleed
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    const prevId = prevUserIdRef.current;
+    prevUserIdRef.current = userId;
+
+    if (prevId && userId && prevId !== userId) {
+      // A different user just logged in — wipe the previous user's cached brand data
+      // so it doesn't appear in the onboarding quiz or brand voice page.
+      localStorage.removeItem('brandData');
+      setBrandData(createEmptyBrandData());
+    } else if (!userId && prevId) {
+      // User logged out — clear cached data
+      localStorage.removeItem('brandData');
+      setBrandData(createEmptyBrandData());
+    }
+  }, [userId]);
 
   // Load brand data from Supabase user_profile table
   useEffect(() => {
@@ -87,9 +118,18 @@ export function BrandProvider({ children }) {
 
     const applyLocalBrandFallback = () => {
       const savedBrand = localStorage.getItem('brandData');
-      if (savedBrand && isActive) {
+      if (!savedBrand || !isActive) return;
+
+      try {
         setBrandData(JSON.parse(savedBrand));
+      } catch (error) {
+        console.warn('[Brand] Could not parse cached brand data:', error.message);
       }
+    };
+
+    const applyEmptyBrandFallback = () => {
+      if (!isActive) return;
+      setBrandData(createEmptyBrandData());
     };
 
     const mergePreferencesIntoBrandData = (baseData, userPreferences = {}) => ({
@@ -116,9 +156,7 @@ export function BrandProvider({ children }) {
       });
     };
 
-    const fetchBrandData = async (retryCount = 0) => {
-      let shouldRetry = false;
-
+    const fetchBrandData = async () => {
       if (!user) {
         // Fallback to localStorage if no user
         if (isActive) {
@@ -129,7 +167,7 @@ export function BrandProvider({ children }) {
       }
 
       try {
-        const QUERY_TIMEOUT_MS = 8000;
+        const QUERY_TIMEOUT_MS = 15000;
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Brand data query timed out')), QUERY_TIMEOUT_MS);
         });
@@ -140,24 +178,6 @@ export function BrandProvider({ children }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        const safeBrandVoicePromise = supabase // HUTTLE AI: updated 1
-          .from('brand_voice')
-          .select('handle')
-          .eq('user_id', user.id)
-          .maybeSingle()
-          .then(({ data, error }) => {
-            if (error) {
-              console.warn('[Brand] Brand voice handle fetch failed (non-blocking):', error.message);
-              return null;
-            }
-
-            return data;
-          })
-          .catch((error) => {
-            console.warn('[Brand] Brand voice handle fetch failed (non-blocking):', error.message);
-            return null;
-          });
-
         // Start preferences in parallel, but never await them for initial brand readiness.
         const safePreferencesPromise = getUserPreferences(user.id).then((result) => {
           if (!result?.success || !result.data) {
@@ -165,18 +185,14 @@ export function BrandProvider({ children }) {
           }
 
           return result.data;
-        }).catch((e) => {
-          console.warn('[Brand] Preferences fetch failed (non-blocking):', e.message);
-          return null;
-        });
+        }).catch(() => null);
 
         const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-        const brandVoiceData = await safeBrandVoicePromise; // HUTTLE AI: updated 1
         if (error) {
           throw error;
         }
 
-        if (data) {
+        if (data && data.user_id) {
           // Map user_profile fields to brandData structure
           // Apply formatEnumLabel to convert snake_case values to human-readable labels.
           const mappedData = {
@@ -184,7 +200,7 @@ export function BrandProvider({ children }) {
             profileType: data.profile_type || 'brand',
             creatorArchetype: data.creator_archetype ? normalizeOptionalEnum(data.creator_archetype) : '',
             brandName: data.brand_name || '',
-            handle: brandVoiceData?.handle || data.social_handle || '', // HUTTLE AI: updated 1
+            handle: data.social_handle || '',
             niche: data.niche ? formatEnumArray(data.niche) : '',
             subNiche: data.sub_niche || data.industry || '',
             contentFocus: data.content_focus ? formatEnumArray(data.content_focus) : '',
@@ -231,7 +247,9 @@ export function BrandProvider({ children }) {
           localStorage.setItem('brandData', JSON.stringify(mappedData));
           void safePreferencesPromise.then(applyPreferenceOverrides);
         } else {
-          // No profile row exists — create a minimal default row so future queries succeed
+          // No profile row exists yet — insert a minimal placeholder row so future
+          // upserts work. Do NOT fall back to localStorage here because that may
+          // contain a previous user's data (the "Angela" cross-user bleed bug).
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
             .from('user_profile')
@@ -241,28 +259,32 @@ export function BrandProvider({ children }) {
             console.warn('[Brand] Default row insert failed (non-critical):', insertError.message);
           }
 
-          applyLocalBrandFallback();
+          applyEmptyBrandFallback();
           void safePreferencesPromise.then(applyPreferenceOverrides);
         }
       } catch (error) {
-        if (retryCount === 0) {
-          shouldRetry = true;
-          console.warn('[Brand] First load failed, retrying in 1s...');
+        if (brandFetchRetryCountRef.current < BRAND_FETCH_RETRY_LIMIT) {
+          brandFetchRetryCountRef.current += 1;
+          if (import.meta.env.DEV) {
+            console.info(
+              `[Brand] Profile load slow (${error?.message || 'unknown'}), retry ${brandFetchRetryCountRef.current}/${BRAND_FETCH_RETRY_LIMIT} in ${BRAND_FETCH_RETRY_DELAY_MS / 1000}s`
+            );
+          }
           retryTimeoutId = setTimeout(() => {
             if (isActive) {
-              fetchBrandData(1);
+              void fetchBrandData();
             }
-          }, 1000);
+          }, BRAND_FETCH_RETRY_DELAY_MS);
           return;
         }
 
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
           console.error('❌ [Brand] The user_profile table does not exist! Run docs/setup/supabase-user-profile-schema.sql');
         }
-        console.error('[Brand] Brand data load failed after retry:', error.message);
-        applyLocalBrandFallback();
+        console.error('[Brand] Brand data load failed after max retries:', error.message);
+        applyEmptyBrandFallback();
       } finally {
-        if (isActive && !shouldRetry) {
+        if (isActive && !retryTimeoutId) {
           setLoading(false);
         }
       }
@@ -275,9 +297,12 @@ export function BrandProvider({ children }) {
       isActive = false;
       if (retryTimeoutId) clearTimeout(retryTimeoutId);
     };
-  }, [user, userProfile, needsOnboarding, reloadTrigger]); // Reload when user, userProfile, or onboarding status changes
+  // Only re-fetch when the logged-in user ID changes or a manual reload is triggered.
+  // Using user?.id (primitive string) instead of the user object reference prevents
+  // spurious re-fetches on every TOKEN_REFRESHED event (which creates a new object).
+  }, [userId, reloadTrigger]);
 
-  const updateBrandData = async (newData) => {
+  const updateBrandData = useCallback(async (newData) => {
     const updated = { ...brandData, ...newData };
     setBrandData(updated);
     
@@ -290,7 +315,8 @@ export function BrandProvider({ children }) {
         // Complete data with all fields
         const profileData = {
           user_id: user.id,
-          profile_type: updated.profileType || 'brand',
+          first_name: updated.firstName?.trim() || null,
+          profile_type: normalizeProfileTypeForDb(updated.profileType),
           creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
           brand_name: updated.brandName || null,
           social_handle: updated.handle || null, // HUTTLE AI: updated 1
@@ -328,33 +354,37 @@ export function BrandProvider({ children }) {
           updated_at: new Date().toISOString(),
         };
 
-        const [{ error: profileError }, { error: brandVoiceError }] = await Promise.all([ // HUTTLE AI: updated 1
-          supabase
-            .from('user_profile')
-            .upsert(profileData, {
-              onConflict: 'user_id'
-            }),
-          supabase
-            .from('brand_voice')
-            .upsert(
-              {
-                user_id: user.id,
-                handle: updated.handle || null,
-              },
-              {
-                onConflict: 'user_id',
-              }
-            ),
-        ]);
+        const { error: profileError } = await supabase
+          .from('user_profile')
+          .upsert(profileData, {
+            onConflict: 'user_id'
+          });
 
-        if (profileError || brandVoiceError) {
-          console.error('Error saving brand data to Supabase:', profileError || brandVoiceError);
-          if (brandVoiceError) {
-            console.error('Error saving brand voice handle to Supabase:', brandVoiceError);
-          }
-          return { success: false, error: (profileError || brandVoiceError).message };
+        if (profileError) {
+          console.error('Error saving brand data to Supabase:', profileError);
+          return { success: false, error: profileError.message };
         }
-        
+
+        const nicheForPrefs =
+          typeof updated.niche === 'string'
+            ? updated.niche
+            : updated.niche
+              ? String(updated.niche)
+              : null;
+
+        const prefResult = await saveUserPreferences(user.id, {
+          creator_type: updated.creatorType || null,
+          city: updated.city || null,
+          growth_stage: normalizeOptionalEnum(updated.growthStage) || null,
+          content_focus: nicheForPrefs,
+          target_audience: updated.targetAudience || null,
+          platforms: Array.isArray(updated.platforms) ? updated.platforms : [],
+        });
+
+        if (!prefResult?.success) {
+          console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
+        }
+
         return { success: true };
       } catch (error) {
         console.error('Error updating brand data:', error);
@@ -364,44 +394,10 @@ export function BrandProvider({ children }) {
     
     // Not authenticated — saved to localStorage only
     return { success: true };
-  };
+  }, [brandData, user?.id]);
 
-  const resetBrandData = async () => {
-    const resetData = {
-      firstName: '',
-      profileType: 'brand',
-      creatorArchetype: '',
-      brandName: '',
-      handle: '', // HUTTLE AI: updated 1
-      niche: '',
-      subNiche: '',
-      contentFocus: '',
-      city: '',
-      industry: '',
-      growthStage: '',
-      creatorType: null,
-      targetAudience: '',
-      brandVoice: '',
-      platforms: [],
-      goals: [],
-      audiencePainPoint: '',
-      audienceActionTrigger: '',
-      toneChips: [],
-      writingStyle: '',
-      examplePost: '',
-      contentToPost: [],
-      contentToAvoid: '',
-      followerCount: '',
-      primaryOffer: '',
-      conversionGoal: '',
-      contentPersona: '',
-      monetizationGoal: '',
-      showUpStyle: '',
-      contentStrengths: [],
-      biggestChallenge: '',
-      hookStylePreference: '',
-      emotionalTriggers: [],
-    };
+  const resetBrandData = useCallback(async () => {
+    const resetData = createEmptyBrandData();
     setBrandData(resetData);
     localStorage.removeItem('brandData');
 
@@ -446,35 +442,24 @@ export function BrandProvider({ children }) {
         if (error) {
           console.error('Error resetting brand data in Supabase:', error);
         }
-
-        const { error: brandVoiceError } = await supabase // HUTTLE AI: updated 1
-          .from('brand_voice')
-          .upsert(
-            {
-              user_id: user.id,
-              handle: null,
-            },
-            {
-              onConflict: 'user_id',
-            }
-          );
-
-        if (brandVoiceError) {
-          console.error('Error resetting brand voice handle in Supabase:', brandVoiceError);
-        }
       } catch (error) {
         console.error('Error resetting brand data:', error);
       }
     }
-  };
+  }, [user?.id]);
 
   // Force reload brand data from Supabase (useful after onboarding)
-  const refreshBrandData = () => {
+  const refreshBrandData = useCallback(() => {
     setReloadTrigger(prev => prev + 1);
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ brandData, updateBrandData, resetBrandData, refreshBrandData, loading }),
+    [brandData, updateBrandData, resetBrandData, refreshBrandData, loading]
+  );
 
   return (
-    <BrandContext.Provider value={{ brandData, updateBrandData, resetBrandData, refreshBrandData, loading }}>
+    <BrandContext.Provider value={value}>
       {children}
     </BrandContext.Provider>
   );

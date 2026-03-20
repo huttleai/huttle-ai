@@ -64,7 +64,7 @@ function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}
 // HUTTLE AI: brand context injected — prepend creator brand profile to any system prompt
 function buildSystemPromptWithBrandBlock(basePrompt, brandData) {
   const brandBlock = buildCreatorBrandBlock(brandData, brandData);
-  const fullPrompt = buildSystemPromptWithBrandBlock(basePrompt, brandData);
+  const fullPrompt = buildSystemPrompt(basePrompt, brandData);
   return brandBlock ? `${brandBlock}\n${fullPrompt}` : fullPrompt;
 }
 

@@ -446,7 +446,7 @@ export default function IgniteEngine() {
       if (!result.success) throw new Error(result.error || 'Failed to save');
       setSavedBrief(true);
       setTimeout(() => setSavedBrief(false), 2000);
-      showToast('Saved to Content Vault!', 'success');
+      showToast('Saved to vault ✓', 'success');
     } catch (error) {
       console.error('Failed to save brief:', error);
       showToast('Failed to save brief', 'error');
@@ -779,9 +779,9 @@ export default function IgniteEngine() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={handleSaveBrief} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+                  <button type="button" data-testid="ignite-save-vault" onClick={handleSaveBrief} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
                     {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
-                    <span>{savedBrief ? 'Saved!' : 'Save to Vault'}</span>
+                    <span>{savedBrief ? 'Saved ✓' : 'Save to Vault'}</span>
                   </button>
                   <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
                     <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />

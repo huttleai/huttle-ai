@@ -1,0 +1,20 @@
+{
+  "goal": "Grow followers",
+  "period": "7",
+  "totalPosts": 4,
+  "platforms": ["Instagram", "TikTok"],
+  "contentMix": { "educational": 2, "authority": 1, "conversion": 1 },
+  "schedule": [
+    {
+      "day": 1,
+      "posts": [
+        {
+          "topic": "Three systems creators can steal this week",
+          "content_type": "Reel",
+          "reasoning": "High save potential.",
+          "platform": "Instagram"
+        }
+      ]
+    }
+  ]
+}

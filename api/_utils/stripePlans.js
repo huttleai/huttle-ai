@@ -53,6 +53,35 @@ export function getPlanFromPriceId(priceId) {
   return priceMap[priceId] || null;
 }
 
+export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
+  const normalizedPlanId = normalizePlanId(planId);
+  if (!normalizedPlanId) return null;
+
+  const priceMap = {
+    essentials: {
+      monthly: process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || null,
+      annual: process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || null,
+    },
+    pro: {
+      monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY || null,
+      annual: process.env.STRIPE_PRICE_PRO_ANNUAL || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL || null,
+    },
+    founder: {
+      annual: process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || null,
+    },
+    builder: {
+      annual:
+        process.env.STRIPE_PRICE_BUILDER_ANNUAL ||
+        process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL ||
+        process.env.STRIPE_PRICE_BUILDERS_ANNUAL ||
+        process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL ||
+        null,
+    },
+  };
+
+  return priceMap[normalizedPlanId]?.[billingCycle] || null;
+}
+
 export function resolvePlanId({ planId, metadataPlanId, priceId }) {
   const normalizedPlanId = normalizePlanId(planId || metadataPlanId);
   if (normalizedPlanId) {

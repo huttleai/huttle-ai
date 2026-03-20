@@ -21,8 +21,7 @@ const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 const DEFAULT_MODEL = 'sonar';
 const ALLOWED_MODELS = new Set([
   'sonar',
-  'llama-3.1-sonar-small-128k-online',
-  'llama-3.1-sonar-large-128k-online',
+  'sonar-pro',
 ]);
 const ALLOWED_SEARCH_CONTEXT_SIZES = new Set(['low', 'medium', 'high']);
 
@@ -322,6 +321,21 @@ function buildDashboardFallbackData(cacheConfig = {}) {
   const platform = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
   const city = resolveFallbackLocation(cacheConfig.city);
 
+  if (cacheConfig.type === 'trending_hashtags_widget') {
+    const p = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
+    const base = [
+      { tag: '#viral', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#trending', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#explorepage', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#reels', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#fyp', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#smallbusiness', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#contentcreator', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#growthmindset', volume: 'Medium', status: 'Trending', platform: p, type: 'hashtag' },
+    ];
+    return base;
+  }
+
   if (cacheConfig.type === 'hashtags') {
     const nicheSlug = String(cacheConfig.niche || 'smallbusiness').replace(/[^a-zA-Z0-9]/g, '');
     const localTags = city
@@ -550,7 +564,7 @@ export default async function handler(req, res) {
       const errorText = await response.text();
       logError('perplexity.upstream_error', { status: response.status, errorText });
 
-      if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags')) {
+      if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')) {
         return respondWithDashboardFallback(res, cache, response.status);
       }
 
@@ -563,21 +577,21 @@ export default async function handler(req, res) {
     const content = data.choices?.[0]?.message?.content || '';
     let structuredData = cache?.key ? parseStructuredJson(content) : null;
 
-    if (cache?.type === 'hashtags' && Array.isArray(structuredData)) {
+    if ((cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget') && Array.isArray(structuredData)) {
       structuredData = normalizeDashboardHashtagPayload(structuredData, cache);
     }
 
     if (
       cache?.key
       && !requireRealtime
-      && (cache?.type === 'trending' || cache?.type === 'hashtags')
+      && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')
       && !Array.isArray(structuredData)
     ) {
       logError('perplexity.unparseable_dashboard_payload', { cacheKey: cache.key });
       return respondWithDashboardFallback(res, cache, 200);
     }
 
-    if (!requireRealtime && cache?.type === 'hashtags' && Array.isArray(structuredData) && structuredData.length === 0) {
+    if (!requireRealtime && (cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget') && Array.isArray(structuredData) && structuredData.length === 0) {
       logError('perplexity.empty_dashboard_hashtag_payload', { cacheKey: cache.key });
       return respondWithDashboardFallback(res, cache, 200);
     }

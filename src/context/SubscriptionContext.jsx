@@ -16,7 +16,7 @@ const SUBSCRIPTION_TIMEOUT_MS = 10000;
 async function getDatabaseSubscription(userId) {
   const { data, error } = await supabase
     .from(TABLES.SUBSCRIPTIONS)
-    .select('id, user_id, tier, status')
+    .select('id, user_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancelled_at')
     .eq('user_id', userId)
     .in('status', Array.from(ACTIVE_ACCESS_STATUSES))
     .limit(1)
@@ -54,6 +54,8 @@ export function SubscriptionProvider({ children }) {
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
   const authLoading = authContext?.loading ?? true;
+  const profileChecked = authContext?.profileChecked ?? false;
+  const sessionConfirmed = authContext?.sessionConfirmed ?? false;
   
   // Check for dev mode (same pattern as AuthContext)
   // SECURITY: Only allow via explicit environment variable in development
@@ -165,6 +167,13 @@ export function SubscriptionProvider({ children }) {
       return;
     }
 
+    if (!sessionConfirmed || (userId && !profileChecked)) {
+      clearSubscriptionTimers();
+      applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
+      setLoading(false);
+      return;
+    }
+
     if (!userId) {
       retryCountRef.current = 0;
       clearSubscriptionTimers();
@@ -268,24 +277,38 @@ export function SubscriptionProvider({ children }) {
       const nextTier = hasActiveSubscription
         ? (databaseTier || resolvedStripeTier || TIERS.FREE)
         : TIERS.FREE;
+      // Build the public subscription object. Sensitive Stripe IDs are stripped:
+      // the server-side API endpoints resolve them from the authenticated user_id.
       const nextSubscription = stripeSubscription
         ? {
-            ...stripeSubscription,
-            ...(databaseSubscription
-              ? {
-                  id: databaseSubscription.id,
-                  user_id: databaseSubscription.user_id,
-                  plan: databaseTier,
-                  tier: databaseTier,
-                  status: databaseSubscription.status,
-                }
-              : {}),
+            subscriptionRecordId: databaseSubscription?.id ?? null,
+            currentPeriodStart: stripeSubscription.currentPeriodStart ?? databaseSubscription?.current_period_start ?? null,
+            currentPeriodEnd: stripeSubscription.currentPeriodEnd ?? databaseSubscription?.current_period_end ?? null,
+            trialStart: stripeSubscription.trialStart ?? null,
+            trialEnd: stripeSubscription.trialEnd ?? null,
+            cancelAtPeriodEnd: stripeSubscription.cancelAtPeriodEnd ?? databaseSubscription?.cancel_at_period_end ?? false,
+            cancelledAt: stripeSubscription.cancelledAt ?? databaseSubscription?.cancelled_at ?? null,
+            billingCycle: stripeSubscription.billingCycle ?? null,
+            upcomingPlanChange: stripeSubscription.upcomingPlanChange ?? null,
+            user_id: databaseSubscription?.user_id ?? userId,
+            plan: databaseTier || stripeSubscription.plan || null,
+            tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
+            status: databaseSubscription?.status || stripeSubscription.status,
           }
         : (databaseSubscription
           ? {
-              ...databaseSubscription,
+              subscriptionRecordId: databaseSubscription.id,
+              currentPeriodStart: databaseSubscription.current_period_start ?? null,
+              currentPeriodEnd: databaseSubscription.current_period_end ?? null,
+              trialStart: null,
+              trialEnd: null,
+              cancelAtPeriodEnd: databaseSubscription.cancel_at_period_end ?? false,
+              cancelledAt: databaseSubscription.cancelled_at ?? null,
+              billingCycle: null,
+              upcomingPlanChange: null,
               plan: databaseTier,
               tier: databaseTier,
+              status: databaseSubscription.status,
             }
           : null);
       const usingSafeFallback = Boolean(stripeResult?.degraded && !databaseSubscription && !stripeSubscription);
@@ -329,7 +352,7 @@ export function SubscriptionProvider({ children }) {
         setLoading(false);
       }
     }
-  }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, authLoading, clearRequestTimeout, clearSubscriptionTimers, skipAuth, userId]);
+  }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, authLoading, clearRequestTimeout, clearSubscriptionTimers, profileChecked, sessionConfirmed, skipAuth, userId]);
 
   const refreshStorageUsage = useCallback(async () => {
     if (skipAuth) {
@@ -346,8 +369,10 @@ export function SubscriptionProvider({ children }) {
     } catch (error) {
       console.error('Error refreshing storage usage:', error);
     }
-    return storageUsage;
-  }, [skipAuth, storageUsage, userId]);
+    // Return 0 on failure — do NOT include `storageUsage` in deps, which would
+    // cause an infinite loop: fetch → setState → new callback → re-fetch.
+    return 0;
+  }, [skipAuth, userId]);
 
   useEffect(() => {
     if (skipAuth) {
@@ -361,6 +386,16 @@ export function SubscriptionProvider({ children }) {
     if (authLoading) {
       setLoading(true);
       clearSubscriptionTimers();
+
+      return () => {
+        clearSubscriptionTimers();
+      };
+    }
+
+    if (!sessionConfirmed || (userId && !profileChecked)) {
+      clearSubscriptionTimers();
+      applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
+      setLoading(false);
 
       return () => {
         clearSubscriptionTimers();
@@ -386,7 +421,7 @@ export function SubscriptionProvider({ children }) {
     return () => {
       clearSubscriptionTimers();
     };
-  }, [applySubscriptionFallback, authLoading, clearSubscriptionTimers, refreshSubscription, skipAuth, userId]);
+  }, [applySubscriptionFallback, authLoading, clearSubscriptionTimers, profileChecked, refreshSubscription, sessionConfirmed, skipAuth, userId]);
 
   useEffect(() => {
     if (userId) {
@@ -398,6 +433,10 @@ export function SubscriptionProvider({ children }) {
 
   const isTrialing = subscription?.status === 'trialing';
   const isPastDue = subscription?.status === 'past_due';
+  const isFounder = userTier === TIERS.FOUNDER;
+  const isBuilder = userTier === TIERS.BUILDER;
+  const isAnnualFounder = isFounder || isBuilder;
+  const isCancelScheduled = Boolean(subscription?.cancelAtPeriodEnd);
   const trialEndsAt = useMemo(
     () => (subscription?.trialEnd ? new Date(subscription.trialEnd) : null),
     [subscription?.trialEnd]
@@ -478,7 +517,7 @@ export function SubscriptionProvider({ children }) {
     return remaining;
   }, [getAuthoritativeRemainingUsage]);
 
-  const getTierDisplayName = (tier) => {
+  const getTierDisplayName = useCallback((tier) => {
     const names = {
       [TIERS.FREE]: 'Free',
       [TIERS.ESSENTIALS]: 'Essentials',
@@ -487,9 +526,9 @@ export function SubscriptionProvider({ children }) {
       [TIERS.FOUNDER]: 'Founders Club',
     };
     return names[tier] || 'No Active Plan';
-  };
+  }, []);
 
-  const getTierColor = (tier) => {
+  const getTierColor = useCallback((tier) => {
     const colors = {
       [TIERS.FREE]: 'text-gray-600',
       [TIERS.ESSENTIALS]: 'text-huttle-primary',
@@ -498,83 +537,89 @@ export function SubscriptionProvider({ children }) {
       [TIERS.FOUNDER]: 'text-amber-600',
     };
     return colors[tier] || 'text-gray-600';
-  };
+  }, []);
 
-  const getStorageLimit = () => {
+  const getStorageLimit = useCallback(() => {
     if (skipAuth) {
       return TIER_LIMITS[TIERS.PRO]?.storageLimit || 50 * 1024 * 1024 * 1024;
     }
     return TIER_LIMITS[userTier]?.storageLimit ?? 0;
-  };
+  }, [skipAuth, userTier]);
 
-  const getStorageUsage = () => {
-    return storageUsage;
-  };
+  const getStorageUsage = useCallback(() => storageUsage, [storageUsage]);
 
-  const canUploadFile = (fileSize) => {
-    const limit = getStorageLimit();
-    const currentUsage = getStorageUsage();
-    return (currentUsage + fileSize) <= limit;
-  };
+  const canUploadFile = useCallback((fileSize) => {
+    const limit = TIER_LIMITS[userTier]?.storageLimit ?? 0;
+    return (storageUsage + fileSize) <= limit;
+  }, [userTier, storageUsage]);
 
-  const getUpgradeMessage = () => {
+  const getUpgradeMessage = useCallback(() => {
     if (isPastDue) {
       return 'Your payment needs attention. Update your billing details to keep full access.';
     }
-
     if (subscriptionStatus === 'canceled') {
       return 'Your subscription has ended. Choose a plan to get back to creating content.';
     }
-
     if (!userTier || userTier === TIERS.FREE) {
       return 'Choose a plan to unlock Huttle AI.';
     }
-
     return '';
-  };
+  }, [isPastDue, subscriptionStatus, userTier]);
 
-  const canAccessFeatureByName = (featureName) => {
+  const canAccessFeatureByName = useCallback((featureName) => {
     return canTierAccessFeature(featureName, userTier);
-  };
+  }, [userTier]);
+
+  const value = useMemo(() => ({
+    userTier,
+    userId,
+    subscription,
+    subscriptionStatus,
+    isTrialing,
+    isPastDue,
+    isFounder,
+    isBuilder,
+    isAnnualFounder,
+    isCancelScheduled,
+    trialEndsAt,
+    trialDaysRemaining,
+    hasPaidAccess,
+    usage,
+    loading,
+    subscriptionError,
+    isSubscriptionDegraded,
+    checkFeatureAccess,
+    getFeatureLimit,
+    checkAndTrackUsage,
+    refreshUsage,
+    getAuthoritativeRemainingUsage,
+    getTierDisplayName,
+    getTierColor,
+    canAccessFeature: canAccessFeatureByName,
+    getStorageLimit,
+    getStorageUsage,
+    refreshStorageUsage,
+    canUploadFile,
+    getUpgradeMessage,
+    refreshSubscription,
+    TIERS,
+    TIER_LIMITS,
+    FEATURES,
+    isDemoMode: demoMode,
+    setDemoTier,
+  }), [
+    userTier, userId, subscription, subscriptionStatus, isTrialing, isPastDue,
+    isFounder, isBuilder, isAnnualFounder, isCancelScheduled,
+    trialEndsAt, trialDaysRemaining, hasPaidAccess, usage, loading,
+    subscriptionError, isSubscriptionDegraded, checkFeatureAccess, getFeatureLimit,
+    checkAndTrackUsage, refreshUsage, getAuthoritativeRemainingUsage,
+    getTierDisplayName, getTierColor, getStorageLimit, getStorageUsage,
+    refreshStorageUsage, canUploadFile, getUpgradeMessage, canAccessFeatureByName,
+    refreshSubscription, demoMode, setDemoTier,
+  ]);
 
   return (
-    <SubscriptionContext.Provider
-      value={{
-        userTier,
-        userId,
-        subscription,
-        subscriptionStatus,
-        isTrialing,
-        isPastDue,
-        trialEndsAt,
-        trialDaysRemaining,
-        hasPaidAccess,
-        usage,
-        loading,
-        subscriptionError,
-        isSubscriptionDegraded,
-        checkFeatureAccess,
-        getFeatureLimit,
-        checkAndTrackUsage,
-        refreshUsage,
-        getAuthoritativeRemainingUsage,
-        getTierDisplayName,
-        getTierColor,
-        canAccessFeature: canAccessFeatureByName,
-        getStorageLimit,
-        getStorageUsage,
-        refreshStorageUsage,
-        canUploadFile,
-        getUpgradeMessage,
-        refreshSubscription,
-        TIERS,
-        TIER_LIMITS,
-        FEATURES,
-        // Demo mode helpers
-        isDemoMode: demoMode,
-        setDemoTier,
-      }}
-    >
+    <SubscriptionContext.Provider value={value}>
       {children}
     </SubscriptionContext.Provider>
   );

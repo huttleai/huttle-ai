@@ -1,0 +1,13 @@
+{
+  "subscription": "sub_test_mock",
+  "plan": "pro",
+  "tier": "pro",
+  "status": "active",
+  "currentPeriodStart": "2026-01-01T00:00:00.000Z",
+  "currentPeriodEnd": "2027-01-01T00:00:00.000Z",
+  "trialEnd": null,
+  "cancelAtPeriodEnd": false,
+  "cancelledAt": null,
+  "upcomingPlanChange": null,
+  "billingCycle": "month"
+}

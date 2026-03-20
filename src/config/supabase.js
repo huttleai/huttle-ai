@@ -1232,7 +1232,8 @@ export async function updatePostStatus(postId, status, userId) {
  * Includes timeout protection and graceful fallback to defaults
  */
 export async function getUserPreferences(userId) {
-  const QUERY_TIMEOUT_MS = 8000;
+  // Cold Supabase projects often need >8s on first request — align with BrandContext.
+  const QUERY_TIMEOUT_MS = 15000;
   const defaultPreferences = {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     calendar_view: 'month',
@@ -1240,7 +1241,6 @@ export async function getUserPreferences(userId) {
   };
 
   try {
-    // Add timeout protection
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Query timed out')), QUERY_TIMEOUT_MS);
     });
@@ -1261,13 +1261,16 @@ export async function getUserPreferences(userId) {
       throw error;
     }
     
-    // Return defaults if no preferences exist
     return { 
       success: true, 
       data: data || defaultPreferences
     };
   } catch (error) {
-    console.warn('Error getting user preferences, using defaults:', error);
+    // Timeouts are expected on slow networks / Supabase cold start — defaults are safe.
+    const isTimeout = error?.message === 'Query timed out';
+    if (!isTimeout) {
+      console.warn('[Preferences] Using defaults:', error?.message || error);
+    }
     return { success: true, data: defaultPreferences };
   }
 }

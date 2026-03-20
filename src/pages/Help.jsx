@@ -220,7 +220,7 @@ export default function Help() {
       tips: [
         'Quick Nav cards link you to Profile, Brand Voice, Security, and Billing pages',
         'Preferred Platforms toggles control which platforms appear in Trend Lab, Remix Studio, and publishing flows',
-        'Manage Billing opens the Stripe Customer Portal for plan changes, payment methods, and cancellation',
+        'Manage Billing opens Huttle AI’s in-app billing center so you can update cards, review invoices, and manage your subscription without emailing support',
         'General settings let you choose your language and timezone',
         'Notification toggles control Trend Alerts and AI Usage Alerts'
       ]

@@ -756,7 +756,7 @@ Provides platform-specific guidelines for:
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
 - `npm run clean` - Clean Vite cache
-- `npm run fresh` - Clean cache and restart dev server
+- `npm run fresh` - Clean Vite cache and start **Vite + local API** (`dev:local`, port 3001 for `/api/*`)
 
 ### Database Setup
 

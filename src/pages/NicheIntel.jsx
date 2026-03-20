@@ -2,7 +2,7 @@ import { useState, useContext, useEffect } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
-  Copy, Check, Sparkles, Lock,
+  Copy, Check, Sparkles, Lock, FolderPlus,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -16,6 +16,9 @@ import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
 import { useNavigate } from 'react-router-dom';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { saveContentLibraryItem } from '../config/supabase';
+import { buildContentVaultPayload } from '../utils/contentVault';
+import { AuthContext } from '../context/AuthContext';
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -33,6 +36,7 @@ function hasConfiguredNiche(brandData) {
 
 export default function NicheIntel() {
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
+  const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -49,6 +53,7 @@ export default function NicheIntel() {
   const [analysis, setAnalysis] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [savedIdeaId, setSavedIdeaId] = useState(null);
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   const hasAccess = checkFeatureAccess('niche-intel');
@@ -115,6 +120,44 @@ export default function NicheIntel() {
     });
 
     navigate(`/dashboard/full-post-builder?${searchParams.toString()}`);
+  };
+
+  const handleSaveIdeaToVault = async (idea, ideaIndex) => {
+    if (!user?.id) {
+      addToast('Please log in to save', 'error');
+      return;
+    }
+    const lines = [
+      idea.title,
+      idea.hook && `Hook: ${idea.hook}`,
+      idea.whyThisWorks && idea.whyThisWorks,
+      Array.isArray(idea.hashtags) && idea.hashtags.length > 0 ? idea.hashtags.join(' ') : '',
+      idea.platformFit && `Best on: ${idea.platformFit}`,
+    ].filter(Boolean);
+    const contentText = lines.join('\n\n');
+    if (!contentText.trim()) return;
+
+    try {
+      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+        name: `Niche idea - ${String(idea.title || '').slice(0, 48)}`,
+        contentText,
+        contentType: 'caption',
+        toolSource: 'niche_intel',
+        toolLabel: 'Niche Intel',
+        topic: String(idea.title || nicheQuery).slice(0, 120),
+        platform: String(idea.platformFit || platform || 'instagram').toLowerCase(),
+        description: 'Saved from Niche Intel',
+        metadata: { idea_format: idea.format, idea_momentum: idea.momentum },
+      }));
+
+      if (!result.success) throw new Error(result.error || 'Save failed');
+      setSavedIdeaId(ideaIndex);
+      setTimeout(() => setSavedIdeaId(null), 2500);
+      addToast('Saved to vault ✓', 'success');
+    } catch (e) {
+      console.error(e);
+      addToast('Could not save idea', 'error');
+    }
   };
 
   const handleCopyHook = async (hook, idx) => {
@@ -375,12 +418,23 @@ export default function NicheIntel() {
                             )}
                             {idea.platformFit && <span className="text-[10px] text-gray-400 mt-1 inline-block">Best on {sanitizeAIOutput(idea.platformFit)}</span>}
                           </div>
-                          <button
-                            onClick={() => handleBuildPost(idea)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-huttle-primary text-white rounded-lg text-xs font-medium hover:bg-huttle-primary-dark transition-colors flex-shrink-0"
-                          >
-                            <Zap className="w-3 h-3" /> Build Post
-                          </button>
+                          <div className="flex flex-col gap-1.5 items-end flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveIdeaToVault(idea, i)}
+                              className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 bg-white text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                              data-testid="niche-intel-save-vault"
+                            >
+                              {savedIdeaId === i ? <Check className="w-3 h-3 text-green-600" /> : <FolderPlus className="w-3 h-3 text-huttle-primary" />}
+                              {savedIdeaId === i ? 'Saved ✓' : 'Save to Vault'}
+                            </button>
+                            <button
+                              onClick={() => handleBuildPost(idea)}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-huttle-primary text-white rounded-lg text-xs font-medium hover:bg-huttle-primary-dark transition-colors"
+                            >
+                              <Zap className="w-3 h-3" /> Build Post
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

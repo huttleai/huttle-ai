@@ -1,10 +1,14 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRight,
+  Calendar,
   Check,
   Copy,
   Edit3,
   FolderPlus,
+  Layers,
   Loader2,
+  Plus,
   Search,
   Sparkles,
   Star,
@@ -12,11 +16,14 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
+import PostKitCard from '../components/PostKitCard';
+import PostKitCreateModal from '../components/PostKitCreateModal';
+import PostKitDetail from '../components/PostKitDetail';
 import {
   addItemsToCollection,
   createContentCollection,
@@ -24,6 +31,7 @@ import {
   getContentCollectionItems,
   getContentCollections,
   getContentLibraryItems,
+  saveContentLibraryItem,
   setContentItemCollections,
   updateContentLibraryItem,
 } from '../config/supabase';
@@ -38,6 +46,7 @@ import {
   mapContentRowToVaultItem,
   PLATFORM_OPTIONS,
 } from '../utils/contentVault';
+import { getUserKits } from '../services/postKitService';
 
 function formatDate(value) {
   if (!value) return '';
@@ -167,7 +176,169 @@ function CollectionManager({
   );
 }
 
-function EmptyState({ hasContent, onClearFilters, onCreate }) {
+const CREATE_POST_PLATFORMS = [
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'tiktok', label: 'TikTok' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'x', label: 'X' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'facebook', label: 'Facebook' },
+];
+
+const KIT_PLATFORM_FILTER_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'tiktok', label: 'TikTok' },
+  { id: 'twitter', label: 'X / Twitter' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'facebook', label: 'Facebook' },
+];
+
+function CreatePostModal({ isOpen, isSaving, onClose, onSaveToVault, onSaveAndSchedule }) {
+  const [postContent, setPostContent] = useState('');
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [plannedDate, setPlannedDate] = useState('');
+  const [tags, setTags] = useState('');
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && textareaRef.current) {
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+    if (!isOpen) {
+      setPostContent('');
+      setSelectedPlatforms([]);
+      setPlannedDate('');
+      setTags('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const togglePlatform = (platformId) => {
+    setSelectedPlatforms((current) =>
+      current.includes(platformId)
+        ? current.filter((id) => id !== platformId)
+        : [...current, platformId]
+    );
+  };
+
+  const formData = { postContent, selectedPlatforms, plannedDate, tags };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4 backdrop-blur-sm" data-testid="vault-create-post-modal">
+      <div className="w-full max-w-lg rounded-t-[28px] sm:rounded-[28px] border border-gray-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Create Post</h3>
+            <p className="mt-0.5 text-sm text-gray-500">Save a post idea directly to your vault</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          <div>
+            <textarea
+              ref={textareaRef}
+              value={postContent}
+              onChange={(e) => setPostContent(e.target.value)}
+              rows={5}
+              placeholder="Write your post..."
+              className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20 placeholder:text-gray-400"
+            />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform(s)</p>
+            <div className="flex flex-wrap gap-2">
+              {CREATE_POST_PLATFORMS.map((platform) => {
+                const isSelected = selectedPlatforms.includes(platform.id);
+                return (
+                  <button
+                    key={platform.id}
+                    type="button"
+                    onClick={() => togglePlatform(platform.id)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      isSelected
+                        ? 'bg-huttle-primary text-white border-huttle-primary'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {platform.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                <Calendar className="inline w-3 h-3 mr-1" />
+                Planned date
+              </label>
+              <input
+                type="date"
+                value={plannedDate}
+                onChange={(e) => setPlannedDate(e.target.value)}
+                className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                Tags / labels
+              </label>
+              <input
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="e.g. launch, product"
+                className="w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20 placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!postContent.trim() || isSaving}
+            onClick={() => onSaveToVault(formData)}
+            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-huttle-primary/30 bg-white px-4 py-3 text-sm font-medium text-huttle-primary transition-all hover:bg-huttle-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}
+            Save to Vault
+          </button>
+          <button
+            type="button"
+            disabled={!postContent.trim() || isSaving}
+            onClick={() => onSaveAndSchedule(formData)}
+            className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+            Save & Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ hasContent, onClearFilters, onCreate, onCreateManual }) {
   return (
     <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
       <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-huttle-primary/10 text-huttle-primary">
@@ -181,14 +352,24 @@ function EmptyState({ hasContent, onClearFilters, onCreate }) {
           ? 'Try a different search or clear your filters.'
           : "Save content from any AI tool and it'll appear here, ready to copy and post."}
       </p>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
         <button
           type="button"
           onClick={hasContent ? onClearFilters : onCreate}
           className="inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
         >
-          {hasContent ? 'Clear Filters' : 'Create Your First Content'}
+          {hasContent ? 'Clear Filters' : 'Generate with AI'}
         </button>
+        {!hasContent && (
+          <button
+            type="button"
+            onClick={onCreateManual}
+            className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+          >
+            <Plus className="h-4 w-4" />
+            Write a Post Manually
+          </button>
+        )}
       </div>
     </div>
   );
@@ -227,6 +408,14 @@ export default function ContentLibrary() {
     newCollectionName: '',
     isSaving: false,
   });
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [isCreatePostSaving, setIsCreatePostSaving] = useState(false);
+  const [vaultMainTab, setVaultMainTab] = useState('kits');
+  const [kits, setKits] = useState([]);
+  const [kitsLoading, setKitsLoading] = useState(false);
+  const [selectedKitId, setSelectedKitId] = useState(null);
+  const [kitPlatformFilter, setKitPlatformFilter] = useState('all');
+  const [showPostKitCreate, setShowPostKitCreate] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -299,6 +488,63 @@ export default function ContentLibrary() {
   useEffect(() => {
     loadVault();
   }, [loadVault]);
+
+  const loadKits = useCallback(async () => {
+    if (!user?.id) {
+      setKits([]);
+      setKitsLoading(false);
+      return;
+    }
+
+    setKitsLoading(true);
+    try {
+      const result = await getUserKits(user.id);
+      if (!result.success) {
+        addToast('Failed to load post kits', 'error');
+        setKits([]);
+        return;
+      }
+      setKits(result.data || []);
+    } catch (error) {
+      console.error('Error loading post kits:', error);
+      addToast('Failed to load post kits', 'error');
+      setKits([]);
+    } finally {
+      setKitsLoading(false);
+    }
+  }, [addToast, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (vaultMainTab !== 'kits') return;
+    loadKits();
+  }, [user?.id, vaultMainTab, loadKits]);
+
+  useEffect(() => {
+    if (vaultMainTab !== 'kits') {
+      setSelectedKitId(null);
+    }
+  }, [vaultMainTab]);
+
+  useEffect(() => {
+    if (vaultMainTab !== 'library') {
+      setActiveItemId(null);
+    }
+  }, [vaultMainTab]);
+
+  const kitCountsByPlatform = useMemo(() => {
+    const counts = { all: kits.length };
+    KIT_PLATFORM_FILTER_TABS.forEach((tab) => {
+      if (tab.id === 'all') return;
+      counts[tab.id] = kits.filter((k) => k.platform === tab.id).length;
+    });
+    return counts;
+  }, [kits]);
+
+  const filteredKits = useMemo(() => {
+    if (kitPlatformFilter === 'all') return kits;
+    return kits.filter((k) => k.platform === kitPlatformFilter);
+  }, [kits, kitPlatformFilter]);
 
   const collectionIdsByItem = useMemo(() => getCollectionIdsByItem(collectionLinks), [collectionLinks]);
 
@@ -583,21 +829,203 @@ export default function ContentLibrary() {
     }
   };
 
+  const handleSavePost = async ({ postContent, selectedPlatforms, plannedDate, tags }, options = {}) => {
+    if (!user?.id || !postContent.trim()) return;
+
+    setIsCreatePostSaving(true);
+    try {
+      const primaryPlatform = selectedPlatforms[0] || null;
+      const topicValue = tags.trim() || null;
+      const metadata = {
+        content_type: 'manual_post',
+        tool_source: 'manual',
+        tool_label: 'Manual post',
+        source: 'manual',
+        platform: primaryPlatform || '',
+        platforms: selectedPlatforms,
+        planned_date: plannedDate || null,
+        topic: topicValue || '',
+        tags: tags.trim() ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        copy_count: 0,
+      };
+
+      const result = await saveContentLibraryItem(user.id, {
+        name: 'Manual Post',
+        content: postContent.trim(),
+        type: 'text',
+        platform: primaryPlatform,
+        topic: topicValue,
+        tool_source: 'manual',
+        metadata,
+      });
+
+      if (!result.success) throw new Error(result.error || 'Failed to save');
+
+      setIsCreatePostOpen(false);
+      addToast('Post saved to vault ✓', 'success');
+      await loadVault();
+
+      if (options.scheduleAfter && plannedDate) {
+        navigate(`/dashboard/calendar?date=${plannedDate}`);
+      }
+    } catch (error) {
+      console.error('Failed to save manual post:', error);
+      addToast('Failed to save post', 'error');
+    } finally {
+      setIsCreatePostSaving(false);
+    }
+  };
+
   const hasNoVaultItems = !loading && vaultItems.length === 0;
   const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
 
   return (
     <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pb-10 pt-14 sm:px-6 lg:ml-64 lg:px-8 lg:pt-20">
       <div className="mx-auto w-full max-w-7xl">
+        <div className="mb-4 rounded-[20px] border border-huttle-primary/20 bg-huttle-50/60 px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-600">
+            <Sparkles className="inline w-3.5 h-3.5 text-huttle-primary mr-1.5 -mt-0.5" />
+            Want AI to help write this post?
+          </p>
+          <Link
+            to="/dashboard/ai-tools"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-huttle-primary hover:text-huttle-primary-dark flex-shrink-0"
+          >
+            Try AI Power Tools <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Content Vault</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {vaultMainTab === 'kits' && !selectedKitId && 'Organize multi-part posts by platform.'}
+                {vaultMainTab === 'kits' && selectedKitId && 'Edit slots and copy when you are ready to post.'}
+                {vaultMainTab === 'library' && 'Your saved AI content'}
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 rounded-2xl border border-gray-200 bg-gray-50/80 p-1">
+              <button
+                type="button"
+                onClick={() => setVaultMainTab('kits')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  vaultMainTab === 'kits' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                Post kits
+              </button>
+              <button
+                type="button"
+                onClick={() => setVaultMainTab('library')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  vaultMainTab === 'library' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                All saved content
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {vaultMainTab === 'kits' && !selectedKitId && (
+          <div className="mb-6 space-y-4">
+            <div className="overflow-x-auto pb-1">
+              <div className="flex min-w-max gap-2">
+                {KIT_PLATFORM_FILTER_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setKitPlatformFilter(tab.id)}
+                    className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                      kitPlatformFilter === tab.id
+                        ? 'bg-huttle-primary text-white shadow-sm'
+                        : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab.label}{' '}
+                    <span className="opacity-80">({kitCountsByPlatform[tab.id] ?? 0})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {kitsLoading && (
+              <div className="flex items-center justify-center rounded-[28px] border border-gray-200 bg-white px-6 py-24 shadow-sm">
+                <div className="text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-huttle-primary" />
+                  <p className="mt-4 text-sm text-gray-500">Loading post kits…</p>
+                </div>
+              </div>
+            )}
+
+            {!kitsLoading && filteredKits.length === 0 && (
+              <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-huttle-primary/10 text-huttle-primary">
+                  <Layers className="h-7 w-7" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900">No post kits yet</h3>
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
+                  Create your first one to start organizing your content.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowPostKitCreate(true)}
+                  className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create post kit
+                </button>
+              </div>
+            )}
+
+            {!kitsLoading && filteredKits.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+                {filteredKits.map((kit) => (
+                  <PostKitCard
+                    key={kit.id}
+                    kit={kit}
+                    onClick={() => setSelectedKitId(kit.id)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowPostKitCreate(true)}
+                  className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-[24px] border-2 border-dashed border-gray-300 bg-white/60 px-5 py-8 text-center text-sm font-semibold text-gray-600 transition-all hover:border-huttle-primary/50 hover:text-huttle-primary"
+                >
+                  <Plus className="h-6 w-6" />
+                  New post kit
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {vaultMainTab === 'kits' && selectedKitId && (
+          <div className="mb-6">
+            <PostKitDetail
+              kitId={selectedKitId}
+              userId={user?.id}
+              onBack={() => {
+                setSelectedKitId(null);
+                loadKits();
+              }}
+              onUpdated={loadKits}
+            />
+          </div>
+        )}
+
+        {vaultMainTab === 'library' && (
+          <>
         <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Content Vault</h1>
-              <p className="mt-1 text-sm text-gray-500">Your saved AI content</p>
+              <h2 className="text-3xl font-semibold tracking-tight text-gray-900">All saved content</h2>
+              <p className="mt-1 text-sm text-gray-500">Captions, hooks, and items you saved from AI tools</p>
             </div>
 
             <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-              <div className="relative w-full sm:min-w-[340px]">
+              <div className="relative w-full sm:min-w-[300px]">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchInput}
@@ -606,6 +1034,16 @@ export default function ContentLibrary() {
                   className="w-full rounded-2xl border border-gray-200 bg-white px-11 py-3 text-sm outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
                 />
               </div>
+
+              <button
+                type="button"
+                data-testid="vault-create-post-button"
+                onClick={() => setIsCreatePostOpen(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-4 py-3 text-sm font-medium text-white transition-all hover:opacity-95 shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                + Create Post
+              </button>
 
               <button
                 type="button"
@@ -627,6 +1065,7 @@ export default function ContentLibrary() {
                 <button
                   key={filter.id}
                   type="button"
+                  data-testid={`vault-filter-${filter.id}`}
                   onClick={() => setSelectedType(filter.id)}
                   className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
                     selectedType === filter.id
@@ -772,11 +1211,21 @@ export default function ContentLibrary() {
         )}
 
         {hasNoVaultItems && (
-          <EmptyState hasContent={false} onClearFilters={resetFilters} onCreate={() => navigate('/dashboard/ai-tools')} />
+          <EmptyState
+            hasContent={false}
+            onClearFilters={resetFilters}
+            onCreate={() => navigate('/dashboard/ai-tools')}
+            onCreateManual={() => setIsCreatePostOpen(true)}
+          />
         )}
 
         {hasNoResults && (
-          <EmptyState hasContent onClearFilters={resetFilters} onCreate={() => navigate('/dashboard/ai-tools')} />
+          <EmptyState
+            hasContent
+            onClearFilters={resetFilters}
+            onCreate={() => navigate('/dashboard/ai-tools')}
+            onCreateManual={() => setIsCreatePostOpen(true)}
+          />
         )}
 
         {!loading && filteredItems.length > 0 && (
@@ -906,9 +1355,12 @@ export default function ContentLibrary() {
             })}
           </div>
         )}
+          </>
+        )}
+
       </div>
 
-      {activeItem && (
+      {vaultMainTab === 'library' && activeItem && (
         <div
           className={`fixed inset-0 z-[60] ${isMobile ? 'bg-[#f7f8fa]' : 'bg-black/30 backdrop-blur-sm'}`}
           onClick={isMobile ? undefined : () => setActiveItemId(null)}
@@ -1055,6 +1507,21 @@ export default function ContentLibrary() {
           </div>
         </div>
       )}
+
+      <PostKitCreateModal
+        isOpen={showPostKitCreate}
+        onClose={() => setShowPostKitCreate(false)}
+        userId={user?.id}
+        onCreated={() => loadKits()}
+      />
+
+      <CreatePostModal
+        isOpen={isCreatePostOpen}
+        isSaving={isCreatePostSaving}
+        onClose={() => setIsCreatePostOpen(false)}
+        onSaveToVault={(formData) => handleSavePost(formData)}
+        onSaveAndSchedule={(formData) => handleSavePost(formData, { scheduleAfter: true })}
+      />
 
       <CollectionManager
         collections={collections}

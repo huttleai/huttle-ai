@@ -21,6 +21,21 @@
     },
     "api/ai/deep-dive.js": {
       "maxDuration": 60
+    },
+    "api/ignite-engine-proxy.js": {
+      "maxDuration": 120
+    },
+    "api/plan-builder-proxy.js": {
+      "maxDuration": 60
+    },
+    "api/ai/grok.js": {
+      "maxDuration": 30
+    },
+    "api/ai/perplexity.js": {
+      "maxDuration": 60
+    },
+    "api/ai/claude.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

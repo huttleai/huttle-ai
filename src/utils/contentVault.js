@@ -49,6 +49,12 @@ export const CONTENT_TYPE_CONFIG = {
     badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
     accentClass: 'border-slate-400',
   },
+  manual_post: {
+    label: 'Manual',
+    singular: 'Manual',
+    badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200',
+    accentClass: 'border-gray-300',
+  },
   legacy: {
     label: 'Saved',
     singular: 'Saved',
@@ -59,6 +65,7 @@ export const CONTENT_TYPE_CONFIG = {
 
 export const CONTENT_TYPE_FILTERS = [
   { id: 'all', label: 'All' },
+  { id: 'manual_post', label: 'Manual' },
   { id: 'caption', label: 'Captions' },
   { id: 'hook', label: 'Hooks' },
   { id: 'hashtag', label: 'Hashtags' },
@@ -99,8 +106,16 @@ export function getPlatformOption(platform) {
 
 export function inferContentType(row) {
   const metadata = row?.metadata || {};
+  const toolSrc = String(metadata.tool_source || metadata.toolSource || '').toLowerCase();
+  if (toolSrc === 'manual' || metadata.source === 'manual') {
+    return 'manual_post';
+  }
   const rawType = metadata.content_type || metadata.contentType || '';
   const normalized = String(rawType).trim().toLowerCase();
+
+  if (normalized === 'manual_post' || normalized === 'manual') {
+    return 'manual_post';
+  }
 
   if (CONTENT_TYPE_CONFIG[normalized]) {
     return normalized;
@@ -252,6 +267,10 @@ export function buildUseAgainTarget(item) {
     || (item.platform === 'linkedin' ? 'LinkedIn' : '')
     || (item.platform === 'x' ? 'X' : '')
   );
+
+  if (source === 'manual' || source === 'manual_post') {
+    return `/dashboard/ai-tools?tool=caption&input=${encodedContent}`;
+  }
 
   if (source === 'caption_generator') {
     return `/dashboard/ai-tools?tool=caption&input=${encodedTopic || encodedContent}&platform=${encodedPlatform}`;

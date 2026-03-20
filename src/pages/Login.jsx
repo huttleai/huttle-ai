@@ -142,6 +142,7 @@ export default function Login() {
                   placeholder="you@example.com"
                   required
                   disabled={loading}
+                  data-testid="email-input"
                 />
               </div>
             </div>
@@ -174,12 +175,13 @@ export default function Login() {
                   placeholder="Enter your password"
                   required
                   disabled={loading}
+                  data-testid="password-input"
                 />
               </div>
             </div>
 
             {/* Submit Button */}
-            <button type="submit" disabled={loading} className="w-full btn-primary py-3">
+            <button type="submit" disabled={loading} className="w-full btn-primary py-3" data-testid="login-button">
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />

@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useMemo } from 'react';
 import { AuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import {
@@ -277,31 +277,31 @@ export function ContentProvider({ children }) {
     safeWriteJson(localStorage, 'savedContent', updated, { maxBytes: 2_500_000 });
   };
 
+  const value = useMemo(() => ({
+    savedContent,
+    scheduledPosts,
+    loading,
+    syncing,
+    userTimezone,
+    saveGeneratedContent,
+    saveToLibrary,
+    loadSavedContent,
+    deleteSavedContent,
+    getContentById,
+    appendToContent,
+    setDraft,
+    getDraft,
+    clearDraft,
+    draftContent,
+    schedulePost,
+    updateScheduledPost,
+    deleteScheduledPost,
+    loadScheduledPosts,
+    getMediaUrl,
+  }), [savedContent, scheduledPosts, loading, syncing, userTimezone, draftContent]);
+
   return (
-    <ContentContext.Provider
-      value={{
-        savedContent,
-        scheduledPosts,
-        loading,
-        syncing,
-        userTimezone,
-        saveGeneratedContent,
-        saveToLibrary,
-        loadSavedContent,
-        deleteSavedContent,
-        getContentById,
-        appendToContent,
-        setDraft,
-        getDraft,
-        clearDraft,
-        draftContent,
-        schedulePost,
-        updateScheduledPost,
-        deleteScheduledPost,
-        loadScheduledPosts,
-        getMediaUrl,
-      }}
-    >
+    <ContentContext.Provider value={value}>
       {children}
     </ContentContext.Provider>
   );

@@ -13,6 +13,7 @@ export default function NotificationBell() {
       onMouseLeave={() => setIsHovered(false)}
       className="relative p-3 hover:bg-gray-50 rounded-lg transition-all duration-150 group min-w-[44px] min-h-[44px] flex items-center justify-center"
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+      data-testid="notification-bell"
     >
       <Bell 
         className={`w-5 h-5 transition-all duration-150 ${

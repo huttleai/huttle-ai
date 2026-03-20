@@ -1,0 +1,16 @@
+{
+  "hook": "Your content problem is probably a workflow problem.",
+  "hookReason": "Sets tension fast for short-form retention.",
+  "script": "Open with tension.\nShow one sharp proof point.\nEnd with a simple action.",
+  "blueprint": "Hook -> proof -> payoff -> CTA",
+  "directors_cut": ["Open with tension.", "Show one sharp proof point.", "End with a simple action."],
+  "seo_keywords": ["creator workflow", "content system"],
+  "suggested_hashtags": ["#creatorgrowth", "#contentsystem"],
+  "viral_score": 88,
+  "scoreBreakdown": {
+    "hookStrength": 90,
+    "trendAlignment": 85,
+    "audienceFit": 88,
+    "platformOptimization": 87
+  }
+}

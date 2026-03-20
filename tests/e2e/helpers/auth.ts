@@ -1,10 +1,10 @@
 import { test as base, expect, type Page } from '@playwright/test';
-import { seedDemoState, setupMockApis } from './mock-api';
+import { mockAllAPIs, seedDemoState } from './mock-api';
 
 export const test = base.extend({
   page: async ({ page }, use) => {
     await seedDemoState(page);
-    await setupMockApis(page);
+    await mockAllAPIs(page);
     await use(page);
   },
 });
@@ -15,6 +15,7 @@ export function hasRealAuthCredentials() {
   return Boolean(process.env.TEST_USER_EMAIL && process.env.TEST_USER_PASSWORD);
 }
 
+/** Real Supabase login — requires TEST_USER_EMAIL / TEST_USER_PASSWORD and dev server without VITE_SKIP_AUTH. */
 export async function loginAsTestUser(page: Page) {
   const email = process.env.TEST_USER_EMAIL;
   const password = process.env.TEST_USER_PASSWORD;
@@ -24,8 +25,8 @@ export async function loginAsTestUser(page: Page) {
   }
 
   await page.goto('/dashboard/login');
-  await page.getByLabel('Email Address').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/dashboard(?:\/)?$/);
+  await page.getByTestId('email-input').fill(email);
+  await page.getByTestId('password-input').fill(password);
+  await page.getByTestId('login-button').click();
+  await expect(page).toHaveURL(/\/dashboard(?:\/)?$/, { timeout: 30000 });
 }

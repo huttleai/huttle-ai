@@ -13,7 +13,9 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
-const GROK_API_KEY = process.env.GROK_API_KEY;
+// Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
+// Local dev sometimes only sets VITE_GROK_API_KEY — accept it as fallback for the proxy only.
+const GROK_API_KEY = process.env.GROK_API_KEY || process.env.VITE_GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 const DEFAULT_MODEL = 'grok-4.1-fast-reasoning';
@@ -259,6 +261,7 @@ export default async function handler(req, res) {
       personalized,
       targetAudience,
       brandContext,
+      forceCacheRefresh,
     } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
@@ -266,7 +269,7 @@ export default async function handler(req, res) {
     }
 
     const requestedModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
-    const safeModel = requestedModel === DEFAULT_MODEL ? 'grok-4-1-fast-reasoning' : requestedModel;
+    const safeModel = requestedModel;
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -281,7 +284,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
     }
 
-    if (cache?.key) {
+    if (cache?.key && !forceCacheRefresh) {
       const cachedResult = await getCachedGrokResult(cache, cacheAccess);
       if (cachedResult) {
         return res.status(200).json({
@@ -309,7 +312,17 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       logError('grok.upstream_error', { status: response.status, errorText });
-      return res.status(response.status).json({ 
+      if (response.status === 403) {
+        return res.status(502).json({
+          error: 'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.'
+        });
+      }
+      if (response.status === 400) {
+        return res.status(502).json({
+          error: 'Grok API rejected the request. The model name may be invalid or the request was malformed.'
+        });
+      }
+      return res.status(502).json({ 
         error: 'AI service error. Please try again.' 
       });
     }

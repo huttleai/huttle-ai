@@ -138,6 +138,51 @@ async function setupRoutes() {
       res.status(503).json({ error: 'Stripe not configured', details: 'Install stripe package to enable subscriptions' });
     });
   }
+
+  try {
+    app.all('/api/cancel-subscription', await loadHandler('api/cancel-subscription.js'));
+  } catch (error) {
+    console.warn('⚠️  Cancel subscription route skipped:', error.message);
+    app.all('/api/cancel-subscription', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'Cancel subscription route unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/create-payment-method-update-session', await loadHandler('api/create-payment-method-update-session.js'));
+  } catch (error) {
+    console.warn('⚠️  Payment method update route skipped:', error.message);
+    app.all('/api/create-payment-method-update-session', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'Payment method update route unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/billing-summary', await loadHandler('api/billing-summary.js'));
+  } catch (error) {
+    console.warn('⚠️  Billing summary route skipped:', error.message);
+    app.all('/api/billing-summary', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'Billing summary route unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/billing-invoices', await loadHandler('api/billing-invoices.js'));
+  } catch (error) {
+    console.warn('⚠️  Billing invoices route skipped:', error.message);
+    app.all('/api/billing-invoices', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'Billing invoices route unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/change-subscription-plan', await loadHandler('api/change-subscription-plan.js'));
+  } catch (error) {
+    console.warn('⚠️  Change subscription plan route skipped:', error.message);
+    app.all('/api/change-subscription-plan', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'Change subscription plan route unavailable locally' });
+    });
+  }
   
   // Health check
   app.get('/health', (req, res) => {

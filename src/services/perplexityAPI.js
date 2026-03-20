@@ -1001,7 +1001,7 @@ Requirements:
 - Return JSON only with no markdown, no commentary, and no extra keys`
       }
     ], 0.2, {
-      model: 'llama-3.1-sonar-large-128k-online',
+      model: 'sonar-pro',
       cache: {
         key: cacheKey,
         niche: normalizeNiche(niche),

@@ -12,18 +12,18 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { authenticateBillingRequest, getAppUrl, resolveBillingContext } from './_utils/billing.js';
 
-// Validate and initialize Stripe
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-if (!STRIPE_SECRET_KEY) {
-  console.error('❌ STRIPE_SECRET_KEY is not configured');
-}
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
-// Initialize Supabase client for user lookup
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(
+      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  : null;
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -36,93 +36,49 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Validate Stripe is configured
   if (!stripe) {
-    console.error('❌ Portal session requested but STRIPE_SECRET_KEY is not configured');
     return res.status(500).json({ error: 'Payment service not configured' });
   }
 
+  if (!supabase) {
+    return res.status(500).json({ error: 'Authentication service not configured' });
+  }
+
   try {
-    // Get the app URL for redirects - REQUIRED in production
-    const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
-    if (!appUrl) {
-      console.error('❌ VITE_APP_URL or NEXT_PUBLIC_APP_URL must be configured for redirects');
-      return res.status(500).json({ error: 'App URL not configured for redirects' });
+    const authResult = await authenticateBillingRequest(req, supabase);
+    if (authResult.error || !authResult.user) {
+      return res.status(authResult.statusCode).json({ error: authResult.error });
     }
 
-    // Get user from Authorization header
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !supabase) {
-      return res.status(401).json({ error: 'Authentication required' });
+    const { user_id: requestedUserId, return_url: returnUrl } = req.body ?? {};
+    if (requestedUserId && requestedUserId !== authResult.user.id) {
+      return res.status(403).json({ error: 'You can only manage your own billing account' });
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Invalid authentication' });
-    }
+    const { customerId } = await resolveBillingContext({
+      supabase,
+      stripe,
+      userId: authResult.user.id,
+      createCustomerIfMissing: true,
+    });
 
-    // Get user's Stripe customer ID from profile
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profile')
-      .select('stripe_customer_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (profileError && profileError.code !== 'PGRST116') {
-      console.error('Profile lookup error:', profileError);
-      return res.status(500).json({ error: 'Failed to lookup user profile' });
-    }
-
-    let stripeCustomerId = profile?.stripe_customer_id;
-
-    // Fallback: If no stripe_customer_id in DB, search Stripe by email
-    // This handles Founders Club members who paid via one-time checkout
-    // but whose customer ID wasn't saved to the profile during webhook processing
-    if (!stripeCustomerId && user.email) {
-      try {
-        const customers = await stripe.customers.list({
-          email: user.email,
-          limit: 1,
-        });
-
-        if (customers.data.length > 0) {
-          stripeCustomerId = customers.data[0].id;
-
-          // Backfill the stripe_customer_id in the profile for future lookups
-          await supabase
-            .from('user_profile')
-            .update({ stripe_customer_id: stripeCustomerId })
-            .eq('user_id', user.id)
-            .catch((err) => console.error('Failed to backfill stripe_customer_id:', err));
-        }
-      } catch (searchError) {
-        console.error('Stripe customer search error:', searchError);
-      }
-    }
-
-    if (!stripeCustomerId) {
-      return res.status(400).json({ 
-        error: 'No billing account found. Need help? Contact support@huttleai.com' 
+    if (!customerId) {
+      return res.status(400).json({
+        error: 'No billing account found. Please contact support@huttleai.com',
       });
     }
 
-    // Create portal session using the customer ID (not subscription ID)
     const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${appUrl}/dashboard/subscription`,
+      customer: customerId,
+      return_url:
+        returnUrl ||
+        `${getAppUrl()}/dashboard/subscription`,
     });
 
-    return res.status(200).json({
-      url: session.url,
-    });
-  } catch (error) {
-    console.error('Stripe Portal Error:', error);
-    return res.status(500).json({
-      error: 'Failed to create portal session. Please try again.',
-    });
+    return res.status(200).json({ url: session.url });
+  } catch (err) {
+    console.error('Portal session error:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
 

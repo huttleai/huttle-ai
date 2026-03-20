@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "report": {
+    "overview": "Deep dive summary: creator workflow content is outperforming generic tips.",
+    "confidence": { "level": "High" },
+    "active_trends": [
+      {
+        "name": "Proof-first tutorials",
+        "status": "Rising",
+        "velocity": "Steady",
+        "primary_platform": "Instagram",
+        "evidence": "Save rates spike on step-by-step breakdowns.",
+        "why_it_matters": "Audiences reward clarity and receipts."
+      }
+    ],
+    "platform_activity": [
+      {
+        "name": "TikTok",
+        "activity_level": "High",
+        "top_format": "Short tutorials",
+        "what's_happening": "Fast hooks plus one clear takeaway win."
+      }
+    ],
+    "competitor_landscape": "Top accounts emphasize systems over motivation.",
+    "audience_sentiment": {
+      "overall_mood": "Positive",
+      "detail": "Practical beats inspirational when both are present."
+    },
+    "timing_window": {
+      "action_window": "This week",
+      "reasoning": "Momentum is still building.",
+      "lifespan": "Likely relevant for the next 1-2 weeks"
+    }
+  },
+  "citations": ["https://example.com/source-1"],
+  "metadata": { "processed_at": "2026-03-19T12:00:00.000Z" }
+}

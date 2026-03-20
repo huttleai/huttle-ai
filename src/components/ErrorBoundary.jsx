@@ -21,7 +21,7 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4" data-testid="error-boundary-fallback">
           <div className="max-w-2xl w-full bg-white rounded-lg shadow-lg p-6">
             <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
             <p className="text-gray-700 mb-4">

@@ -545,7 +545,7 @@ export default function TrendDiscoveryHub() {
   };
 
   return (
-    <div className="relative mb-8">
+    <div className="relative mb-8" data-testid="trend-discovery-hub">
       {/* Background Effects */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-huttle-500/10 via-huttle-400/5 to-transparent rounded-full blur-3xl" />
@@ -607,6 +607,7 @@ export default function TrendDiscoveryHub() {
                   setActiveMode('quickScan');
                 }}
                 title="See what's trending everywhere right now"
+                data-testid="trend-pulse-tab"
                 className={`relative z-10 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-semibold transition-colors duration-300 flex-1 md:flex-none whitespace-nowrap ${
                   activeMode === 'quickScan'
                     ? 'text-gray-900'
@@ -879,6 +880,7 @@ export default function TrendDiscoveryHub() {
                     <button
                       onClick={handleQuickScan}
                       className="group relative inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-huttle-blue via-huttle-primary to-huttle-600 text-white rounded-2xl text-lg font-bold transition-all shadow-md hover:shadow-lg hover:shadow-huttle-500/30"
+                      data-testid="trend-pulse-start-scan"
                     >
                       <Radar className="w-5 h-5 group-hover:animate-spin" style={{ animationDuration: '2s' }} />
                       <span>Start Scanning</span>

@@ -1,0 +1,26 @@
+{
+  "trends": [
+    {
+      "topic": "Workflow Proof Content",
+      "category": "Viral Moment",
+      "why_trending": "Creators are posting before-and-after proof clips that drive saves.",
+      "relevance_to_niche": "Fits education and SaaS creators building trust fast.",
+      "momentum": "rising",
+      "platforms_active": ["Instagram", "TikTok"],
+      "estimated_lifespan": "days",
+      "opportunity_window": "Act now"
+    },
+    {
+      "topic": "Founder Story Threads",
+      "category": "Cultural Wave",
+      "why_trending": "Short founder confession formats are getting strong comment volume.",
+      "relevance_to_niche": "Great for personal brands selling expertise.",
+      "momentum": "peaking",
+      "platforms_active": ["X", "LinkedIn"],
+      "estimated_lifespan": "1-2 weeks",
+      "opportunity_window": "Plan this week"
+    }
+  ],
+  "scan_summary": "Niche shows strong momentum on proof-led formats.",
+  "last_updated": "2026-03-19T12:00:00.000Z"
+}

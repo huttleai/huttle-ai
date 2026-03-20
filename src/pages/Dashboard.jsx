@@ -27,7 +27,8 @@ import {
   Clock,
   Loader2,
   RotateCcw,
-  X
+  X,
+  Flame,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -35,6 +36,7 @@ import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
 import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
+import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon } from '../components/SocialIcons';
 import { getContentLibraryItems } from '../config/supabase';
 import {
@@ -43,6 +45,8 @@ import {
   deleteDashboardCache, // HUTTLE AI: cache fix
   getDashboardGeneratedDate, // HUTTLE AI: cache fix
   trackDashboardGenerationUsage,
+  fetchDashboardForYouHashtags,
+  fetchDashboardTrendingHashtags,
 } from '../services/dashboardCacheService';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
@@ -56,6 +60,17 @@ const fadeUp = {
 };
 const MotionDiv = motion.div;
 const TOTAL_HASHTAG_CAP = 10;
+const HASHTAG_MODE_STORAGE_KEY = 'huttle_hashtag_mode';
+
+function readStoredHashtagMode() {
+  try {
+    const v = localStorage.getItem(HASHTAG_MODE_STORAGE_KEY);
+    if (v === 'for_you' || v === 'trending') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'trending';
+}
 const HASHTAG_REACH_RANK = { high: 3, medium: 2, niche: 1 };
 
 function mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, hashtag) {
@@ -126,6 +141,13 @@ export default function Dashboard() {
   const [recentVaultItems, setRecentVaultItems] = useState([]);
   const [copiedVaultItem, setCopiedVaultItem] = useState(null);
   const [selectedHashtagPlatform, setSelectedHashtagPlatform] = useState('All');
+  const [hashtagMode, setHashtagMode] = useState(readStoredHashtagMode);
+  const [forYouHashtags, setForYouHashtags] = useState(null);
+  const [forYouLoading, setForYouLoading] = useState(false);
+  const forYouRequestKeyRef = useRef('');
+  const [trendingTabHashtags, setTrendingTabHashtags] = useState(null);
+  const [trendingTabLoading, setTrendingTabLoading] = useState(false);
+  const trendingRequestKeyRef = useRef('');
   const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
@@ -241,29 +263,6 @@ export default function Dashboard() {
     } // HUTTLE AI: cache fix
   }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
-  const refreshHashtags = async () => { // HUTTLE AI: cache fix
-    if (!user?.id || isHashtagsRefreshing) return; // HUTTLE AI: cache fix
-    setIsHashtagsRefreshing(true); // HUTTLE AI: cache fix
-    try { // HUTTLE AI: cache fix
-      const result = await loadDashboardData({ forceRefresh: true }); // HUTTLE AI: cache fix
-      if (result?.success) { // HUTTLE AI: cache fix
-        showToast('Dashboard refreshed!', 'success'); // HUTTLE AI: cache fix
-      } else { // HUTTLE AI: cache fix
-        showToast('Could not refresh your dashboard. Try again.', 'error'); // HUTTLE AI: cache fix
-      } // HUTTLE AI: cache fix
-    } catch (err) { // HUTTLE AI: cache fix
-      console.error('[Dashboard] Failed to refresh dashboard:', err); // HUTTLE AI: cache fix
-      showToast('Could not refresh your dashboard. Try again.', 'error'); // HUTTLE AI: cache fix
-    } finally { // HUTTLE AI: cache fix
-      setIsHashtagsRefreshing(false); // HUTTLE AI: cache fix
-    } // HUTTLE AI: cache fix
-  }; // HUTTLE AI: cache fix
-
-  const retryTrending = async () => { // HUTTLE AI: cache fix
-    if (isDashboardLoading) return; // HUTTLE AI: cache fix
-    await refreshHashtags(); // HUTTLE AI: cache fix
-  }; // HUTTLE AI: cache fix
-
   useEffect(() => {
     const success = searchParams.get('success');
     const canceled = searchParams.get('canceled');
@@ -347,6 +346,41 @@ export default function Dashboard() {
   const [expandedTrend, setExpandedTrend] = useState(null);
 
   const hasNicheConfigured = Boolean(normalizedNiche || normalizedIndustry);
+  const hashtagPersonalization = useMemo(
+    () => getHashtagPersonalizationContext(brandProfile),
+    [brandProfile]
+  );
+
+  const forYouPersonalizationExtended = useMemo(() => {
+    if (!hashtagPersonalization) return null;
+    return {
+      ...hashtagPersonalization,
+      subNiche: getPrimaryContextValue(brandProfile?.subNiche),
+      city: brandProfile?.city?.trim() || null,
+      industry: getPrimaryContextValue(brandProfile?.industry),
+      creatorType: brandProfile?.creatorType || null,
+      profileType: brandProfile?.profileType || null,
+    };
+  }, [hashtagPersonalization, brandProfile]);
+
+  useEffect(() => {
+    if (!hashtagPersonalization && hashtagMode === 'for_you') {
+      setHashtagMode('trending');
+      try {
+        localStorage.setItem(HASHTAG_MODE_STORAGE_KEY, 'trending');
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [hashtagPersonalization, hashtagMode]);
+
+  useEffect(() => {
+    forYouRequestKeyRef.current = '';
+    setForYouHashtags(null);
+    trendingRequestKeyRef.current = '';
+    setTrendingTabHashtags(null);
+  }, [user?.id]);
+
   const tourSteps = [
     { title: 'Welcome to Huttle AI!', content: 'Let\'s take a quick tour to help you get the most out of your experience. We\'ll walk you through the key features.', icon: Sparkles },
     { title: 'Set Up Your Brand Voice', content: 'Head to Brand Voice in the sidebar to define your brand personality, tone, and target audience. This ensures all AI-generated content matches your unique style.', icon: Target },
@@ -543,13 +577,158 @@ export default function Dashboard() {
 
     return deduplicatedHashtags;
   }, [dashboardHashtagPlatforms, dashboardHashtags]);
+
+  const primaryPlatformForForYou = useMemo(() => {
+    const fromDash = dashboardHashtagPlatforms[0];
+    if (fromDash) return fromDash;
+    const fromBrand = Array.isArray(brandProfile?.platforms) ? brandProfile.platforms[0] : null;
+    return fromBrand || 'instagram';
+  }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
+
+  const refreshHashtags = async () => {
+    if (!user?.id || isHashtagsRefreshing) return;
+    setIsHashtagsRefreshing(true);
+    try {
+      if (hashtagMode === 'for_you' && forYouPersonalizationExtended) {
+        const generatedDate = getDashboardGeneratedDate();
+        const { items } = await fetchDashboardForYouHashtags({
+          personalization: forYouPersonalizationExtended,
+          primaryPlatform: primaryPlatformForForYou,
+          userId: user.id,
+          generatedDate,
+          forceRefresh: true,
+        });
+        const requestKey = `${user.id}_${generatedDate}_${forYouPersonalizationExtended.niche}_${primaryPlatformForForYou}_foryou`;
+        forYouRequestKeyRef.current = requestKey;
+        setForYouHashtags(items.length > 0 ? items : null);
+        if (items.length > 0) showToast('Hashtags refreshed!', 'success');
+        return;
+      }
+      if (hashtagMode === 'trending' && hashtagPersonalization) {
+        const generatedDate = getDashboardGeneratedDate();
+        const { items } = await fetchDashboardTrendingHashtags({
+          primaryPlatform: primaryPlatformForForYou,
+          userId: user.id,
+          generatedDate,
+          forceRefresh: true,
+        });
+        const requestKey = `${user.id}_${generatedDate}_trending_${primaryPlatformForForYou}`;
+        trendingRequestKeyRef.current = requestKey;
+        setTrendingTabHashtags(items.length > 0 ? items : null);
+        if (items.length > 0) showToast('Hashtags refreshed!', 'success');
+        return;
+      }
+      const result = await loadDashboardData({ forceRefresh: true });
+      if (result?.success) {
+        showToast('Dashboard refreshed!', 'success');
+      } else {
+        showToast('Could not refresh your dashboard. Try again.', 'error');
+      }
+    } catch (err) {
+      console.error('[Dashboard] Failed to refresh dashboard:', err);
+      showToast('Could not refresh your dashboard. Try again.', 'error');
+    } finally {
+      setIsHashtagsRefreshing(false);
+    }
+  };
+
+  const retryTrending = async () => {
+    if (isDashboardLoading) return;
+    await refreshHashtags();
+  };
+
+  const useTrendingTabFeed = Boolean(hashtagPersonalization && hashtagMode === 'trending');
+  const useForYouHashtags = Boolean(hashtagPersonalization && hashtagMode === 'for_you');
+
+  const widgetHashtagList = useMemo(() => {
+    if (hashtagPersonalization && hashtagMode === 'trending') {
+      if (trendingTabLoading && !trendingTabHashtags?.length) return [];
+      return trendingTabHashtags?.length ? trendingTabHashtags : [];
+    }
+    if (useForYouHashtags) {
+      if (forYouLoading && !forYouHashtags?.length) return [];
+      return forYouHashtags?.length ? forYouHashtags : [];
+    }
+    return displayedDashboardHashtags;
+  }, [
+    hashtagPersonalization,
+    hashtagMode,
+    trendingTabLoading,
+    trendingTabHashtags,
+    useForYouHashtags,
+    forYouLoading,
+    forYouHashtags,
+    displayedDashboardHashtags,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
+
+    const generatedDate = getDashboardGeneratedDate();
+    const requestKey = `${user.id}_${generatedDate}_${forYouPersonalizationExtended.niche}_${primaryPlatformForForYou}_foryou`;
+    if (forYouRequestKeyRef.current === requestKey) return;
+
+    let cancelled = false;
+    (async () => {
+      setForYouLoading(true);
+      try {
+        const { items } = await fetchDashboardForYouHashtags({
+          personalization: forYouPersonalizationExtended,
+          primaryPlatform: primaryPlatformForForYou,
+          userId: user.id,
+          generatedDate,
+          forceRefresh: false,
+        });
+        if (cancelled) return;
+        forYouRequestKeyRef.current = requestKey;
+        setForYouHashtags(items.length > 0 ? items : null);
+      } finally {
+        if (!cancelled) setForYouLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, forYouPersonalizationExtended]);
+
+  useEffect(() => {
+    if (!user?.id || !hashtagPersonalization || hashtagMode !== 'trending') return;
+
+    const generatedDate = getDashboardGeneratedDate();
+    const requestKey = `${user.id}_${generatedDate}_trending_${primaryPlatformForForYou}`;
+    if (trendingRequestKeyRef.current === requestKey) return;
+
+    let cancelled = false;
+    (async () => {
+      setTrendingTabLoading(true);
+      try {
+        const { items } = await fetchDashboardTrendingHashtags({
+          primaryPlatform: primaryPlatformForForYou,
+          userId: user.id,
+          generatedDate,
+          forceRefresh: false,
+        });
+        if (cancelled) return;
+        trendingRequestKeyRef.current = requestKey;
+        setTrendingTabHashtags(items.length > 0 ? items : null);
+      } finally {
+        if (!cancelled) setTrendingTabLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou]);
+
   const filteredDashboardHashtags = useMemo(() => {
     if (selectedHashtagPlatform === 'All') {
-      return displayedDashboardHashtags;
+      return widgetHashtagList;
     }
 
-    return displayedDashboardHashtags.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
-  }, [displayedDashboardHashtags, selectedHashtagPlatform]);
+    return widgetHashtagList.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
+  }, [widgetHashtagList, selectedHashtagPlatform]);
   const showBrandVoiceNudge = Boolean(dashboardData?.show_brand_voice_nudge);
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label
@@ -559,6 +738,20 @@ export default function Dashboard() {
   const trendingFallbackMessage = dashboardData?.trending_fallback_message || 'Trends are refreshing — check back in a few minutes.';
   const hashtagsFallbackMessage = dashboardData?.hashtags_fallback_message || 'Hashtags loading — refresh in a moment.';
   const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
+  const hashtagWidgetListLoading = isDashboardLoading
+    || (useForYouHashtags && forYouLoading && !forYouHashtags?.length)
+    || (useTrendingTabFeed && trendingTabLoading && !trendingTabHashtags?.length);
+  const showHashtagsPreviousDayBanner = hashtagsFromPreviousDay
+    && !(useForYouHashtags && forYouHashtags?.length > 0);
+
+  const persistHashtagMode = (mode) => {
+    setHashtagMode(mode);
+    try {
+      localStorage.setItem(HASHTAG_MODE_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     if (dashboardHashtagPlatforms.length <= 1) {
@@ -631,7 +824,7 @@ export default function Dashboard() {
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                   <span className="text-xs font-bold uppercase tracking-widest text-green-600">Active Now</span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
                   {greetingHeadline}
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
@@ -643,7 +836,7 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
                   {greetingHeadline}
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
@@ -704,7 +897,7 @@ export default function Dashboard() {
       {/* Hero Section - Trending Now (2/3) + Hashtags of the Day (1/3) */}
       <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Trending Now - Hero */}
-        <motion.div custom={3} initial="hidden" animate="visible" variants={fadeUp} className="lg:col-span-2">
+        <motion.div custom={3} initial="hidden" animate="visible" variants={fadeUp} className="lg:col-span-2" data-testid="trending-widget">
           <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm h-full">
             <div className="p-5">
               <div className="flex items-start justify-between gap-3 mb-5">
@@ -897,7 +1090,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Hashtags of the Day */}
-        <motion.div custom={4} initial="hidden" animate="visible" variants={fadeUp}>
+        <motion.div custom={4} initial="hidden" animate="visible" variants={fadeUp} data-testid="hashtag-widget">
           <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm h-full">
             <div className="p-5">
               <div className="flex items-center gap-3 mb-5">
@@ -914,9 +1107,10 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={refreshHashtags}
-                  disabled={isHashtagsRefreshing || isDashboardLoading}
+                  disabled={isHashtagsRefreshing || hashtagWidgetListLoading}
                   title="Regenerate hashtags"
                   className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                  data-testid="dashboard-refresh-hashtags"
                 >
                   {isHashtagsRefreshing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -926,7 +1120,38 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {isDashboardLoading ? (
+              {hashtagPersonalization && (
+                <div className="mb-4 inline-flex rounded-lg border border-gray-200/90 bg-gray-50/40 p-0.5 gap-0.5 w-full max-w-[260px]">
+                  <button
+                    type="button"
+                    data-testid="dashboard-hashtag-tab-trending"
+                    onClick={() => persistHashtagMode('trending')}
+                    className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-center text-[12px] font-semibold transition-colors ${
+                      hashtagMode === 'trending'
+                        ? 'bg-[#01BAD2] text-white shadow-sm'
+                        : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5 opacity-90" aria-hidden />
+                    Trending
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="dashboard-hashtag-tab-for-you"
+                    onClick={() => persistHashtagMode('for_you')}
+                    className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-center text-[12px] font-semibold transition-colors ${
+                      hashtagMode === 'for_you'
+                        ? 'bg-[#01BAD2] text-white shadow-sm'
+                        : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 opacity-90" aria-hidden />
+                    For you
+                  </button>
+                </div>
+              )}
+
+              {hashtagWidgetListLoading ? (
                 <div className="space-y-2">
                   {[1, 2, 3, 4, 5, 6].map((item) => (
                     <div key={item} className="animate-pulse flex items-center gap-2 p-2.5 border border-gray-100 rounded-lg">
@@ -935,9 +1160,9 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              ) : displayedDashboardHashtags.length > 0 ? (
+              ) : filteredDashboardHashtags.length > 0 ? (
                 <div className="space-y-1.5">
-                  {hashtagsFromPreviousDay && (
+                  {showHashtagsPreviousDayBanner && (
                     <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
                       From yesterday — updating now
                     </div>
@@ -970,13 +1195,26 @@ export default function Dashboard() {
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-violet-100 text-violet-700';
                     const platforms = Array.isArray(tag.relevant_platforms) ? tag.relevant_platforms : [];
+                    const isNicheTag = tag.category === 'niche';
+                    const isGrowthTag = tag.category === 'growth';
                     return (
                       <button
                         key={`${tag.hashtag}-${index}`}
+                        data-testid="dashboard-hashtag-item"
                         onClick={() => copyHashtag(tag.hashtag)}
                         className="group w-full flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-huttle-primary/30 hover:bg-huttle-50/30 transition-all text-left"
                       >
                         <span className="font-semibold text-sm text-gray-900 truncate">{tag.hashtag}</span>
+                        {isNicheTag && (
+                          <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700 tracking-wide">
+                            Niche
+                          </span>
+                        )}
+                        {isGrowthTag && (
+                          <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 tracking-wide">
+                            Growth
+                          </span>
+                        )}
                         {platforms.length > 0 && (
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {platforms.map((platform) => {

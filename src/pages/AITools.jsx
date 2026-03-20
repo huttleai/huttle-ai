@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -27,6 +27,7 @@ import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import AddToKitModal from '../components/AddToKitModal';
 
 function uniqueNonEmpty(items) {
   return [...new Set((items || []).map((item) => item?.trim()).filter(Boolean))];
@@ -134,6 +135,10 @@ export default function AITools() {
 
   // Modal state
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [kitContent, setKitContent] = useState('');
+  const [kitSlotKey, setKitSlotKey] = useState('caption');
+  const [kitSourceTool, setKitSourceTool] = useState('Caption Generator');
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   // Initialize AI usage limits based on subscription tier
@@ -622,7 +627,8 @@ export default function AITools() {
         hashtags: 'Hashtag',
         hooks: 'Hook',
         cta: 'CTA',
-        'visual-brainstorm': 'Visual Brainstorm'
+        'visual-brainstorm': 'Visual Brainstorm',
+        scorer: 'Content Scorer',
       };
 
       const toolSources = {
@@ -631,6 +637,7 @@ export default function AITools() {
         hooks: 'hook_builder',
         cta: 'cta_suggester',
         'visual-brainstorm': 'visual_brainstorm',
+        scorer: 'content_quality_scorer',
       };
 
       const contentTypeMap = {
@@ -653,7 +660,8 @@ export default function AITools() {
         || (activeTool === 'hashtags' ? hashtagPlatform : '')
         || (activeTool === 'hooks' ? hookPlatform : '')
         || (activeTool === 'cta' ? ctaPlatform : '')
-        || (activeTool === 'visual-brainstorm' ? visualPlatform : '');
+        || (activeTool === 'visual-brainstorm' ? visualPlatform : '')
+        || (activeTool === 'scorer' ? (metadata.platform || 'instagram') : '');
 
       const itemData = buildContentVaultPayload({
         name,
@@ -675,7 +683,7 @@ export default function AITools() {
       if (result.success) {
         setSavedIndex(itemIndex);
         setTimeout(() => setSavedIndex(null), 2000);
-        showToast('Saved to Content Vault!', 'success');
+        showToast('Saved to vault ✓', 'success');
       } else {
         showToast('Failed to add to library', 'error');
         console.error('Error saving to library:', result.error);
@@ -686,9 +694,15 @@ export default function AITools() {
     }
   };
 
+  const openAddToKitModal = (text, slotKey, sourceTool) => {
+    setKitContent(text);
+    setKitSlotKey(slotKey);
+    setKitSourceTool(sourceTool);
+    setShowKitModal(true);
+  };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden" data-testid="ai-tools-page">
       {/* Subtle background pattern */}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       
@@ -782,6 +796,7 @@ export default function AITools() {
                   onChange={(e) => setCaptionInput(e.target.value)}
                   placeholder="e.g., morning workout motivation, new product launch..."
                   className="w-full p-3 border border-gray-200 rounded-lg resize-none h-20 md:h-24 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm"
+                  data-testid="caption-topic-input"
                 />
               </div>
               
@@ -855,6 +870,7 @@ export default function AITools() {
                 onClick={handleGenerateCaptions}
                 disabled={isLoadingCaptions || isBrandLoading}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50"
+                data-testid="generate-caption-button"
               >
                 {isLoadingCaptions ? <LoadingSpinner size="sm" /> : <Wand2 className="w-4 h-4" />}
                 <span>{isBrandLoading ? 'Loading Brand Voice...' : isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
@@ -867,7 +883,7 @@ export default function AITools() {
               )}
 
               {generatedCaptions.length > 0 && (
-                <div className="pt-4 border-t border-gray-100">
+                <div className="pt-4 border-t border-gray-100" data-testid="ai-result-container">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
                   <div className="space-y-3">
                     {generatedCaptions.map((caption, i) => (
@@ -879,6 +895,14 @@ export default function AITools() {
                           </button>
                           <button onClick={() => handleAddToLibrary(caption.trim(), 'caption', { input: captionInput }, `caption-${i}`)} className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
                             {savedIndex === `caption-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save to Vault</span></>}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openAddToKitModal(caption.trim(), 'caption', 'Caption Generator')}
+                            className="flex items-center gap-1 px-2 md:px-3 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all text-gray-700"
+                          >
+                            <Layers className="w-3 h-3 text-gray-600" />
+                            <span>Add to post kit</span>
                           </button>
                         </div>
                       </div>
@@ -965,11 +989,29 @@ export default function AITools() {
               {generatedHashtags.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={1} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <span className="text-xs md:text-sm font-medium text-gray-700">Ranked Hashtags</span>
-                    <button onClick={() => handleCopy(generatedHashtags.map(h => h.tag).join(' '), 'all-hashtags')} className="text-xs text-huttle-primary hover:underline font-medium">
-                      {copiedIndex === 'all-hashtags' ? 'Copied!' : 'Copy All'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddToLibrary(generatedHashtags.map((h) => h.tag).join(' '), 'hashtag', { input: hashtagInput, platform: hashtagPlatform, bundle: true }, 'hashtag-set')}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-huttle-primary hover:underline"
+                        data-testid="save-hashtag-set-vault"
+                      >
+                        {savedIndex === 'hashtag-set' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save set to Vault</span></>}
+                      </button>
+                      <button onClick={() => handleCopy(generatedHashtags.map(h => h.tag).join(' '), 'all-hashtags')} className="text-xs text-huttle-primary hover:underline font-medium">
+                        {copiedIndex === 'all-hashtags' ? 'Copied!' : 'Copy All'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAddToKitModal(generatedHashtags.map((h) => h.tag).join(' '), 'hashtags', 'Hashtag Generator')}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-all hover:border-huttle-primary/50"
+                      >
+                        <Layers className="w-3 h-3" />
+                        Add to post kit
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {generatedHashtags.map((hashtag, i) => (
@@ -1085,6 +1127,14 @@ export default function AITools() {
                         <div className="flex items-center gap-1.5 ml-2">
                           <button onClick={() => handleAddToLibrary(hook.trim(), 'hook', { input: hookInput }, `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Save to Vault">
                             {savedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openAddToKitModal(hook.trim(), 'opening_line', 'Hook Builder')}
+                            className="rounded border border-gray-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600 transition-colors hover:border-huttle-primary/50 hover:text-huttle-primary"
+                            title="Add to post kit"
+                          >
+                            Post kit
                           </button>
                           <button onClick={() => handleCopy(hook.trim(), `hook-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
                             {copiedIndex === `hook-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
@@ -1234,6 +1284,14 @@ export default function AITools() {
                             <button onClick={() => handleAddToLibrary(item.cta, 'cta', { input: ctaPromoting, platform: ctaPlatform, style: item.style }, `cta-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
                               {savedIndex === `cta-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Saved!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save</span></>}
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => openAddToKitModal(item.cta, 'cta', 'CTA Suggester')}
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all text-gray-700"
+                            >
+                              <Layers className="w-3 h-3 text-gray-600" />
+                              <span>Add to post kit</span>
+                            </button>
                           </div>
                         </div>
                       );
@@ -1358,6 +1416,14 @@ export default function AITools() {
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <h4 className="font-semibold text-gray-900 mb-2 text-sm">Rewrite Example</h4>
                           <p className="text-sm text-gray-700">{renderAIText(contentScore.rewriteExample)}</p>
+                          <button
+                            type="button"
+                            onClick={() => handleAddToLibrary(contentScore.rewriteExample, 'caption', { input: contentToScore.slice(0, 200), platform: 'multi', scorer_rewrite: true }, 'scorer-rewrite')}
+                            className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all"
+                            data-testid="scorer-save-rewrite-vault"
+                          >
+                            {savedIndex === 'scorer-rewrite' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save rewrite to Vault</span></>}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1655,6 +1721,15 @@ export default function AITools() {
           </div>
         )}
       </div>
+
+      <AddToKitModal
+        isOpen={showKitModal}
+        onClose={() => setShowKitModal(false)}
+        content={kitContent}
+        slotKey={kitSlotKey}
+        sourceTool={kitSourceTool}
+        userId={user?.id}
+      />
 
       {/* How We Predict Modal */}
       <HowWePredictModal isOpen={showHowWePredictModal} onClose={() => setShowHowWePredictModal(false)} />

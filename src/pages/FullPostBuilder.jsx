@@ -125,6 +125,7 @@ export default function FullPostBuilder() {
   const [humanScore, setHumanScore] = useState(null);
   const [algorithmScore, setAlgorithmScore] = useState(null);
   const [loadingQuality, setLoadingQuality] = useState(false);
+  const [savedPartIds, setSavedPartIds] = useState({});
 
   const hasAccess = checkFeatureAccess('full-post-builder');
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
@@ -440,9 +441,33 @@ export default function FullPostBuilder() {
       }));
       if (result.success) {
         setSaved(true);
-        addToast('Saved to Content Vault!', 'success');
+        addToast('Saved to vault ✓', 'success');
       }
     } catch { addToast('Failed to save', 'error'); }
+  };
+
+  const saveWizardPartToVault = async (key, contentText, contentType, label) => {
+    if (!user?.id || !String(contentText || '').trim()) return;
+    try {
+      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+        name: `${label} - ${topic.slice(0, 40)}`,
+        contentText: String(contentText).trim(),
+        contentType,
+        toolSource: 'full_post_builder',
+        toolLabel: `Full Post Builder — ${label}`,
+        topic,
+        platform,
+        description: `Full Post Builder | ${label}`,
+        metadata: { goal, wizard_part: key },
+      }));
+      if (result.success) {
+        setSavedPartIds((prev) => ({ ...prev, [key]: true }));
+        addToast('Saved to vault ✓', 'success');
+        setTimeout(() => setSavedPartIds((prev) => ({ ...prev, [key]: false })), 2500);
+      }
+    } catch {
+      addToast('Failed to save', 'error');
+    }
   };
 
   const handleStartOver = () => {
@@ -683,13 +708,25 @@ export default function FullPostBuilder() {
                       <p className="text-sm">No hooks generated yet</p>
                     </div>
                   )}
-                  <button
-                    onClick={handleGenerateHooks}
-                    disabled={loadingHooks}
-                    className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingHooks ? 'animate-spin' : ''}`} /> Regenerate hooks
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleGenerateHooks}
+                      disabled={loadingHooks}
+                      className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingHooks ? 'animate-spin' : ''}`} /> Regenerate hooks
+                    </button>
+                    {selectedHook && (
+                      <button
+                        type="button"
+                        onClick={() => saveWizardPartToVault('hook', selectedHook, 'hook', 'Hook')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:border-huttle-primary/40 text-gray-700"
+                        data-testid="full-post-save-hook-vault"
+                      >
+                        {savedPartIds.hook ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5 text-huttle-primary" /><span>Save hook to Vault</span></>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -727,13 +764,25 @@ export default function FullPostBuilder() {
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingCaption ? 'animate-spin' : ''}`} /> Regenerate caption
                   </button>
-                  <button
-                    onClick={handleEnhanceCaption}
-                    disabled={loadingCaptionEnhancement || !caption.trim()}
-                    className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${loadingCaptionEnhancement ? 'animate-pulse' : ''}`} /> {loadingCaptionEnhancement ? 'Enhancing with Sonnet 4.6...' : 'Enhance with Sonnet 4.6'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleEnhanceCaption}
+                      disabled={loadingCaptionEnhancement || !caption.trim()}
+                      className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${loadingCaptionEnhancement ? 'animate-pulse' : ''}`} /> {loadingCaptionEnhancement ? 'Enhancing with Sonnet 4.6...' : 'Enhance with Sonnet 4.6'}
+                    </button>
+                    {caption.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => saveWizardPartToVault('caption', caption, 'caption', 'Caption')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:border-huttle-primary/40 text-gray-700"
+                        data-testid="full-post-save-caption-vault"
+                      >
+                        {savedPartIds.caption ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5 text-huttle-primary" /><span>Save caption to Vault</span></>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -769,13 +818,25 @@ export default function FullPostBuilder() {
                       <p className="text-sm">No hashtags generated yet</p>
                     </div>
                   )}
-                  <button
-                    onClick={handleGenerateHashtags}
-                    disabled={loadingHashtags}
-                    className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingHashtags ? 'animate-spin' : ''}`} /> Regenerate hashtags
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleGenerateHashtags}
+                      disabled={loadingHashtags}
+                      className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingHashtags ? 'animate-spin' : ''}`} /> Regenerate hashtags
+                    </button>
+                    {hashtags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => saveWizardPartToVault('hashtags', hashtags.map((h) => h.tag).join(' '), 'hashtag', 'Hashtags')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:border-huttle-primary/40 text-gray-700"
+                        data-testid="full-post-save-hashtags-vault"
+                      >
+                        {savedPartIds.hashtags ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5 text-huttle-primary" /><span>Save hashtags to Vault</span></>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -817,13 +878,25 @@ export default function FullPostBuilder() {
                       <p className="text-sm">No CTAs generated yet</p>
                     </div>
                   )}
-                  <button
-                    onClick={handleGenerateCTAs}
-                    disabled={loadingCTAs}
-                    className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingCTAs ? 'animate-spin' : ''}`} /> Regenerate CTAs
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleGenerateCTAs}
+                      disabled={loadingCTAs}
+                      className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingCTAs ? 'animate-spin' : ''}`} /> Regenerate CTAs
+                    </button>
+                    {selectedCTA?.cta && (
+                      <button
+                        type="button"
+                        onClick={() => saveWizardPartToVault('cta', selectedCTA.cta, 'cta', 'CTA')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white hover:border-huttle-primary/40 text-gray-700"
+                        data-testid="full-post-save-cta-vault"
+                      >
+                        {savedPartIds.cta ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5 text-huttle-primary" /><span>Save CTA to Vault</span></>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -940,7 +1013,7 @@ export default function FullPostBuilder() {
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-huttle-primary text-white rounded-xl text-sm font-medium hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-60 transition-all"
               >
                 {saved ? <Check className="w-4 h-4" /> : <FolderPlus className="w-4 h-4" />}
-                {saved ? 'Saved!' : 'Save to Vault'}
+                {saved ? 'Saved ✓' : 'Save to Vault'}
               </button>
               <button
                 onClick={handleSchedulePost}

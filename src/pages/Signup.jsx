@@ -342,6 +342,7 @@ export default function Signup() {
                   placeholder="you@example.com"
                   required
                   disabled={loading}
+                  data-testid="signup-email-input"
                 />
               </div>
             </div>
@@ -365,6 +366,7 @@ export default function Signup() {
                   required
                   disabled={loading}
                   minLength={8}
+                  data-testid="signup-password-input"
                 />
                 <button
                   type="button"
@@ -467,6 +469,7 @@ export default function Signup() {
                   required
                   disabled={loading}
                   minLength={8}
+                  data-testid="signup-confirm-password-input"
                 />
                 {confirmPassword && (
                   <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -496,6 +499,7 @@ export default function Signup() {
               type="submit" 
               disabled={loading || !passwordMeetsRequirements} 
               className="w-full btn-primary py-3 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="signup-submit-button"
             >
               {loading ? (
                 <>

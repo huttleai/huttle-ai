@@ -722,7 +722,7 @@ export default function AIPlanBuilder() {
                       platforms: generatedPlan.platforms || [],
                     },
                   }));
-                  if (result.success) showToast('Plan saved to Content Vault!', 'success');
+                  if (result.success) showToast('Saved to vault ✓', 'success');
                   else showToast('Failed to save plan', 'error');
                 } catch { showToast('Failed to save plan', 'error'); }
               }}
@@ -822,7 +822,7 @@ export default function AIPlanBuilder() {
                               post_type: post.content_type || post.type || 'Post',
                             },
                           }));
-                          if (result.success) showToast('Saved to Vault!', 'success');
+                          if (result.success) showToast('Saved to vault ✓', 'success');
                         } catch { showToast('Failed to save', 'error'); }
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all"

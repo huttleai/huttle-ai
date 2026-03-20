@@ -1,11 +1,9 @@
-import { useState, useContext } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink, Smartphone, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Tooltip from '../components/Tooltip';
-import { AuthContext } from '../context/AuthContext';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
-import { createPortalSession } from '../services/stripeAPI';
 
 /**
  * Settings Page
@@ -16,8 +14,6 @@ import { createPortalSession } from '../services/stripeAPI';
  */
 export default function Settings() {
   const { addToast } = useToast();
-  const { user } = useContext(AuthContext);
-  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const { 
     preferredPlatforms,
     preferredPlatformIds,
@@ -41,30 +37,6 @@ export default function Settings() {
     // Save settings to localStorage (platforms are auto-saved via the hook)
     localStorage.setItem('userSettings', JSON.stringify(settings));
     addToast('Settings saved successfully!', 'success');
-  };
-
-  const handleManageBilling = async () => {
-    if (!user?.id) {
-      addToast('Please sign in to manage billing.', 'warning');
-      return;
-    }
-
-    setIsOpeningPortal(true);
-    try {
-      const result = await createPortalSession();
-      if (result?.demo) {
-        addToast('Billing portal is temporarily unavailable. Please try again shortly.', 'info');
-        return;
-      }
-      if (!result?.success) {
-        addToast(result?.error || 'Could not open billing portal. Please try again.', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to open billing portal:', error);
-      addToast('Could not open billing portal. Please try again.', 'error');
-    } finally {
-      setIsOpeningPortal(false);
-    }
   };
 
   // Transform allPlatforms to the format expected by the UI
@@ -98,20 +70,12 @@ export default function Settings() {
       {/* Quick Settings Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <Link 
-          to="/dashboard/profile"
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
-        >
-          <User className="w-6 h-6 text-huttle-primary mb-2" />
-          <h4 className="font-semibold text-gray-900 text-sm mb-1">Profile</h4>
-          <p className="text-xs text-gray-600">Update your information</p>
-        </Link>
-        <Link 
           to="/dashboard/brand-voice"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
         >
-          <Smartphone className="w-6 h-6 text-huttle-primary mb-2" />
-          <h4 className="font-semibold text-gray-900 text-sm mb-1">Brand Voice</h4>
-          <p className="text-xs text-gray-600">Customize AI content</p>
+          <User className="w-6 h-6 text-huttle-primary mb-2" />
+          <h4 className="font-semibold text-gray-900 text-sm mb-1">Brand Profile</h4>
+          <p className="text-xs text-gray-600">Identity, niche, voice &amp; goals</p>
         </Link>
         <Link 
           to="/dashboard/security"
@@ -124,54 +88,12 @@ export default function Settings() {
         <Link 
           to="/dashboard/subscription"
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md hover:border-huttle-primary transition-all text-left"
+          data-testid="settings-billing-link"
         >
           <CreditCard className="w-6 h-6 text-huttle-primary mb-2" />
           <h4 className="font-semibold text-gray-900 text-sm mb-1">Billing</h4>
-          <p className="text-xs text-gray-600">Plans & payment methods</p>
+          <p className="text-xs text-gray-600">Membership, plans &amp; payment</p>
         </Link>
-      </div>
-
-      {/* Billing & Subscription */}
-      <div className="card p-5 md:p-6 mb-6 md:mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard className="w-5 h-5 text-huttle-primary" />
-              <h3 className="text-lg font-semibold text-gray-900">Billing & Subscription</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Update payment methods, view invoices, or cancel anytime through the Stripe billing portal.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleManageBilling}
-              disabled={isOpeningPortal}
-              className="btn-primary"
-            >
-              {isOpeningPortal ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Opening...
-                </>
-              ) : (
-                <>
-                  Manage Billing
-                  <ExternalLink className="w-4 h-4" />
-                </>
-              )}
-            </button>
-            <Link
-              to="/dashboard/subscription"
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              View Plans
-            </Link>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-gray-500">
-          No support ticket is needed for cancellation. Billing is fully self-serve.
-        </p>
       </div>
 
       {/* Preferred Platforms */}

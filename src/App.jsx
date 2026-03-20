@@ -36,7 +36,12 @@ function LoginRoute() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         {/* Public Landing Page */}
         <Route path="/" element={<LandingPage />} />

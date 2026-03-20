@@ -155,7 +155,7 @@ export default function OnboardingQuiz({ onComplete }) {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { user } = useContext(AuthContext);
-  const { brandData, refreshBrandData } = useContext(BrandContext);
+  const { refreshBrandData } = useContext(BrandContext);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(defaultFormData);
   const [isSaving, setIsSaving] = useState(false);
@@ -264,7 +264,11 @@ export default function OnboardingQuiz({ onComplete }) {
       growth_stage: formData.growth_stage || 'building_momentum',
     };
 
-    const firstName = brandData?.firstName?.trim() || getFirstNameFromUser(user) || null;
+    // Only derive first name from the authenticated user's own metadata.
+    // Do NOT use brandData.firstName here — BrandContext may have loaded stale
+    // localStorage data from a previous user session before the new user's
+    // Supabase profile row was created, causing the "Angela" cross-user bug.
+    const firstName = getFirstNameFromUser(user) || null;
     const profileType = getProfileType(nextFormData.creator_type);
 
     setIsSaving(true);
@@ -288,7 +292,7 @@ export default function OnboardingQuiz({ onComplete }) {
         body: JSON.stringify({
           firstName,
           profileType,
-          brandName: brandData?.brandName?.trim() || null,
+          brandName: null,
           creatorType: nextFormData.creator_type,
           niche: nextFormData.niche,
           growthStage: nextFormData.growth_stage,
@@ -314,7 +318,7 @@ export default function OnboardingQuiz({ onComplete }) {
       localStorage.setItem('brandData', JSON.stringify({
         firstName: firstName || '',
         profileType,
-        brandName: brandData?.brandName || '',
+        brandName: '',
         niche: nextFormData.niche,
         contentFocus: nextFormData.niche,
         growthStage: nextFormData.growth_stage,

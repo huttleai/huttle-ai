@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { createContext, useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
@@ -274,29 +274,29 @@ export function NotificationProvider({ children }) {
     setNotifications([]);
   };
 
+  const value = useMemo(() => ({
+    notifications,
+    unreadCount,
+    showNotificationPanel,
+    setShowNotificationPanel,
+    addNotification,
+    addConnectionWarning,
+    addMissingContentWarning,
+    addSuccess,
+    addInfo,
+    addPanelUpdate,
+    addAIUsageWarning,
+    addSocialUpdate,
+    addEngagementSpike,
+    addContentInsight,
+    markAsRead,
+    markAllAsRead,
+    removeNotification,
+    clearAll,
+  }), [notifications, unreadCount, showNotificationPanel]);
+
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        showNotificationPanel,
-        setShowNotificationPanel,
-        addNotification,
-        addConnectionWarning,
-        addMissingContentWarning,
-        addSuccess,
-        addInfo,
-        addPanelUpdate,
-        addAIUsageWarning,
-        addSocialUpdate,
-        addEngagementSpike,
-        addContentInsight,
-        markAsRead,
-        markAllAsRead,
-        removeNotification,
-        clearAll,
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
       <NotificationPanel />
     </NotificationContext.Provider>

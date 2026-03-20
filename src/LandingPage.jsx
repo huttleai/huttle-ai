@@ -1334,7 +1334,7 @@ export default function LandingPage() {
       />
       
       {/* NAVBAR */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3">
+      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3" data-testid="landing-nav">
         <div 
           className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50 nav-fade-in"
         >
@@ -1359,6 +1359,7 @@ export default function LandingPage() {
           <Link
             to="/login"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            data-testid="landing-nav-login"
           >
             <LogIn className="w-4 h-4" />
             <span className="hidden md:inline">Login</span>
@@ -1367,7 +1368,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION */}
-      <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip">
+      <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip" data-testid="landing-hero">
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">

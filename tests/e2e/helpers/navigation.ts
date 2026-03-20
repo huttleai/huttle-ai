@@ -8,10 +8,9 @@ export const dashboardRoutes = [
   { label: 'AI Power Tools', href: '/dashboard/ai-tools?tool=caption', testId: 'sidebar-link-ai-power-tools' },
   { label: 'Trend Lab', href: '/dashboard/trend-lab', testId: 'sidebar-link-trend-lab' },
   { label: 'Niche Intel', href: '/dashboard/niche-intel', testId: 'sidebar-link-niche-intel' },
-  { label: 'Ignite Engine', href: '/dashboard/ignite-engine', testId: 'sidebar-link-ignite-engine' }, // HUTTLE AI: updated 3
+  { label: 'Ignite Engine', href: '/dashboard/ignite-engine', testId: 'sidebar-link-ignite-engine' },
   { label: 'Content Remix Studio', href: '/dashboard/content-remix', testId: 'sidebar-link-content-remix-studio' },
-  { label: 'Profile', href: '/dashboard/profile', testId: 'sidebar-link-profile' },
-  { label: 'Brand Voice', href: '/dashboard/brand-voice', testId: 'sidebar-link-brand-voice' },
+  { label: 'Brand Profile', href: '/dashboard/brand-voice', testId: 'sidebar-link-brand-profile' },
   { label: 'Social Updates', href: '/dashboard/social-updates', testId: 'sidebar-link-social-updates' },
   { label: 'Settings', href: '/dashboard/settings', testId: 'sidebar-link-settings' },
   { label: 'Help', href: '/dashboard/help', testId: 'sidebar-link-help' },
@@ -20,7 +19,7 @@ export const dashboardRoutes = [
 export async function waitForAppReady(page: Page) {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle').catch(() => {});
-  await expect(page.locator('#root')).not.toBeEmpty({ timeout: 15000 });
+  await expect(page.locator('#root')).not.toBeEmpty({ timeout: 20000 });
 }
 
 export async function gotoDashboard(page: Page, path = '/dashboard') {

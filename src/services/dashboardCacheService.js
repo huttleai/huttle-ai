@@ -144,13 +144,11 @@ function isGenericTrendingNiche(niche) {
 function getTrendingMode(brandVoice = {}) {
   const niche = getBrandVoiceNiche(brandVoice);
   const growthStage = getBrandVoiceGrowthStage(brandVoice);
-  const creatorType = getBrandVoiceCreatorType(brandVoice) || 'solo_creator';
 
   const hasSpecificNiche = Boolean(niche) && !isGenericTrendingNiche(niche);
   const isJustStarting = growthStage === 'just_starting_out';
-  const isSoloCreator = creatorType === 'solo_creator';
 
-  if (!hasSpecificNiche || isJustStarting || isSoloCreator) {
+  if (!hasSpecificNiche || isJustStarting) {
     return 'platform_wide';
   }
 
@@ -489,22 +487,27 @@ Return the JSON array now:`;
 
 function buildNicheSpecificTrendingMessages(context, platform) {
   const platformLabel = formatPlatformLabel(platform);
-  const trendingPrompt = `You are a social media trend analyst.
+  const creatorTypeLabel = context.brandProfile?.creatorType || context.brandProfile?.profileType || 'content creator';
+  const targetAudience = context.targetAudience;
+  const city = context.city;
 
-Return a JSON array of 5 trending content topics for ${context.niche} businesses on ${platformLabel} right now.
+  const trendingPrompt = `You are a real-time social media trend researcher. Find trending topics specifically relevant to a ${creatorTypeLabel} in the "${context.niche}" niche posting on ${platformLabel}.
+${targetAudience ? `\nTarget audience: ${targetAudience}` : ''}${city ? `\nLocation: ${city} (include local or regional trends when relevant)` : ''}
 
-Each item must have exactly these fields:
+Return ONLY trends that someone in this niche would actually post about. Do NOT return generic trending topics like celebrity gossip or political news unless they directly relate to the niche.
+
+Return a JSON array of 5 trending content topics. Each item must have exactly these fields:
 {
   "title": "Short topic name (3-6 words)",
-  "description": "Why this is trending right now (1-2 sentences)",
+  "description": "Why this is trending right now and why it matters for this niche (1-2 sentences)",
   "momentum": "rising" | "peaking" | "steady",
   "category": "education" | "promotion" | "entertainment" | "community"
 }
 
 Rules:
 - Return ONLY the JSON array, no other text, no markdown fences
-- All 5 items must be relevant to ${context.niche} businesses
-- Base topics on current social media trends, not generic advice
+- All 5 items must be directly relevant to the ${context.niche} niche
+- Base topics on current real social media trends, not generic advice
 - momentum must be exactly one of: rising, peaking, steady
 - category must be exactly one of: education, promotion, entertainment, community
 
@@ -512,7 +515,7 @@ Example of correct format:
 [
   {
     "title": "Before and after results",
-    "description": "Transformation content is seeing 40% higher saves this month as audiences seek proof of results.",
+    "description": "Transformation content is resonating strongly in this space as audiences seek proof of real outcomes.",
     "momentum": "rising",
     "category": "promotion"
   }
@@ -523,7 +526,7 @@ Return the JSON array now:`;
   return [
     {
       role: 'system',
-      content: 'You are a social media trend analyst.',
+      content: `You are a real-time social media trend analyst specialized in the ${context.niche} niche. You surface only trends directly relevant to this creator's specific audience and content focus — never generic viral topics.`,
     },
     {
       role: 'user',
@@ -554,33 +557,32 @@ function buildTrendingMessages(context, platform) {
 function buildNicheSpecificHashtagPromptByPlatform(context, platform) {
   const platformLabel = formatPlatformLabel(platform);
 
-  return `You are a social media hashtag analyst.
+  return `You are a social media hashtag researcher. Generate hashtags for a content creator in the "${context.niche}" niche posting on ${platformLabel}.
+${context.city ? `Location: ${context.city}` : ''}
 
-Return a JSON array of 10 hashtags for ${context.niche} businesses on ${platformLabel}.
-
-Each item must have exactly these fields:
+Return EXACTLY 10 hashtags as a JSON array. Each hashtag object must contain:
 {
   "tag": "#hashtag",
   "volume": "HIGH" | "MEDIUM" | "NICHE",
-  "engagement": number between 1-100
+  "engagement": number between 1-100,
+  "category": "niche" | "growth"
 }
 
-Volume distribution rules you MUST follow:
-- Exactly 3-4 items with volume: "HIGH"
-  (broad, well-known tags with millions of posts)
-- Exactly 3-4 items with volume: "MEDIUM"
-  (mid-tier tags with 100k-1M posts)
-- Exactly 2-3 items with volume: "NICHE"
-  (specific, targeted tags under 100k posts)
+IMPORTANT: Return EXACTLY 5 niche hashtags and 5 growth hashtags.
+
+Niche hashtags (5, category: "niche"): Must be directly relevant to the ${context.niche} niche. These are hashtags that people in this specific niche search for and follow.${context.city ? ` You may include 1-2 location-specific niche tags for ${context.city}.` : ''}
+
+Growth hashtags (5, category: "growth"): Must be broadly popular hashtags that any creator uses to reach new audiences. These work across niches — e.g., #ContentCreator, #SmallBusiness, #Trending, #Viral.
+
+Volume rules:
+- HIGH: millions of posts (broad reach)
+- MEDIUM: 100k–1M posts
+- NICHE: under 100k posts (targeted)
 
 Rules:
 - Return ONLY the JSON array, no markdown, no other text
-- Tags must be relevant to ${context.niche} businesses on ${platformLabel}
-- HIGH tags: broad industry tags (#skincare, #beauty, #botox)
-- MEDIUM tags: more specific (#medspalife, #skincarespecialist)
-- NICHE tags: hyper-specific (#atlantamedspa, #hydrafacialresults)
-- engagement score should reflect relative popularity
-${context.city ? `- Include up to 1-2 location-aware NICHE tags relevant to ${context.city} when they are realistic for ${platformLabel}` : ''}
+- Only include real, actively-used hashtags you can verify exist
+- Niche tags should feel specific and relevant — not generic
 
 Return the JSON array now:`;
 }
@@ -673,7 +675,7 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
               city: context.city || DEFAULT_CITY,
               type,
               ttlHours: 24,
-              forceRefresh: type === 'hashtags'
+              forceRefresh: (type === 'hashtags' || type === 'trending_hashtags_widget')
                 ? Boolean(options.forceRefreshHashtags)
                 : Boolean(options.forceRefreshTrending),
             },
@@ -790,15 +792,24 @@ function normalizeHashtagItem(item, platform, fromCache = false, generatedAt = n
   ) || 'Niche';
   const platformLabel = formatPlatformLabel((isStringItem ? '' : item?.platform) || platform);
 
+  const rawCategory = isStringItem ? '' : normalizeTextValue(item?.category).toLowerCase();
+  const hashtagCategory = rawCategory === 'niche' || rawCategory === 'growth' ? rawCategory : null;
+
+  const descriptionText = !isStringItem && item?.description
+    ? normalizeTextValue(item.description)
+    : '';
+
   return {
     hashtag: tagValue,
-    relevance: `${platformLabel} discovery term for ${platform === 'youtube' ? 'searchers' : 'active content discovery'}`,
+    relevance: descriptionText
+      || `${platformLabel} discovery term for ${platform === 'youtube' ? 'searchers' : 'active content discovery'}`,
     estimated_reach: mapHashtagVolume(
       isStringItem
         ? ''
         : (item?.volume || item?.estimated_reach || item?.reach)
     ),
     type: status.toLowerCase() === 'trending' ? 'trending' : 'niche',
+    category: hashtagCategory,
     relevant_platforms: [platformLabel],
     platform: platformLabel,
     result_type: isSearchKeyword ? 'search_keyword' : 'hashtag',
@@ -1087,6 +1098,249 @@ async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
     }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
+
+const FOR_YOU_HASHTAG_CAP = 10;
+const TRENDING_WIDGET_HASHTAG_CAP = 10;
+
+function buildDashboardTrendingHashtagUserPrompt(platform) {
+  const platformLabel = formatPlatformLabel(normalizePlatformValue(platform));
+  return `You are a social media hashtag researcher. Return the top 8 universally popular hashtags that any content creator uses on ${platformLabel} to maximize reach and discoverability. These must be generic growth hashtags — NOT specific to any niche or industry.
+
+Focus on: broad trending hashtags, platform-specific discovery hashtags (like #fyp for TikTok, #explorepage for Instagram), general small business and creator growth hashtags.
+
+Platform: ${platformLabel}
+
+Return as a JSON array of objects:
+[{ "hashtag": "#fyp", "volume": "high", "description": "TikTok's main discovery feed hashtag" }]
+
+Respond with ONLY the JSON array, no other text.`;
+}
+
+function formatCreatorTypeLabel(creatorType, profileType) {
+  const t = normalizeTextValue(creatorType).toLowerCase();
+  if (t) {
+    if (t === 'creator') return 'content creator';
+    return t.replace(/_/g, ' ');
+  }
+  if (normalizeTextValue(profileType).toLowerCase() === 'creator') return 'content creator';
+  return 'business or creator';
+}
+
+function buildDashboardForYouHashtagUserPrompt(personalization, platform) {
+  const platformLabel = formatPlatformLabel(normalizePlatformValue(platform));
+  const niche = normalizeTextValue(personalization?.niche) || 'your niche';
+  const creatorType = formatCreatorTypeLabel(personalization?.creatorType, personalization?.profileType);
+  const subNiche = normalizeTextValue(personalization?.subNiche);
+  const city = normalizeTextValue(personalization?.city);
+  const industry = normalizeTextValue(personalization?.industry);
+
+  return `You are a social media hashtag researcher. Return 8 hashtags specifically relevant to a ${creatorType} in the "${niche}" niche on ${platformLabel}.
+${subNiche ? `Sub-niche: ${subNiche}` : ''}
+${city ? `Location: ${city}` : ''}
+${industry ? `Industry: ${industry}` : ''}
+
+These must be hashtags that someone in this SPECIFIC niche would use — not generic growth hashtags. Include a mix of:
+- Industry-specific hashtags (3-4)
+- Treatment/service/topic-specific hashtags (2-3)
+${city ? '- Local/city-specific hashtags (1-2) combining the city with the niche' : ''}
+
+Return as a JSON array of objects:
+[{ "hashtag": "#medspa", "volume": "high", "description": "Primary industry hashtag for medical spas" }]
+
+Respond with ONLY the JSON array, no other text.`;
+}
+
+/**
+ * Generic platform-wide hashtags for the dashboard "Trending" tab (separate cache from niche For You).
+ * @returns {Promise<{ items: object[], fromCache: boolean }>}
+ */
+export async function fetchDashboardTrendingHashtags({
+  primaryPlatform,
+  userId,
+  generatedDate,
+  forceRefresh = false,
+}) {
+  if (!userId) {
+    return { items: [], fromCache: false };
+  }
+
+  const headers = await getAuthHeaders();
+  const platform = normalizePlatformValue(primaryPlatform || 'instagram');
+  const cacheKey = buildCacheKey('platform_wide', platform, 'global', generatedDate, 'trending_hashtags_widget');
+  const cacheContext = {
+    cacheNiche: 'platform_wide',
+    normalizedCity: 'global',
+    city: null,
+  };
+
+  const messages = [
+    {
+      role: 'system',
+      content: 'You are a social media hashtag researcher. Follow instructions exactly. Return only a JSON array, no markdown.',
+    },
+    {
+      role: 'user',
+      content: buildDashboardTrendingHashtagUserPrompt(platform),
+    },
+  ];
+
+  try {
+    if (!forceRefresh) {
+      const cachedPayload = await getWarmPlatformCache(cacheKey, platform, 'trending_hashtags_widget');
+      if (cachedPayload) {
+        const arr = Array.isArray(cachedPayload) ? cachedPayload : ensureArray(cachedPayload);
+        const generatedAt = new Date().toISOString();
+        const items = arr
+          .map((item) => normalizeHashtagItem(
+            { ...item, category: 'growth' },
+            platform,
+            true,
+            generatedAt,
+            false
+          ))
+          .filter(Boolean)
+          .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
+        if (items.length > 0) {
+          return { items, fromCache: true };
+        }
+      }
+    }
+
+    const response = await requestPerplexityWidgetData(
+      'trending_hashtags_widget',
+      platform,
+      cacheContext,
+      headers,
+      { forceRefreshHashtags: forceRefresh },
+      cacheKey,
+      messages,
+    );
+
+    if (!response || !response.ok) {
+      throw new Error('Trending hashtags request failed');
+    }
+
+    const payload = await response.json();
+    const parsed = Array.isArray(payload?.structuredData)
+      ? payload.structuredData
+      : parsePerplexityResponse(payload?.content || '');
+
+    const arr = Array.isArray(parsed) ? parsed : [];
+    const generatedAt = payload?.generatedAt || new Date().toISOString();
+
+    const items = arr
+      .map((item) => normalizeHashtagItem(
+        { ...item, category: 'growth' },
+        platform,
+        Boolean(payload?.cached),
+        generatedAt,
+        false
+      ))
+      .filter(Boolean)
+      .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
+
+    return {
+      items,
+      fromCache: Boolean(payload?.cached),
+    };
+  } catch (error) {
+    console.warn('[Dashboard] Trending widget hashtags failed:', error?.message || error);
+    const fallback = buildHashtagFallbackItems(platform)
+      .map((raw) => normalizeHashtagItem({ ...raw, category: 'growth' }, platform, false, new Date().toISOString(), false))
+      .filter(Boolean)
+      .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
+    return { items: fallback, fromCache: false };
+  }
+}
+
+/**
+ * Personalized "For you" hashtags via Grok (server-cached in niche_content_cache, user-scoped).
+ * @returns {Promise<{ items: object[], fromCache: boolean }>}
+ */
+export async function fetchDashboardForYouHashtags({
+  personalization,
+  primaryPlatform,
+  userId,
+  generatedDate,
+  forceRefresh = false,
+}) {
+  if (!userId || !personalization?.niche) {
+    return { items: [], fromCache: false };
+  }
+
+  const headers = await getAuthHeaders();
+  const platform = normalizePlatformValue(primaryPlatform || 'instagram');
+  const nicheKey = normalizeNiche(personalization.niche) || 'general';
+  const cacheKey = `dashboard_for_you__${userId}__${generatedDate}__${nicheKey}__${platform}__foryou_v2`;
+
+  try {
+    const response = await retryFetch(
+      GROK_PROXY_URL,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'grok-4.1-fast-reasoning',
+          temperature: 0.35,
+          personalized: true,
+          forceCacheRefresh: Boolean(forceRefresh),
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a social media hashtag strategist. Follow the user instructions exactly. Return only a JSON array, no markdown or commentary.',
+            },
+            {
+              role: 'user',
+              content: buildDashboardForYouHashtagUserPrompt(personalization, platform),
+            },
+          ],
+          cache: {
+            key: cacheKey,
+            niche: nicheKey,
+            platform,
+            type: 'dashboard_hashtags_for_you',
+            ttlHours: 24,
+          },
+        }),
+      },
+      {
+        timeoutMs: API_TIMEOUTS.STANDARD,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('For-you hashtags request failed');
+    }
+
+    const payload = await response.json();
+    const parsed = parseStructuredJson(payload?.content || '');
+    const arr = Array.isArray(parsed) ? parsed : [];
+    const generatedAt = payload?.generatedAt || new Date().toISOString();
+
+    const items = arr
+      .map((item) => normalizeHashtagItem(
+        {
+          ...item,
+          tag: item.tag || item.hashtag,
+          category: 'niche',
+        },
+        platform,
+        Boolean(payload?.cached),
+        generatedAt,
+        false
+      ))
+      .filter(Boolean)
+      .slice(0, FOR_YOU_HASHTAG_CAP);
+
+    return {
+      items,
+      fromCache: Boolean(payload?.cached),
+    };
+  } catch (error) {
+    console.warn('[Dashboard] For-you hashtags failed:', error?.message || error);
+    return { items: [], fromCache: false };
+  }
+}
 
 function buildDashboardMetadata(context, overrides = {}) { // HUTTLE AI: cache fix
   return { // HUTTLE AI: cache fix

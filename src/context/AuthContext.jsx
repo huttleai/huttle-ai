@@ -1,10 +1,56 @@
-import { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../config/supabase';
 
 export const AuthContext = createContext();
+const AUTH_STATE_CACHE_KEY = 'huttle-auth-state-cache';
 
 function getOnboardingCompletionKey(userId) {
   return `has_completed_onboarding:${userId}`;
+}
+
+function serializeUserForCache(user) {
+  if (!user?.id) return null;
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    name: user.name ?? user.user_metadata?.name ?? null,
+    user_metadata: user.user_metadata ?? null,
+  };
+}
+
+function readCachedAuthState() {
+  try {
+    const rawState = localStorage.getItem(AUTH_STATE_CACHE_KEY);
+    return rawState ? JSON.parse(rawState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAuthState({ user, userProfile, needsOnboarding }) {
+  const serializedUser = serializeUserForCache(user);
+  if (!serializedUser) return;
+
+  try {
+    localStorage.setItem(AUTH_STATE_CACHE_KEY, JSON.stringify({
+      user: serializedUser,
+      userProfile: userProfile ?? null,
+      needsOnboarding: Boolean(needsOnboarding),
+      profileChecked: true,
+      cachedAt: Date.now(),
+    }));
+  } catch {
+    // Ignore cache write failures and rely on live auth state instead.
+  }
+}
+
+function clearCachedAuthState() {
+  try {
+    localStorage.removeItem(AUTH_STATE_CACHE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function readCachedOnboardingCompletion(userId) {
@@ -38,6 +84,7 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [sessionConfirmed, setSessionConfirmed] = useState(false);
 
   // Refs to track current state without stale closures in auth listener
   const currentUserIdRef = useRef(null);
@@ -46,13 +93,29 @@ export function AuthProvider({ children }) {
   // from prematurely setting loading = false during the INITIAL_SESSION race
   const initialLoadCompleteRef = useRef(false);
 
+  const applyCachedAuthFallback = useCallback(() => {
+    const cachedState = readCachedAuthState();
+    if (!cachedState?.user?.id) {
+      return false;
+    }
+
+    setUser(cachedState.user);
+    setUserProfile(cachedState.userProfile ?? null);
+    setNeedsOnboarding(Boolean(cachedState.needsOnboarding));
+    setProfileChecked(cachedState.profileChecked !== false);
+    profileCheckedRef.current = cachedState.profileChecked !== false;
+    currentUserIdRef.current = cachedState.user.id;
+    return true;
+  }, []);
+
   // Memoized checkUserProfile to prevent recreation on every render
   // Includes timeout protection to prevent infinite loading if Supabase query hangs
-  const checkUserProfile = useCallback(async (userId) => {
+  const checkUserProfile = useCallback(async (userId, currentUser = null) => {
     const hasCachedOnboardingCompletion = readCachedOnboardingCompletion(userId);
+    const cachedUser = currentUser ?? { id: userId };
 
-    // Reduced timeout — AuthContext only needs a lightweight check, not the full profile
-    const QUERY_TIMEOUT_MS = 8000;
+    // Allow extra time for Supabase cold start; only a few columns are selected.
+    const QUERY_TIMEOUT_MS = 15000;
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error(`Profile query timed out after ${QUERY_TIMEOUT_MS / 1000} seconds. This may indicate the user_profile table doesn't exist or RLS policies are misconfigured.`));
@@ -77,6 +140,7 @@ export function AuthProvider({ children }) {
           setProfileChecked(true);
           profileCheckedRef.current = true;
           currentUserIdRef.current = userId;
+          writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: false });
           return;
         }
 
@@ -99,6 +163,8 @@ export function AuthProvider({ children }) {
         setNeedsOnboarding(true);
         setProfileChecked(true);
         profileCheckedRef.current = true;
+        currentUserIdRef.current = userId;
+        writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: true });
         return;
       }
 
@@ -110,37 +176,48 @@ export function AuthProvider({ children }) {
       if (hasCompletedOnboarding || (!data && hasCachedOnboardingCompletion)) {
         setUserProfile(data || null);
         setNeedsOnboarding(false);
+        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: false });
       } else {
         // Missing profile rows or incomplete profiles should always see onboarding.
         setUserProfile(data || null);
         setNeedsOnboarding(true);
+        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: true });
       }
       setProfileChecked(true);
       profileCheckedRef.current = true;
       currentUserIdRef.current = userId;
     } catch (error) {
       if (hasCachedOnboardingCompletion) {
-        console.warn('⚠️ [Auth] Profile check timed out, using cached onboarding completion state.');
+        // Expected on slow networks — cached onboarding keeps UX unblocked; avoid noisy errors.
+        if (import.meta.env.DEV) {
+          console.info('[Auth] Profile check slow; using cached onboarding state.');
+        }
         setUserProfile(null);
         setNeedsOnboarding(false);
         setProfileChecked(true);
         profileCheckedRef.current = true;
         currentUserIdRef.current = userId;
+        writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: false });
         return;
       }
 
       const isTimeout = error.message?.includes('timed out');
-      console.error(`❌ [Auth] Error in checkUserProfile (${isTimeout ? 'timeout' : 'exception'}):`, error.message);
+      if (!isTimeout) {
+        console.error(`❌ [Auth] Error in checkUserProfile:`, error.message);
+      }
 
       if (isTimeout) {
         // Timeout likely means Supabase cold start, not a missing profile.
         // Let the user through with a degraded experience instead of blocking.
-        console.warn('⚠️ [Auth] Treating timeout as temporary — allowing access with free defaults.');
+        if (import.meta.env.DEV) {
+          console.info('[Auth] Profile check timed out; continuing with defaults (retry on next navigation).');
+        }
         setUserProfile(null);
         setNeedsOnboarding(false);
         setProfileChecked(true);
         profileCheckedRef.current = true;
         currentUserIdRef.current = userId;
+        writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: false });
         return;
       }
 
@@ -154,6 +231,8 @@ export function AuthProvider({ children }) {
       setNeedsOnboarding(true);
       setProfileChecked(true);
       profileCheckedRef.current = true;
+      currentUserIdRef.current = userId;
+      writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: true });
     }
   }, []);
 
@@ -180,6 +259,7 @@ export function AuthProvider({ children }) {
             setUserProfile(null);
             setNeedsOnboarding(false);
             setProfileChecked(true);
+            setSessionConfirmed(true);
             setLoading(false);
           }
           return;
@@ -188,14 +268,20 @@ export function AuthProvider({ children }) {
         // Set a timeout to prevent infinite loading during slow Supabase cold starts
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('⚠️ [Auth] Auth check timed out after 15 seconds. Proceeding without session.');
+            console.warn('⚠️ [Auth] Auth check timed out after 25 seconds. Falling back to cached auth state.');
+            const usedCachedState = applyCachedAuthFallback();
             setLoading(false);
-            setUser(null);
-            setUserProfile(null);
-            setNeedsOnboarding(false);
-            setProfileChecked(true);
+            setSessionConfirmed(false);
+            if (!usedCachedState) {
+              setUser(null);
+              setUserProfile(null);
+              setNeedsOnboarding(false);
+              setProfileChecked(true);
+              profileCheckedRef.current = true;
+              currentUserIdRef.current = null;
+            }
           }
-        }, 15000);
+        }, 25000);
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -208,22 +294,33 @@ export function AuthProvider({ children }) {
 
         if (session?.user) {
           setUser(session.user);
+          setSessionConfirmed(true);
           // CRITICAL: Wait for profile check to complete before setting loading to false
-          await checkUserProfile(session.user.id);
+          await checkUserProfile(session.user.id, session.user);
         } else {
           setUser(null);
           setUserProfile(null);
           setNeedsOnboarding(false);
           setProfileChecked(true);
+          setSessionConfirmed(true);
+          profileCheckedRef.current = true;
+          currentUserIdRef.current = null;
+          clearCachedAuthState();
         }
       } catch (error) {
         clearTimeout(timeoutId);
         console.error('❌ [Auth] Error loading Supabase session:', error);
         if (isMounted) {
-          setUser(null);
-          setUserProfile(null);
-          setNeedsOnboarding(false);
-          setProfileChecked(true);
+          const usedCachedState = applyCachedAuthFallback();
+          setSessionConfirmed(false);
+          if (!usedCachedState) {
+            setUser(null);
+            setUserProfile(null);
+            setNeedsOnboarding(false);
+            setProfileChecked(true);
+            profileCheckedRef.current = true;
+            currentUserIdRef.current = null;
+          }
         }
       } finally {
         if (isMounted && !skipAuth) {
@@ -247,12 +344,16 @@ export function AuthProvider({ children }) {
       try {
         if (!isMounted) return;
 
-        // TOKEN_REFRESHED events should NOT reset state or re-check profile
-        // This prevents users from being kicked to onboarding when switching tabs
-        if (event === 'TOKEN_REFRESHED') {
-          if (session?.user) {
-            setUser(session.user);
-          }
+        // TOKEN_REFRESHED, USER_UPDATED, and MFA events are internal Supabase
+        // housekeeping — they do NOT change which user is logged in. Setting
+        // state here would pass a new `user` object reference to every
+        // downstream context (BrandContext, SubscriptionContext, etc.),
+        // triggering full re-fetch cascades every ~55 minutes or on tab focus.
+        if (
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED' ||
+          event === 'MFA_CHALLENGE_VERIFIED'
+        ) {
           return;
         }
 
@@ -260,6 +361,7 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           if (session?.user) {
             setUser(session.user);
+            setSessionConfirmed(true);
             // Use refs for current values to avoid stale closure issues on tab switch
             const isSameUser = session.user.id === currentUserIdRef.current;
             const alreadyChecked = profileCheckedRef.current;
@@ -268,7 +370,7 @@ export function AuthProvider({ children }) {
             if (!alreadyChecked || !isSameUser) {
               setProfileChecked(false);
               profileCheckedRef.current = false;
-              await checkUserProfile(session.user.id);
+              await checkUserProfile(session.user.id, session.user);
             }
           }
         } else if (event === 'SIGNED_OUT') {
@@ -276,8 +378,10 @@ export function AuthProvider({ children }) {
           setUserProfile(null);
           setNeedsOnboarding(false);
           setProfileChecked(true);
+          setSessionConfirmed(true);
           profileCheckedRef.current = false;
           currentUserIdRef.current = null;
+          clearCachedAuthState();
         }
       } catch (error) {
         console.error('❌ [Auth] Error handling auth state change:', error);
@@ -420,21 +524,24 @@ export function AuthProvider({ children }) {
     return { success: true };
   };
 
+  const value = useMemo(() => ({
+    user,
+    userProfile,
+    needsOnboarding,
+    sessionConfirmed,
+    profileChecked,
+    login,
+    signup,
+    logout,
+    updateUser,
+    updatePassword,
+    updateEmail,
+    completeOnboarding,
+    loading,
+  }), [user, userProfile, needsOnboarding, sessionConfirmed, profileChecked, login, signup, logout, updateUser, updatePassword, updateEmail, completeOnboarding, loading]);
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      userProfile, 
-      needsOnboarding,
-      profileChecked, // Expose this so components can wait for profile check
-      login, 
-      signup, 
-      logout, 
-      updateUser,
-      updatePassword,
-      updateEmail,
-      completeOnboarding, 
-      loading 
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

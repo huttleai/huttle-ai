@@ -11,16 +11,45 @@
 import { supabase } from '../config/supabase';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+
+/** Shown when Vite proxies /api to :3001 but nothing is listening (502/503). */
+const LOCAL_API_UNREACHABLE_MESSAGE =
+  'Cannot reach the Huttle API (localhost:3001). Run `npm run dev` to start Vite and the local API together, or run `npm run dev:api` in a second terminal.';
+
 const SAFE_SUBSCRIPTION_DEFAULT = {
   subscription: null,
   plan: 'free',
   tier: 'free',
   status: 'unknown',
+  currentPeriodStart: null,
   currentPeriodEnd: null,
   trialEnd: null,
   cancelAtPeriodEnd: false,
+  cancelledAt: null,
+  upcomingPlanChange: null,
+  billingCycle: null,
   degraded: true,
 };
+
+async function parseJsonResponse(response, fallbackMessage) {
+  const text = await response.text();
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Vite proxy often returns HTML for 502 when the API process is down
+      data = {};
+    }
+  }
+  if (!response.ok) {
+    if (import.meta.env.DEV && (response.status === 502 || response.status === 503)) {
+      throw new Error(LOCAL_API_UNREACHABLE_MESSAGE);
+    }
+    throw new Error(data?.error || fallbackMessage);
+  }
+  return data;
+}
 
 function buildSubscriptionStatusResult(overrides = {}) {
   return {
@@ -258,7 +287,7 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
  * - Cancel subscription
  * - Change plan
  */
-export async function createPortalSession() {
+export async function createPortalSession({ userId = null, returnUrl = null } = {}) {
   try {
     // Demo mode: Show message instead of opening portal
     if (isDemoMode()) {
@@ -273,6 +302,10 @@ export async function createPortalSession() {
     const response = await fetch('/api/create-portal-session', {
       method: 'POST',
       headers,
+      body: JSON.stringify({
+        user_id: userId,
+        return_url: returnUrl || window.location.href,
+      }),
     });
 
     if (!response.ok) {
@@ -295,6 +328,139 @@ export async function createPortalSession() {
     return {
       success: false,
       error: error.message
+    };
+  }
+}
+
+export async function createPaymentMethodUpdateSession({ returnUrl = null } = {}) {
+  try {
+    if (isDemoMode()) {
+      return {
+        success: true,
+        demo: true,
+        message: 'Demo mode: billing management simulated.',
+      };
+    }
+
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/create-payment-method-update-session', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        return_url: returnUrl || window.location.href,
+      }),
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to open payment method update flow');
+    if (data.url) {
+      window.location.href = data.url;
+    }
+
+    return { success: true, url: data.url };
+  } catch (error) {
+    console.error('Payment Method Update Error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function getBillingSummary() {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/billing-summary', {
+      method: 'GET',
+      headers,
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to load billing summary');
+    return {
+      success: true,
+      summary: data.summary || null,
+    };
+  } catch (error) {
+    console.error('Billing Summary Error:', error);
+    return {
+      success: false,
+      error: error.message,
+      summary: null,
+    };
+  }
+}
+
+export async function getBillingInvoices() {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/billing-invoices', {
+      method: 'GET',
+      headers,
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to load invoices');
+    return {
+      success: true,
+      invoices: Array.isArray(data.invoices) ? data.invoices : [],
+    };
+  } catch (error) {
+    console.error('Billing Invoices Error:', error);
+    return {
+      success: false,
+      error: error.message,
+      invoices: [],
+    };
+  }
+}
+
+export async function cancelSubscription({ stripeSubscriptionId = null } = {}) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/cancel-subscription', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        stripe_subscription_id: stripeSubscriptionId,
+      }),
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to cancel subscription');
+    return {
+      success: true,
+      accessUntil: data.access_until || null,
+    };
+  } catch (error) {
+    console.error('Cancel Subscription Error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function changeSubscriptionPlan({ targetPlanId, billingCycle = 'monthly' }) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/change-subscription-plan', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        target_plan_id: targetPlanId,
+        billing_cycle: billingCycle,
+      }),
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to change subscription plan');
+    return {
+      success: true,
+      mode: data.mode || 'immediate',
+      message: data.message || null,
+      effectiveAt: data.effective_at || null,
+    };
+  } catch (error) {
+    console.error('Change Subscription Plan Error:', error);
+    return {
+      success: false,
+      error: error.message,
     };
   }
 }
@@ -352,10 +518,15 @@ export async function getSubscriptionStatus(options = {}) {
         });
       }
 
+      const isApiDown =
+        import.meta.env.DEV && (response.status === 502 || response.status === 503);
+
       return buildSubscriptionStatusResult({
         shouldRetry: response.status >= 500 || response.status === 408 || response.status === 429,
         statusCode: response.status,
-        error: `Subscription status request failed with ${response.status}.`,
+        error: isApiDown
+          ? LOCAL_API_UNREACHABLE_MESSAGE
+          : `Subscription status request failed with ${response.status}.`,
       });
     }
 
@@ -380,9 +551,13 @@ export async function getSubscriptionStatus(options = {}) {
       plan: data.plan ?? SAFE_SUBSCRIPTION_DEFAULT.plan,
       tier: data.tier ?? data.plan ?? SAFE_SUBSCRIPTION_DEFAULT.tier,
       status: data.status,
+      currentPeriodStart: data.currentPeriodStart,
       currentPeriodEnd: data.currentPeriodEnd,
       trialEnd: data.trialEnd,
       cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+      cancelledAt: data.cancelledAt,
+      upcomingPlanChange: data.upcomingPlanChange,
+      billingCycle: data.subscription?.billingCycle ?? data.billingCycle ?? null,
       degraded: false,
     };
   } catch (error) {

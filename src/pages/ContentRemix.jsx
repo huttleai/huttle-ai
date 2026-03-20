@@ -419,7 +419,7 @@ export default function ContentRemix() {
 
       setSavedId(variationId);
       setTimeout(() => setSavedId(null), 2000);
-      showToast('Saved to Content Vault!', 'success');
+      showToast('Saved to vault ✓', 'success');
     } catch (error) {
       console.error('Failed to save remix variation:', error);
       showToast('Failed to save content', 'error');
@@ -807,9 +807,10 @@ export default function ContentRemix() {
                           <button
                             onClick={() => handleSaveVariation(variation, section.platform, variationId)}
                             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                            data-testid="content-remix-save-vault"
                           >
                             {savedId === variationId ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Save className="w-3.5 h-3.5" />}
-                            {savedId === variationId ? 'Saved!' : 'Save'}
+                            {savedId === variationId ? 'Saved ✓' : 'Save to Vault'}
                           </button>
                         </div>
                       </div>
