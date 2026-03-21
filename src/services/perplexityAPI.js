@@ -995,6 +995,15 @@ Return ONLY valid JSON with this exact top-level structure:
   ],
   "hooks": [
     "Specific hook pattern or hook line currently working"
+  ],
+  "top_hashtags": [
+    { "tag": "#example", "why": "Why this tag is relevant right now on ${platform}" }
+  ],
+  "audience_pain_points": [
+    "Specific frustration or unmet need in this niche (grounded in current signals)"
+  ],
+  "competitor_post_strategies": [
+    "Concrete posting or format strategy a competitor or top creator is using successfully"
   ]
 }
 
@@ -1004,6 +1013,9 @@ Requirements:
 - Ground every section in current web research from the last 30 days where possible
 - Prioritize findings that matter to ${audience}
 - Include competitor observations when available, especially for any provided handles
+- Provide 8-12 top_hashtags with a short "why" for each (mix of broad, mid, and niche where realistic)
+- Provide 5-10 audience_pain_points and 3-8 competitor_post_strategies (specific, not generic)
+- Provide 5-10 content_idea seeds in content_ideas (each must include title, format, hook, why_it_works, momentum)
 - Return JSON only with no markdown, no commentary, and no extra keys`
       }
     ], 0.2, {

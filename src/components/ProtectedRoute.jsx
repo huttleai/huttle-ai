@@ -19,7 +19,7 @@ export default function ProtectedRoute({ children }) {
   // RACE CONDITION FIX: Wait for loading to complete before making auth decisions
   // This prevents redirecting users who are in the middle of Magic Link authentication
   if (loading || (user && !subscriptionReady)) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner fullScreen text="Loading…" variant="huttle" />;
   }
 
   // Only redirect to login AFTER loading is complete and we confirm there's no user

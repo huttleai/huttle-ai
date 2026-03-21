@@ -37,11 +37,7 @@ const IPhoneMockupDemo = lazy(() => import('../components/IPhoneMockupDemo'));
 const MockupShowcase = lazy(() => import('../pages/MockupShowcase'));
 
 function DashboardRouteFallback() {
-  return (
-    <div className="flex min-h-[50vh] flex-1 items-center justify-center pt-14 lg:ml-64">
-      <LoadingSpinner text="Loading…" />
-    </div>
-  );
+  return <LoadingSpinner fullScreen variant="huttle" text="Loading…" />;
 }
 
 function AppContent({ secureAccountMode = false, onboardingMode = false }) {

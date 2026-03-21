@@ -85,6 +85,7 @@ export default function ContentRemix() {
   const [remixResults, setRemixResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [remixError, setRemixError] = useState(null);
+  const [usedAiFallback, setUsedAiFallback] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [savedId, setSavedId] = useState(null);
 
@@ -160,7 +161,7 @@ export default function ContentRemix() {
       .join('\n');
 
     return withoutStandaloneLabels
-      .replace(/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*[:.\-]?\s*/i, '')
+      .replace(/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*[:.-]?\s*/i, '')
       .trim();
   };
 
@@ -172,7 +173,7 @@ export default function ContentRemix() {
     if (!cleanedContent) return [cleanedContent];
 
     // Try splitting by numbered headers: "1.", "2.", "3." or "Variation 1", etc.
-    const numberedSplit = cleanedContent.split(/\n\s*(?:\d+[\.\)]\s+|(?:Variation|Option|Version)\s*\d+[:\.\s])/i);
+    const numberedSplit = cleanedContent.split(/\n\s*(?:\d+[.)]\s+|(?:Variation|Option|Version)\s*\d+[:.\s])/i);
     if (numberedSplit.length >= 2) {
       // First item may be empty or a preamble — filter out empties
       return numberedSplit.map((value) => sanitizeVariationText(value)).filter((value) => value.length > 15).slice(0, 3);
@@ -236,7 +237,7 @@ export default function ContentRemix() {
 
     const sections = [];
     // Match ### Platform or **Platform** headers
-    const platformRegex = /(?:^|\n)\s*(?:#{1,4}\s*|\*\*|platform\s*[:\-]\s*)?(Instagram|TikTok|X|Twitter|Facebook|YouTube)(?:\*\*)?\s*[:\-]?\s*/gi;
+    const platformRegex = /(?:^|\n)\s*(?:#{1,4}\s*|\*\*|platform\s*[:-]\s*)?(Instagram|TikTok|X|Twitter|Facebook|YouTube)(?:\*\*)?\s*[:-]?\s*/gi;
     const matches = [...rawContent.matchAll(platformRegex)];
 
     if (matches.length > 0) {
@@ -308,6 +309,15 @@ export default function ContentRemix() {
     await remixUsage.trackFeatureUsage({ mode: remixGoal });
     setRemixError(null);
     setRemixResults(null);
+    setUsedAiFallback(false);
+
+    const applyRemixSuccess = (raw, sections, fromFallback) => {
+      setRemixResults({ raw, sections });
+      setUsedAiFallback(Boolean(fromFallback));
+      const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
+      showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
+      setCurrentStep(4);
+    };
 
     try {
       // Try Claude first
@@ -326,54 +336,76 @@ export default function ContentRemix() {
         }
       });
 
-      if (result.success && result.content) {
-        const safeContent = ensureString(result.content);
-        const parsed = Array.isArray(result.sections) && result.sections.length > 0
-          ? result.sections
-          : parseRemixOutput(safeContent);
-        setRemixResults({ raw: safeContent, sections: parsed });
-        const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
-        showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
-        setCurrentStep(4);
+      const hasPrimary =
+        result.success
+        && (Boolean(result.content?.trim()) || (Array.isArray(result.sections) && result.sections.length > 0));
+
+      if (hasPrimary) {
+        const safeContent = ensureString(result.content || '');
+        let parsed;
+        try {
+          parsed = Array.isArray(result.sections) && result.sections.length > 0
+            ? result.sections
+            : parseRemixOutput(safeContent);
+        } catch (parseErr) {
+          console.error('[ContentRemix] Remix parse error', parseErr);
+          parsed = [];
+        }
+        if (!parsed.length && safeContent) {
+          parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
+        }
+        applyRemixSuccess(safeContent, parsed, false);
         return;
       }
 
-      // Claude failed — fallback to Grok API
-      console.warn('Claude remix failed, falling back to Grok API:', result.error);
+      if (result.success) {
+        console.warn('[ContentRemix] Primary response missing content; using Grok fallback', result.error);
+      } else {
+        console.warn('[ContentRemix] Claude remix failed, falling back to Grok API:', result.error);
+      }
+
       const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
 
       if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
         const rawContent = grokResult.remixed || grokResult.ideas;
         const safeContent = ensureString(rawContent);
-        const parsed = parseRemixOutput(safeContent);
-        setRemixResults({ raw: safeContent, sections: parsed });
-        const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
-        showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
-        setCurrentStep(4);
+        let parsed;
+        try {
+          parsed = parseRemixOutput(safeContent);
+        } catch (parseErr) {
+          console.error('[ContentRemix] Grok remix parse error', parseErr);
+          parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
+        }
+        applyRemixSuccess(safeContent, parsed, true);
         return;
       }
 
-      // Both failed
       const errorMessage = getRemixErrorMessage(result.errorType);
       setRemixError(errorMessage);
       showToast(errorMessage, 'error');
     } catch (error) {
       console.error('Error remixing content:', error);
-      // Final fallback attempt
       try {
         const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
         if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
           const content = grokResult.remixed || grokResult.ideas;
-          const parsed = parseRemixOutput(content);
-          setRemixResults({ raw: content, sections: parsed });
-          showToast(`Content remixed! ${getToastDisclaimer('remix')}`, 'success');
-          setCurrentStep(4);
+          const safeContent = ensureString(content);
+          let parsed;
+          try {
+            parsed = parseRemixOutput(safeContent);
+          } catch (parseErr) {
+            console.error('[ContentRemix] Grok remix parse error', parseErr);
+            parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
+          }
+          applyRemixSuccess(safeContent, parsed, true);
           return;
         }
       } catch (grokError) {
         console.error('Grok fallback also failed:', grokError);
       }
-      const finalError = getRemixErrorMessage('UNKNOWN');
+      const finalError = error?.message?.includes('timeout') || error?.name === 'AbortError'
+        ? 'Generation timed out. Please try again with shorter input.'
+        : getRemixErrorMessage('UNKNOWN');
       setRemixError(finalError);
       showToast(finalError, 'error');
     } finally {
@@ -432,16 +464,15 @@ export default function ContentRemix() {
     setSelectedPlatforms(brandVoicePlatforms.length > 0 ? [...brandVoicePlatforms] : []);
     setRemixResults(null);
     setRemixError(null);
+    setUsedAiFallback(false);
   };
 
   const handleRemixAgain = () => {
     setRemixResults(null);
     setRemixError(null);
+    setUsedAiFallback(false);
     setCurrentStep(3);
   };
-
-  // Loading state - show skeleton on step 4 while generating
-  const isRemixing = isLoading && currentStep === 3;
 
   const canProceedToStep2 = remixInput.trim().length > 10;
   const canProceedToStep3 = canProceedToStep2 && remixGoal;
@@ -457,6 +488,9 @@ export default function ContentRemix() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {isLoading && (
+        <LoadingSpinner fullScreen variant="huttle" text="Remixing your content…" />
+      )}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
 
       <div className="relative z-10 max-w-3xl mx-auto">
@@ -749,10 +783,13 @@ export default function ContentRemix() {
               <p className="text-sm text-gray-500 ml-10">
                 {REMIX_GOALS.find(g => g.id === remixGoal)?.label} remix for {selectedPlatforms.join(', ')}
               </p>
+              {usedAiFallback && (
+                <p className="text-xs text-gray-400 ml-10 mt-1">Powered by AI fallback</p>
+              )}
             </div>
 
             {/* Platform Sections with Variations */}
-            {remixResults.sections.map((section, sIdx) => {
+            {(remixResults.sections || []).map((section, sIdx) => {
               const style = PLATFORM_STYLES[section.platform] || { badge: 'bg-gray-600' };
               return (
                 <div key={sIdx} className="space-y-3">
@@ -767,7 +804,7 @@ export default function ContentRemix() {
                   </div>
 
                   {/* Variation Cards */}
-                  {section.variations.map((variation, vIdx) => {
+                  {(section.variations || []).map((variation, vIdx) => {
                     const variationId = `s${sIdx}-v${vIdx}`;
                     const isCopied = copiedId === variationId;
                     return (

@@ -34,11 +34,11 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations power all of Huttle AI\'s intelligent features. Each plan includes a different monthly pool:\n\n• Essentials ($15/mo): 200 generations/month\n• Pro ($39/mo): 800 generations/month\n\nPro plans also have per-feature sub-limits on advanced tools to ensure fair usage:\n\n• Niche Intel: 5/month\n• Trend Discovery (Deep Dive): 50/month\n• Content Remix Studio: 75/month\n• Ignite Engine: 40/month\n• AI Plan Builder: 20/month\n• All other AI tools (Captions, Hashtags, Hooks, CTAs, Scorer, Visual Brainstormer): No individual cap — they count toward your monthly total.\n\nYour usage resets at the start of each billing cycle. Track it in the sidebar AI meter or on each feature\'s page.' // HUTTLE AI: updated 3
+      answer: 'AI generations power Huttle AI\'s intelligent features. Plans are billed annually:\n\n• Essentials (annual) — 200 generations per billing year\n• Pro (annual) — 800 generations per billing year\n• Founders Club — $199/year (full Pro feature access)\n• Builders Club — $249/year (full Pro feature access)\n\nAdvanced tools also have per-feature limits per billing period (for example Niche Intel, Deep Dive, Content Remix, Ignite Engine, and AI Plan Builder). Other tools (captions, hashtags, hooks, CTAs, scorer, visual brainstormer) count toward your overall generation pool without separate caps.\n\nUsage resets on each billing anniversary. Track it in the sidebar AI meter or on each feature page.'
     },
     {
       question: 'When do my AI generations reset?',
-      answer: 'AI generations reset on the first day of each month at midnight UTC. Any unused generations do not roll over to the next month. You can track your usage in the sidebar or on the Subscription page.'
+      answer: 'AI generations reset at the start of each billing period (your annual renewal date). Unused generations do not roll over. You can track usage in the sidebar or on the Subscription page.'
     },
     {
       question: 'How do I publish to social media?',
@@ -170,7 +170,7 @@ export default function Help() {
         'Top Hook Patterns give you ready-to-use, scroll-stopping hook templates — click to copy',
         'Content Gap Opportunities surface topics your competitors are missing, with opportunity tiers',
         '5 Content Ideas are tailored to your brand — click "Build Post" to send any idea to Full Post Builder',
-        'Available on Pro plan (5 analyses/month) and Founders Club (10/month)'
+        'Available on Pro (annual) and Founders Club — check the feature meter on this page for your remaining analyses each billing period'
       ]
     },
     { 

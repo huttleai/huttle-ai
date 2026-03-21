@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Lightbulb, PenTool, PenLine, Hash, MessageSquare, Check, ChevronLeft,
-  ChevronRight, Copy, FolderPlus, RotateCcw, RefreshCw, X, Sparkles, TrendingUp,
+  ChevronRight, Copy, FolderPlus, RotateCcw, RefreshCw, X, Sparkles, TrendingUp, HelpCircle,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
@@ -23,8 +23,39 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { enhanceCaptionWithClaude } from '../services/claudeAPI';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One-sentence explainer + example line for each hook style (topic-aware). */
+function getHookTypeHelp(type, topicSnippet) {
+  const t = (topicSnippet || 'your topic').trim().slice(0, 72) || 'your topic';
+  const map = {
+    Question: {
+      blurb: 'Opens with a question so people stop to find the answer.',
+      example: `Still guessing about ${t}? Here's what actually works.`,
+    },
+    Teaser: {
+      blurb: 'Hints at a secret or payoff so curiosity pulls them in.',
+      example: `The one thing about ${t} almost everyone gets wrong.`,
+    },
+    'Shocking Stat': {
+      blurb: 'Surprises with a pattern or contrast — no fake numbers; qualitative surprise only.',
+      example: `Most people approach ${t} backwards — here's the shift.`,
+    },
+    Story: {
+      blurb: 'Starts mid-moment so it feels like a real story, not a pitch.',
+      example: `Last week I almost gave up on ${t}. Then this happened.`,
+    },
+    'Bold Claim': {
+      blurb: 'States a strong opinion or promise that demands a reaction.',
+      example: `${t} doesn't need more content — it needs this one fix.`,
+    },
+  };
+  return map[type] || { blurb: 'A scroll-stopping opening line.', example: `Strong opener about ${t}.` };
+}
 
 const STEPS = [
   { id: 'topic', label: 'Topic', icon: Lightbulb, description: 'Set your topic, platform & goal' },
@@ -45,15 +76,42 @@ const HOOK_TYPES = ['Question', 'Teaser', 'Shocking Stat', 'Story', 'Bold Claim'
 
 function parseHooksFromText(text) {
   if (!text) return [];
+  const raw = String(text).trim();
+
+  try {
+    const direct = JSON.parse(raw);
+    if (Array.isArray(direct)) {
+      return direct.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
+    }
+    if (direct && typeof direct === 'object' && Array.isArray(direct.hooks)) {
+      return direct.hooks.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fence?.[1]) {
+    try {
+      const parsed = JSON.parse(fence[1].trim());
+      if (Array.isArray(parsed)) {
+        return parsed.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
   const hooks = [];
-  const lines = text.split('\n').filter((l) => l.trim());
+  const lines = raw.split('\n').filter((l) => l.trim());
   for (const line of lines) {
-    const cleaned = line.replace(/^\d+[.)]\s*/, '').trim();
-    if (cleaned && cleaned.length > 3) {
+    let cleaned = line.replace(/^\d+[.)]\s*/, '').replace(/^[-*]\s*/, '').trim();
+    cleaned = cleaned.replace(/^\*\*|\*\*$/g, '').replace(/\*\*(.*?)\*\*/g, '$1').trim();
+    if (cleaned && cleaned.length > 2) {
       hooks.push(cleaned);
     }
   }
-  return hooks.slice(0, 4);
+  return hooks.slice(0, 6);
 }
 
 function parseHashtagsFromResponse(text) {
@@ -127,6 +185,8 @@ export default function FullPostBuilder() {
   const hasHydratedRef = useRef(false);
   const pendingTrendingRef = useRef(null);
   const appliedTrendingRef = useRef(false);
+  /** After the user edits the topic field, never auto-reapply brand niche over their text. */
+  const userEditedTopicRef = useRef(false);
   if (location.state?.source === 'trending') {
     pendingTrendingRef.current = location.state;
   }
@@ -213,11 +273,11 @@ export default function FullPostBuilder() {
     }
   }, [storageKey, hasExplicitPrefill, prefillGoal, prefillPlatform, prefillTopic, location.pathname, location.search, navigate]);
 
-  // HUTTLE AI: brand context injected — pre-fill topic from niche and platform from brand profile
+  // HUTTLE AI: brand context injected — pre-fill topic from niche and platform from brand profile (default only)
   useEffect(() => {
     if (!hasHydratedRef.current || hasExplicitPrefill || trendingBanner) return;
-    // Ref guard: same flush as trending hydrate can leave trendingBanner false in this closure while topic is still empty
     if (trendingContextRef.current?.source === 'trending') return;
+    if (userEditedTopicRef.current) return;
     if (!topic.trim() && brandData?.niche) {
       const niche = Array.isArray(brandData.niche) ? brandData.niche[0] : brandData.niche;
       if (niche?.trim()) setTopic(niche.trim());
@@ -228,7 +288,7 @@ export default function FullPostBuilder() {
         : brandData.platforms[0];
       if (firstPlatform) setPlatform(firstPlatform.toLowerCase());
     }
-  }, [brandData, hasExplicitPrefill, trendingBanner]);
+  }, [brandData, hasExplicitPrefill, trendingBanner, topic, platform]);
 
   // Save draft to localStorage
   useEffect(() => {
@@ -276,7 +336,7 @@ export default function FullPostBuilder() {
     setShowFinalPanel(false);
   };
 
-  // Step 2: Generate hooks
+  // Step 2: Generate hooks (with retries — Grok occasionally returns empty or malformed lines)
   const handleGenerateHooks = async () => {
     if (!topic.trim()) { addToast('Enter a topic first', 'warning'); return; }
     setLoadingHooks(true);
@@ -285,25 +345,51 @@ export default function FullPostBuilder() {
       if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingHooks(false); return; }
 
       const tc = trendingContextRef.current;
-      const res = await generateFullPostHooks({
-        topic,
+      const payload = {
+        topic: topic.trim(),
         hookType: selectedHookType,
         platform,
         formatType: tc?.format_type,
         nicheAngle: tc?.niche_angle,
         trendDescription: tc?.description,
-      }, brandData);
+      };
 
-      if (res.success && res.hooks) {
-        const parsed = parseHooksFromText(res.hooks);
+      let lastErr = null;
+      let parsed = [];
+
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        if (attempt > 0) {
+          console.warn('[FullPostBuilder] Retrying hook generation', { attempt, topic: topic.slice(0, 80) });
+          await sleep(1000);
+        }
+        try {
+          const res = await generateFullPostHooks(payload, brandData);
+          const rawHooks = res.hooks ?? res.content ?? '';
+          if (res.success && rawHooks) {
+            parsed = parseHooksFromText(typeof rawHooks === 'string' ? rawHooks : String(rawHooks));
+          }
+          if (parsed.length > 0) break;
+          lastErr = new Error('Empty or unparseable hook list');
+        } catch (e) {
+          lastErr = e;
+          console.error('[FullPostBuilder] Hook generation attempt failed', { attempt, message: e?.message });
+        }
+      }
+
+      if (parsed.length > 0) {
         setHooks(parsed.slice(0, 4));
         setSelectedHook(null);
         resetDownstream(2);
       } else {
-        addToast('Failed to generate hooks', 'error');
+        console.error('[FullPostBuilder] Hook generation failed after retries', lastErr);
+        addToast('We could not generate hooks right now. Check your connection and try again.', 'error');
       }
-    } catch { addToast('Hook generation failed', 'error'); }
-    finally { setLoadingHooks(false); }
+    } catch (e) {
+      console.error('[FullPostBuilder] Hook generation error', e);
+      addToast('Hook generation failed. Please try again.', 'error');
+    } finally {
+      setLoadingHooks(false);
+    }
   };
 
   // Step 3: Generate caption
@@ -517,6 +603,7 @@ export default function FullPostBuilder() {
   };
 
   const handleStartOver = () => {
+    userEditedTopicRef.current = false;
     setCurrentStep(0);
     setDirection(-1);
     setTopic('');
@@ -567,8 +654,23 @@ export default function FullPostBuilder() {
     exit: (d) => ({ x: d > 0 ? -200 : 200, opacity: 0 }),
   };
 
+  const topicPreview = topic.trim() || (Array.isArray(brandData?.niche) ? brandData.niche[0] : brandData?.niche) || 'your niche';
+
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {(loadingHooks || loadingCaption || loadingHashtags || loadingCTAs || loadingQuality) && (
+        <LoadingSpinner
+          fullScreen
+          variant="huttle"
+          text={
+            loadingHooks ? 'Crafting scroll-stopping hooks…'
+              : loadingCaption ? 'Writing your caption…'
+                : loadingHashtags ? 'Ranking hashtags…'
+                  : loadingCTAs ? 'Generating CTAs…'
+                    : 'Scoring your post…'
+          }
+        />
+      )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-6 md:mb-8">
@@ -676,7 +778,11 @@ export default function FullPostBuilder() {
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">Post topic or idea</label>
                     <textarea
                       value={topic}
-                      onChange={(e) => { setTopic(e.target.value); resetDownstream(1); }}
+                      onChange={(e) => {
+                        userEditedTopicRef.current = true;
+                        setTopic(e.target.value);
+                        resetDownstream(1);
+                      }}
                       placeholder="e.g., 5 morning habits that changed my productivity"
                       rows={3}
                       className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
@@ -716,62 +822,74 @@ export default function FullPostBuilder() {
               {/* Step 2: Hook */}
               {currentStep === 1 && (
                 <div className="space-y-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hook type</label>
-                    <div className="flex flex-wrap gap-2">
-                      {HOOK_TYPES.map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            setSelectedHookType(type);
-                            setHooks([]);
-                            setSelectedHook(null);
-                            resetDownstream(2);
-                          }}
-                          className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                            selectedHookType === type
-                              ? 'bg-huttle-primary/5 border-huttle-primary/30 text-huttle-primary ring-1 ring-huttle-primary/20'
-                              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      ))}
+                  <div className="rounded-xl border border-huttle-primary/15 bg-huttle-primary/5 px-4 py-3 flex gap-3">
+                    <HelpCircle className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" aria-hidden />
+                    <div className="text-sm text-gray-700">
+                      <p className="font-medium text-gray-900">What&apos;s a hook?</p>
+                      <p className="mt-1 text-gray-600">
+                        A hook is your post&apos;s opening line — it&apos;s what stops someone from scrolling. Think of it as your headline.
+                      </p>
                     </div>
                   </div>
-                  {loadingHooks ? (
-                    <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-                      ))}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Hook type</label>
+                    <p className="text-xs text-gray-500 mb-3">Each style uses a different psychological pull. Pick one, then choose a generated line below.</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {HOOK_TYPES.map((type) => {
+                        const help = getHookTypeHelp(type, topicPreview);
+                        const isSel = selectedHookType === type;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => {
+                              setSelectedHookType(type);
+                              setHooks([]);
+                              setSelectedHook(null);
+                              resetDownstream(2);
+                            }}
+                            className={`text-left rounded-xl border p-3 transition-all ${
+                              isSel
+                                ? 'border-huttle-primary/40 bg-huttle-primary/5 ring-1 ring-huttle-primary/20'
+                                : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="text-xs font-semibold text-gray-900">{type}</span>
+                            <p className="text-[11px] text-gray-600 mt-1 leading-snug">{help.blurb}</p>
+                            <p className="text-[11px] text-huttle-primary/90 mt-2 italic leading-snug">&ldquo;{sanitizeAIOutput(help.example)}&rdquo;</p>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ) : hooks.length > 0 ? (
+                  </div>
+                  {!loadingHooks && hooks.length > 0 ? (
                     <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pick a hook</p>
                       {hooks.map((hook, i) => (
                         <button
                           key={i}
+                          type="button"
                           onClick={() => { setSelectedHook(hook); resetDownstream(2); }}
-                          className={`w-full text-left p-4 rounded-xl border transition-all ${
+                          className={`w-full text-left rounded-xl border p-4 shadow-sm transition-all ${
                             selectedHook === hook
                               ? 'bg-huttle-primary/5 border-huttle-primary/30 ring-2 ring-huttle-primary/20'
-                              : 'bg-white border-gray-200 hover:border-gray-300'
+                              : 'bg-white border-gray-200 hover:border-huttle-primary/25'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-medium text-gray-900">{sanitizeAIOutput(hook)}</p>
                             {selectedHook === hook && <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />}
                           </div>
-                          <span className="text-xs text-gray-400 mt-1 inline-block">{selectedHookType} variation {i + 1}</span>
+                          <span className="text-xs text-gray-400 mt-2 inline-block">{selectedHookType} · Option {i + 1}</span>
                         </button>
                       ))}
                     </div>
-                  ) : (
+                  ) : !loadingHooks ? (
                     <div className="text-center py-8 text-gray-400">
                       <Zap className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">No hooks generated yet</p>
+                      <p className="text-sm">No hooks generated yet — use Next from Step 1 or Regenerate below</p>
                     </div>
-                  )}
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={handleGenerateHooks}

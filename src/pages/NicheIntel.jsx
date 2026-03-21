@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
@@ -19,6 +19,7 @@ import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { saveContentLibraryItem } from '../config/supabase';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { AuthContext } from '../context/AuthContext';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -34,12 +35,7 @@ export default function NicheIntel() {
   const navigate = useNavigate();
   const { featureUsed, featureLimit, trackFeatureUsage, canGenerate } = useAIUsage('nicheIntel');
 
-  const [nicheQuery, setNicheQuery] = useState(() => {
-    const niches = brandData?.niche;
-    if (Array.isArray(niches)) return niches.join(', ');
-    if (typeof niches === 'string') return niches;
-    return '';
-  });
+  const [nicheQuery, setNicheQuery] = useState('');
   const [platform, setPlatform] = useState('instagram');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
@@ -47,19 +43,51 @@ export default function NicheIntel() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [savedIdeaId, setSavedIdeaId] = useState(null);
 
-  const hasAccess = checkFeatureAccess('niche-intel');
+  /** Once true, never overwrite the niche field from Brand Voice or URL. */
+  const userEditedNicheRef = useRef(false);
+  const cacheRestoredRef = useRef(false);
 
+  const hasAccess = checkFeatureAccess('niche-intel');
+  const analysisStorageKey = useMemo(
+    () => (user?.id ? `nicheIntelAnalysis:${user.id}` : null),
+    [user?.id],
+  );
+
+  // Default niche from brand (only until the user types or clears)
   useEffect(() => {
+    if (userEditedNicheRef.current) return;
     const niches = brandData?.niche;
-    if (nicheQuery.trim()) return;
-    if (Array.isArray(niches) && niches.length > 0) {
-      setNicheQuery(niches.join(', '));
-      return;
-    }
-    if (typeof niches === 'string' && niches.trim()) {
-      setNicheQuery(niches);
+    if (!niches) return;
+    const next = Array.isArray(niches) ? niches.join(', ') : String(niches);
+    if (next.trim() && !nicheQuery.trim()) {
+      setNicheQuery(next);
     }
   }, [brandData?.niche, nicheQuery]);
+
+  // Restore last analysis from localStorage (24h) — no network; avoids repeat runs on refresh
+  useEffect(() => {
+    if (!analysisStorageKey || cacheRestoredRef.current) return;
+    try {
+      const raw = localStorage.getItem(analysisStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.expiresAt || !parsed?.analysis) return;
+      if (Date.now() > parsed.expiresAt) {
+        localStorage.removeItem(analysisStorageKey);
+        return;
+      }
+      cacheRestoredRef.current = true;
+      setAnalysis(parsed.analysis);
+      if (typeof parsed.nicheQuery === 'string' && parsed.nicheQuery && !userEditedNicheRef.current) {
+        setNicheQuery(parsed.nicheQuery);
+      }
+      if (typeof parsed.platform === 'string' && parsed.platform) {
+        setPlatform(parsed.platform);
+      }
+    } catch (e) {
+      console.error('[NicheIntel] Failed to restore cached analysis', e);
+    }
+  }, [analysisStorageKey]);
 
   const handleAnalyze = async () => {
     if (!canGenerate) {
@@ -94,10 +122,26 @@ export default function NicheIntel() {
         }
 
         setAnalysis(analysisRes.analysis);
+        if (analysisStorageKey) {
+          try {
+            localStorage.setItem(
+              analysisStorageKey,
+              JSON.stringify({
+                expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+                analysis: analysisRes.analysis,
+                nicheQuery: resolvedQuery,
+                platform,
+              }),
+            );
+          } catch (e) {
+            console.error('[NicheIntel] Could not persist analysis cache', e);
+          }
+        }
       } else {
         addToast('Analysis failed. Try again.', 'error');
       }
-    } catch {
+    } catch (e) {
+      console.error('[NicheIntel] Analyze error', e);
       addToast('Something went wrong. Try again.', 'error');
     } finally {
       setLoading(false);
@@ -208,6 +252,9 @@ export default function NicheIntel() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {loading && (
+        <LoadingSpinner fullScreen variant="huttle" text="Researching your niche and synthesizing insights…" />
+      )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-6 md:mb-8">
@@ -240,13 +287,39 @@ export default function NicheIntel() {
             Niches, keywords, or @handles to analyze.
           </p>
           <div className="space-y-4">
-            <textarea
-              value={nicheQuery}
-              onChange={(e) => setNicheQuery(e.target.value)}
-              placeholder="@fitcoachsarah, fitness transformation, med spa"
-              rows={2}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
-            />
+            <div className="relative">
+              <textarea
+                value={nicheQuery}
+                onChange={(e) => {
+                  userEditedNicheRef.current = true;
+                  setNicheQuery(e.target.value);
+                }}
+                placeholder="@fitcoachsarah, fitness transformation, med spa"
+                rows={2}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-12 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
+              />
+              {nicheQuery.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    userEditedNicheRef.current = true;
+                    setNicheQuery('');
+                    setAnalysis(null);
+                    if (analysisStorageKey) {
+                      try {
+                        localStorage.removeItem(analysisStorageKey);
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                  }}
+                  className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                  aria-label="Clear niche input"
+                >
+                  <span className="text-lg leading-none">&times;</span>
+                </button>
+              )}
+            </div>
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
             <button
               onClick={handleAnalyze}
@@ -281,20 +354,7 @@ export default function NicheIntel() {
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && (
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                <div className="h-5 w-40 bg-gray-100 rounded animate-pulse mb-3" />
-                <div className="space-y-2">
-                  <div className="h-4 bg-gray-100 rounded animate-pulse" />
-                  <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Loading: full-screen spinner (see overlay above) */}
 
         {/* Results */}
         <AnimatePresence>
@@ -379,7 +439,7 @@ export default function NicheIntel() {
               {analysis.contentIdeas?.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h3 className="flex items-center gap-2 font-semibold text-gray-900 mb-4">
-                    <Sparkles className="w-5 h-5 text-indigo-500" /> Your 5 Content Ideas
+                    <Sparkles className="w-5 h-5 text-indigo-500" /> Your content ideas
                   </h3>
                   <div className="space-y-3">
                     {analysis.contentIdeas.map((idea, i) => (

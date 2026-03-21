@@ -1,4 +1,5 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef } from 'react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
@@ -127,6 +128,8 @@ export default function TrendDiscoveryHub() {
   const [deepDiveError, setDeepDiveError] = useState(null);
   const [deepDiveLoadingSeconds, setDeepDiveLoadingSeconds] = useState(0);
   const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
+  /** When user switches away during Deep Dive, ignore late responses */
+  const deepDiveCancelledRef = useRef(false);
   const [audienceInsightsResult, setAudienceInsightsResult] = useState(null);
   const [audienceInsightsError, setAudienceInsightsError] = useState(null);
   const [isLoadingAudienceInsights, setIsLoadingAudienceInsights] = useState(false);
@@ -423,6 +426,7 @@ export default function TrendDiscoveryHub() {
 
     setDeepDiveError(null);
     setDeepDiveResults(null);
+    deepDiveCancelledRef.current = false;
     setIsLoadingDeepDive(true);
     try {
       // Fetch user profile for personalized context
@@ -448,6 +452,9 @@ export default function TrendDiscoveryHub() {
       });
 
       if (result.success && result.report) {
+        if (deepDiveCancelledRef.current) {
+          return;
+        }
         await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
         setDeepDiveResults({
           topic: deepDiveTopic.trim(),
@@ -466,12 +473,14 @@ export default function TrendDiscoveryHub() {
         setDeepDiveError(null);
         showToast(`Deep Dive report ready. ${getToastDisclaimer('forecast')}`, 'ai');
       } else {
+        if (deepDiveCancelledRef.current) return;
         const errorMessage = result?.reason || 'Deep Dive encountered a server issue. Please try again in a moment.';
         setDeepDiveError(errorMessage);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Deep Dive error:', error);
+      if (deepDiveCancelledRef.current) return;
       const errorMessage = 'Deep Dive encountered a server issue. Please try again in a moment.';
       setDeepDiveError(errorMessage);
       showToast(errorMessage, 'error');
@@ -634,6 +643,7 @@ export default function TrendDiscoveryHub() {
               
               <button
                 onClick={() => {
+                  if (isLoadingDeepDive) deepDiveCancelledRef.current = true;
                   clearAudienceInsights();
                   setActiveMode('quickScan');
                 }}
@@ -680,8 +690,7 @@ export default function TrendDiscoveryHub() {
         </div>
 
         {/* Content Area */}
-        <div className="relative px-6 pb-8 md:px-8">
-          
+        <div className="relative px-6 pb-8 md:px-8 min-h-[520px]">
           {/* Per-feature usage meter */}
           <div className="mb-4">
             {activeMode === 'quickScan' && (
@@ -701,10 +710,17 @@ export default function TrendDiscoveryHub() {
               />
             )}
           </div>
-          
+
+          <AnimatePresence mode="wait">
           {/* Trend Pulse Mode */}
           {activeMode === 'quickScan' && (
-            <div className="animate-fadeIn">
+            <Motion.div
+              key="quickScan"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
               {isScanning ? (
                 /* Scanning Animation */
                 <div className="relative py-16">
@@ -922,12 +938,18 @@ export default function TrendDiscoveryHub() {
                   </div>
                 </div>
               )}
-            </div>
+            </Motion.div>
           )}
 
           {/* Deep Dive Mode */}
           {activeMode === 'deepDive' && (
-            <div className="animate-fadeIn">
+            <Motion.div
+              key="deepDive"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
               {(isLoadingAudienceInsights || audienceInsightsResult || audienceInsightsError) ? (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1372,8 +1394,9 @@ export default function TrendDiscoveryHub() {
                   )}
                 </>
               )}
-            </div>
+            </Motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -212,7 +212,7 @@ function sanitizeVariationText(value) {
     .join('\n');
 
   return withoutStandaloneLabels
-    .replace(/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*[:.\-]?\s*/i, '')
+    .replace(/^\s*(?:#+\s*)?(?:variation|option|version)\s*\d+\s*[:.-]?\s*/i, '')
     .trim();
 }
 
@@ -235,7 +235,7 @@ function normalizeSections(rawSections, requestedPlatforms) {
     if (!normalizedValue) return [];
 
     const numberedVariations = normalizedValue
-      .split(/(?:^|\n)\s*(?:\d+[\.\)]\s+|(?:Variation|Option|Version)\s*\d+[:.\s]+)/i)
+      .split(/(?:^|\n)\s*(?:\d+[.)]\s+|(?:Variation|Option|Version)\s*\d+[:.\s]+)/i)
       .map((entry) => entry.trim())
       .filter(Boolean);
 
@@ -275,13 +275,18 @@ function normalizeSections(rawSections, requestedPlatforms) {
         const canonicalPlatform = requestedLookup.get(platformName.toLowerCase()) || platformName;
         const variations = normalizeVariations(section?.variations);
 
-        if (!canonicalPlatform || variations.length !== EXPECTED_VARIATION_COUNT) {
+        if (!canonicalPlatform || variations.length < 2) {
           return null;
+        }
+
+        const paddedVariations = [...variations];
+        while (paddedVariations.length < EXPECTED_VARIATION_COUNT && paddedVariations.length > 0) {
+          paddedVariations.push(paddedVariations[paddedVariations.length - 1]);
         }
 
         return {
           platform: canonicalPlatform,
-          variations,
+          variations: paddedVariations.slice(0, EXPECTED_VARIATION_COUNT),
         };
       })
       .filter(Boolean);
@@ -298,13 +303,18 @@ function normalizeSections(rawSections, requestedPlatforms) {
 
         const variations = normalizeVariations(matchingValue);
 
-        if (variations.length !== EXPECTED_VARIATION_COUNT) {
+        if (variations.length < 2) {
           return null;
+        }
+
+        const padded = [...variations];
+        while (padded.length < EXPECTED_VARIATION_COUNT && padded.length > 0) {
+          padded.push(padded[padded.length - 1]);
         }
 
         return {
           platform,
-          variations,
+          variations: padded.slice(0, EXPECTED_VARIATION_COUNT),
         };
       })
       .filter(Boolean);

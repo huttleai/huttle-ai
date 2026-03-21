@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, Copy, Check, FolderPlus } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -17,6 +18,7 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { getCachedTrends } from '../services/dashboardCacheService';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -198,8 +200,13 @@ export default function AIPlanBuilder() {
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  // Subscribe to job updates via Supabase Realtime + fallback polling
-  useEffect(() => {
+  const jobCompleteStatuses = useCallback((status) => {
+    const s = String(status || '').toLowerCase();
+    return s === 'completed' || s === 'complete' || s === 'success' || s === 'done';
+  }, []);
+
+  // Subscribe to job updates via Supabase Realtime + polling (useLayoutEffect so listener runs before paint / before n8n can finish)
+  useLayoutEffect(() => {
     if (!currentJobId) return;
     let resolved = false;
 
@@ -215,7 +222,6 @@ export default function AIPlanBuilder() {
       handleJobFailed(error);
     };
 
-    // Realtime subscription
     const channel = supabase
       .channel(`job:${currentJobId}`)
       .on(
@@ -229,10 +235,10 @@ export default function AIPlanBuilder() {
         (payload) => {
           const updatedJob = payload.new;
           setJobStatus(updatedJob.status);
-          
-          if ((updatedJob.status === 'completed' || updatedJob.status === 'complete') && updatedJob.result) {
+
+          if (jobCompleteStatuses(updatedJob.status) && updatedJob.result) {
             resolveJob(updatedJob.result);
-          } else if (updatedJob.status === 'failed') {
+          } else if (String(updatedJob.status || '').toLowerCase() === 'failed') {
             rejectJob(updatedJob.error);
           }
         }
@@ -241,27 +247,27 @@ export default function AIPlanBuilder() {
 
     realtimeChannelRef.current = channel;
 
-    // Fallback polling every 5 seconds (handles RLS blocking Realtime)
     const pollInterval = setInterval(async () => {
       if (resolved) return;
       try {
-        const { data: job } = await supabase
+        const { data: job, error } = await supabase
           .from('jobs')
           .select('status, result, error')
           .eq('id', currentJobId)
-          .single();
-        
-        if (!job) return;
-        
-        if ((job.status === 'completed' || job.status === 'complete') && job.result) {
+          .maybeSingle();
+
+        if (error || !job) return;
+
+        if (jobCompleteStatuses(job.status) && job.result) {
           resolveJob(job.result);
-        } else if (job.status === 'failed') {
+        } else if (String(job.status || '').toLowerCase() === 'failed') {
           rejectJob(job.error);
         }
-      } catch { /* polling error - will retry */ }
-    }, 5000);
+      } catch (e) {
+        console.error('[PlanBuilder] Poll error', e);
+      }
+    }, 3000);
 
-    // Soft timeout at 5 minutes — show helpful message with retry
     const softTimeoutId = setTimeout(() => {
       if (resolved) return;
       rejectJob('This is taking longer than expected. Your plan may still be generating — check back in a few minutes.');
@@ -271,11 +277,8 @@ export default function AIPlanBuilder() {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
       clearTimeout(softTimeoutId);
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
     };
-  }, [currentJobId, handleJobComplete, handleJobFailed, showToast]);
+  }, [currentJobId, handleJobComplete, handleJobFailed, jobCompleteStatuses]);
 
   const handlePlatformToggle = (platform) => {
     setSelectedPlatforms(prev => 
@@ -331,7 +334,22 @@ export default function AIPlanBuilder() {
         throw new Error(createError?.message || 'Failed to create job');
       }
 
-      setCurrentJobId(jobId);
+      // Progress + Realtime listener must exist before n8n can complete (avoid race)
+      const startTime = Date.now();
+      const duration = 25000;
+      progressIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progressPercent = Math.min((elapsed / duration) * 88, 88);
+        setProgress(progressPercent);
+        if (progressPercent >= 88) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+      }, 120);
+
+      flushSync(() => {
+        setCurrentJobId(jobId);
+      });
 
       // Step 2: Trigger n8n webhook with job_id AND form data (fire-and-forget with retry)
       const brandBlock = buildBrandContext(brandProfile, { first_name: user?.user_metadata?.first_name }); // HUTTLE AI: brand context injected
@@ -389,27 +407,15 @@ export default function AIPlanBuilder() {
         }
         
         showToast('Plan generation service unavailable. Please try again later.', 'error');
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         setIsGenerating(false);
         setProgress(0);
         setCurrentJobId(null);
         return;
       }
-
-      // Step 3: Start optimistic progress animation (0% to 90% over 25 seconds)
-      const startTime = Date.now();
-      const duration = 25000; // 25 seconds
-      
-      progressIntervalRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progressPercent = Math.min((elapsed / duration) * 90, 90);
-        
-        setProgress(progressPercent);
-        
-        if (progressPercent >= 90) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-      }, 100); // Update every 100ms for smooth animation
 
       showToast('Your AI plan is being generated...', 'info');
 
@@ -425,16 +431,19 @@ export default function AIPlanBuilder() {
    * Get human-readable status message for the progress bar
    */
   const getStatusMessage = () => {
-    if (progress >= 90) return 'Almost there...';
-    if (progress >= 60) return 'Crafting your content strategy...';
-    if (progress >= 30) return 'Analyzing trends and best practices...';
+    if (progress >= 85) return 'Finalizing your calendar...';
+    if (progress >= 55) return 'Scheduling optimal post times...';
+    if (progress >= 28) return 'Planning your content mix...';
     if (jobStatus === 'running') return 'AI is generating your plan...';
-    if (jobStatus === 'pending') return 'Starting generation...';
+    if (jobStatus === 'pending' || jobStatus === 'queued') return 'Starting generation...';
     return 'Initializing...';
   };
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {isGenerating && (
+        <LoadingSpinner fullScreen variant="huttle" text={getStatusMessage()} />
+      )}
       <div className="mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">

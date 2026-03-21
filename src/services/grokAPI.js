@@ -49,6 +49,13 @@ const HOOK_TYPE_ALIASES = {
   story: 'Story',
   bold_claim: 'Bold Claim',
 };
+
+/** Normalize UI labels ("Shocking Stat") and slug keys ("shocking_stat") to canonical hook type labels. */
+function normalizeFullPostHookTypeLabel(hookType) {
+  if (hookType == null || hookType === '') return 'Question';
+  const key = String(hookType).toLowerCase().replace(/\s+/g, '_');
+  return HOOK_TYPE_ALIASES[key] || String(hookType).trim();
+}
 const NO_FABRICATED_STATS_GUARDRAIL = 'Do not invent specific statistics or percentages. If referencing data, use general language like "studies show" or "research suggests" rather than fabricating specific numbers like "73% of users".';
 const NO_PLACEHOLDER_GUARDRAIL = 'Never include placeholder text like [Your Name], [Insert Link], or [Add Emoji Here] in your output. Either fill it in with a reasonable example or omit it.';
 const READY_TO_USE_GUARDRAIL = 'Your output must be copy-paste ready. A user should be able to take your output directly to their social media app and post it without any editing required.';
@@ -315,7 +322,7 @@ function normalizeNicheAnalysisPayload(rawAnalysis, platform) {
           : [],
       }))
       .filter((idea) => idea.title && idea.hook)
-      .slice(0, 5)
+      .slice(0, 10)
     : [];
 
   return {
@@ -892,7 +899,7 @@ export async function generateFullPostHooks(
   try {
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const platformData = getPlatform(platform);
-    const safeHookType = HOOK_TYPE_ALIASES[hookType] || hookType;
+    const safeHookType = normalizeFullPostHookTypeLabel(hookType);
 
     const trendBlock = formatType || nicheAngle || trendDescription
       ? `
@@ -2361,14 +2368,14 @@ RULES:
 - trendingThemes: 3-5 themes, each with momentum badge
 - hookPatterns: 3-4 fillable templates with [brackets]
 - contentGaps: 2-3 underserved topics with clear audience demand
-- contentIdeas: exactly 5 original ideas, specific enough to execute immediately
+- contentIdeas: 6-10 original ideas, specific enough to execute immediately (prioritize strongest first)
 - Every momentum field must be exactly one of: Rising, Peaking, Declining
 - Every content idea must be niche-specific, platform-specific, and grounded in the research findings
 - Every content idea must include a direct hook, a momentum label, a whyThisWorks explanation, and 3-5 relevant hashtags
 - All ideas must be original and aligned with the brand voice
 - Never copy or closely paraphrase existing content
 - Use competitor patterns and momentum_signals when provided
-- Rank the 5 content ideas from strongest opportunity to weakest opportunity`,
+- Rank the content ideas from strongest opportunity to weakest opportunity`,
       },
       {
         role: 'user',
@@ -2382,7 +2389,7 @@ ${researchContext}
 Target platform: ${platform}
 ${brandContext ? `\nBrand profile:\n${brandContext}` : ''}
 
-Generate trending themes, hook patterns, content gaps, and 5 ranked original content ideas.
+Generate trending themes, hook patterns, content gaps, and 6-10 ranked original content ideas.
 
 For content ideas:
 - Make them immediately executable, not generic

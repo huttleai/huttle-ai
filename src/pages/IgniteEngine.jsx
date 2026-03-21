@@ -5,7 +5,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Zap,
   Sparkles,
@@ -52,6 +52,8 @@ import {
 import { buildN8nSystemPrompt } from '../utils/blueprintPromptBuilder';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { parseJsonLenient } from '../utils/parseAiJson';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { getCachedTrends } from '../services/dashboardCacheService';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
@@ -152,7 +154,6 @@ export default function IgniteEngine() {
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const blueprintUsage = useAIUsage('igniteEngine'); // HUTTLE AI: updated 3
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const availablePlatforms = hasPlatformsConfigured
@@ -345,18 +346,21 @@ export default function IgniteEngine() {
         throw new Error(`HTTP_ERROR: ${response.status}`);
       }
 
-      let responseData;
-      try {
-        const rawText = await response.text();
-        responseData = rawText ? JSON.parse(rawText) : {};
-      } catch (e) {
-        console.error('[IgniteEngine] JSON Parse Error:', e);
-        throw new Error('INVALID_JSON');
+      const rawText = await response.text();
+      let responseData = parseJsonLenient(rawText);
+      if (!responseData && rawText?.trim()) {
+        try {
+          responseData = JSON.parse(rawText.trim());
+        } catch (e) {
+          console.error('[IgniteEngine] JSON Parse Error:', e);
+          throw new Error('INVALID_JSON');
+        }
       }
+      responseData = responseData || {};
 
       const normalized = normalizeN8nResponse(responseData);
 
-      if (!normalized || !normalized.performanceScore) {
+      if (!normalized || normalized.performanceScore == null || Number.isNaN(Number(normalized.performanceScore))) {
         console.error('[IgniteEngine] No usable content in response');
         throw new Error('INVALID_BRIEF_STRUCTURE');
       }
@@ -481,6 +485,9 @@ export default function IgniteEngine() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {isGenerating && (
+        <LoadingSpinner fullScreen variant="huttle" text={loadingStep} />
+      )}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
 
       <div className="relative z-10 max-w-4xl mx-auto space-y-8">
@@ -1343,11 +1350,9 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
 
   const grokData = await res.json();
   const raw = grokData.content || '';
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
-
+  const parsed = parseJsonLenient(raw);
+  if (!parsed) return null;
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
     return normalizeN8nResponse(parsed);
   } catch {
     return null;
