@@ -13,6 +13,46 @@ const USER_PROFILE_SELECT =
   'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers';
 
 const QUERY_TIMEOUT_MS = 5000;
+const LEGACY_BRAND_CACHE_KEY = 'brandData';
+
+function getBrandCacheKey(userId) {
+  return userId ? `brandData:${userId}` : null;
+}
+
+function writeBrandCache(userId, data) {
+  const cacheKey = getBrandCacheKey(userId);
+  if (!cacheKey || !data) return;
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch {
+    // Ignore localStorage quota / availability issues.
+  }
+}
+
+function clearBrandCache(userId) {
+  const cacheKey = getBrandCacheKey(userId);
+  if (!cacheKey) return;
+  localStorage.removeItem(cacheKey);
+}
+
+function hasMeaningfulBrandData(data) {
+  if (!data || typeof data !== 'object') return false;
+
+  const platforms = Array.isArray(data.platforms) ? data.platforms : [];
+  const goals = Array.isArray(data.goals) ? data.goals : [];
+  const toneChips = Array.isArray(data.toneChips) ? data.toneChips : [];
+
+  return Boolean(
+    String(data.firstName || '').trim()
+    || String(data.brandName || '').trim()
+    || String(data.niche || '').trim()
+    || String(data.targetAudience || '').trim()
+    || platforms.length > 0
+    || goals.length > 0
+    || toneChips.length > 0
+  );
+}
 
 function createEmptyBrandData() {
   return {
@@ -109,48 +149,38 @@ export function BrandProvider({ children }) {
     prevUserIdRef.current = userId;
 
     if (prevId && userId && prevId !== userId) {
-      localStorage.removeItem('brandData');
+      clearBrandCache(prevId);
+      localStorage.removeItem(LEGACY_BRAND_CACHE_KEY);
       setBrandData(createEmptyBrandData());
       setBrandFetchComplete(false);
     } else if (!userId && prevId) {
-      localStorage.removeItem('brandData');
+      clearBrandCache(prevId);
+      localStorage.removeItem(LEGACY_BRAND_CACHE_KEY);
       setBrandData(createEmptyBrandData());
       setBrandFetchComplete(true);
+    } else if (userId) {
+      // One-time cleanup for legacy unscoped cache key.
+      localStorage.removeItem(LEGACY_BRAND_CACHE_KEY);
     }
   }, [userId]);
 
   useEffect(() => {
     let isActive = true;
 
-    const applyLocalBrandFallback = () => {
-      const savedBrand = localStorage.getItem('brandData');
-      if (!savedBrand || !isActive) return;
-
-      try {
-        setBrandData(JSON.parse(savedBrand));
-      } catch (error) {
-        console.warn('[Brand] Could not parse cached brand data:', error.message);
-      }
-    };
-
     const applyEmptyBrandFallback = () => {
       if (!isActive) return;
       setBrandData(createEmptyBrandData());
     };
 
-    /** After a failed profile fetch/insert, prefer cached brand data so the UI is not wiped. */
+    /**
+     * Never hydrate authenticated fetch failures from localStorage.
+     * Cached profile snapshots can be stale and overwrite newer server data on next save.
+     */
     const applyFetchFailureFallback = () => {
       if (!isActive) return;
-      const savedBrand = localStorage.getItem('brandData');
-      if (savedBrand) {
-        try {
-          setBrandData(JSON.parse(savedBrand));
-          return;
-        } catch (e) {
-          console.warn('[Brand] Could not parse cached brand data after fetch failure:', e.message);
-        }
+      if (!hasMeaningfulBrandData(brandDataRef.current)) {
+        applyEmptyBrandFallback();
       }
-      applyEmptyBrandFallback();
     };
 
     const mergePreferencesIntoBrandData = (baseData, userPreferences = {}) => ({
@@ -170,7 +200,7 @@ export function BrandProvider({ children }) {
     const fetchBrandData = async () => {
       if (!user) {
         if (isActive) {
-          applyLocalBrandFallback();
+          applyEmptyBrandFallback();
           setBrandFetchComplete(true);
         }
         return;
@@ -256,7 +286,7 @@ export function BrandProvider({ children }) {
           if (isActive) {
             setBrandData(mergedData);
           }
-          localStorage.setItem('brandData', JSON.stringify(mergedData));
+          writeBrandCache(user.id, mergedData);
         } else {
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
@@ -271,7 +301,7 @@ export function BrandProvider({ children }) {
           if (isActive && userPreferences) {
             setBrandData((current) => {
               const merged = mergePreferencesIntoBrandData(current, userPreferences);
-              localStorage.setItem('brandData', JSON.stringify(merged));
+              writeBrandCache(user.id, merged);
               return merged;
             });
           }
@@ -301,7 +331,7 @@ export function BrandProvider({ children }) {
     setBrandData(updated);
     brandDataRef.current = updated;
 
-    localStorage.setItem('brandData', JSON.stringify(updated));
+    writeBrandCache(user?.id, updated);
 
     if (user?.id) {
       try {
@@ -390,7 +420,8 @@ export function BrandProvider({ children }) {
   const resetBrandData = useCallback(async () => {
     const resetData = createEmptyBrandData();
     setBrandData(resetData);
-    localStorage.removeItem('brandData');
+    clearBrandCache(user?.id);
+    localStorage.removeItem(LEGACY_BRAND_CACHE_KEY);
 
     if (user?.id) {
       try {
