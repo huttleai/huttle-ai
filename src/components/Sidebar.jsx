@@ -32,8 +32,8 @@ function toTestId(value) {
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { logout } = useContext(AuthContext);
-  const { userTier, TIERS } = useSubscription();
+  const { logout, user } = useContext(AuthContext);
+  const { TIERS } = useSubscription();
   const { overallUsed: aiUsed, overallLimit: aiLimit } = useAIUsage();
   const isCompactViewport = useIsMobile(1024);
   const navigate = useNavigate();
@@ -50,6 +50,9 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
+      if (user?.id) {
+        localStorage.removeItem(`brandData:${user.id}`);
+      }
       localStorage.removeItem('brandData');
       localStorage.removeItem('hasSeenWelcome');
       
