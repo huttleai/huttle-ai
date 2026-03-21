@@ -951,12 +951,6 @@ export default function AITools() {
                 <span>{isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
                 {!isLoadingCaptions && <ChevronRight className="w-4 h-4" />}
               </button>
-              {!isBrandVoiceComplete && (
-                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                  Add your Brand Voice for more personalized results →
-                </a>
-              )}
-
               {generatedCaptions.length > 0 && (
                 <div className="pt-4 border-t border-gray-100" data-testid="ai-result-container">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1056,12 +1050,6 @@ export default function AITools() {
                 {isLoadingHashtags ? <LoadingSpinner size="sm" /> : <Hash className="w-4 h-4" />}
                 <span>{isLoadingHashtags ? 'Finding...' : 'Generate Hashtags'}</span>
               </button>
-              {!isBrandVoiceComplete && (
-                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                  Add your Brand Voice for more personalized results →
-                </a>
-              )}
-
               {generatedHashtags.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={1} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1208,12 +1196,6 @@ export default function AITools() {
                 {isLoadingHooks ? <LoadingSpinner size="sm" /> : <Type className="w-4 h-4" />}
                 <span>{isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
               </button>
-              {!isBrandVoiceComplete && (
-                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                  Add your Brand Voice for more personalized results →
-                </a>
-              )}
-
               {generatedHooks.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={2} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1338,12 +1320,6 @@ export default function AITools() {
                 {isLoadingCTAs ? <LoadingSpinner size="sm" /> : <Target className="w-4 h-4" />}
                 <span>{isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
               </button>
-              {!isBrandVoiceComplete && (
-                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                  Add your Brand Voice for more personalized results →
-                </a>
-              )}
-
               {/* Results — Styled CTAs */}
               {styledCTAs?.ctas && (
                 <div className="pt-4 border-t border-gray-100">
@@ -1466,12 +1442,6 @@ export default function AITools() {
                     {isLoadingScore ? <LoadingSpinner size="sm" /> : <BarChart3 className="w-4 h-4" />}
                     <span>{isLoadingScore ? 'Analyzing...' : 'Score Content'}</span>
                   </button>
-                  {!isBrandVoiceComplete && (
-                    <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                      Add your Brand Voice for more personalized results →
-                    </a>
-                  )}
-
                   {contentScore && (
                     <div className="pt-4 border-t border-gray-100 space-y-4">
                       <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1687,12 +1657,6 @@ export default function AITools() {
                 {isLoadingVisualIdeas ? <LoadingSpinner size="sm" /> : <Lightbulb className="w-4 h-4" />}
                 <span>{isLoadingVisualIdeas ? 'Generating (10-15 sec)...' : 'Generate Visuals'}</span>
               </button>
-              {!isBrandVoiceComplete && (
-                <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                  Add your Brand Voice for more personalized results →
-                </a>
-              )}
-
               {/* Results — AI Image Prompts */}
               {visualBrainstormResult?.type === 'ai-prompt' && visualBrainstormResult.prompts && (
                 <div className="pt-4 border-t border-gray-100">

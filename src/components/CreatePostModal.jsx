@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Loader2, AlertTriangle, ArrowRight, FolderOpen, Search, Check } from 'lucide-react';
+import { X, Sparkles, Calendar, Clock, Image, Video, Type, Upload, Loader2, AlertTriangle, FolderOpen, Search, Check } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -476,14 +476,8 @@ export default function CreatePostModal({ isOpen, onClose, preselectedDate = nul
                   <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
-                    <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose which platforms you create content for.</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Choose platforms under Account → Brand Profile in the sidebar.</p>
                   </div>
-                  <button
-                    onClick={() => { onClose(); navigate('/dashboard/brand-voice'); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    Set up Brand Voice <ArrowRight className="w-3 h-3" />
-                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

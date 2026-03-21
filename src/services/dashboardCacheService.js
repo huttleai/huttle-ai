@@ -141,35 +141,22 @@ const HASHTAG_FALLBACK = [
   { tag: '#creatorjourney', volume: 'NICHE', status: 'Niche', type: 'hashtag' },
 ];
 
-const DASHBOARD_SCHEDULE_TZ = 'America/New_York';
-/** Hour (0–23) in Eastern time; before this, the dashboard "day" is the previous calendar date. */
-const DASHBOARD_DAY_START_HOUR_ET = 6;
+/** Hour (0–23) in the user's local timezone; before this, the dashboard "day" is the previous calendar date. */
+const DASHBOARD_DAY_START_HOUR_LOCAL = 6;
 
-function getEasternWallClockParts(date) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: DASHBOARD_SCHEDULE_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-  });
-  const parts = dtf.formatToParts(date);
-  const map = Object.fromEntries(
-    parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value])
-  );
+function getLocalWallClockParts(date) {
   return {
-    y: Number(map.year),
-    m: Number(map.month),
-    d: Number(map.day),
-    h: Number(map.hour),
+    y: date.getFullYear(),
+    m: date.getMonth() + 1,
+    d: date.getDate(),
+    h: date.getHours(),
   };
 }
 
-function subtractOneCalendarDay(y, m, d) {
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() - 1);
-  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+function subtractOneLocalCalendarDay(y, m, d) {
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - 1);
+  return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
 }
 
 function getCurrentMonthYear(date = new Date()) {
@@ -541,7 +528,7 @@ For EACH trend, return:
 
 STRICT RULES:
 - Return ONLY trends you found evidence of in the last 7 days
-- Prefer fewer high-quality trends over padding with uncertain ones — return 4-5 max
+- Return exactly 6 high-quality trends — do not return fewer unless you cannot find 6 verified trends
 - If a trend is older than 7 days, do NOT include it
 - Every description must reference what makes this trend DISTINCTIVE, not generic
 - NEVER fabricate trend names or post counts
@@ -600,7 +587,7 @@ ${industry ? `- Industry: ${industry}` : ''}`,
     },
     {
       role: 'user',
-      content: `Find 3-4 content trends specifically relevant to a ${creatorType || 'content creator'} in the "${nicheLabel}" niche on ${platformLabel} right now.
+      content: `Find 6 content trends specifically relevant to a ${creatorType || 'content creator'} in the "${nicheLabel}" niche on ${platformLabel} right now.
 
 For EACH trend, return:
 - "title": catchy name, 5 words max
@@ -615,7 +602,7 @@ For EACH trend, return:
 STRICT RULES:
 - Every trend MUST be specific to "${nicheLabel}" — not general social media advice
 - hook_starter must be ready to copy and paste, not a template with brackets
-- Prefer fewer HIGH-QUALITY niche trends over padding — 3-4 max
+- Return exactly 6 high-quality niche trends — return fewer only if you cannot find 6 verified niche trends
 - If you cannot find real niche-specific trends, return fewer items rather than fabricating
 
 Return ONLY a JSON array. No other text.`,
@@ -660,9 +647,9 @@ function mergeAndRankTrends(globalTrends, nicheTrends, platform) {
     return bScore - aScore;
   });
 
-  const nichePick = unique.filter((t) => t.trend_type === 'niche').slice(0, 3);
-  const globalPick = unique.filter((t) => t.trend_type === 'global').slice(0, 3);
-  const rest = unique.filter((t) => !nichePick.includes(t) && !globalPick.includes(t)).slice(0, 2);
+  const nichePick = unique.filter((t) => t.trend_type === 'niche').slice(0, 4);
+  const globalPick = unique.filter((t) => t.trend_type === 'global').slice(0, 4);
+  const rest = unique.filter((t) => !nichePick.includes(t) && !globalPick.includes(t)).slice(0, 4);
 
   return [...nichePick, ...globalPick, ...rest].slice(0, 8);
 }
@@ -1633,8 +1620,12 @@ export async function fetchDashboardForYouHashtags({
     }
 
     const payload = await response.json();
-    const parsed = parseStructuredJson(payload?.content || '');
-    const arr = Array.isArray(parsed) ? parsed : [];
+    // Try structuredData first (returned by proxy when serving from cache),
+    // then fall back to content string — same pattern used by the Trending tab.
+    const rawData = Array.isArray(payload?.structuredData)
+      ? payload.structuredData
+      : parseStructuredJson(payload?.content || '');
+    const arr = Array.isArray(rawData) ? rawData : [];
     const generatedAt = payload?.generatedAt || new Date().toISOString();
 
     const items = arr
@@ -1846,16 +1837,30 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
 } // HUTTLE AI: cache fix
 
 /**
- * YYYY-MM-DD key for daily dashboard cache: Eastern calendar date, rolling at 6:00 AM America/New_York.
+ * YYYY-MM-DD key for daily dashboard cache: local calendar date, rolling at 6:00 AM in the user's timezone.
  * @param {Date} [date]
  * @returns {string}
  */
 export function getDashboardGeneratedDate(date = new Date()) {
-  let { y, m, d, h } = getEasternWallClockParts(date);
-  if (h < DASHBOARD_DAY_START_HOUR_ET) {
-    ({ y, m, d } = subtractOneCalendarDay(y, m, d));
+  let { y, m, d, h } = getLocalWallClockParts(date);
+  if (h < DASHBOARD_DAY_START_HOUR_LOCAL) {
+    ({ y, m, d } = subtractOneLocalCalendarDay(y, m, d));
   }
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
+ * Next local wall-clock moment when the dashboard day rolls (6:00 AM).
+ * @param {Date} [from]
+ * @returns {Date}
+ */
+export function getNextLocalDashboardRefreshAt(from = new Date()) {
+  const next = new Date(from.getTime());
+  next.setHours(DASHBOARD_DAY_START_HOUR_LOCAL, 0, 0, 0);
+  if (next.getTime() <= from.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
 }
 
 export async function getDashboardCache(userId, brandProfile, options = {}) { // HUTTLE AI: cache fix
@@ -1881,6 +1886,18 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
   if (!cachedRow) { // HUTTLE AI: cache fix
     return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
+
+  // Invalidate the cache when the user's brand-profile platforms have changed since it was generated.
+  // The cached metadata stores display labels ("Instagram", "TikTok"); context has normalized keys ("instagram", "tiktok").
+  const cachedPlatformLabels = ensureArray(cachedRow?.dashboard_metadata?.selected_platforms);
+  if (cachedPlatformLabels.length > 0) {
+    const cachedNormalized = cachedPlatformLabels.map(normalizePlatformValue).sort().join(',');
+    const currentNormalized = [...context.selectedPlatforms].sort().join(',');
+    if (cachedNormalized !== currentNormalized) {
+      // Platforms changed — treat as a cache miss so fresh data is generated for all platforms
+      return { success: true, cacheHit: false, generatedDate, data: null };
+    }
+  }
 
   return { // HUTTLE AI: cache fix
     success: true, // HUTTLE AI: cache fix

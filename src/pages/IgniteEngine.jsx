@@ -560,17 +560,9 @@ export default function IgniteEngine() {
                 {!isBrandVoiceComplete && (
                   <div className="flex items-center gap-3 p-4 bg-huttle-50 border border-huttle-primary/20 rounded-xl animate-fadeIn">
                     <Sparkles className="w-5 h-5 text-huttle-primary flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-700">
-                        Complete your Brand Voice for more personalized briefs
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => navigate('/dashboard/brand-voice')}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-huttle-primary bg-white hover:bg-huttle-50 rounded-lg transition-colors whitespace-nowrap border border-huttle-primary/20"
-                    >
-                      Complete Now <ArrowRight className="w-3 h-3" />
-                    </button>
+                    <p className="text-sm text-gray-700">
+                      Finishing <span className="font-medium">Brand Profile</span> (sidebar → Account) improves brief personalization.
+                    </p>
                   </div>
                 )}
 
@@ -581,14 +573,8 @@ export default function IgniteEngine() {
                       <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                       <div className="flex-1">
                         <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
-                        <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose which platforms you create content for.</p>
+                        <p className="text-xs text-amber-600 mt-0.5">Choose platforms under Account → Brand Profile in the sidebar.</p>
                       </div>
-                      <button
-                        onClick={() => navigate('/dashboard/brand-voice')}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                      >
-                        Set up Brand Voice <ArrowRight className="w-3 h-3" />
-                      </button>
                     </div>
                   ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">

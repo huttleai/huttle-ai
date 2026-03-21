@@ -2,86 +2,63 @@ import { useEffect, useRef, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
+import { hasProfileContext } from '../utils/brandContextBuilder';
 
-/** localStorage key for tracking which notification types have been shown */
-const NOTIF_SHOWN_KEY = 'huttle_notif_shown';
-
-/**
- * Get the set of notification keys that have already been shown to this user.
- * @returns {Set<string>}
- */
-function getShownKeys() {
-  try {
-    const raw = localStorage.getItem(NOTIF_SHOWN_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-/**
- * Mark a notification key as shown so it won't be regenerated.
- * @param {string} key
- */
-function markShown(key) {
-  const shown = getShownKeys();
-  shown.add(key);
-  localStorage.setItem(NOTIF_SHOWN_KEY, JSON.stringify([...shown]));
-}
+const reminderStorageKey = (userId) => `huttle_brand_profile_reminder_day:${userId}`;
 
 /**
  * useNotificationGenerator
  *
- * Runs on mount to generate contextual notifications:
- * 1. Welcome message for new users
- * 2. Onboarding nudges (incomplete Brand Voice, no platforms)
+ * Daily in-app reminder (notification bell) when Brand Profile is still incomplete.
+ * Intentionally does not spam the same CTA across every page — users see one link on
+ * the Dashboard header + this daily nudge until they finish setup.
  */
 export default function useNotificationGenerator() {
-  const { brandData } = useContext(BrandContext);
+  const { brandData, brandFetchComplete } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { addNotification } = useNotifications();
-  const generatedRef = useRef(false);
+  const attemptedForDayRef = useRef('');
 
-  // ──────────────── One-time notifications on mount ────────────────
   useEffect(() => {
-    if (!user?.id || generatedRef.current) return;
-    generatedRef.current = true;
+    if (!user?.id || !brandFetchComplete || !brandData) return;
 
-    const shown = getShownKeys();
-
-    // 1. Onboarding nudges — Brand Voice incomplete
-    if (!shown.has('onboard_brandvoice') && brandData) {
-      const hasNiche = !!brandData.niche?.trim();
-      const hasAudience = !!brandData.targetAudience?.trim();
-      const hasTone = !!(brandData.brandVoice?.trim() || brandData.tone?.trim());
-
-      if (!hasNiche || !hasAudience || !hasTone) {
-        addNotification({
-          type: 'info',
-          title: 'Complete your Brand Voice',
-          message: 'Personalize your AI content by finishing your Brand Voice setup — add your niche, audience, and tone.',
-          actionUrl: '/dashboard/brand-voice',
-          actionLabel: 'Complete Now',
-          persistent: true,
-        });
-        markShown('onboard_brandvoice');
+    if (hasProfileContext(brandData)) {
+      attemptedForDayRef.current = '';
+      try {
+        localStorage.removeItem(reminderStorageKey(user.id));
+      } catch {
+        /* ignore */
       }
+      return;
     }
 
-    // 2. Onboarding nudge — No platforms selected
-    if (!shown.has('onboard_platforms') && brandData) {
-      const platforms = brandData.platforms || [];
-      if (platforms.length === 0) {
-        addNotification({
-          type: 'info',
-          title: 'Select your platforms',
-          message: 'Choose your preferred social media platforms in Brand Voice settings for tailored content.',
-          actionUrl: '/dashboard/brand-voice',
-          actionLabel: 'Select Platforms',
-          persistent: true,
-        });
-        markShown('onboard_platforms');
-      }
+    const today = new Date().toISOString().slice(0, 10);
+    if (attemptedForDayRef.current === today) return;
+
+    const lastScheduled = localStorage.getItem(reminderStorageKey(user.id));
+    if (lastScheduled === today) {
+      attemptedForDayRef.current = today;
+      return;
     }
-  }, [user?.id, brandData]);
+
+    const dateLabel = new Date().toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    addNotification({
+      type: 'info',
+      title: `Brand Profile — ${dateLabel}`,
+      message:
+        'Daily reminder: add your niche, audience, and platforms so AI can personalize your experience. Open Brand Profile from the sidebar (Account).',
+      actionUrl: '/dashboard/brand-voice',
+      actionLabel: 'Open Brand Profile',
+      dismissKey: `brand_profile_reminder_${today}`,
+      persistent: true,
+    });
+
+    attemptedForDayRef.current = today;
+    localStorage.setItem(reminderStorageKey(user.id), today);
+  }, [user?.id, brandData, brandFetchComplete, addNotification]);
 }

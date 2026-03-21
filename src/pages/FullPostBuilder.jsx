@@ -71,14 +71,6 @@ function parseHashtagsFromResponse(text) {
   return tags.map((tag) => ({ tag, score: 50, tier: 'mid', reason: '' }));
 }
 
-function hasConfiguredNiche(brandData) {
-  if (Array.isArray(brandData?.niche)) {
-    return brandData.niche.some((value) => value?.trim());
-  }
-
-  return Boolean(brandData?.niche?.trim());
-}
-
 export default function FullPostBuilder() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
@@ -131,7 +123,6 @@ export default function FullPostBuilder() {
   const [savedPartIds, setSavedPartIds] = useState({});
 
   const hasAccess = checkFeatureAccess('full-post-builder');
-  const isBrandVoiceComplete = hasConfiguredNiche(brandData);
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}:${user?.id || 'guest'}`, [user?.id]);
   const hasHydratedRef = useRef(false);
   const pendingTrendingRef = useRef(null);
@@ -718,11 +709,6 @@ export default function FullPostBuilder() {
                       <Sparkles className="w-4 h-4 text-huttle-primary" />
                       <span className="text-xs text-gray-700">Brand voice: <strong>{brandData.brandVoice}</strong></span>
                     </div>
-                  )}
-                  {!isBrandVoiceComplete && (
-                    <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                      Add your Brand Voice for more personalized results →
-                    </a>
                   )}
                 </div>
               )}

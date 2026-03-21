@@ -230,6 +230,10 @@ function toFormData(source = {}) {
   };
 }
 
+function getInitialFormData() {
+  return toFormData({});
+}
+
 function buildBrandUpdatePayload(fd) {
   return {
     firstName: fd.firstName?.trim() || '',
@@ -422,47 +426,62 @@ export default function BrandVoice() {
   const { addToast } = useToast();
   const { userTier } = useSubscription();
 
-  const [formData, setFormData] = useState(() => toFormData({}));
+  const [formData, setFormData] = useState(getInitialFormData);
   const [openSections, setOpenSections] = useState(() =>
     Object.fromEntries(SECTION_ORDER.map((k) => [k, false]))
   );
-  const baselineRef = useRef('');
+  /** Must match initial `formData` so dirty detection and first hydrate behave correctly. */
+  const baselineRef = useRef(JSON.stringify(getInitialFormData()));
   const autoExpandDoneRef = useRef(false);
+  /** Only hydrate the form when fetch completes the first time — not on every `brandData` update (avoids stale fetch wiping edits). */
+  const prevBrandFetchCompleteRef = useRef(false);
   const debounceRef = useRef(null);
   const [saveUi, setSaveUi] = useState('idle');
   const formRef = useRef(null);
+  const userRef = useRef(user);
+  userRef.current = user;
   formRef.current = formData;
 
   const isFoundingMember = ['founders', 'founder', 'builder', 'builders'].includes(userTier);
 
-  const syncFromBrandData = useCallback(
-    (source, runAutoExpand = false) => {
-      const next = toFormData(source);
-      setFormData(next);
-      baselineRef.current = JSON.stringify(next);
-      if (runAutoExpand && !autoExpandDoneRef.current) {
-        autoExpandDoneRef.current = true;
-        const { sections, completedCount, totalCount } = getBrandProfileSectionCompletion(next, user);
-        const anyIncomplete = completedCount < totalCount;
-        const firstIncomplete = SECTION_ORDER.find((k) => !sections[k].complete);
-        if (anyIncomplete && firstIncomplete) {
-          setOpenSections((o) => ({ ...o, [firstIncomplete]: true }));
-        }
+  const syncFromBrandData = useCallback((source, runAutoExpand = false) => {
+    const next = toFormData(source);
+    setFormData(next);
+    baselineRef.current = JSON.stringify(next);
+    if (runAutoExpand && !autoExpandDoneRef.current) {
+      autoExpandDoneRef.current = true;
+      const u = userRef.current;
+      const { sections, completedCount, totalCount } = getBrandProfileSectionCompletion(next, u);
+      const anyIncomplete = completedCount < totalCount;
+      const firstIncomplete = SECTION_ORDER.find((k) => !sections[k].complete);
+      if (anyIncomplete && firstIncomplete) {
+        setOpenSections((o) => ({ ...o, [firstIncomplete]: true }));
       }
-    },
-    [user]
-  );
+    }
+  }, []);
 
   useEffect(() => {
-    if (!brandFetchComplete) return;
+    if (!brandFetchComplete) {
+      prevBrandFetchCompleteRef.current = false;
+      return;
+    }
+
+    const fetchJustFinished = !prevBrandFetchCompleteRef.current;
+    prevBrandFetchCompleteRef.current = true;
+
+    if (!fetchJustFinished) {
+      return;
+    }
+
     const dirtyNow = JSON.stringify(formRef.current) !== baselineRef.current;
     if (dirtyNow) return;
     const runExpand = !autoExpandDoneRef.current;
     syncFromBrandData(brandData, runExpand);
-  }, [brandData, brandFetchComplete, syncFromBrandData]);
+  }, [brandFetchComplete, brandData, syncFromBrandData]);
 
   useEffect(() => {
     autoExpandDoneRef.current = false;
+    prevBrandFetchCompleteRef.current = false;
   }, [user?.id]);
 
   const isDirty = JSON.stringify(formData) !== baselineRef.current;

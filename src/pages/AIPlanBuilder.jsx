@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useContext, useCallback } from 'react';
-import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, ArrowRight, Copy, Check, FolderPlus } from 'lucide-react';
+import { Wand2, Target, Calendar, TrendingUp, Sparkles, CheckCircle, Clock, Info, Loader, History, ChevronRight, Mic2, AlertTriangle, Copy, Check, FolderPlus } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { useBrand } from '../context/BrandContext';
@@ -524,14 +524,8 @@ export default function AIPlanBuilder() {
                   <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-amber-800">No platforms selected yet.</p>
-                    <p className="text-xs text-amber-600 mt-0.5">Set up your Brand Voice to choose platforms.</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Select platforms under Account → Brand Profile in the sidebar.</p>
                   </div>
-                  <button
-                    onClick={() => navigate('/dashboard/brand-voice')}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    Set up Brand Voice <ArrowRight className="w-3 h-3" />
-                  </button>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">

@@ -191,7 +191,7 @@ export default function TrendDiscovery() {
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertCircle className="w-4 h-4 text-amber-600" />
           <span className="text-sm text-amber-800">
-            Set up your <span className="font-medium">Brand Voice</span> for personalized research
+            Add your niche in Brand Profile (sidebar → Account) for personalized research.
           </span>
         </div>
       );

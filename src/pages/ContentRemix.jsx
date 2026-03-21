@@ -11,7 +11,7 @@ import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { saveContentLibraryItem } from '../config/supabase';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -67,7 +67,6 @@ export default function ContentRemix() {
   const { addToast: showToast } = useToast();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const remixUsage = useAIUsage('contentRemix');
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Step tracking
@@ -639,15 +638,9 @@ export default function ContentRemix() {
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">No platforms configured</p>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Set up your Brand Voice to select your preferred platforms first.
+                  <p className="text-sm text-gray-600">
+                    Choose your platforms under <span className="font-medium">Account → Brand Profile</span> in the sidebar, then return here.
                   </p>
-                  <button
-                    onClick={() => navigate('/dashboard/brand-voice')}
-                    className="flex items-center gap-2 px-4 py-2 bg-huttle-primary text-white rounded-lg text-sm font-semibold hover:bg-huttle-primary-dark transition-all"
-                  >
-                    Set Up Brand Voice <ArrowRight className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             ) : (

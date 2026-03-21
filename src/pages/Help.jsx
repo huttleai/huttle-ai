@@ -88,7 +88,7 @@ export default function Help() {
         'AI Insights delivers 3 daily tips on timing, audience, platform strategy, and content types',
         'Quick Create shortcuts let you jump straight into any of the 6 AI Power Tools',
         'Recently Saved shows your latest Content Vault items for fast access',
-        'Dashboard data refreshes daily at 6 AM ET — check the freshness indicator in the header'
+        'Dashboard data refreshes daily at 6 AM your local time — check the freshness indicator in the header'
       ]
     },
     { 

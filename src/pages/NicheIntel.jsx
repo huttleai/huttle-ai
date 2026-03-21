@@ -26,14 +26,6 @@ const MOMENTUM_COLORS = {
   Declining: 'bg-red-100 text-red-700',
 };
 
-function hasConfiguredNiche(brandData) {
-  if (Array.isArray(brandData?.niche)) {
-    return brandData.niche.some((value) => value?.trim());
-  }
-
-  return Boolean(brandData?.niche?.trim());
-}
-
 export default function NicheIntel() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
@@ -54,7 +46,6 @@ export default function NicheIntel() {
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [savedIdeaId, setSavedIdeaId] = useState(null);
-  const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
   const hasAccess = checkFeatureAccess('niche-intel');
 
@@ -257,11 +248,6 @@ export default function NicheIntel() {
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
             />
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
-            {!isBrandVoiceComplete && (
-              <a href="/dashboard/brand-voice" className="inline-block text-xs text-amber-600 hover:text-amber-700 font-medium">
-                Add your Brand Voice for more personalized results →
-              </a>
-            )}
             <button
               onClick={handleAnalyze}
               disabled={loading || !canGenerate}

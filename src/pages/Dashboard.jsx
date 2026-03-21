@@ -9,7 +9,6 @@ import {
   Target,
   Bell,
   Sparkles,
-  AlertCircle,
   Plus,
   ArrowRight,
   Beaker,
@@ -24,7 +23,6 @@ import {
   BarChart3,
   Image as ImageIcon,
   FolderOpen,
-  Clock,
   Loader2,
   RotateCcw,
   X,
@@ -47,6 +45,7 @@ import {
   getDashboardCache, // HUTTLE AI: cache fix
   deleteDashboardCache, // HUTTLE AI: cache fix
   getDashboardGeneratedDate, // HUTTLE AI: cache fix
+  getNextLocalDashboardRefreshAt,
   trackDashboardGenerationUsage,
   fetchDashboardForYouHashtags,
   fetchDashboardTrendingHashtags,
@@ -140,7 +139,9 @@ export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [dashboardError, setDashboardError] = useState('');
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
-  const [isHashtagsRefreshing, setIsHashtagsRefreshing] = useState(false);
+  const [dashboardDayKey, setDashboardDayKey] = useState(() => getDashboardGeneratedDate());
+  const dashboardDayKeyRef = useRef(dashboardDayKey);
+  const dailyRefreshTimerRef = useRef(null);
   const [dashboardAlerts, setDashboardAlerts] = useState([]);
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
   const [recentVaultItems, setRecentVaultItems] = useState([]);
@@ -149,6 +150,7 @@ export default function Dashboard() {
   const [hashtagMode, setHashtagMode] = useState(readStoredHashtagMode);
   const [forYouHashtags, setForYouHashtags] = useState(null);
   const [forYouLoading, setForYouLoading] = useState(false);
+  const [forYouRetryCount, setForYouRetryCount] = useState(0);
   const forYouRequestKeyRef = useRef('');
   const [trendingTabHashtags, setTrendingTabHashtags] = useState(null);
   const [trendingTabLoading, setTrendingTabLoading] = useState(false);
@@ -158,6 +160,7 @@ export default function Dashboard() {
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
   const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
   const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
+  dashboardDayKeyRef.current = dashboardDayKey;
 
   const copyHashtag = async (hashtag) => {
     try {
@@ -406,7 +409,7 @@ export default function Dashboard() {
 
   const tourSteps = [
     { title: 'Welcome to Huttle AI!', content: 'Let\'s take a quick tour to help you get the most out of your experience. We\'ll walk you through the key features.', icon: Sparkles },
-    { title: 'Set Up Your Brand Voice', content: 'Head to Brand Voice in the sidebar to define your brand personality, tone, and target audience. This ensures all AI-generated content matches your unique style.', icon: Target },
+    { title: 'Brand Profile', content: 'Under Account → Brand Profile in the sidebar, add your niche, audience, and platforms once. That powers personalization across the app.', icon: Target },
     { title: 'AI Power Tools', content: 'Generate captions, hashtags, hooks, and more with our AI Power Tools. Each generation uses your brand voice for consistent, on-brand content.', icon: Zap },
     { title: 'Trend Lab', content: 'Discover trending topics in your niche with Quick Scan, or do a Deep Dive into specific trends for actionable content ideas.', icon: TrendingUp },
     { title: 'You\'re All Set!', content: 'Explore your dashboard to discover AI insights and trending topics. Save everything to your Content Vault. Track your AI generation usage in the sidebar. Happy creating!', icon: Sparkles },
@@ -447,6 +450,7 @@ export default function Dashboard() {
     setDashboardError(''); // HUTTLE AI: cache fix
     setIsDashboardLoading(false); // HUTTLE AI: cache fix
     setIsAlertsLoading(false); // HUTTLE AI: cache fix
+    setDashboardDayKey(getDashboardGeneratedDate());
   }, [user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
@@ -460,6 +464,56 @@ export default function Dashboard() {
       activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
     }; // HUTTLE AI: cache fix
   }, [authLoading, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
+
+  useEffect(() => {
+    if (!user?.id || authLoading) return undefined;
+
+    const runDailyRefresh = () => {
+      setDashboardDayKey(getDashboardGeneratedDate());
+      hasFetchedTodayRef.current = false;
+      forYouRequestKeyRef.current = '';
+      trendingRequestKeyRef.current = '';
+      loadDashboardData({ forceRefresh: true });
+    };
+
+    const scheduleNext = () => {
+      if (dailyRefreshTimerRef.current !== null) {
+        window.clearTimeout(dailyRefreshTimerRef.current);
+        dailyRefreshTimerRef.current = null;
+      }
+      const now = Date.now();
+      const at = getNextLocalDashboardRefreshAt(new Date(now));
+      const ms = Math.max(0, at.getTime() - now);
+      dailyRefreshTimerRef.current = window.setTimeout(() => {
+        dailyRefreshTimerRef.current = null;
+        runDailyRefresh();
+        scheduleNext();
+      }, ms);
+    };
+
+    scheduleNext();
+
+    const onResume = () => {
+      if (document.visibilityState !== 'visible') return;
+      const current = getDashboardGeneratedDate();
+      if (current !== dashboardDayKeyRef.current) {
+        runDailyRefresh();
+        scheduleNext();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('focus', onResume);
+
+    return () => {
+      if (dailyRefreshTimerRef.current !== null) {
+        window.clearTimeout(dailyRefreshTimerRef.current);
+        dailyRefreshTimerRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('focus', onResume);
+    };
+  }, [user?.id, authLoading, loadDashboardData]);
 
   // Social update notifications
   useEffect(() => {
@@ -629,56 +683,20 @@ export default function Dashboard() {
     return fromBrand || 'instagram';
   }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
 
-  const refreshHashtags = async () => {
-    if (!user?.id || isHashtagsRefreshing) return;
-    setIsHashtagsRefreshing(true);
-    try {
-      if (hashtagMode === 'for_you' && forYouPersonalizationExtended) {
-        const generatedDate = getDashboardGeneratedDate();
-        const { items } = await fetchDashboardForYouHashtags({
-          personalization: forYouPersonalizationExtended,
-          primaryPlatform: primaryPlatformForForYou,
-          userId: user.id,
-          generatedDate,
-          forceRefresh: true,
-        });
-        const requestKey = `${user.id}_${generatedDate}_${forYouPersonalizationExtended.niche}_${primaryPlatformForForYou}_foryou`;
-        forYouRequestKeyRef.current = requestKey;
-        setForYouHashtags(items.length > 0 ? items : null);
-        if (items.length > 0) showToast('Hashtags refreshed!', 'success');
-        return;
-      }
-      if (hashtagMode === 'trending' && hashtagPersonalization) {
-        const generatedDate = getDashboardGeneratedDate();
-        const { items } = await fetchDashboardTrendingHashtags({
-          primaryPlatform: primaryPlatformForForYou,
-          userId: user.id,
-          generatedDate,
-          forceRefresh: true,
-        });
-        const requestKey = `${user.id}_${generatedDate}_trending_${primaryPlatformForForYou}`;
-        trendingRequestKeyRef.current = requestKey;
-        setTrendingTabHashtags(items.length > 0 ? items : null);
-        if (items.length > 0) showToast('Hashtags refreshed!', 'success');
-        return;
-      }
-      const result = await loadDashboardData({ forceRefresh: true });
-      if (result?.success) {
-        showToast('Dashboard refreshed!', 'success');
-      } else {
-        showToast('Could not refresh your dashboard. Try again.', 'error');
-      }
-    } catch (err) {
-      console.error('[Dashboard] Failed to refresh dashboard:', err);
-      showToast('Could not refresh your dashboard. Try again.', 'error');
-    } finally {
-      setIsHashtagsRefreshing(false);
-    }
-  };
+  const retryForYouHashtags = useCallback(() => {
+    forYouRequestKeyRef.current = '';
+    setForYouHashtags(null);
+    setForYouRetryCount((prev) => prev + 1);
+  }, []);
 
   const retryTrending = async () => {
     if (isDashboardLoading) return;
-    await refreshHashtags();
+    const result = await loadDashboardData({ forceRefresh: true });
+    if (result?.success) {
+      showToast('Dashboard refreshed!', 'success');
+    } else if (!result?.cancelled) {
+      showToast('Could not refresh your dashboard. Try again.', 'error');
+    }
   };
 
   const useTrendingTabFeed = Boolean(hashtagPersonalization && hashtagMode === 'trending');
@@ -724,8 +742,14 @@ export default function Dashboard() {
           forceRefresh: false,
         });
         if (cancelled) return;
-        forYouRequestKeyRef.current = requestKey;
-        setForYouHashtags(items.length > 0 ? items : null);
+        if (items.length > 0) {
+          // Only lock the dedup key when we actually got results.
+          // Leaving it unset on empty results lets the retry button trigger a fresh fetch.
+          forYouRequestKeyRef.current = requestKey;
+          setForYouHashtags(items);
+        } else {
+          setForYouHashtags(null);
+        }
       } finally {
         if (!cancelled) setForYouLoading(false);
       }
@@ -734,7 +758,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, forYouPersonalizationExtended]);
+  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
 
   useEffect(() => {
     if (!user?.id || !hashtagPersonalization || hashtagMode !== 'trending') return;
@@ -764,7 +788,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou]);
+  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, dashboardDayKey]);
 
   const filteredDashboardHashtags = useMemo(() => {
     if (selectedHashtagPlatform === 'All') {
@@ -773,14 +797,13 @@ export default function Dashboard() {
 
     return widgetHashtagList.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
   }, [widgetHashtagList, selectedHashtagPlatform]);
-  const showBrandVoiceNudge = Boolean(dashboardData?.show_brand_voice_nudge);
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label
     || dashboardHashtagPlatforms[0]
     || 'Instagram';
   const showPlatformWideNicheNudge = Boolean(dashboardData?.show_platform_wide_niche_nudge);
   const trendingFallbackMessage = dashboardData?.trending_fallback_message || 'Trends are refreshing — check back in a few minutes.';
-  const hashtagsFallbackMessage = dashboardData?.hashtags_fallback_message || 'Hashtags loading — refresh in a moment.';
+  const hashtagsFallbackMessage = dashboardData?.hashtags_fallback_message || 'Hashtags loading — check back shortly.';
   const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
   const hashtagWidgetListLoading = isDashboardLoading
     || (useForYouHashtags && forYouLoading && !forYouHashtags?.length)
@@ -809,50 +832,6 @@ export default function Dashboard() {
     }
   }, [dashboardHashtagPlatforms, selectedHashtagPlatform]);
 
-  const freshnessDisplay = useMemo(() => {
-    if (isDashboardLoading) {
-      return {
-        status: 'loading',
-        dotClass: '',
-        text: `Fetching today's insights${normalizedNiche ? ` for ${normalizedNiche}` : ''}...`,
-      };
-    }
-    if (dashboardError) {
-      return {
-        status: 'error',
-        dotClass: 'bg-red-500',
-        text: 'Could not load today\'s data',
-      };
-    }
-    if (!dashboardData?.created_at) {
-      return null;
-    }
-    const createdMs = new Date(dashboardData.created_at).getTime();
-    const nowMs = Date.now();
-    const diffMs = nowMs - createdMs;
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    const etFormatter = new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'America/New_York',
-      hour12: true,
-    });
-    const updatedTimeET = etFormatter.format(new Date(createdMs));
-
-    if (diffHours < 24) {
-      return {
-        status: 'fresh',
-        dotClass: 'bg-green-500',
-        text: `Updated at ${updatedTimeET} ET · Next refresh tomorrow at 6:00 AM ET`,
-      };
-    }
-    return {
-      status: 'stale',
-      dotClass: 'bg-amber-500 animate-pulse',
-      text: 'Updating now...',
-    };
-  }, [isDashboardLoading, dashboardError, dashboardData?.created_at, normalizedNiche]);
 
   return (
     <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-14 lg:pt-14 px-4 sm:px-6 lg:px-8 pb-12">
@@ -873,9 +852,9 @@ export default function Dashboard() {
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
                 {hasProfilePersonalization === false && (
-                  <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
-                    Complete your profile for a personalized experience <ArrowRight className="w-3 h-3" />
-                  </Link>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
+                  </p>
                 )}
               </>
             ) : (
@@ -885,9 +864,9 @@ export default function Dashboard() {
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
                 {hasProfilePersonalization === false && (
-                  <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-huttle-primary hover:underline">
-                    Complete your Brand Voice for a personalized experience <ArrowRight className="w-3 h-3" />
-                  </Link>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
+                  </p>
                 )}
               </>
             )}
@@ -917,26 +896,6 @@ export default function Dashboard() {
           </div>
         </div>
       </MotionDiv>
-
-      {/* Data Freshness Indicator */}
-      {freshnessDisplay && (
-        <motion.div custom={0.5} initial="hidden" animate="visible" variants={fadeUp} className="mb-6">
-          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white border border-gray-100/80 shadow-sm">
-            {freshnessDisplay.status === 'loading' ? (
-              <Loader2 className="w-3.5 h-3.5 text-huttle-primary animate-spin flex-shrink-0" />
-            ) : (
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${freshnessDisplay.dotClass}`} />
-            )}
-            <span className="text-xs text-gray-600 font-medium">{freshnessDisplay.text}</span>
-            {freshnessDisplay.status === 'error' && (
-              <span className="ml-auto text-xs text-gray-400">Reload page to retry</span>
-            )}
-            {freshnessDisplay.status === 'fresh' && (
-              <Clock className="w-3.5 h-3.5 text-gray-400 ml-auto flex-shrink-0" />
-            )}
-          </div>
-        </motion.div>
-      )}
 
       {/* Hero Section - Trending Now (2/3) + Hashtags of the Day (1/3) */}
       <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -970,21 +929,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-
-              {!hasProfilePersonalization && (
-                <div className="bg-huttle-50/50 border border-huttle-100 rounded-xl p-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 mb-1">Personalize Your Feed</p>
-                      <p className="text-xs text-gray-600 mb-2">Set up your brand voice for tailored trends.</p>
-                      <Link to="/dashboard/brand-voice" className="inline-flex items-center gap-1 text-xs font-semibold text-huttle-primary hover:text-huttle-primary-dark group">
-                        Setup Brand Voice <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {isDashboardLoading && (
@@ -1147,7 +1091,7 @@ export default function Dashboard() {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/trend-lab?topic=${encodeURIComponent(sanitizedTrendTopic)}`); }}
+                            onClick={(e) => { e.stopPropagation(); navigate('/dashboard/trend-lab', { state: { deepDiveTopic: sanitizedTrendTopic, autoRun: true } }); }}
                             className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white dark:bg-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Beaker className="w-3 h-3" /> Deep Dive
@@ -1193,21 +1137,8 @@ export default function Dashboard() {
 
               {showPlatformWideNicheNudge && (
                 <div className="text-xs text-gray-400 mt-3 text-center">
-                  Showing platform-wide trends ·{' '}
-                  <Link to="/dashboard/brand-voice" className="text-teal-500 underline">
-                    Add your niche
-                  </Link>{' '}
-                  for personalized trends
+                  Showing platform-wide trends. Add your niche in Brand Profile (sidebar) for personalized trends.
                 </div>
-              )}
-
-              {showBrandVoiceNudge && (
-                <Link
-                  to="/dashboard/brand-voice"
-                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-huttle-primary hover:text-huttle-primary-dark"
-                >
-                  {dashboardData?.brand_voice_nudge_copy || 'Set your Brand Voice for niche-specific trends →'}
-                </Link>
               )}
 
               <Link to="/dashboard/trend-lab" className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-sm">
@@ -1232,20 +1163,8 @@ export default function Dashboard() {
                       ? `Top reach tags on ${primaryPlatformLabel}`
                       : 'Copy & paste ready'}
                   </p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Updates daily at 6:00 AM your time</p>
                 </div>
-                <button
-                  onClick={refreshHashtags}
-                  disabled={isHashtagsRefreshing || hashtagWidgetListLoading}
-                  title="Regenerate hashtags"
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                  data-testid="dashboard-refresh-hashtags"
-                >
-                  {isHashtagsRefreshing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="w-4 h-4" />
-                  )}
-                </button>
               </div>
 
               {hashtagPersonalization && (
@@ -1385,18 +1304,21 @@ export default function Dashboard() {
                     <Copy className="w-3.5 h-3.5" /> Copy All Hashtags
                   </button>
                 </div>
+              ) : useForYouHashtags ? (
+                <div className="text-center py-6">
+                  <p className="text-xs text-gray-500 mb-3">Personalized hashtags couldn't load. Try again.</p>
+                  <button
+                    type="button"
+                    onClick={retryForYouHashtags}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Retry
+                  </button>
+                </div>
               ) : (
                 <p className="text-xs text-gray-500 p-3 border border-gray-100 rounded-xl">{hashtagsFallbackMessage}</p>
               )}
 
-              {showBrandVoiceNudge && (
-                <Link
-                  to="/dashboard/brand-voice"
-                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-huttle-primary hover:text-huttle-primary-dark"
-                >
-                  {dashboardData?.brand_voice_nudge_copy || 'Set your Brand Voice for niche-specific trends →'}
-                </Link>
-              )}
             </div>
           </div>
         </motion.div>

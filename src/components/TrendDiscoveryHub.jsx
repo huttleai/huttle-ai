@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -107,6 +107,7 @@ export default function TrendDiscoveryHub() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { getFeatureLimit } = useSubscription();
   const quickScanUsage = useAIUsage('trendQuickScan');
@@ -118,6 +119,7 @@ export default function TrendDiscoveryHub() {
   const [deepDiveTopic, setDeepDiveTopic] = useState('');
   const [deepDiveResults, setDeepDiveResults] = useState(null);
   const [isLoadingDeepDive, setIsLoadingDeepDive] = useState(false);
+  const [autoRunTopic, setAutoRunTopic] = useState(null);
   const [savedTrendIndex, setSavedTrendIndex] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -188,7 +190,7 @@ export default function TrendDiscoveryHub() {
     }
 
     if (!brandData?.niche) {
-      showToast('Please set your niche in Brand Voice first', 'warning');
+      showToast('Add your niche in Brand Profile first (sidebar → Account).', 'warning');
       return;
     }
 
@@ -243,6 +245,35 @@ export default function TrendDiscoveryHub() {
       isActive = false;
     };
   }, [brandData, searchParams, setSearchParams, showToast]);
+
+  // Handle navigation state from Dashboard "Deep Dive" trend cards.
+  // On mount, read state.deepDiveTopic and state.autoRun, then pre-fill the input and optionally auto-run.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const { deepDiveTopic: routeTopic, autoRun } = location.state || {};
+    if (!routeTopic) return;
+
+    const safeTopic = String(routeTopic).substring(0, 200);
+    setDeepDiveTopic(safeTopic);
+    setActiveMode('deepDive');
+    setDeepDiveResults(null);
+    setDeepDiveError(null);
+
+    if (autoRun) {
+      setAutoRunTopic(safeTopic);
+    }
+
+    // Clear navigation state so a back-forward navigation doesn't re-trigger
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+  }, []); // intentionally run only on mount
+
+  // Once deepDiveTopic state matches the pending auto-run topic, call handleDeepDive.
+  useEffect(() => {
+    if (!autoRunTopic || deepDiveTopic !== autoRunTopic) return;
+    setAutoRunTopic(null);
+    handleDeepDive(); // deepDiveTopic is now the correct value in the closure
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepDiveTopic, autoRunTopic]);
 
   const getCategoryStyles = (category) => {
     const normalized = (category || '').toLowerCase();
@@ -332,7 +363,7 @@ export default function TrendDiscoveryHub() {
     clearAudienceInsights();
 
     if (!brandData?.niche) {
-      showToast('Please set your niche in Brand Voice first', 'warning');
+      showToast('Add your niche in Brand Profile first (sidebar → Account).', 'warning');
       return;
     }
 

@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ScrollToTop from './components/ScrollToTop';
 import LandingPage from './LandingPage';
 import DashboardManager from './dashboard/Dashboard';
 import PaymentSuccess from './pages/PaymentSuccess';
@@ -42,6 +43,7 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
+      <ScrollToTop />
       <Routes>
         {/* Public Landing Page */}
         <Route path="/" element={<LandingPage />} />

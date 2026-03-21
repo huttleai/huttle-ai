@@ -3,18 +3,13 @@ import { attachStrictErrorCollector } from './helpers/console';
 import { gotoDashboard } from './helpers/navigation';
 
 test.describe('Dashboard', () => {
-  test('greeting, widgets, hashtag refresh', async ({ page }) => {
+  test('greeting, widgets', async ({ page }) => {
     const detach = attachStrictErrorCollector(page);
     await gotoDashboard(page, '/dashboard');
     await expect(page.getByTestId('dashboard-greeting')).toBeVisible();
     await expect(page.getByTestId('trending-widget')).toBeVisible();
     await expect(page.getByTestId('hashtag-widget')).toBeVisible();
     await expect(page.getByTestId('sidebar-ai-meter')).toBeVisible();
-    const refresh = page.getByTestId('dashboard-refresh-hashtags');
-    if (await refresh.isEnabled().catch(() => false)) {
-      await refresh.click();
-      await page.waitForLoadState('networkidle').catch(() => {});
-    }
     const before = await page.getByTestId('dashboard-greeting').innerText();
     await page.waitForTimeout(15000);
     const after = await page.getByTestId('dashboard-greeting').innerText();

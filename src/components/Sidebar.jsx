@@ -161,7 +161,11 @@ export default function Sidebar() {
           <div className="flex items-center mb-8 mt-1">
             <div
               className="cursor-pointer group"
-              onClick={() => { navigate('/dashboard'); setIsMobileOpen(false); }}
+              onClick={() => {
+                navigate('/dashboard');
+                window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                setIsMobileOpen(false);
+              }}
             >
               <img 
                 src="/huttle-logo.png" 
@@ -186,7 +190,12 @@ export default function Sidebar() {
                       <NavLink
                         key={item.path + item.name}
                         to={item.path}
-                        onClick={() => setIsMobileOpen(false)}
+                        onClick={() => {
+                          setIsMobileOpen(false);
+                          if (item.path === '/dashboard') {
+                            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                          }
+                        }}
                         onMouseEnter={() => setHoveredItem(item.path)}
                         onMouseLeave={() => setHoveredItem(null)}
                         className="group relative block"
