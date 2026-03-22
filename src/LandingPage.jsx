@@ -1368,7 +1368,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION */}
-      <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip" data-testid="landing-hero">
+      <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip overflow-y-visible" data-testid="landing-hero">
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">
@@ -1405,32 +1405,32 @@ export default function LandingPage() {
             </div>
             
             {/* RIGHT COLUMN - iPhone Mockup with Floating Cards */}
-            <div className="relative flex justify-center order-2 mt-6 lg:mt-0">
-              <div className="relative w-full max-w-[500px] sm:max-w-[550px] mx-auto md:max-w-none md:w-[520px] md:mx-0 lg:w-[560px] xl:w-[620px] min-h-[480px] sm:min-h-[520px] md:h-[560px] lg:h-[600px]">
+            <div className="relative flex justify-center order-2 mt-12 sm:mt-14 md:mt-10 lg:mt-0 w-full max-w-full">
+              <div className="relative w-full max-w-[min(100%,420px)] sm:max-w-[min(100%,480px)] mx-auto md:max-w-none md:w-[520px] md:mx-0 lg:w-[560px] xl:w-[620px] min-h-[500px] sm:min-h-[540px] md:min-h-[600px] lg:min-h-[640px] md:h-[620px] lg:h-[660px] xl:h-[700px] overflow-x-clip overflow-y-visible md:overflow-visible px-1 sm:px-0">
                 
                 {/* Floating Cards - Desktop (md+) - CSS animations instead of framer-motion */}
-                {/* Top Left Card - Trending */}
+                {/* Top Left Card - Trending (tablet ~75%, desktop xl+ ~88%) */}
                 <div 
-                  className="absolute z-10 hidden md:block hero-card-in"
-                  style={{ left: '-8%', top: '12%', animationDelay: '0.9s' }}
+                  className="absolute z-10 hidden md:block hero-card-in left-[-3%] lg:left-[-6%] xl:left-[-7%] top-[11%] lg:top-[12%]"
+                  style={{ animationDelay: '0.9s' }}
                 >
                   <div className="hero-float-1" style={{ transform: 'rotate(-5deg)' }}>
-                    <GlassCard className="w-[175px] lg:w-[190px] xl:w-[205px] p-3.5 lg:p-4">
-                      <div className="flex items-center gap-2 mb-2.5">
-                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg lg:rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
-                          <TrendingUp size={16} />
+                    <GlassCard className="w-[128px] lg:w-[142px] xl:w-[156px] 2xl:w-[168px] p-3 lg:p-3.5 xl:p-4">
+                      <div className="flex items-center gap-1.5 mb-1.5 lg:mb-2">
+                        <div className="h-7 w-7 lg:h-8 lg:w-8 xl:h-9 xl:w-9 rounded-lg lg:rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
+                          <TrendingUp size={15} />
                         </div>
-                        <div>
-                          <div className="text-[8px] lg:text-[9px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
-                          <div className="font-bold text-slate-900 text-xs lg:text-sm">#GlowUp</div>
+                        <div className="min-w-0">
+                          <div className="text-[8px] xl:text-[9px] font-bold text-slate-400 uppercase tracking-wider">Trending Now</div>
+                          <div className="font-bold text-slate-900 text-xs lg:text-sm xl:text-base leading-tight">#GlowUp</div>
                         </div>
                       </div>
-                      <div className="space-y-1 text-[11px] lg:text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Posts today</span>
-                          <span className="font-bold text-slate-900">12.4k</span>
+                      <div className="space-y-0.5 text-[10px] lg:text-[11px] xl:text-xs">
+                        <div className="flex justify-between gap-1">
+                          <span className="text-slate-500 truncate">Posts today</span>
+                          <span className="font-bold text-slate-900 shrink-0">12.4k</span>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between gap-1">
                           <span className="text-slate-500">Growth</span>
                           <span className="font-bold text-green-500">+340%</span>
                         </div>
@@ -1441,23 +1441,23 @@ export default function LandingPage() {
 
                 {/* Bottom Left Card - Created */}
                 <div 
-                  className="absolute z-10 hidden md:block hero-card-in"
-                  style={{ left: '0%', bottom: '15%', animationDelay: '1.1s' }}
+                  className="absolute z-10 hidden md:block hero-card-in left-[1%] lg:left-[0%] bottom-[14%] lg:bottom-[15%]"
+                  style={{ animationDelay: '1.1s' }}
                 >
                   <div className="hero-float-2" style={{ transform: 'rotate(-6deg)' }}>
-                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4">
-                      <div className="flex justify-between items-center mb-2.5">
-                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Created</span>
-                        <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
-                          <Check size={9} className="text-green-600" />
+                    <GlassCard className="w-[122px] lg:w-[138px] xl:w-[150px] 2xl:w-[162px] p-3 lg:p-3.5 xl:p-4">
+                      <div className="flex justify-between items-center mb-1.5 lg:mb-2 gap-1">
+                        <span className="text-[8px] xl:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Created</span>
+                        <div className="h-3.5 w-3.5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                          <Check size={8} className="text-green-600" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
-                          <Instagram size={14} />
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="h-7 w-7 lg:h-8 lg:w-8 xl:h-9 xl:w-9 rounded-lg bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-lg shrink-0">
+                          <Instagram size={13} />
                         </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-[11px] lg:text-xs">Instagram Reel</div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-[11px] lg:text-xs xl:text-sm leading-tight">Instagram Reel</div>
                           <div className="text-[10px] lg:text-[11px] text-slate-500">Saved to Vault</div>
                         </div>
                       </div>
@@ -1467,41 +1467,41 @@ export default function LandingPage() {
 
                 {/* Top Right Card - Viral Score */}
                 <div 
-                  className="absolute z-10 hidden md:block hero-card-in"
-                  style={{ right: '-8%', top: '10%', animationDelay: '1.0s' }}
+                  className="absolute z-10 hidden md:block hero-card-in right-[-3%] lg:right-[-6%] xl:right-[-7%] top-[9%] lg:top-[10%]"
+                  style={{ animationDelay: '1.0s' }}
                 >
                   <div className="hero-float-3" style={{ transform: 'rotate(5deg)' }}>
-                    <GlassCard className="w-[150px] lg:w-[165px] xl:w-[180px] p-3.5 lg:p-4">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <Gauge size={12} className="text-[#01bad2]" />
-                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
+                    <GlassCard className="w-[112px] lg:w-[124px] xl:w-[138px] 2xl:w-[148px] p-3 lg:p-3.5 xl:p-4">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Gauge size={11} className="text-[#01bad2]" />
+                        <span className="text-[8px] xl:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Viral Score</span>
                       </div>
                       <div className="flex items-end gap-1">
-                        <span className="text-2xl lg:text-3xl font-black text-slate-900">94</span>
-                        <span className="text-xs lg:text-sm text-slate-400 mb-0.5">/100</span>
+                        <span className="text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 leading-none">94</span>
+                        <span className="text-[11px] lg:text-xs text-slate-400 mb-0.5">/100</span>
                       </div>
-                      <p className="text-[9px] lg:text-[10px] text-green-600 font-medium mt-1">High viral potential!</p>
+                      <p className="text-[8px] lg:text-[9px] text-green-600 font-medium mt-0.5 leading-tight">High viral potential!</p>
                     </GlassCard>
                   </div>
                 </div>
 
                 {/* Bottom Right Card - Audio Match */}
                 <div 
-                  className="absolute z-10 hidden md:block hero-card-in"
-                  style={{ right: '0%', bottom: '18%', animationDelay: '1.2s' }}
+                  className="absolute z-10 hidden md:block hero-card-in right-[1%] lg:right-[0%] bottom-[16%] lg:bottom-[18%]"
+                  style={{ animationDelay: '1.2s' }}
                 >
                   <div className="hero-float-4" style={{ transform: 'rotate(6deg)' }}>
-                    <GlassCard className="w-[165px] lg:w-[180px] xl:w-[195px] p-3.5 lg:p-4">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <Music size={12} className="text-[#01bad2]" />
-                        <span className="text-[8px] lg:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
+                    <GlassCard className="w-[122px] lg:w-[138px] xl:w-[150px] 2xl:w-[162px] p-3 lg:p-3.5 xl:p-4">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Music size={11} className="text-[#01bad2]" />
+                        <span className="text-[8px] xl:text-[9px] font-bold uppercase text-slate-400 tracking-wider">Audio Match</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-                          <Play size={14} className="text-white ml-0.5" />
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="h-7 w-7 lg:h-8 lg:w-8 xl:h-9 xl:w-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shrink-0">
+                          <Play size={13} className="text-white ml-0.5" />
                         </div>
-                        <div className="flex-1">
-                          <div className="text-[11px] lg:text-xs font-bold text-slate-900">Trending Sound</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] lg:text-xs xl:text-sm font-bold text-slate-900 leading-tight">Trending Sound</div>
                           <div className="text-[10px] lg:text-[11px] text-slate-500">2.1M uses</div>
                         </div>
                       </div>
@@ -1509,41 +1509,41 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                {/* iPhone Mockup */}
+                {/* iPhone Mockup — width-led scale: focal point vs floating badges */}
                 <div 
-                  className="absolute z-30 inset-0 flex items-center justify-center pointer-events-none hero-phone-in"
+                  className="absolute z-30 inset-0 flex items-end justify-center sm:items-center pointer-events-none hero-phone-in px-3 sm:px-4 pb-1 sm:pb-0 pt-8 sm:pt-4 md:pt-0"
                 >
-                  <div className="phone-float">
+                  <div className="phone-float flex w-full max-w-full items-end justify-center sm:items-center">
                     <img 
-                      src="/ignite-engine-mockup.png" // HUTTLE AI: updated 3
-                      alt="Huttle AI Ignite Engine feature"
-                      className="w-[140vw] max-w-none sm:w-[120vw] sm:max-w-none md:w-[820px] md:max-w-none lg:w-[920px] xl:w-[1020px] h-auto drop-shadow-2xl"
+                      src="/hero-iphone-mockup.png"
+                      alt="Huttle AI mobile app — trending content and create flow"
+                      className="h-auto w-[min(280px,max(240px,70vw))] max-w-[280px] sm:w-[min(300px,max(250px,68vw))] sm:max-w-[300px] md:w-[min(330px,42vw)] md:max-w-[340px] md:min-w-0 lg:w-[min(360px,38vw)] lg:max-w-[380px] xl:w-[min(400px,34vw)] xl:max-w-[400px] object-contain object-bottom sm:object-center drop-shadow-[0_28px_55px_-12px_rgba(15,23,42,0.38)]"
                     />
                   </div>
                 </div>
 
-                {/* Mobile Cards - Simplified (no framer-motion) */}
+                {/* Mobile Cards — compact badges (~60% scale), tucked near phone; z-10 below mockup (z-30) */}
                 {/* Top Left - Trending */}
-                <div className="absolute z-10 md:hidden left-2 top-[20%] origin-center hero-card-mobile" style={{ animationDelay: '0.7s' }}>
+                <div className="absolute z-10 md:hidden left-[5%] min-[400px]:left-[6%] top-[28%] origin-center hero-card-mobile" style={{ animationDelay: '0.7s' }}>
                   <div className="hero-float-1" style={{ transform: 'rotate(-10deg)' }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow">
-                          <TrendingUp size={12} />
+                    <GlassCard className="w-[62px] min-[400px]:w-[66px] p-2 shadow-lg">
+                      <div className="flex items-center gap-0.5 mb-0.5">
+                        <div className="h-4 w-4 rounded bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-sm">
+                          <TrendingUp size={10} />
                         </div>
-                        <div>
-                          <div className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">Trending</div>
-                          <div className="font-bold text-slate-900 text-[8px]">#GlowUp</div>
+                        <div className="min-w-0">
+                          <div className="text-[6px] font-bold text-slate-400 uppercase tracking-wider leading-none">Trend</div>
+                          <div className="font-bold text-slate-900 text-[7px] leading-tight">#GlowUp</div>
                         </div>
                       </div>
-                      <div className="space-y-0.5 text-[7px]">
-                        <div className="flex justify-between">
+                      <div className="space-y-0 text-[6px] leading-tight">
+                        <div className="flex justify-between gap-0.5">
                           <span className="text-slate-500">Posts</span>
                           <span className="font-bold text-slate-900">12.4k</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Growth</span>
-                          <span className="font-bold text-green-500">+340%</span>
+                        <div className="flex justify-between gap-0.5">
+                          <span className="text-slate-500 truncate">Growth</span>
+                          <span className="font-bold text-green-500 shrink-0">+340%</span>
                         </div>
                       </div>
                     </GlassCard>
@@ -1551,22 +1551,22 @@ export default function LandingPage() {
                 </div>
 
                 {/* Bottom Left - Created */}
-                <div className="absolute z-10 md:hidden left-2 bottom-[25%] origin-center hero-card-mobile" style={{ animationDelay: '1.0s' }}>
+                <div className="absolute z-10 md:hidden left-[5%] min-[400px]:left-[6%] bottom-[28%] origin-center hero-card-mobile" style={{ animationDelay: '1.0s' }}>
                   <div className="hero-float-2" style={{ transform: 'rotate(-8deg)' }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Created</span>
+                    <GlassCard className="w-[62px] min-[400px]:w-[66px] p-2 shadow-lg">
+                      <div className="flex justify-between items-center mb-0.5 gap-0.5">
+                        <span className="text-[6px] font-bold uppercase text-slate-400 tracking-wider leading-none">Made</span>
                         <div className="h-3 w-3 rounded-full bg-green-100 flex items-center justify-center">
                           <Check size={7} className="text-green-600" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-6 w-6 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow">
-                          <Instagram size={10} />
+                      <div className="flex items-center gap-0.5">
+                        <div className="h-4 w-4 rounded bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                          <Instagram size={9} />
                         </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-[8px]">IG Reel</div>
-                          <div className="text-[7px] text-slate-500">Saved</div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 text-[7px] leading-tight">Reel</div>
+                          <div className="text-[6px] text-slate-500 leading-none">Vault</div>
                         </div>
                       </div>
                     </GlassCard>
@@ -1574,37 +1574,37 @@ export default function LandingPage() {
                 </div>
 
                 {/* Top Right - Viral Score */}
-                <div className="absolute z-10 md:hidden right-2 top-[20%] origin-center hero-card-mobile" style={{ animationDelay: '0.8s' }}>
+                <div className="absolute z-10 md:hidden right-[5%] min-[400px]:right-[6%] top-[28%] origin-center hero-card-mobile" style={{ animationDelay: '0.8s' }}>
                   <div className="hero-float-3" style={{ transform: 'rotate(10deg)' }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
-                      <div className="flex items-center gap-1 mb-1.5">
-                        <Gauge size={10} className="text-[#01bad2]" />
-                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Viral</span>
+                    <GlassCard className="w-[62px] min-[400px]:w-[66px] p-2 shadow-lg">
+                      <div className="flex items-center gap-0.5 mb-0.5">
+                        <Gauge size={9} className="text-[#01bad2]" />
+                        <span className="text-[6px] font-bold uppercase text-slate-400 tracking-wider leading-none">Viral</span>
                       </div>
                       <div className="flex items-end gap-0.5">
-                        <span className="text-xl font-black text-slate-900">94</span>
-                        <span className="text-[10px] text-slate-400 mb-0.5">/100</span>
+                        <span className="text-lg font-black text-slate-900 leading-none">94</span>
+                        <span className="text-[8px] text-slate-400 mb-0.5">/100</span>
                       </div>
-                      <p className="text-[7px] text-green-600 font-medium mt-0.5">High potential!</p>
+                      <p className="text-[6px] text-green-600 font-medium mt-0.5 leading-tight">Hot!</p>
                     </GlassCard>
                   </div>
                 </div>
 
                 {/* Bottom Right - Audio Match */}
-                <div className="absolute z-10 md:hidden right-2 bottom-[25%] origin-center hero-card-mobile" style={{ animationDelay: '1.1s' }}>
+                <div className="absolute z-10 md:hidden right-[5%] min-[400px]:right-[6%] bottom-[28%] origin-center hero-card-mobile" style={{ animationDelay: '1.1s' }}>
                   <div className="hero-float-4" style={{ transform: 'rotate(8deg)' }}>
-                    <GlassCard className="w-[95px] sm:w-[105px] p-2.5 shadow-xl">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <Music size={10} className="text-[#01bad2]" />
-                        <span className="text-[7px] font-bold uppercase text-slate-400 tracking-wider">Audio</span>
+                    <GlassCard className="w-[62px] min-[400px]:w-[66px] p-2 shadow-lg">
+                      <div className="flex items-center gap-0.5 mb-0.5">
+                        <Music size={9} className="text-[#01bad2]" />
+                        <span className="text-[6px] font-bold uppercase text-slate-400 tracking-wider leading-none">Audio</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-6 w-6 rounded bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow">
-                          <Play size={10} className="text-white ml-0.5" />
+                      <div className="flex items-center gap-0.5">
+                        <div className="h-4 w-4 rounded bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-sm shrink-0">
+                          <Play size={9} className="text-white ml-px" />
                         </div>
-                        <div className="flex-1">
-                          <div className="text-[8px] font-bold text-slate-900">Trending Sound</div>
-                          <div className="text-[7px] text-slate-500">2.1M uses</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[7px] font-bold text-slate-900 leading-tight">Sound</div>
+                          <div className="text-[6px] text-slate-500 leading-none">2.1M</div>
                         </div>
                       </div>
                     </GlassCard>

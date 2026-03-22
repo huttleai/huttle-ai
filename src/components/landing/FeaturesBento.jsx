@@ -76,7 +76,7 @@ export const BentoFeatures = () => {
             </div>
             <div className="mt-auto z-10 flex-1 flex items-end justify-center pt-8">
               <img 
-                src="/ignite-engine-mockup.png" // HUTTLE AI: updated 3
+                src="/hero-iphone-mockup.png"
                 alt="Ignite Engine" 
                 className="w-full max-w-[300px] rounded-t-2xl shadow-2xl translate-y-8 group-hover:translate-y-4 transition-transform duration-700 ease-out border border-white/10" 
                 onError={(e) => {
