@@ -1,0 +1,53 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - img [ref=e8]
+      - generic [ref=e11]:
+        - heading "Set Up Your Dashboard" [level=1] [ref=e12]
+        - paragraph [ref=e13]: "Step 1 of 8: Type"
+    - generic [ref=e17]: 1/8
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]: "1"
+        - generic [ref=e21]: Type
+      - generic [ref=e22]:
+        - generic [ref=e23]: "2"
+        - generic [ref=e24]: Niche
+      - generic [ref=e25]:
+        - generic [ref=e26]: "3"
+        - generic [ref=e27]: Stage
+      - generic [ref=e28]:
+        - generic [ref=e29]: "4"
+        - generic [ref=e30]: Audience
+      - generic [ref=e31]:
+        - generic [ref=e32]: "5"
+        - generic [ref=e33]: Platforms
+      - generic [ref=e34]:
+        - generic [ref=e35]: "6"
+        - generic [ref=e36]: Tone
+      - generic [ref=e37]:
+        - generic [ref=e38]: "7"
+        - generic [ref=e39]: Goals
+      - generic [ref=e40]:
+        - generic [ref=e41]: "8"
+        - generic [ref=e42]: City
+  - generic [ref=e44]:
+    - heading "How will you use Huttle AI?" [level=2] [ref=e45]
+    - paragraph [ref=e46]: This helps us personalize everything for you
+    - generic [ref=e47]:
+      - button "Brand / Business Marketing a business, service, or company" [ref=e48] [cursor=pointer]:
+        - img [ref=e50]
+        - heading "Brand / Business" [level=3] [ref=e53]
+        - paragraph [ref=e54]: Marketing a business, service, or company
+      - button "Solo Creator Growing your personal brand or following" [ref=e55] [cursor=pointer]:
+        - img [ref=e57]
+        - heading "Solo Creator" [level=3] [ref=e60]
+        - paragraph [ref=e61]: Growing your personal brand or following
+  - button "Continue" [disabled] [ref=e64]:
+    - generic [ref=e65]:
+      - text: Continue
+      - img [ref=e66]
+```

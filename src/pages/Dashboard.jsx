@@ -307,6 +307,7 @@ export default function Dashboard() {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedTrendHookKey(key);
+      showToast('Copied to clipboard', 'success');
       setTimeout(() => setCopiedTrendHookKey(null), 2000);
     } catch {
       showToast('Failed to copy', 'error');
@@ -660,7 +661,7 @@ export default function Dashboard() {
 
   const normalizePlatformIdForBuilder = (trend) => platformIdFromTrend(trend);
 
-  const [trendMobileDetailsOpen, setTrendMobileDetailsOpen] = useState({});
+  const [trendDetailsOpen, setTrendDetailsOpen] = useState({});
   const [copiedTrendHookKey, setCopiedTrendHookKey] = useState(null);
 
   const getInsightCategoryStyles = (category) => {
@@ -1031,7 +1032,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
                 {isDashboardLoading && (
                   <>
                     {[1, 2, 3, 4, 5, 6].map((item) => (
@@ -1074,8 +1075,9 @@ export default function Dashboard() {
                   const whyLine = sanitizeAIOutput(trend.why_its_working);
                   const platformId = normalizePlatformIdForBuilder(trend);
                   const trendType = (trend.trend_type || 'global').toLowerCase();
-                  const mobileOpen = Boolean(trendMobileDetailsOpen[cardKey]);
+                  const detailsOpen = Boolean(trendDetailsOpen[cardKey]);
                   const confidenceHigh = trend.confidence === 'high';
+                  const hasExpandableDetails = Boolean(nicheAngle || hookLine || whyLine);
 
                   return (
                     <div
@@ -1090,7 +1092,7 @@ export default function Dashboard() {
                               {getPlatformIcon(sanitizedTrendPlatform, 'w-4 h-4 text-gray-600')}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm leading-snug text-gray-900 dark:text-gray-100 break-words line-clamp-2 sm:line-clamp-none">{sanitizedTrendTopic}</p>
+                              <p className="font-bold text-sm leading-snug text-gray-900 dark:text-gray-100 hyphens-none text-pretty min-w-0">{sanitizedTrendTopic}</p>
                               {formatBadge && (
                                 <span
                                   data-testid="trend-format-badge"
@@ -1117,54 +1119,61 @@ export default function Dashboard() {
                         </div>
 
                         {sanitizedTrendDescription && (
-                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-3">{sanitizedTrendDescription}</p>
+                          <p
+                            className={`text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-3 hyphens-none ${detailsOpen ? '' : 'line-clamp-3'}`}
+                          >
+                            {sanitizedTrendDescription}
+                          </p>
                         )}
 
-                        <div className="md:hidden mb-2">
-                          <button
-                            type="button"
-                            onClick={() => setTrendMobileDetailsOpen((prev) => ({ ...prev, [cardKey]: !prev[cardKey] }))}
-                            className="text-xs font-semibold text-huttle-primary flex items-center gap-1"
-                          >
-                            {mobileOpen ? 'Hide details ▾' : 'See details ▸'}
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileOpen ? 'rotate-180' : ''}`} />
-                          </button>
-                        </div>
+                        {hasExpandableDetails && (
+                          <div className="mb-3">
+                            <button
+                              type="button"
+                              onClick={() => setTrendDetailsOpen((prev) => ({ ...prev, [cardKey]: !prev[cardKey] }))}
+                              className="text-xs font-semibold text-huttle-primary inline-flex items-center gap-1"
+                              aria-expanded={detailsOpen}
+                            >
+                              {detailsOpen ? 'Hide details' : 'See details'}
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} aria-hidden />
+                            </button>
+                          </div>
+                        )}
 
-                        {nicheAngle && (
+                        {detailsOpen && nicheAngle && (
                           <div
                             data-testid="trend-niche-section"
-                            className={`mb-3 rounded-lg border border-cyan-100 dark:border-cyan-900/40 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-2.5 ${mobileOpen ? 'block' : 'hidden md:block'}`}
+                            className="mb-3 rounded-r-lg border-l-2 border-cyan-300 dark:border-cyan-600 bg-cyan-50/50 dark:bg-cyan-900/15 pl-3 pr-2.5 py-2"
                           >
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-800 dark:text-cyan-200 mb-1">FOR YOUR NICHE</p>
-                            <p className="text-xs text-gray-800 dark:text-gray-100 leading-relaxed">{nicheAngle}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-800 dark:text-cyan-200 mb-1">For your niche</p>
+                            <p className="text-xs text-gray-800 dark:text-gray-100 leading-relaxed hyphens-none">{nicheAngle}</p>
                           </div>
                         )}
 
-                        {hookLine && (
-                          <div className={`mb-3 rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2.5 ${mobileOpen ? 'block' : 'hidden md:block'}`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">Your hook</p>
-                                <p data-testid="trend-hook-text" className="text-xs font-mono text-gray-900 dark:text-gray-100 leading-snug">&quot;{hookLine}&quot;</p>
-                              </div>
-                              <button
-                                type="button"
-                                data-testid="trend-hook-copy"
-                                onClick={() => copyTrendHook(cardKey, hookLine)}
-                                className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-gray-900 border border-gray-200 text-[10px] font-semibold text-gray-700"
-                              >
-                                {copiedTrendHookKey === cardKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                                {copiedTrendHookKey === cardKey ? '✓ Copied' : 'Copy'}
-                              </button>
+                        {detailsOpen && hookLine && (
+                          <div className="mb-3 flex items-start gap-2 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Your hook</p>
+                              <p data-testid="trend-hook-text" className="text-xs text-gray-900 dark:text-gray-100 leading-relaxed hyphens-none">
+                                &quot;{hookLine}&quot;
+                              </p>
                             </div>
+                            <button
+                              type="button"
+                              data-testid="trend-hook-copy"
+                              onClick={() => copyTrendHook(cardKey, hookLine)}
+                              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-600 hover:text-huttle-primary hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors"
+                            >
+                              {copiedTrendHookKey === cardKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedTrendHookKey === cardKey ? <span className="text-[10px] font-semibold text-emerald-600">✓ Copied</span> : <span className="text-[10px] font-semibold">Copy</span>}
+                            </button>
                           </div>
                         )}
 
-                        {whyLine && (
-                          <p className={`text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex gap-1.5 ${mobileOpen ? 'flex' : 'hidden md:flex'}`}>
+                        {detailsOpen && whyLine && (
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex gap-1.5">
                             <span aria-hidden>⚡</span>
-                            <span>{whyLine}</span>
+                            <span className="hyphens-none">{whyLine}</span>
                           </p>
                         )}
 

@@ -60,8 +60,13 @@ test.describe('Dashboard', () => {
   test('Trending Now cards show format badge, niche section, hook copy feedback', async ({ page }) => {
     const detach = attachStrictErrorCollector(page);
     await gotoDashboard(page, '/dashboard');
-    await expect(page.getByTestId('trend-card').first()).toBeVisible({ timeout: 60000 });
+    const firstCard = page.getByTestId('trend-card').first();
+    await expect(firstCard).toBeVisible({ timeout: 60000 });
     await expect(page.getByTestId('trend-format-badge').first()).toBeVisible();
+    const seeDetails = firstCard.getByRole('button', { name: /see details/i });
+    if (await seeDetails.isVisible().catch(() => false)) {
+      await seeDetails.click();
+    }
     await expect(page.getByTestId('trend-niche-section').first()).toBeVisible();
     await page.getByTestId('trend-hook-copy').first().click();
     await expect(page.getByTestId('trend-card').first().getByText('✓ Copied')).toBeVisible();
