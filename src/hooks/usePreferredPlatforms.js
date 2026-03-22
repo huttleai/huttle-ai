@@ -135,7 +135,8 @@ export function usePreferredPlatforms() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Brand Voice platforms are the primary source of truth
+  // Brand Voice platforms are the primary source of truth (Settings toggles update this when BV is configured).
+  // Dashboard widgets resolve platforms from cached `selected_platforms` then fall back to these IDs — keep labels consistent with Brand Profile.
   const brandPlatformIds = (brandData?.platforms || [])
     .map(name => normalizePlatformName(name))
     .filter(Boolean);

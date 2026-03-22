@@ -630,7 +630,7 @@ export default function BrandVoice() {
 
   return (
     <div
-      className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-24 md:pb-28"
+      className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-24 md:pb-28"
       data-testid="brand-profile-page"
     >
       <div className="mb-6 md:mb-8 max-w-3xl">

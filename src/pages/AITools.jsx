@@ -752,7 +752,7 @@ export default function AITools() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden" data-testid="ai-tools-page">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8 relative overflow-x-hidden" data-testid="ai-tools-page">
       {/* Subtle background pattern */}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       
@@ -764,7 +764,7 @@ export default function AITools() {
               <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
                 AI Power Tools
               </h1>
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">

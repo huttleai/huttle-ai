@@ -487,7 +487,7 @@ export default function ContentRemix() {
   ];
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       {isLoading && (
         <LoadingSpinner fullScreen variant="huttle" text="Remixing your content…" />
       )}
@@ -520,37 +520,56 @@ export default function ContentRemix() {
           </div>
         </div>
 
-        {/* Step Progress Bar */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        {/* Step Progress — compact on mobile */}
+        <div className="mb-6 md:mb-8">
+          <div className="md:hidden">
+            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-gray-900">
+              <span>
+                Step {currentStep} of {steps.length}
+              </span>
+              <span className="font-medium text-huttle-primary">{steps.find((s) => s.num === currentStep)?.label}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-huttle-primary transition-all duration-300 ease-out"
+                style={{ width: `${(currentStep / steps.length) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="hidden items-center justify-between md:flex">
             {steps.map((step, idx) => (
-              <div key={step.num} className="flex items-center flex-1">
+              <div key={step.num} className="flex flex-1 items-center">
                 <button
+                  type="button"
                   onClick={() => {
                     if (step.num < currentStep && step.num < 4) setCurrentStep(step.num);
                   }}
                   disabled={step.num > currentStep || step.num === 4}
                   className={`flex items-center gap-2 ${step.num <= currentStep ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                    step.num === currentStep
-                      ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/30'
-                      : step.num < currentStep
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    {step.num < currentStep ? <Check className="w-4 h-4" /> : step.num}
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all ${
+                      step.num === currentStep
+                        ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/30'
+                        : step.num < currentStep
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-200 text-gray-500'
+                    }`}
+                  >
+                    {step.num < currentStep ? <Check className="h-4 w-4" /> : step.num}
                   </div>
-                  <span className={`text-xs font-medium hidden sm:block ${
-                    step.num === currentStep ? 'text-gray-900' : 'text-gray-500'
-                  }`}>
+                  <span
+                    className={`hidden text-xs font-medium sm:inline ${
+                      step.num === currentStep ? 'text-gray-900' : 'text-gray-500'
+                    }`}
+                  >
                     {step.label}
                   </span>
                 </button>
                 {idx < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 rounded ${
-                    step.num < currentStep ? 'bg-green-400' : 'bg-gray-200'
-                  }`} />
+                  <div
+                    className={`mx-2 h-0.5 flex-1 rounded ${step.num < currentStep ? 'bg-green-400' : 'bg-gray-200'}`}
+                  />
                 )}
               </div>
             ))}
@@ -608,15 +627,16 @@ export default function ContentRemix() {
               What do you want to achieve with this content?
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:gap-3">
               {REMIX_GOALS.map((goal) => {
                 const Icon = goal.icon;
                 const isSelected = remixGoal === goal.id;
                 return (
                   <button
                     key={goal.id}
+                    type="button"
                     onClick={() => setRemixGoal(goal.id)}
-                    className={`text-left p-4 rounded-xl border-2 transition-all ${
+                    className={`min-h-[52px] w-full rounded-xl border-2 p-4 text-left transition-all sm:min-h-0 ${
                       isSelected
                         ? `${goal.borderActive} ring-2 bg-gradient-to-br ${goal.bgGradient} shadow-md`
                         : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'

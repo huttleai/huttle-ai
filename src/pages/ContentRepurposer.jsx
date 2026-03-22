@@ -290,7 +290,7 @@ Format as JSON with fields: content, hashtags, tips, hooks`
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 md:gap-4">

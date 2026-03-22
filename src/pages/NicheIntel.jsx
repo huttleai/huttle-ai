@@ -206,7 +206,7 @@ export default function NicheIntel() {
   // Upgrade prompt for non-Pro users
   if (!hasAccess) {
     return (
-      <div className="flex-1 ml-0 md:ml-64 pt-16 md:pt-20 p-4 md:p-8">
+      <div className="flex-1 ml-0 md:ml-12 lg:ml-64 pt-16 md:pt-20 p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20 border border-black" style={{ background: 'linear-gradient(135deg, rgba(1, 186, 210, 1) 0%, rgba(59, 130, 246, 1) 100%)' }}>
@@ -251,7 +251,7 @@ export default function NicheIntel() {
   }
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {loading && (
         <LoadingSpinner fullScreen variant="huttle" text="Researching your niche and synthesizing insights…" />
       )}

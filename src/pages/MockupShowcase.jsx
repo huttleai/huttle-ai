@@ -9,7 +9,7 @@ import { Download, Share2, Sparkles } from 'lucide-react';
  */
 export default function MockupShowcase() {
   return (
-    <div className="flex-1 min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12">
       {/* Animated background mesh */}
       <div className="fixed inset-0 pointer-events-none opacity-20 z-0">
         <div className="absolute top-20 left-20 w-96 h-96 bg-orange-500 rounded-full blur-[120px] animate-pulse" />

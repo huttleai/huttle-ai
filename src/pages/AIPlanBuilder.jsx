@@ -440,7 +440,7 @@ export default function AIPlanBuilder() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {isGenerating && (
         <LoadingSpinner fullScreen variant="huttle" text={getStatusMessage()} />
       )}
@@ -629,9 +629,9 @@ export default function AIPlanBuilder() {
         
         {isGenerating && (
           <div className="mb-6 max-w-md mx-auto">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>{getStatusMessage()}</span>
-              <span className="font-medium">{Math.round(progress)}%</span>
+            <div className="mb-1 flex items-center justify-between text-sm text-gray-600">
+              <span className="text-sm leading-snug">{getStatusMessage()}</span>
+              <span className="min-w-[3.5rem] text-right text-base font-semibold tabular-nums">{Math.round(progress)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
               <div 
@@ -667,7 +667,7 @@ export default function AIPlanBuilder() {
                 <p className="text-gray-600">Goal: {sanitizeAIOutput(generatedPlan.goal)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-4">
               <div className="bg-white rounded-lg p-4 border border-green-200">
                 <h4 className="text-sm font-semibold text-gray-700 mb-1">Platforms</h4>
                 <p className="text-sm font-semibold text-gray-900">{sanitizeAIOutput(generatedPlan.platforms?.join(', ')) || 'Multi-platform'}</p>

@@ -651,7 +651,7 @@ function mergeAndRankTrends(globalTrends, nicheTrends, platform) {
   const globalPick = unique.filter((t) => t.trend_type === 'global').slice(0, 4);
   const rest = unique.filter((t) => !nichePick.includes(t) && !globalPick.includes(t)).slice(0, 4);
 
-  return [...nichePick, ...globalPick, ...rest].slice(0, 8);
+  return [...nichePick, ...globalPick, ...rest].slice(0, 6);
 }
 
 async function adaptGlobalTrendForNiche(trend, brandData) {

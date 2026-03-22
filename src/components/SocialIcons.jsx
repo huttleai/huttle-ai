@@ -1,7 +1,7 @@
 // Social Media Platform Icons
 // Supports both colored (brand) and monochrome versions
 
-import { Instagram, Facebook, Youtube, Twitter, Linkedin, Video } from 'lucide-react';
+import { Instagram, Facebook, Youtube, Twitter, Linkedin } from 'lucide-react';
 
 // Monochrome Lucide icons (preferred for professional UI)
 export const InstagramIconMono = ({ className = "w-5 h-5" }) => (
@@ -12,8 +12,11 @@ export const FacebookIconMono = ({ className = "w-5 h-5" }) => (
   <Facebook className={className} />
 );
 
+/** TikTok brand mark (not Lucide `Video` — that reads as a generic camera). */
 export const TikTokIconMono = ({ className = "w-5 h-5" }) => (
-  <Video className={className} />
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+  </svg>
 );
 
 export const TwitterXIconMono = ({ className = "w-5 h-5" }) => (
@@ -96,27 +99,43 @@ export const LinkedInIcon = ({ className = "w-5 h-5", monochrome = false }) => {
   );
 };
 
+/**
+ * Normalizes API/platform strings so icon matching is reliable (e.g. "Tik Tok", "IG", "X").
+ */
+export function normalizePlatformLabelForIcon(raw) {
+  if (raw == null || raw === '') return '';
+  const s = String(raw).trim().toLowerCase();
+  if (s.includes('tiktok')) return 'TikTok';
+  if (s.includes('instagram')) return 'Instagram';
+  if (s.includes('facebook')) return 'Facebook';
+  if (s.includes('youtube')) return 'YouTube';
+  if (s.includes('linkedin')) return 'LinkedIn';
+  if (s === 'x' || s.includes('twitter')) return 'X';
+  return String(raw).trim();
+}
+
 // Helper to get the appropriate icon component
 // Default to monochrome for professional UI
 export const getPlatformIcon = (platform, className, monochrome = true) => {
-  const platformLower = platform?.toLowerCase() || '';
-  
+  const normalized = normalizePlatformLabelForIcon(platform);
+  const platformLower = normalized.toLowerCase();
+
   if (monochrome) {
     if (platformLower.includes('instagram')) return <InstagramIconMono className={className} />;
     if (platformLower.includes('facebook')) return <FacebookIconMono className={className} />;
     if (platformLower.includes('tiktok')) return <TikTokIconMono className={className} />;
-    if (platformLower.includes('x') || platformLower.includes('twitter')) return <TwitterXIconMono className={className} />;
+    if (platformLower === 'x' || platformLower.includes('twitter')) return <TwitterXIconMono className={className} />;
     if (platformLower.includes('youtube')) return <YouTubeIconMono className={className} />;
     if (platformLower.includes('linkedin')) return <LinkedInIconMono className={className} />;
   } else {
     if (platformLower.includes('instagram')) return <InstagramIcon className={className} />;
     if (platformLower.includes('facebook')) return <FacebookIcon className={className} />;
     if (platformLower.includes('tiktok')) return <TikTokIcon className={className} />;
-    if (platformLower.includes('x') || platformLower.includes('twitter')) return <TwitterXIcon className={className} />;
+    if (platformLower === 'x' || platformLower.includes('twitter')) return <TwitterXIcon className={className} />;
     if (platformLower.includes('youtube')) return <YouTubeIcon className={className} />;
     if (platformLower.includes('linkedin')) return <LinkedInIcon className={className} />;
   }
-  
+
   return null;
 };
 

@@ -9,6 +9,7 @@ import { SubscriptionProvider } from '../context/SubscriptionContext';
 import { DashboardProvider } from '../context/DashboardContext'; // HUTTLE AI: cache fix
 import Sidebar from '../components/Sidebar';
 import TopHeader from '../components/TopHeader';
+import { MobileNavProvider } from '../context/MobileNavContext';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -110,10 +111,11 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
     }
 
     return (
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-        <Sidebar />
-        <TopHeader />
-        <Suspense fallback={<DashboardRouteFallback />}>
+      <MobileNavProvider>
+        <div className="flex min-h-screen min-w-0 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+          <Sidebar />
+          <TopHeader />
+          <Suspense fallback={<DashboardRouteFallback />}>
           <Routes>
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
@@ -139,7 +141,8 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
-      </div>
+        </div>
+      </MobileNavProvider>
     );
   }
 

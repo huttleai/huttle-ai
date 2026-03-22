@@ -484,7 +484,7 @@ export default function IgniteEngine() {
   const briefLabel = bp ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {isGenerating && (
         <LoadingSpinner fullScreen variant="huttle" text={loadingStep} />
       )}
@@ -494,25 +494,27 @@ export default function IgniteEngine() {
 
         {/* Header */}
         <div className="mb-4 md:mb-6 lg:mb-8">
-          <div className="flex items-start gap-2 md:gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
-              <Flame className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-0.5 flex-wrap">
-                <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
-                  Ignite Engine
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-huttle-gradient text-white text-[10px] font-bold uppercase tracking-wider">
-                  Beta
-                </span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3 md:gap-4">
+            <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 md:h-12 md:w-12 lg:h-14 lg:w-14">
+                <Flame className="h-5 w-5 text-huttle-primary md:h-6 md:w-6 lg:h-7 lg:w-7" />
               </div>
-              <p className="text-xs md:text-sm text-gray-500 mt-0.5">
-                Built to maximize reach. Backed by live data.
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 flex flex-wrap items-center gap-2 md:gap-3">
+                  <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+                    Ignite Engine
+                  </h1>
+                  <span className="rounded-full bg-huttle-gradient px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Beta
+                  </span>
+                </div>
+                <p className="mt-0.5 text-sm text-gray-500 md:text-sm">
+                  Built to maximize reach. Backed by live data.
+                </p>
+              </div>
             </div>
             {hasAccess && (
-              <div className="flex-shrink-0">
+              <div className="w-full shrink-0 sm:w-auto sm:min-w-[200px]">
                 <AIUsageMeter
                   used={blueprintUsage.featureUsed}
                   limit={blueprintUsage.featureLimit}

@@ -239,7 +239,7 @@ export default function SocialUpdates() {
   }, [updates]);
 
   return (
-    <div className="flex-1 bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-8 pb-8">
+    <div className="flex-1 bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-8 pb-8">
       <div className="mb-6">
         <div className="flex items-center gap-4 mb-2">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">

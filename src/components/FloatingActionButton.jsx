@@ -64,7 +64,13 @@ export default function FloatingActionButton({ onCreatePost } = {}) {
       )}
 
       {/* Quick Actions Menu — fan out above the FAB */}
-      <div className="fixed bottom-24 right-6 z-50 flex flex-col-reverse gap-3 items-end">
+      <div
+        className="fixed z-50 flex flex-col-reverse items-end gap-3"
+        style={{
+          bottom: 'max(6rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))',
+          right: 'max(1.5rem, env(safe-area-inset-right, 0px))',
+        }}
+      >
         {QUICK_ACTIONS.map((item, index) => {
           const Icon = item.icon;
           return (
@@ -100,12 +106,17 @@ export default function FloatingActionButton({ onCreatePost } = {}) {
 
       {/* Main FAB */}
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl transition-all duration-200 flex items-center justify-center active:scale-95 ${
+        className={`fixed z-50 flex h-14 w-14 min-h-[56px] min-w-[56px] items-center justify-center rounded-full shadow-xl shadow-black/15 transition-all duration-200 active:scale-95 ${
           isExpanded
             ? 'bg-gray-900 hover:bg-gray-800 rotate-45'
             : 'bg-huttle-cyan hover:bg-huttle-cyan-dark rotate-0'
         }`}
+        style={{
+          bottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))',
+          right: 'max(1.5rem, env(safe-area-inset-right, 0px))',
+        }}
         aria-label={isExpanded ? 'Close quick actions' : 'Open quick actions'}
         data-testid="floating-action-button"
       >

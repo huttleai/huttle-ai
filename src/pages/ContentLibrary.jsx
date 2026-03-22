@@ -921,7 +921,7 @@ export default function ContentLibrary() {
   const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
 
   return (
-    <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pb-10 pt-14 sm:px-6 lg:ml-64 lg:px-8 lg:pt-20">
+    <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pt-14 sm:px-6 md:ml-12 lg:ml-64 lg:px-8 lg:pt-20 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-4 rounded-[20px] border border-huttle-primary/20 bg-huttle-50/60 px-4 py-3 flex items-center justify-between gap-3">
           <p className="text-sm text-gray-600">

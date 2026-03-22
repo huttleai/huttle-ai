@@ -38,7 +38,7 @@ import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
 import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
-import { getPlatformIcon } from '../components/SocialIcons';
+import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
 import { getContentLibraryItems } from '../config/supabase';
 import {
   generateDashboardData,
@@ -64,7 +64,126 @@ const fadeUp = {
 };
 const MotionDiv = motion.div;
 const TOTAL_HASHTAG_CAP = 10;
+const TRENDING_NOW_CARD_CAP = 6;
 const HASHTAG_MODE_STORAGE_KEY = 'huttle_hashtag_mode';
+
+/** Matches dashboard cache `formatPlatformLabel` for Brand Profile / Settings platform strings. */
+function toDashboardPlatformLabel(raw) {
+  const v = String(raw || '').toLowerCase();
+  if (v.includes('instagram')) return 'Instagram';
+  if (v.includes('facebook')) return 'Facebook';
+  if (v.includes('tiktok')) return 'TikTok';
+  if (v.includes('youtube')) return 'YouTube';
+  if (v.includes('linkedin')) return 'LinkedIn';
+  if (v === 'x' || v.includes('twitter')) return 'X';
+  return 'Instagram';
+}
+
+function platformIdFromTrend(trend) {
+  const raw = trend?.platform;
+  if (typeof raw === 'string' && raw.length && !String(raw).includes(' ')) {
+    const v = raw.toLowerCase();
+    if (['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin', 'twitter', 'x'].includes(v)) {
+      return v === 'x' ? 'twitter' : v;
+    }
+  }
+  const label = String(trend?.relevant_platform || '').toLowerCase();
+  if (label.includes('tiktok')) return 'tiktok';
+  if (label.includes('facebook')) return 'facebook';
+  if (label.includes('youtube')) return 'youtube';
+  if (label.includes('linkedin')) return 'linkedin';
+  if (label.includes('x') || label.includes('twitter')) return 'twitter';
+  return 'instagram';
+}
+
+/**
+ * Round-robin up to `cap` trends across platform buckets so multi-platform users see a mix.
+ */
+function interleaveTrendsByPlatform(topics, cap, preferredPlatformLabels) {
+  if (!Array.isArray(topics) || topics.length === 0) return [];
+
+  const buckets = new Map();
+  const firstSeenOrder = [];
+  for (const t of topics) {
+    const id = platformIdFromTrend(t);
+    if (!buckets.has(id)) {
+      buckets.set(id, []);
+      firstSeenOrder.push(id);
+    }
+    buckets.get(id).push(t);
+  }
+
+  const preferredIds = (preferredPlatformLabels || []).map((lbl) => platformIdFromTrend({ relevant_platform: lbl }));
+  const keys = [...buckets.keys()];
+  keys.sort((a, b) => {
+    const ia = preferredIds.indexOf(a);
+    const ib = preferredIds.indexOf(b);
+    if (ia === -1 && ib === -1) return firstSeenOrder.indexOf(a) - firstSeenOrder.indexOf(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  const result = [];
+  let round = 0;
+  while (result.length < cap) {
+    let added = false;
+    for (const key of keys) {
+      const arr = buckets.get(key);
+      if (round < arr.length) {
+        result.push(arr[round]);
+        added = true;
+        if (result.length >= cap) break;
+      }
+    }
+    if (!added) break;
+    round += 1;
+  }
+  return result;
+}
+
+function mergeFetchedHashtagsByPlatformRoundRobin(platformLabels, itemsPerPlatform) {
+  const hashtagMap = new Map();
+  const deduplicatedHashtags = [];
+  if (!platformLabels.length) return deduplicatedHashtags;
+
+  const hashtagsByPlatform = platformLabels.map((platform, index) => ({
+    platform,
+    hashtags: itemsPerPlatform[index] || [],
+    index: 0,
+  }));
+
+  const perPlatformLimit = Math.floor(TOTAL_HASHTAG_CAP / platformLabels.length);
+  const remainder = TOTAL_HASHTAG_CAP % platformLabels.length;
+  const initialPlatformLimits = new Map(
+    platformLabels.map((platform, index) => [
+      platform,
+      perPlatformLimit + (index < remainder ? 1 : 0),
+    ])
+  );
+
+  for (const platformData of hashtagsByPlatform) {
+    const initialLimit = initialPlatformLimits.get(platformData.platform) ?? 0;
+    while (platformData.index < platformData.hashtags.length && platformData.index < initialLimit) {
+      mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, platformData.hashtags[platformData.index]);
+      platformData.index += 1;
+    }
+  }
+
+  while (deduplicatedHashtags.length < TOTAL_HASHTAG_CAP) {
+    let addedOrMerged = false;
+    for (const platformData of hashtagsByPlatform) {
+      if (platformData.index >= platformData.hashtags.length) continue;
+      mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, platformData.hashtags[platformData.index]);
+      platformData.index += 1;
+      addedOrMerged = true;
+      if (deduplicatedHashtags.length >= TOTAL_HASHTAG_CAP) break;
+    }
+    if (!addedOrMerged) break;
+  }
+
+  return deduplicatedHashtags;
+}
 
 function readStoredHashtagMode() {
   try {
@@ -146,7 +265,6 @@ export default function Dashboard() {
   const [isAlertsLoading, setIsAlertsLoading] = useState(false);
   const [recentVaultItems, setRecentVaultItems] = useState([]);
   const [copiedVaultItem, setCopiedVaultItem] = useState(null);
-  const [selectedHashtagPlatform, setSelectedHashtagPlatform] = useState('All');
   const [hashtagMode, setHashtagMode] = useState(readStoredHashtagMode);
   const [forYouHashtags, setForYouHashtags] = useState(null);
   const [forYouLoading, setForYouLoading] = useState(false);
@@ -355,10 +473,6 @@ export default function Dashboard() {
     () => (Array.isArray(dashboardData?.trending_topics) ? dashboardData.trending_topics : []),
     [dashboardData]
   );
-  const displayedDashboardTrendingTopics = useMemo(
-    () => dashboardTrendingTopics.slice(0, 8),
-    [dashboardTrendingTopics]
-  );
   const dashboardInsights = useMemo(() => {
     const arr = Array.isArray(dashboardData?.ai_insights) ? dashboardData.ai_insights : [];
     if (arr.length > 0) return arr;
@@ -544,22 +658,7 @@ export default function Dashboard() {
     return { indicator: '•', textClass: 'text-amber-600', bgClass: 'bg-amber-50', label: 'Trending' };
   };
 
-  const normalizePlatformIdForBuilder = (trend) => {
-    const raw = trend?.platform;
-    if (typeof raw === 'string' && raw.length && !String(raw).includes(' ')) {
-      const v = raw.toLowerCase();
-      if (['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin', 'twitter', 'x'].includes(v)) {
-        return v === 'x' ? 'twitter' : v;
-      }
-    }
-    const label = String(trend?.relevant_platform || '').toLowerCase();
-    if (label.includes('tiktok')) return 'tiktok';
-    if (label.includes('facebook')) return 'facebook';
-    if (label.includes('youtube')) return 'youtube';
-    if (label.includes('linkedin')) return 'linkedin';
-    if (label.includes('x') || label.includes('twitter')) return 'twitter';
-    return 'instagram';
-  };
+  const normalizePlatformIdForBuilder = (trend) => platformIdFromTrend(trend);
 
   const [trendMobileDetailsOpen, setTrendMobileDetailsOpen] = useState({});
   const [copiedTrendHookKey, setCopiedTrendHookKey] = useState(null);
@@ -616,6 +715,21 @@ export default function Dashboard() {
     () => (Array.isArray(dashboardData?.selected_platforms) ? dashboardData.selected_platforms : []),
     [dashboardData?.selected_platforms]
   );
+
+  /** Brand Voice `platforms` (and Settings when BV unset) — same source as `buildDashboardBrandContext` in dashboardCacheService. */
+  const resolvedDashboardPlatformLabels = useMemo(() => {
+    if (dashboardHashtagPlatforms.length > 0) return dashboardHashtagPlatforms;
+    if (Array.isArray(brandProfile?.platforms) && brandProfile.platforms.length > 0) {
+      return [...new Set(brandProfile.platforms.map(toDashboardPlatformLabel))];
+    }
+    return ['Instagram'];
+  }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
+
+  const displayedDashboardTrendingTopics = useMemo(
+    () => interleaveTrendsByPlatform(dashboardTrendingTopics, TRENDING_NOW_CARD_CAP, resolvedDashboardPlatformLabels),
+    [dashboardTrendingTopics, resolvedDashboardPlatformLabels]
+  );
+
   const displayedDashboardHashtags = useMemo(() => {
     const deduplicatedHashtags = [];
     const hashtagMap = new Map();
@@ -676,13 +790,6 @@ export default function Dashboard() {
     return deduplicatedHashtags;
   }, [dashboardHashtagPlatforms, dashboardHashtags]);
 
-  const primaryPlatformForForYou = useMemo(() => {
-    const fromDash = dashboardHashtagPlatforms[0];
-    if (fromDash) return fromDash;
-    const fromBrand = Array.isArray(brandProfile?.platforms) ? brandProfile.platforms[0] : null;
-    return fromBrand || 'instagram';
-  }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
-
   const retryForYouHashtags = useCallback(() => {
     forYouRequestKeyRef.current = '';
     setForYouHashtags(null);
@@ -699,13 +806,13 @@ export default function Dashboard() {
     }
   };
 
-  const useTrendingTabFeed = Boolean(hashtagPersonalization && hashtagMode === 'trending');
   const useForYouHashtags = Boolean(hashtagPersonalization && hashtagMode === 'for_you');
 
   const widgetHashtagList = useMemo(() => {
-    if (hashtagPersonalization && hashtagMode === 'trending') {
-      if (trendingTabLoading && !trendingTabHashtags?.length) return [];
-      return trendingTabHashtags?.length ? trendingTabHashtags : [];
+    if (hashtagMode === 'trending') {
+      if (trendingTabHashtags?.length) return trendingTabHashtags;
+      if (trendingTabLoading && !displayedDashboardHashtags.length) return [];
+      return displayedDashboardHashtags;
     }
     if (useForYouHashtags) {
       if (forYouLoading && !forYouHashtags?.length) return [];
@@ -713,7 +820,6 @@ export default function Dashboard() {
     }
     return displayedDashboardHashtags;
   }, [
-    hashtagPersonalization,
     hashtagMode,
     trendingTabLoading,
     trendingTabHashtags,
@@ -727,26 +833,31 @@ export default function Dashboard() {
     if (!user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
 
     const generatedDate = getDashboardGeneratedDate();
-    const requestKey = `${user.id}_${generatedDate}_${forYouPersonalizationExtended.niche}_${primaryPlatformForForYou}_foryou`;
+    const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
+    const requestKey = `${user.id}_${generatedDate}_${forYouPersonalizationExtended.niche}_${platformKey}_foryou`;
     if (forYouRequestKeyRef.current === requestKey) return;
 
     let cancelled = false;
     (async () => {
       setForYouLoading(true);
       try {
-        const { items } = await fetchDashboardForYouHashtags({
-          personalization: forYouPersonalizationExtended,
-          primaryPlatform: primaryPlatformForForYou,
-          userId: user.id,
-          generatedDate,
-          forceRefresh: false,
-        });
+        const results = await Promise.all(
+          resolvedDashboardPlatformLabels.map((platformLabel) =>
+            fetchDashboardForYouHashtags({
+              personalization: forYouPersonalizationExtended,
+              primaryPlatform: platformLabel,
+              userId: user.id,
+              generatedDate,
+              forceRefresh: false,
+            })
+          )
+        );
         if (cancelled) return;
-        if (items.length > 0) {
-          // Only lock the dedup key when we actually got results.
-          // Leaving it unset on empty results lets the retry button trigger a fresh fetch.
+        const itemsPerPlatform = results.map((r) => r.items || []);
+        const merged = mergeFetchedHashtagsByPlatformRoundRobin(resolvedDashboardPlatformLabels, itemsPerPlatform);
+        if (merged.length > 0) {
           forYouRequestKeyRef.current = requestKey;
-          setForYouHashtags(items);
+          setForYouHashtags(merged);
         } else {
           setForYouHashtags(null);
         }
@@ -758,28 +869,35 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
+  }, [user?.id, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
 
   useEffect(() => {
-    if (!user?.id || !hashtagPersonalization || hashtagMode !== 'trending') return;
+    if (!user?.id || hashtagMode !== 'trending') return;
 
     const generatedDate = getDashboardGeneratedDate();
-    const requestKey = `${user.id}_${generatedDate}_trending_${primaryPlatformForForYou}`;
+    const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
+    const requestKey = `${user.id}_${generatedDate}_trending_${platformKey}`;
     if (trendingRequestKeyRef.current === requestKey) return;
 
     let cancelled = false;
     (async () => {
       setTrendingTabLoading(true);
       try {
-        const { items } = await fetchDashboardTrendingHashtags({
-          primaryPlatform: primaryPlatformForForYou,
-          userId: user.id,
-          generatedDate,
-          forceRefresh: false,
-        });
+        const results = await Promise.all(
+          resolvedDashboardPlatformLabels.map((platformLabel) =>
+            fetchDashboardTrendingHashtags({
+              primaryPlatform: platformLabel,
+              userId: user.id,
+              generatedDate,
+              forceRefresh: false,
+            })
+          )
+        );
         if (cancelled) return;
+        const itemsPerPlatform = results.map((r) => r.items || []);
+        const merged = mergeFetchedHashtagsByPlatformRoundRobin(resolvedDashboardPlatformLabels, itemsPerPlatform);
         trendingRequestKeyRef.current = requestKey;
-        setTrendingTabHashtags(items.length > 0 ? items : null);
+        setTrendingTabHashtags(merged.length > 0 ? merged : null);
       } finally {
         if (!cancelled) setTrendingTabLoading(false);
       }
@@ -788,18 +906,11 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, primaryPlatformForForYou, dashboardDayKey]);
+  }, [user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
 
-  const filteredDashboardHashtags = useMemo(() => {
-    if (selectedHashtagPlatform === 'All') {
-      return widgetHashtagList;
-    }
-
-    return widgetHashtagList.filter((tag) => tag.relevant_platforms?.includes(selectedHashtagPlatform));
-  }, [widgetHashtagList, selectedHashtagPlatform]);
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label
-    || dashboardHashtagPlatforms[0]
+    || resolvedDashboardPlatformLabels[0]
     || 'Instagram';
   const showPlatformWideNicheNudge = Boolean(dashboardData?.show_platform_wide_niche_nudge);
   const trendingFallbackMessage = dashboardData?.trending_fallback_message || 'Trends are refreshing — check back in a few minutes.';
@@ -807,7 +918,7 @@ export default function Dashboard() {
   const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
   const hashtagWidgetListLoading = isDashboardLoading
     || (useForYouHashtags && forYouLoading && !forYouHashtags?.length)
-    || (useTrendingTabFeed && trendingTabLoading && !trendingTabHashtags?.length);
+    || (hashtagMode === 'trending' && trendingTabLoading && !trendingTabHashtags?.length && !displayedDashboardHashtags.length);
   const showHashtagsPreviousDayBanner = hashtagsFromPreviousDay
     && !(useForYouHashtags && forYouHashtags?.length > 0);
 
@@ -820,21 +931,8 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (dashboardHashtagPlatforms.length <= 1) {
-      setSelectedHashtagPlatform('All');
-      return;
-    }
-
-    const availablePlatforms = ['All', ...dashboardHashtagPlatforms];
-    if (!availablePlatforms.includes(selectedHashtagPlatform)) {
-      setSelectedHashtagPlatform('All');
-    }
-  }, [dashboardHashtagPlatforms, selectedHashtagPlatform]);
-
-
   return (
-    <div className="flex-1 min-h-screen bg-transparent ml-0 lg:ml-64 pt-14 lg:pt-14 px-4 sm:px-6 lg:px-8 pb-12">
+    <div className="flex-1 min-h-screen bg-transparent ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-14 px-4 sm:px-6 lg:px-8 pb-12">
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
@@ -917,6 +1015,9 @@ export default function Dashboard() {
                           ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
                           : 'General trends across platforms'}
                     </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Up to {TRENDING_NOW_CARD_CAP} trends, balanced across your platforms
+                    </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
                       <span>{trendWidgetTimestamp}</span>
                       <span
@@ -933,7 +1034,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {isDashboardLoading && (
                   <>
-                    {[1, 2, 3, 4].map((item) => (
+                    {[1, 2, 3, 4, 5, 6].map((item) => (
                       <div key={item} className="animate-pulse p-4 border border-gray-100 rounded-xl">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="w-8 h-8 bg-gray-200 rounded-lg" />
@@ -1159,44 +1260,60 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-gray-900">Hashtags of the Day</h2>
                   <p className="text-xs text-gray-500">
-                    {dashboardTrendingMode === 'platform_wide'
-                      ? `Top reach tags on ${primaryPlatformLabel}`
-                      : 'Copy & paste ready'}
+                    {hashtagPersonalization
+                      ? (hashtagMode === 'trending'
+                        ? 'General trending hashtags for your selected platforms'
+                        : 'Niche-specific tags aligned to your brand voice')
+                      : 'General trending hashtags for your selected platforms'}
                   </p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Updates daily at 6:00 AM your time</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {!hashtagPersonalization && (
+                      <span className="text-amber-800/90">Add your niche in Brand Profile to unlock Brand voice. </span>
+                    )}
+                    Updates daily at 6:00 AM your time
+                  </p>
                 </div>
               </div>
 
-              {hashtagPersonalization && (
-                <div className="mb-4 inline-flex rounded-lg border border-gray-200/90 bg-gray-50/40 p-0.5 gap-0.5 w-full max-w-[260px]">
-                  <button
-                    type="button"
-                    data-testid="dashboard-hashtag-tab-trending"
-                    onClick={() => persistHashtagMode('trending')}
-                    className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-center text-[12px] font-semibold transition-colors ${
-                      hashtagMode === 'trending'
-                        ? 'bg-[#01BAD2] text-white shadow-sm'
-                        : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
-                    }`}
-                  >
-                    <Flame className="w-3.5 h-3.5 opacity-90" aria-hidden />
-                    Trending
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="dashboard-hashtag-tab-for-you"
-                    onClick={() => persistHashtagMode('for_you')}
-                    className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-center text-[12px] font-semibold transition-colors ${
-                      hashtagMode === 'for_you'
-                        ? 'bg-[#01BAD2] text-white shadow-sm'
-                        : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 opacity-90" aria-hidden />
-                    For you
-                  </button>
-                </div>
-              )}
+              <div className="mb-4 inline-flex rounded-lg border border-gray-200/90 bg-gray-50/40 p-0.5 gap-0.5 w-full max-w-[min(100%,320px)]">
+                <button
+                  type="button"
+                  data-testid="dashboard-hashtag-tab-trending"
+                  aria-pressed={hashtagMode === 'trending'}
+                  onClick={() => persistHashtagMode('trending')}
+                  className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-center text-[11px] sm:text-[12px] font-semibold transition-colors ${
+                    hashtagMode === 'trending'
+                      ? 'bg-[#01BAD2] text-white shadow-sm'
+                      : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5 opacity-90 shrink-0" aria-hidden />
+                  General trending
+                </button>
+                <button
+                  type="button"
+                  data-testid="dashboard-hashtag-tab-for-you"
+                  aria-pressed={hashtagMode === 'for_you'}
+                  aria-disabled={!hashtagPersonalization}
+                  onClick={() => {
+                    if (!hashtagPersonalization) {
+                      showToast('Add your niche in Brand Profile to unlock brand-specific hashtags.', 'info');
+                      navigate('/dashboard/brand-voice');
+                      return;
+                    }
+                    persistHashtagMode('for_you');
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-center text-[11px] sm:text-[12px] font-semibold transition-colors ${
+                    hashtagMode === 'for_you'
+                      ? 'bg-[#01BAD2] text-white shadow-sm'
+                      : 'bg-white/90 text-gray-600 border border-gray-200/90 hover:bg-white'
+                  } ${!hashtagPersonalization ? 'opacity-75' : ''}`}
+                  title={!hashtagPersonalization ? 'Add your niche in Brand Profile to unlock Brand voice hashtags' : undefined}
+                >
+                  <Sparkles className="w-3.5 h-3.5 opacity-90 shrink-0" aria-hidden />
+                  Brand voice
+                </button>
+              </div>
 
               {hashtagWidgetListLoading ? (
                 <div className="space-y-2">
@@ -1207,98 +1324,87 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              ) : filteredDashboardHashtags.length > 0 ? (
+              ) : widgetHashtagList.length > 0 ? (
                 <div className="space-y-1.5">
                   {showHashtagsPreviousDayBanner && (
                     <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
                       From yesterday — updating now
                     </div>
                   )}
-                  {dashboardHashtagPlatforms.length > 1 && (
-                    <div className="flex flex-wrap gap-2 pb-2">
-                      {['All', ...dashboardHashtagPlatforms].map((platform) => {
-                        const isSelected = selectedHashtagPlatform === platform;
-                        return (
-                          <button
-                            key={platform}
-                            onClick={() => setSelectedHashtagPlatform(platform)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                              isSelected
-                                ? 'bg-huttle-primary text-white border-huttle-primary'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {platform}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
 
-                  {filteredDashboardHashtags.map((tag, index) => {
+                  {widgetHashtagList.map((tag, index) => {
                     const reachColor = tag.estimated_reach === 'high'
                       ? 'bg-emerald-100 text-emerald-700'
                       : tag.estimated_reach === 'medium'
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-violet-100 text-violet-700';
-                    const platforms = Array.isArray(tag.relevant_platforms) ? tag.relevant_platforms : [];
                     const isNicheTag = tag.category === 'niche';
-                    const isGrowthTag = tag.category === 'growth';
+                    const platformLabels = (() => {
+                      const fromArr = Array.isArray(tag.relevant_platforms)
+                        ? tag.relevant_platforms.filter(Boolean)
+                        : [];
+                      const deduped = [...new Set(fromArr)];
+                      if (deduped.length) return deduped;
+                      return tag.platform ? [tag.platform] : [];
+                    })();
+                    const platformTitles = platformLabels
+                      .map((p) => normalizePlatformLabelForIcon(p) || p)
+                      .filter(Boolean);
                     return (
                       <button
                         key={`${tag.hashtag}-${index}`}
                         data-testid="dashboard-hashtag-item"
                         onClick={() => copyHashtag(tag.hashtag)}
-                        className="group w-full flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 hover:border-huttle-primary/30 hover:bg-huttle-50/30 transition-all text-left"
+                        className="group flex w-full items-center gap-3 p-2.5 text-left rounded-lg border border-gray-100 hover:border-huttle-primary/30 hover:bg-huttle-50/30 transition-all"
                       >
-                        <span className="font-semibold text-sm text-gray-900 truncate">{tag.hashtag}</span>
-                        {isNicheTag && (
-                          <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700 tracking-wide">
-                            Niche
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className="font-semibold text-sm text-gray-900 truncate">{tag.hashtag}</span>
+                          {isNicheTag && (
+                            <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700 tracking-wide">
+                              Niche
+                            </span>
+                          )}
+                          {platformLabels.length > 0 && (
+                            <div
+                              className="flex flex-shrink-0 items-center gap-1"
+                              aria-label={platformTitles.length ? `Good for: ${platformTitles.join(', ')}` : undefined}
+                            >
+                              {platformLabels.map((platform, pIdx) => {
+                                const icon = getPlatformIcon(platform, 'w-3.5 h-3.5 text-gray-600');
+                                if (!icon) return null;
+                                const label = normalizePlatformLabelForIcon(platform) || platform;
+                                return (
+                                  <span
+                                    key={`${label}-${pIdx}`}
+                                    title={label}
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-gray-100 bg-gray-50 text-gray-700"
+                                  >
+                                    {icon}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${reachColor}`}>
+                            {tag.estimated_reach?.toUpperCase() || 'MEDIUM'}
                           </span>
-                        )}
-                        {isGrowthTag && (
-                          <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 tracking-wide">
-                            Growth
-                          </span>
-                        )}
-                        {platforms.length > 0 && (
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {platforms.map((platform) => {
-                              const icon = getPlatformIcon(platform, 'w-3 h-3 text-gray-500');
-                              if (!icon) return null;
-                              return (
-                                <span
-                                  key={platform}
-                                  title={platform}
-                                  className="w-5 h-5 rounded-md bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0"
-                                >
-                                  {icon}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <span className={`ml-auto text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${reachColor}`}>
-                          {tag.estimated_reach?.toUpperCase() || 'MEDIUM'}
-                        </span>
-                        {copiedHashtag === tag.hashtag ? (
-                          <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-gray-300 group-hover:text-huttle-primary flex-shrink-0 transition-colors" />
-                        )}
+                          {copiedHashtag === tag.hashtag ? (
+                            <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-gray-300 group-hover:text-huttle-primary shrink-0 transition-colors" />
+                          )}
+                        </div>
                       </button>
                     );
                   })}
-                  {filteredDashboardHashtags.length === 0 && (
-                    <p className="text-xs text-gray-500 p-3 border border-gray-100 rounded-xl">No tags available for this platform right now.</p>
-                  )}
                   <button
                     onClick={() => {
-                      const allTags = filteredDashboardHashtags.map(t => t.hashtag).join(' ');
+                      const allTags = widgetHashtagList.map(t => t.hashtag).join(' ');
                       navigator.clipboard.writeText(allTags).then(() => showToast('All hashtags copied!', 'success'));
                     }}
-                    disabled={filteredDashboardHashtags.length === 0}
+                    disabled={widgetHashtagList.length === 0}
                     className="mt-3 w-full py-2 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-xs"
                   >
                     <Copy className="w-3.5 h-3.5" /> Copy All Hashtags

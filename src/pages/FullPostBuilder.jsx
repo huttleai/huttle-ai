@@ -631,7 +631,7 @@ export default function FullPostBuilder() {
 
   if (!hasAccess) {
     return (
-      <div className="flex-1 ml-0 md:ml-64 pt-16 md:pt-20 p-4 md:p-8">
+      <div className="flex-1 ml-0 md:ml-12 lg:ml-64 pt-16 md:pt-20 p-4 md:p-8">
         <div className="max-w-2xl mx-auto text-center py-16">
           <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto mb-6">
             <PenLine className="w-8 h-8 text-huttle-primary" />
@@ -657,7 +657,7 @@ export default function FullPostBuilder() {
   const topicPreview = topic.trim() || (Array.isArray(brandData?.niche) ? brandData.niche[0] : brandData?.niche) || 'your niche';
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       {(loadingHooks || loadingCaption || loadingHashtags || loadingCTAs || loadingQuality) && (
         <LoadingSpinner
           fullScreen
@@ -693,36 +693,55 @@ export default function FullPostBuilder() {
           </div>
         </div>
 
-        {/* Stepper */}
+        {/* Stepper — compact on mobile */}
         {!showFinalPanel && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
+          <div className="mb-6 md:mb-8">
+            <div className="md:hidden">
+              <div className="mb-2 flex items-center justify-between text-sm font-semibold text-gray-900">
+                <span>
+                  Step {currentStep + 1} of {STEPS.length}
+                </span>
+                <span className="font-medium text-huttle-primary">{STEPS[currentStep].label}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-huttle-primary transition-all duration-300 ease-out"
+                  style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div className="hidden items-center justify-between md:flex">
               {STEPS.map((step, idx) => (
-                <div key={step.id} className="flex items-center flex-1">
+                <div key={step.id} className="flex flex-1 items-center">
                   <button
+                    type="button"
                     onClick={() => idx <= currentStep && goToStep(idx)}
                     disabled={idx > currentStep}
                     className={`flex items-center gap-2 ${idx <= currentStep ? 'cursor-pointer' : 'cursor-default'}`}
                   >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                      idx === currentStep
-                        ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/30'
-                        : idx < currentStep
-                          ? 'bg-green-500 text-white'
-                          : 'bg-gray-200 text-gray-500'
-                    }`}>
-                      {idx < currentStep ? <Check className="w-4 h-4" /> : idx + 1}
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all ${
+                        idx === currentStep
+                          ? 'bg-huttle-primary text-white shadow-md shadow-huttle-primary/30'
+                          : idx < currentStep
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-200 text-gray-500'
+                      }`}
+                    >
+                      {idx < currentStep ? <Check className="h-4 w-4" /> : idx + 1}
                     </div>
-                    <span className={`text-xs font-medium hidden sm:block ${
-                      idx === currentStep ? 'text-gray-900' : 'text-gray-500'
-                    }`}>
+                    <span
+                      className={`hidden text-xs font-medium sm:inline ${
+                        idx === currentStep ? 'text-gray-900' : 'text-gray-500'
+                      }`}
+                    >
                       {step.label}
                     </span>
                   </button>
                   {idx < STEPS.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-2 rounded ${
-                      idx < currentStep ? 'bg-green-400' : 'bg-gray-200'
-                    }`} />
+                    <div
+                      className={`mx-2 h-0.5 flex-1 rounded ${idx < currentStep ? 'bg-green-400' : 'bg-gray-200'}`}
+                    />
                   )}
                 </div>
               ))}
@@ -785,7 +804,7 @@ export default function FullPostBuilder() {
                       }}
                       placeholder="e.g., 5 morning habits that changed my productivity"
                       rows={3}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
+                      className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-base leading-relaxed outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/30 md:text-sm"
                     />
                   </div>
                   <div>
@@ -794,12 +813,12 @@ export default function FullPostBuilder() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">Goal</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {GOALS.map((g) => (
                         <button
                           key={g.id}
                             onClick={() => { setGoal(g.id); resetDownstream(1); }}
-                          className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                          className={`min-h-[44px] px-3 py-2.5 rounded-xl text-base font-medium border transition-all sm:text-sm ${
                             goal === g.id
                               ? 'bg-huttle-primary/5 border-huttle-primary/30 text-huttle-primary ring-1 ring-huttle-primary/20'
                               : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
@@ -834,7 +853,7 @@ export default function FullPostBuilder() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Hook type</label>
                     <p className="text-xs text-gray-500 mb-3">Each style uses a different psychological pull. Pick one, then choose a generated line below.</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {HOOK_TYPES.map((type) => {
                         const help = getHookTypeHelp(type, topicPreview);
                         const isSel = selectedHookType === type;
@@ -1131,7 +1150,7 @@ export default function FullPostBuilder() {
         {showFinalPanel && (
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             {/* Score Badges */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:gap-2">
               <ScoreBadge label="Quality" score={qualityScore} icon={Sparkles} loading={loadingQuality} thresholds={{ green: 80, teal: 60, amber: 40 }} />
               <HumanizerScore content={caption} onScoreChange={setHumanScore} onTrackUsage={trackFeatureUsage} onContentUpdate={(nextContent) => { setCaption(nextContent); resetDownstream(3); }} compact autoRun hideInput />
               <AlgorithmChecker content={assembledPost} platform={platform} onScoreChange={setAlgorithmScore} compact />
@@ -1180,39 +1199,44 @@ export default function FullPostBuilder() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <button
+                type="button"
                 onClick={handleCopyAll}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-gray-800 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
               >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="h-5 w-5 sm:h-4 sm:w-4" /> : <Copy className="h-5 w-5 sm:h-4 sm:w-4" />}
                 {copied ? 'Copied!' : 'Copy All'}
               </button>
               <button
+                type="button"
                 onClick={handleSaveToVault}
                 disabled={saved}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-huttle-primary text-white rounded-xl text-sm font-medium hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-60 transition-all"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-huttle-primary px-4 py-3 text-base font-medium text-white transition-all hover:bg-huttle-primary-dark hover:shadow-lg disabled:opacity-60 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
               >
-                {saved ? <Check className="w-4 h-4" /> : <FolderPlus className="w-4 h-4" />}
+                {saved ? <Check className="h-5 w-5 sm:h-4 sm:w-4" /> : <FolderPlus className="h-5 w-5 sm:h-4 sm:w-4" />}
                 {saved ? 'Saved ✓' : 'Save to Vault'}
               </button>
               <button
+                type="button"
                 onClick={handleSchedulePost}
-                className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
               >
-                <MessageSquare className="w-4 h-4" /> Schedule
+                <MessageSquare className="h-5 w-5 sm:h-4 sm:w-4" /> Schedule
               </button>
               <button
+                type="button"
                 onClick={handleStartOver}
-                className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
               >
-                <RotateCcw className="w-4 h-4" /> Start Over
+                <RotateCcw className="h-5 w-5 sm:h-4 sm:w-4" /> Start Over
               </button>
               <button
+                type="button"
                 onClick={() => { setShowFinalPanel(false); setCurrentStep(0); }}
-                className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
               >
-                <ChevronLeft className="w-4 h-4" /> Edit Steps
+                <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> Edit Steps
               </button>
             </div>
 

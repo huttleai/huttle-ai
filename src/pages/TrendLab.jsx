@@ -135,7 +135,7 @@ export default function TrendLab() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 ml-0 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {/* Subtle background pattern */}
       <div className="fixed inset-0 pointer-events-none pattern-mesh opacity-30 z-0" />
       
@@ -147,7 +147,7 @@ export default function TrendLab() {
               <Lightbulb className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
             </div>
             <div>
-              <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-gray-900">
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
                 Trend Lab
               </h1>
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">
