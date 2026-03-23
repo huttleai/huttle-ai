@@ -29,6 +29,8 @@ export default function HumanizerScore({
   compact = false,
   hideInput = false,
   autoRun = false,
+  /** When true, softer failures for Full Post Builder (no error toast; concise notice). */
+  fullPostBuilderContext = false,
 }) {
   const { brandData } = useContext(BrandContext);
   const { addToast } = useToast();
@@ -38,7 +40,9 @@ export default function HumanizerScore({
   const [loading, setLoading] = useState(false);
   const [improvingPhrase, setImprovingPhrase] = useState(null);
   const [expandedDim, setExpandedDim] = useState(null);
+  const [humanNotice, setHumanNotice] = useState(null);
   const lastAnalyzedContentRef = useRef('');
+  const analysisReqIdRef = useRef(0);
 
   const content = externalContent ?? localContent;
 
@@ -48,36 +52,71 @@ export default function HumanizerScore({
       return;
     }
 
+    const reqId = ++analysisReqIdRef.current;
     setLoading(true);
     setResult(null);
+    setHumanNotice(null);
+
+    const isStale = () => reqId !== analysisReqIdRef.current;
 
     try {
       if (onTrackUsage) {
         const { allowed } = await onTrackUsage({ feature: 'humanizerScore' });
         if (!allowed) {
           addToast('AI generation limit reached', 'warning');
-          setLoading(false);
           return;
         }
       }
 
-      const res = await scoreHumanness(content, brandData);
+      if (isStale()) {
+        if (import.meta.env.DEV) console.debug('[HumanizerScore] stale response ignored (after usage gate)', reqId);
+        return;
+      }
+
+      const scoreOpts = fullPostBuilderContext ? { fullPostBuilder: true } : undefined;
+      const res = await scoreHumanness(content, brandData, scoreOpts);
+      if (isStale()) {
+        if (import.meta.env.DEV) console.debug('[HumanizerScore] stale response ignored (after API)', reqId);
+        return;
+      }
+      if (res.success && res.unavailable) {
+        lastAnalyzedContentRef.current = content;
+        onScoreChange?.(null);
+        setHumanNotice('Human score temporarily unavailable.');
+        return;
+      }
       if (res.success && res.score) {
         setResult(res.score);
         lastAnalyzedContentRef.current = content;
         onScoreChange?.(res.score.overall);
+      } else if (fullPostBuilderContext) {
+        lastAnalyzedContentRef.current = content;
+        onScoreChange?.(null);
+        setHumanNotice('Human score temporarily unavailable.');
       } else {
         addToast('Could not analyze content. Try again.', 'error');
       }
     } catch {
-      addToast('Analysis failed. Please try again.', 'error');
+      if (isStale()) {
+        if (import.meta.env.DEV) console.debug('[HumanizerScore] stale error path ignored', reqId);
+        return;
+      }
+      if (fullPostBuilderContext) {
+        lastAnalyzedContentRef.current = content;
+        onScoreChange?.(null);
+        setHumanNotice('Human score temporarily unavailable.');
+      } else {
+        addToast('Analysis failed. Please try again.', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (reqId === analysisReqIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    if (!autoRun || !content?.trim() || loading) return;
+    if (!autoRun || !content?.trim()) return;
     if (lastAnalyzedContentRef.current === content) return;
     runAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,6 +175,9 @@ export default function HumanizerScore({
         )}
         {result && (
           <span className={`text-xs font-medium ${color.text}`}>{color.label}</span>
+        )}
+        {humanNotice && !loading && (
+          <span className="text-xs text-gray-500 max-w-[12rem] leading-snug">{humanNotice}</span>
         )}
       </div>
     );

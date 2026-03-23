@@ -35,6 +35,7 @@ import {
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import { supabase } from '../config/supabase';
+import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { 
   isDemoMode, 
   simulateDelay, 
@@ -59,8 +60,11 @@ const HOOK_TYPE_ALIASES = {
 /** Normalize UI labels ("Shocking Stat") and slug keys ("shocking_stat") to canonical hook type labels. */
 function normalizeFullPostHookTypeLabel(hookType) {
   if (hookType == null || hookType === '') return 'Question';
-  const key = String(hookType).toLowerCase().replace(/\s+/g, '_');
-  return HOOK_TYPE_ALIASES[key] || String(hookType).trim();
+  if (typeof hookType !== 'string') return 'Question';
+  const trimmed = hookType.trim();
+  if (!trimmed) return 'Question';
+  const key = trimmed.toLowerCase().replace(/\s+/g, '_');
+  return HOOK_TYPE_ALIASES[key] || trimmed;
 }
 const NO_FABRICATED_STATS_GUARDRAIL = 'Do not invent specific statistics or percentages. If referencing data, use general language like "studies show" or "research suggests" rather than fabricating specific numbers like "73% of users".';
 const NO_PLACEHOLDER_GUARDRAIL = 'Never include placeholder text like [Your Name], [Insert Link], or [Add Emoji Here] in your output. Either fill it in with a reasonable example or omit it.';
@@ -444,24 +448,102 @@ function getGrokProxyErrorMessage(errorData, status) {
   return `API error: ${status}`;
 }
 
+function truncateForAiPrompt(text, maxChars = 2800) {
+  const t = String(text || '').trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, maxChars)}\n[…truncated for length]`;
+}
+
+const DEFAULT_GROK_MODEL_CLIENT = 'grok-4-1-fast-non-reasoning';
+
+function resolveGrokModelIdClientFallback() {
+  const chat = (import.meta.env.VITE_GROK_CHAT_MODEL || '').trim();
+  const legacy = (import.meta.env.VITE_GROK_MODEL || '').trim();
+  return chat || legacy || DEFAULT_GROK_MODEL_CLIENT;
+}
+
 /**
- * Make a request to the Grok API via the secure proxy
+ * Feature → model id. Values come from Vite `define` (GROK_MODEL_NON_REASONING / GROK_MODEL_REASONING at build time).
+ * @param {'fast'|'reasoning'} [mode]
  */
-async function callGrokAPI(messages, temperature = 0.7) {
+function getGrokModel(mode = 'fast') {
+  const fast = String(__GROK_FAST_MODEL__ || '').trim();
+  const reasoning = String(__GROK_REASONING_MODEL__ || '').trim();
+  if (mode === 'reasoning' && reasoning) return reasoning;
+  if (fast) return fast;
+  return resolveGrokModelIdClientFallback();
+}
+
+/** Maps to `GROK_MODEL_REASONING` / `__GROK_REASONING_MODEL__` — Full Post Builder + richer copy/analysis. */
+const GROK_MODE_QUALITY = 'reasoning';
+
+/**
+ * Make a request to the Grok API via the secure proxy (API key server-only; model chosen here, forwarded in body).
+ * Proxy body is only: model, messages, temperature, optional max_tokens (number).
+ * @param {object[]} messages
+ * @param {number} [temperature]
+ * @param {{ max_tokens?: number, mode?: 'fast'|'reasoning', grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
+ */
+async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
   const headers = await getAuthHeaders();
-  
+  const grokMode = requestOptions.mode === 'reasoning' ? 'reasoning' : 'fast';
+  const model = getGrokModel(grokMode);
+
+  const normalizedMessages = Array.isArray(messages)
+    ? messages.map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
+      }))
+    : [];
+
+  const safeTemp =
+    typeof temperature === 'number' && Number.isFinite(temperature) ? temperature : Number(temperature) || 0.7;
+
+  /** @type {Record<string, unknown>} */
+  const body = {
+    model,
+    messages: normalizedMessages,
+    temperature: safeTemp,
+  };
+
+  const mtRaw = requestOptions.max_tokens;
+  if (mtRaw != null) {
+    const n = typeof mtRaw === 'number' ? mtRaw : Number(mtRaw);
+    if (Number.isFinite(n) && n > 0) {
+      const capped = Math.min(Math.floor(n), 8192);
+      if (capped > 0) {
+        body.max_tokens = capped;
+      }
+    }
+  }
+
+  if (requestOptions.grok_debug_fullpost === true) {
+    body.grok_debug_fullpost = true;
+  }
+  const dbgStep = typeof requestOptions.grok_debug_fullpost_step === 'string'
+    ? requestOptions.grok_debug_fullpost_step.trim().slice(0, 64)
+    : '';
+  if (dbgStep) {
+    body.grok_debug_fullpost_step = dbgStep;
+  }
+
+  if (requestOptions.forceCacheRefresh === true) {
+    body.forceCacheRefresh = true;
+  }
+
   const response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-    })
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(getGrokProxyErrorMessage(errorData, response.status));
+    const msg = getGrokProxyErrorMessage(errorData, response.status);
+    const err = new Error(msg);
+    if (errorData.code) err.code = errorData.code;
+    err.status = response.status;
+    throw err;
   }
 
   return response.json();
@@ -569,7 +651,7 @@ function normalizeRankedHashtagData(rawItems, hashtagCount) {
     return [];
   }
 
-  const normalizeCompetitionTier = (rawTier, score, index) => {
+  const normalizeCompetitionTier = (rawTier, score) => {
     const t = String(rawTier || '').trim().toLowerCase();
     if (t === 'popular' || t === 'medium' || t === 'niche') {
       return t.charAt(0).toUpperCase() + t.slice(1);
@@ -601,7 +683,7 @@ function normalizeRankedHashtagData(rawItems, hashtagCount) {
       const momentum = rawMomentum === 'rising' || rawMomentum === 'peaking' || rawMomentum === 'stable'
         ? rawMomentum.charAt(0).toUpperCase() + rawMomentum.slice(1)
         : 'Stable';
-      const tier = normalizeCompetitionTier(item?.tier, score, index);
+      const tier = normalizeCompetitionTier(item?.tier, score);
 
       return {
         tag: rawTag.startsWith('#') ? rawTag : `#${rawTag.replace(/^#*/, '')}`,
@@ -659,7 +741,7 @@ Make sure each idea:
 
 Number them 1-5 with brief descriptions.`
       }
-    ], 0.8);
+    ], 0.8, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -687,7 +769,8 @@ Number them 1-5 with brief descriptions.`
   }
 }
 
-export async function generateCaption(contentData, brandData) {
+export async function generateCaption(contentData, brandData, options = {}) {
+  const fullPostBuilder = options.fullPostBuilder === true;
   // Check if demo mode is enabled AND no real topic provided - return mock data
   if (isDemoMode() && !contentData.topic?.trim()) {
     await simulateDelay(1000, 2000);
@@ -714,11 +797,14 @@ export async function generateCaption(contentData, brandData) {
     const hookGuidelines = getHookGuidelines(platform);
     const ctaGuidelines = getCTAGuidelines(platform);
 
-    const captionResearch = await getRealtimeCaptionPatterns(
-      { topic: contentData.topic, platform },
-      brandData
-    );
-    const researchText = captionResearch.success ? (captionResearch.research || '').trim() : '';
+    let researchText = '';
+    if (!fullPostBuilder) {
+      const captionResearch = await getRealtimeCaptionPatterns(
+        { topic: contentData.topic, platform },
+        brandData
+      );
+      researchText = captionResearch.success ? (captionResearch.research || '').trim() : '';
+    }
     const researchBlock = researchText
       ? `Research context (live web signals):\n${researchText}\n`
       : 'Research context: Live pattern scan unavailable — rely on strong platform-native strategy.\n';
@@ -752,7 +838,7 @@ ${contentData.trendDescription ? `- Trend brief: ${contentData.trendDescription}
 `
         : '';
 
-    const userMessage = `${brandSection}
+    let userMessage = `${brandSection}
 
 ${researchBlock}
 ${trendBlock}
@@ -790,12 +876,31 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
   "notes": string
 }`;
 
+    const captionRegenNonce =
+      typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
+        ? options.forceFreshRegeneration.trim().slice(0, 80)
+        : '';
+    if (captionRegenNonce) {
+      userMessage += `\n\n— Regeneration request (${captionRegenNonce}) — Produce a meaningfully different caption body while honoring every constraint above (including the exact opening hook line when provided). Vary structure, examples, and phrasing.`;
+    }
+
+    const grokCaptionOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast' };
+    if (fullPostBuilder) {
+      grokCaptionOpts.max_tokens = 8192;
+      grokCaptionOpts.grok_debug_fullpost = true;
+      grokCaptionOpts.grok_debug_fullpost_step = 'caption';
+    }
+    if (captionRegenNonce) {
+      grokCaptionOpts.forceCacheRefresh = true;
+    }
+
     const data = await callGrokAPI(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      0.7
+      0.7,
+      grokCaptionOpts,
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -810,6 +915,7 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
       usage: data.usage,
       research: researchText,
       realtime: Boolean(researchText),
+      streamlined: fullPostBuilder || !researchText,
     };
   } catch (error) {
     console.error('Grok API Error:', error);
@@ -831,7 +937,62 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
   }
 }
 
-export async function scoreContentQuality(content, brandData = null) {
+/**
+ * Grok-only caption polish when Claude enhance is unavailable (e.g. proxy 404).
+ */
+export async function enhanceCaptionWithGrokFallback(
+  { caption, platform, topic, selectedHook },
+  brandData = null,
+  options = {}
+) {
+  const platformSlug = platform || 'instagram';
+  const platformData = getPlatform(platformSlug);
+  const promptProfile = getPromptBrandProfile(brandData, { platforms: [platformSlug] });
+  const systemPrompt = buildAIPowerBrainSystemPrompt(
+    'captions',
+    brandData,
+    `${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
+
+Return ONLY the improved caption as plain text. No JSON, no numbering, no markdown fences.`,
+  );
+  let userMessage = `${buildPromptBrandSection(brandData, { platforms: [platformSlug] })}
+
+Polish this caption for ${platformData?.name || platformSlug} — same meaning, stronger rhythm, brand tone: ${promptProfile.tone}.
+Topic: ${topic || '—'}
+Opening hook in use: ${selectedHook || '—'}
+
+Caption:
+${truncateForAiPrompt(caption, 4000)}`;
+
+  const regenNonce =
+    typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
+      ? options.forceFreshRegeneration.trim().slice(0, 80)
+      : '';
+  if (regenNonce) {
+    userMessage += `\n\n— Polish pass (${regenNonce}) — Apply a fresh editorial pass; do not return the same wording verbatim.`;
+  }
+
+  const data = await callGrokAPI(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+    0.5,
+    {
+      mode: GROK_MODE_QUALITY,
+      max_tokens: 4096,
+      grok_debug_fullpost: true,
+      grok_debug_fullpost_step: 'caption_enhance',
+      ...(regenNonce ? { forceCacheRefresh: true } : {}),
+    },
+  );
+  const out = String(data.content || '').trim();
+  if (!out) return { success: false, error: 'Empty response' };
+  return { success: true, caption: out, usage: data.usage };
+}
+
+export async function scoreContentQuality(content, brandData = null, options = {}) {
+  const fullPostBuilder = options.fullPostBuilder === true;
   // Check if demo mode is enabled - return mock data immediately
   if (isDemoMode()) {
     await simulateDelay(800, 1500);
@@ -880,7 +1041,7 @@ Algorithm-weighted signals for this platform (use to inform algorithmAlignmentSc
 ${signalBlock}
 
 Content to analyze:
-${content}
+${truncateForAiPrompt(content, 14000)}
 ${brandSection}
 
 Return ONLY valid JSON with this exact shape:
@@ -904,14 +1065,26 @@ Rules:
 - Be ruthless and specific; avoid generic praise.`,
       },
     ];
+    const grokScorerOpts = { mode: GROK_MODE_QUALITY, max_tokens: 4096 };
+    if (fullPostBuilder) {
+      grokScorerOpts.grok_debug_fullpost = true;
+      grokScorerOpts.grok_debug_fullpost_step = 'quality_score';
+    }
+
     let data;
     try {
       data = await callClaudeAPI([...messages], 0.3);
     } catch (claudeError) {
-      if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.3);
-      } else {
-        throw claudeError;
+      console.warn('Quality score: Claude unavailable, using Grok:', claudeError?.message);
+      try {
+        data = await callGrokAPI([...messages], 0.3, grokScorerOpts);
+      } catch (grokError) {
+        console.warn('Quality score: Grok fallback failed:', grokError?.message);
+        return {
+          success: false,
+          error: 'Scoring is temporarily unavailable.',
+          code: 'SCORING_UNAVAILABLE',
+        };
       }
     }
 
@@ -975,17 +1148,11 @@ Rules:
       usage: data.usage,
     };
   } catch (error) {
-    console.error('Grok API Error:', error);
-    
-    // Fallback to demo data on error
-    await simulateDelay(500, 800);
-    const mockScore = getContentScoreMock(content);
+    console.error('Content quality scoring error:', error);
     return {
-      success: true,
-      analysis: JSON.stringify(mockScore),
-      score: mockScore,
-      usage: { fallback: true },
-      note: 'Using demo scoring due to API unavailability'
+      success: false,
+      error: 'Scoring is temporarily unavailable.',
+      code: 'SCORING_UNAVAILABLE',
     };
   }
 }
@@ -1015,7 +1182,7 @@ Include for each day:
 
 Make sure all content aligns with the brand voice and appeals to the target audience.`
       }
-    ], 0.6);
+    ], 0.6, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -1031,11 +1198,114 @@ Make sure all content aligns with the brand voice and appeals to the target audi
   }
 }
 
-export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram') {
+const HOOK_BUILDER_THEME_BY_FULL_POST_TYPE = {
+  Question: 'curiosity',
+  Teaser: 'intrigue',
+  'Shocking Stat': 'surprise',
+  Story: 'storytelling',
+  'Bold Claim': 'authority',
+};
+
+/** Slug → canonical theme (Full Post hook slugs + identity for theme keys if passed through). */
+const FULL_POST_HOOK_SLUG_TO_HOOK_BUILDER_THEME = {
+  question: 'curiosity',
+  teaser: 'intrigue',
+  shocking_stat: 'surprise',
+  story: 'storytelling',
+  bold_claim: 'authority',
+  curiosity: 'curiosity',
+  intrigue: 'intrigue',
+  surprise: 'surprise',
+  storytelling: 'storytelling',
+  authority: 'authority',
+};
+
+/** Canonical Hook Builder theme → substring for demo `getHookMocks` (matches mock `theme` labels). */
+const HOOK_BUILDER_MOCK_THEME_NEEDLE = {
+  curiosity: 'question',
+  intrigue: 'teaser',
+  surprise: 'statistic',
+  storytelling: 'story',
+  authority: 'shocking',
+};
+
+const HOOK_BUILDER_THEME_DIRECTIVES = {
+  curiosity:
+    'Theme "curiosity": compelling questions that stop the scroll; most hooks end with "?". Avoid generic "what if everything you knew about [topic] was wrong" — ask something only someone who understands the topic would ask.',
+  intrigue:
+    'Theme "intrigue": tease a concrete secret, result, or insider angle about the topic — not vague mystery; do not reveal the payoff in the hook line.',
+  surprise:
+    'Theme "surprise": counterintuitive contrasts or real-feeling pattern breaks about the topic; do not invent fake statistics or precise percentages — use qualitative surprises grounded in reality.',
+  storytelling:
+    'Theme "storytelling": first person, mid-moment, with tangible sensory or emotional detail about the topic — not abstract "I was deep into [topic]" or "I didn\'t plan to care about [topic]" frames.',
+  authority:
+    'Theme "authority": strong, specific, disagreeable opinions about the topic — not vague motivation; someone familiar with the subject should feel you took a real stance.',
+  _default:
+    'Match the requested hook theme in every object; stay stylistically consistent with that theme.',
+};
+
+/**
+ * Map UI / Full Post fallback theme strings to a canonical theme key for prompts and guardrails.
+ * @param {string} theme
+ * @returns {string}
+ */
+function normalizeHookBuilderThemeKey(theme) {
+  const t = String(theme ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+  if (!t) return 'curiosity';
+  const aliases = {
+    question: 'curiosity',
+    curiosity: 'curiosity',
+    teaser: 'intrigue',
+    intrigue: 'intrigue',
+    shocking: 'surprise',
+    shocking_stat: 'surprise',
+    statistic: 'surprise',
+    fact: 'surprise',
+    surprise: 'surprise',
+    story: 'storytelling',
+    storytelling: 'storytelling',
+    bold_claim: 'authority',
+    bold: 'authority',
+    authority: 'authority',
+  };
+  return aliases[t] || t;
+}
+
+/**
+ * Map Full Post Builder hook-type label to Hook Builder theme slug (for fallback generation).
+ * @param {string} fullPostHookType
+ * @returns {string}
+ */
+export function mapFullPostHookTypeToHookBuilderTheme(fullPostHookType) {
+  const label = normalizeFullPostHookTypeLabel(fullPostHookType);
+  const byLabel = HOOK_BUILDER_THEME_BY_FULL_POST_TYPE[label];
+  if (byLabel) return byLabel;
+  const slug = String(fullPostHookType ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+  return FULL_POST_HOOK_SLUG_TO_HOOK_BUILDER_THEME[slug] || 'curiosity';
+}
+
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.skipRealtimeResearch] — skip Perplexity hook-pattern call (quieter + fewer deps; use for Full Post fallback).
+ */
+export async function generateHooks(input, brandData, theme = 'question', platform = 'instagram', options = {}) {
+  const skipRealtimeResearch = options.skipRealtimeResearch === true;
+  const themeRaw = typeof theme === 'string' && theme.trim() ? theme.trim() : 'question';
+  const canonicalTheme = normalizeHookBuilderThemeKey(themeRaw);
+  const themeDirective =
+    HOOK_BUILDER_THEME_DIRECTIVES[canonicalTheme] || HOOK_BUILDER_THEME_DIRECTIVES._default;
+
   // Check if demo mode is enabled AND no real input - return mock data
   if (isDemoMode() && !input?.trim()) {
     await simulateDelay(800, 1500);
-    const mockHooks = getHookMocks(theme, 4);
+    const mockNeedle = HOOK_BUILDER_MOCK_THEME_NEEDLE[canonicalTheme] || themeRaw;
+    const mockHooks = getHookMocks(mockNeedle, 4);
     return {
       success: true,
       hooks: mockHooks.map((h, i) => `${i + 1}. ${h.text}`).join('\n'),
@@ -1052,27 +1322,43 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
     const hookGuidelines = getHookGuidelines(platform);
     const platformData = getPlatform(platform);
 
-    const hookResearch = await getRealtimeHookPatterns({ topic: input, platform }, brandData);
+    const hookResearch = skipRealtimeResearch
+      ? { success: false, research: '' }
+      : await getRealtimeHookPatterns({ topic: input, platform }, brandData);
     const researchText = hookResearch.success ? (hookResearch.research || '').trim() : '';
     const researchBlock = researchText
       ? `Research context (live web signals):\n${researchText}\n`
       : 'Research context: Live pattern scan unavailable — rely on platform-native hook craft.\n';
 
+    const topicTrimmed = String(input ?? '').trim();
+    const topicQuoted = topicTrimmed ? `"${topicTrimmed}"` : 'the topic';
+    const topicSpecificityAndCasing = `Topic-specificity and language (mandatory for every hook):
+- Every hook must reference a real detail, experience, misconception, pain point, or insight specific to ${topicQuoted}. Do NOT write generic sentence templates with the topic word inserted. If the hook would still make sense with any random topic swapped in, rewrite it.
+- Use natural English grammar: the topic should be lowercase mid-sentence unless it is a proper noun or brand name (e.g. write "the truth about microneedling" not "the truth about Microneedling" when the topic is a common noun).`;
+
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'hooks',
       brandData,
-      `${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
+      `${themeDirective}
 
-Return ONLY valid JSON (no markdown): a JSON array of 6–10 HookIdea objects as defined in the user message. Each "hook" field must be ≤15 words.`
+Generate hooks using the "${canonicalTheme}" theme (user-selected label: "${themeRaw}"). The hooks must feel stylistically consistent with this theme; do not default to generic question-style hooks unless the theme is curiosity.
+
+${topicSpecificityAndCasing}
+
+${buildPromptGuardrails({ includeStats: true, readyToUse: true })}
+
+Return ONLY valid JSON (no markdown): a JSON array of 6–10 HookIdea objects as defined in the user message. Each "hook" field must be one sentence and ≤20 words.`
     );
 
     const userMessage = `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 
 ${researchBlock}
+Generate hooks using the "${themeRaw}" theme. Stylistic target (canonical): "${canonicalTheme}". Every hook must match this theme; see system message for theme rules and topic-specificity rules.
+
 Generate hooks for:
 - Platform: ${platformData?.name || platform}
-- Topic / idea: ${input}
-- Hook theme from UI (lean into this): ${theme}
+- Topic / idea: ${topicTrimmed || input}
+- Hook theme (mandatory): ${themeRaw} → apply "${canonicalTheme}" style to every hook
 - Niche: ${niche}
 - Audience: ${audience}
 - Brand tone: ${brandVoice}
@@ -1089,21 +1375,22 @@ ${creatorPromptGuidance.creatorType === 'solo_creator'
 
 Return ONLY a JSON array with 6–10 objects. Each object:
 {
-  "hook": string (≤15 words, copy-paste ready),
+  "hook": string (one sentence, ≤20 words, copy-paste ready),
   "pattern": string (e.g. counterintuitive question, POV, bold claim),
   "emotionTarget": string (e.g. curiosity, relief, FOMO),
   "bestFor": string (e.g. Reels, TikTok, Shorts, Carousel cover),
   "complexity": "simple" | "moderate" | "story-driven"
 }
 
-Bias at least half the set toward the requested theme "${theme}" while keeping variety.`;
+At least 6 of the hooks must clearly embody "${canonicalTheme}" (theme "${themeRaw}"); any remaining variety must still fit the same theme (no mixing in unrelated hook types).`;
 
     const data = await callGrokAPI(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      0.8
+      0.8,
+      { mode: GROK_MODE_QUALITY },
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -1119,13 +1406,45 @@ Bias at least half the set toward the requested theme "${theme}" while keeping v
     };
   } catch (error) {
     console.error('Grok API Error:', error);
-    
-    // Fallback: generate hooks using the user's actual input
-    const fallbackHooks = [
-      `1. What if everything you knew about ${input} was wrong?`,
-      `2. Stop scrolling — this changes everything about ${input}.`,
-      `3. I tried ${input} for 30 days. Here's what happened...`,
-      `4. The truth about ${input} that nobody talks about.`
+
+    const t = String(input || 'this').trim() || 'this';
+    const fallbackByCanonical = {
+      curiosity: [
+        `1. What if everything you thought about ${t} was wrong?`,
+        `2. Why do so many people still get ${t} backwards?`,
+        `3. Is ${t} actually the bottleneck you think it is?`,
+        `4. Have you been making ${t} harder than it needs to be?`,
+      ],
+      intrigue: [
+        `1. The part of ${t} nobody explains until it's too late...`,
+        `2. I almost didn't share this about ${t}...`,
+        `3. There's a hidden layer to ${t} most people miss.`,
+        `4. Wait until you see what changes ${t} completely.`,
+      ],
+      surprise: [
+        `1. Everything you assumed about ${t}? Flip it.`,
+        `2. The quiet pattern behind ${t} that breaks the usual rules.`,
+        `3. ${t} works backward from what most people expect.`,
+        `4. If ${t} feels obvious, you're probably skipping the real move.`,
+      ],
+      storytelling: [
+        `1. I was deep into ${t} when everything clicked.`,
+        `2. I didn't plan to care about ${t} until this moment.`,
+        `3. Last week I messed up ${t} — and learned fast.`,
+        `4. Here's the honest version of my ${t} story.`,
+      ],
+      authority: [
+        `1. ${t} is overrated unless you fix this first.`,
+        `2. Stop treating ${t} like a hobby if you want real results.`,
+        `3. Most advice about ${t} is backwards — here's what actually works.`,
+        `4. If you're serious about ${t}, commit to this non-negotiable.`,
+      ],
+    };
+    const fallbackHooks = fallbackByCanonical[canonicalTheme] || [
+      `1. What if everything you knew about ${t} was wrong?`,
+      `2. Stop scrolling — this changes everything about ${t}.`,
+      `3. I tried ${t} for 30 days. Here's what happened...`,
+      `4. The truth about ${t} that nobody talks about.`,
     ];
     return {
       success: true,
@@ -1144,6 +1463,9 @@ export async function generateFullPostHooks(
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const platformData = getPlatform(platform);
     const safeHookType = normalizeFullPostHookTypeLabel(hookType);
+    const topicTrimmed = String(topic ?? '').trim();
+    const platformName = platformData?.name || platform;
+    const topicQuoted = topicTrimmed ? `"${topicTrimmed}"` : 'the topic';
 
     const trendBlock = formatType || nicheAngle || trendDescription
       ? `
@@ -1154,53 +1476,107 @@ ${trendDescription ? `- Brief: ${trendDescription}` : ''}
 `
       : '';
 
-    const data = await callGrokAPI([
-      {
-        role: 'system',
-        content: buildAIPowerBrainSystemPrompt(
-          'hooks',
-          brandData,
-          `Full Post Builder mode: return exactly 4 hooks as plain numbered lines (not JSON).
-Each hook must be a ${safeHookType} hook, under 15 words, platform-native, and specific to the topic.
-${safeHookType === 'Shocking Stat' ? 'Do not invent percentages or precise statistics. Use qualitative surprise language only.' : 'Keep every opening copy-paste ready.'}
+    const fullPostHooksInstruction = `You are a viral social media copywriter. Generate exactly 4 hooks about ${topicQuoted} in the "${safeHookType}" style for ${platformName}.
 
-${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`
-        )
-      },
-      {
-        role: 'user',
-        content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
+CRITICAL RULES:
+1. Every hook must show SPECIFIC knowledge about ${topicQuoted}. Reference real details, experiences, common misconceptions, pain points, or outcomes that someone familiar with the subject would recognize. Do NOT write generic templates that could apply to any topic — if you could swap the topic word for any other word and the hook still works, it is too generic. Rewrite it.
+
+2. Hook style — follow "${safeHookType}" strictly:
+   - "Question": A specific, compelling question about the topic that the reader needs answered. Must end with "?". Bad: "What if everything you knew about [topic] was wrong?" (generic). Good: a question referencing a real aspect of the topic.
+   - "Teaser": Tease a specific secret, result, or insider insight about the topic. Create curiosity about something concrete, not vague mystery.
+   - "Shocking Stat": A surprising contrast, counterintuitive truth, or unexpected pattern about the topic. Do NOT invent fake numbers. Use qualitative surprises grounded in reality.
+   - "Story": Start mid-moment in a real-feeling personal experience with the topic. Use first person. Reference tangible sensory or emotional details — not abstract statements about "caring" or being "deep into" the topic.
+   - "Bold Claim": A strong, specific, opinionated statement about the topic that takes a real stance. Not vague motivation — a concrete opinion someone could disagree with.
+
+3. Capitalization: Use natural English grammar. The topic phrase should be lowercase mid-sentence unless it is a proper noun or brand name (e.g. write "the truth about microneedling" not "the truth about Microneedling" when microneedling is a common noun).
+
+4. Each hook must be one sentence, under 20 words, and immediately make someone stop scrolling.
+
+5. Do NOT just insert the topic word into a generic sentence frame. Every hook must be specific enough that it could ONLY be about this topic.
+
+Generate exactly 4 hooks in the "${safeHookType}" style ONLY. Do not mix styles.`;
+
+    // Full Post Builder: non-reasoning model + explicit max_tokens (model id from getGrokModel via proxy body).
+    const systemMsg = {
+      role: 'system',
+      content: buildAIPowerBrainSystemPrompt(
+        'hooks',
+        brandData,
+        `Full Post Builder mode: output exactly 4 hooks.
+Format (required): plain numbered lines only, one hook per line:
+1. First hook here
+2. Second hook here
+3. Third hook here
+4. Fourth hook here
+Do not wrap in markdown code fences. Do not use JSON unless you output ONLY a JSON array of 4 strings.
+
+${fullPostHooksInstruction}
+
+Each hook must be platform-native for ${platformName} and strictly follow the "${safeHookType}" rules above.
+
+${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
+      ),
+    };
+
+    const userMsg = {
+      role: 'user',
+      content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 ${trendBlock}
-Generate 4 ${safeHookType} hooks for this full-post workflow.
+Generate 4 hooks for this full-post workflow. Use ONLY the "${safeHookType}" style (see system message). Do not mix hook styles.
 
-Topic: "${topic}"
-Platform: ${platformData?.name || platform}
+Topic: ${topicQuoted}
+Platform: ${platformName}
 ${getAudiencePainPointGuidance(promptProfile.niche)}
 
 Requirements:
-- Hook type: ${safeHookType}
+- Hook type (mandatory): ${safeHookType} — all four lines must match this style
 - Match the creator's brand tone: ${promptProfile.tone}
-- Stay under 15 words per hook
-- Make each hook platform-native for ${platformData?.name || platform}
-- Make each hook specific to this niche and audience
+- Stay under 20 words per hook; one sentence each
+- Show topic-specific knowledge — no generic mad-lib frames; obey capitalization rule (lowercase common nouns mid-sentence)
+- Make each hook platform-native for ${platformName}
 
-Return only the numbered hooks.`
-      }
-    ], 0.7);
+Return only the four numbered hooks (or a JSON array of 4 strings). No preamble or explanation.`,
+    };
+
+    const data = await callGrokAPI([systemMsg, userMsg], 0.7, {
+      mode: GROK_MODE_QUALITY,
+      max_tokens: 1024,
+      grok_debug_fullpost: true,
+    });
+
+    const rawContent = typeof data.content === 'string' ? data.content : '';
+    const hooks = parseFullPostHookList(rawContent);
+
+    if (!hooks.length) {
+      return {
+        success: false,
+        code: 'HOOKS_EMPTY',
+        error: 'The model returned no usable hooks. Try again.',
+        content: rawContent,
+        usage: data.usage,
+      };
+    }
 
     return {
       success: true,
-      hooks: data.content || '',
-      usage: data.usage
+      hooks,
+      content: rawContent,
+      usage: data.usage,
     };
   } catch (error) {
     console.error('Full post hook generation error:', error);
+    const code = typeof error?.code === 'string' ? error.code : 'GROK_REQUEST_FAILED';
+    const message = typeof error?.message === 'string' ? error.message : 'Hook generation failed';
     return {
       success: false,
-      error: error.message
+      code,
+      error: message,
+      status: typeof error?.status === 'number' ? error.status : undefined,
     };
   }
 }
+
+export { parseFullPostHookList };
 
 /**
  * Generate styled CTAs grouped by category (Direct, Soft, Urgency, Question, Story)
@@ -1208,8 +1584,10 @@ Return only the numbered hooks.`
  * @param {Object} brandData - Brand data from BrandContext
  * @returns {Promise<Object>} Styled CTAs grouped by category
  */
-export async function generateStyledCTAs(params, brandData, platform = 'instagram') {
+export async function generateStyledCTAs(params, brandData, platform = 'instagram', options = {}) {
+  const fullPostBuilder = options.fullPostBuilder === true;
   const { promoting, goalType, selectedHook, caption } = params;
+  const captionForPrompt = fullPostBuilder ? truncateForAiPrompt(caption, 3200) : caption;
 
   const goalLabels = {
     'followers': 'Grow followers',
@@ -1241,11 +1619,16 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
 
-    const ctaResearch = await getRealtimeCTAPatterns(
-      { promoting, platform, goalType },
-      brandData
-    );
-    const researchText = ctaResearch.success ? (ctaResearch.research || '').trim() : '';
+    let researchText = '';
+    let streamlined = fullPostBuilder;
+    if (!fullPostBuilder) {
+      const ctaResearch = await getRealtimeCTAPatterns(
+        { promoting, platform, goalType },
+        brandData
+      );
+      researchText = ctaResearch.success ? (ctaResearch.research || '').trim() : '';
+      if (!ctaResearch.success || !researchText) streamlined = true;
+    }
     const researchBlock = researchText
       ? `Research context (live web signals):\n${researchText}\n`
       : 'Research context: Live pattern scan unavailable — rely on platform-native conversion craft.\n';
@@ -1275,7 +1658,7 @@ Generate CTAs for:
 - Brand tone: ${promptProfile.tone}
 - Creator type: ${creatorPromptGuidance.label}
 - Optional hook: ${selectedHook || 'Not provided'}
-- Optional caption context: ${caption || 'Not provided'}
+- Optional caption context: ${captionForPrompt || 'Not provided'}
 
 Platform CTA guidance:
 - Style: ${ctaGuidelines.style}
@@ -1307,12 +1690,19 @@ Return ONLY JSON:
 
 Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
 
+    const grokCtaOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    if (fullPostBuilder) {
+      grokCtaOpts.grok_debug_fullpost = true;
+      grokCtaOpts.grok_debug_fullpost_step = 'ctas';
+    }
+
     const data = await callGrokAPI(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      0.7
+      0.7,
+      grokCtaOpts,
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -1326,6 +1716,7 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
         usage: data.usage,
         research: researchText,
         realtime: Boolean(researchText),
+        streamlined,
       };
     }
 
@@ -1340,7 +1731,8 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
         { style: 'Direct', cta: `Book your ${promoting} this week before spots fill up.`, tip: 'Direct CTAs work best for ready buyers.' }
       ],
       platformTip: `On ${platformData?.name || platform}, questions and soft CTAs drive the most engagement.`,
-      usage: data.usage
+      usage: data.usage,
+      streamlined,
     };
   } catch (error) {
     console.error('Grok API Error:', error);
@@ -1354,7 +1746,8 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
         { style: 'Direct', cta: `Book your ${promoting} today if you want to start this week.`, tip: 'Direct CTAs convert warm audiences.' }
       ],
       platformTip: `Mix different CTA styles for best results on ${platform}.`,
-      usage: { fallback: true }
+      usage: { fallback: true },
+      streamlined: true,
     };
   }
 }
@@ -1420,7 +1813,7 @@ Each CTA must:
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
       }
-    ], 0.7);
+    ], 0.7, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -1447,7 +1840,7 @@ Number them 1-5. Include a brief explanation of why each CTA works for ${platfor
   }
 }
 
-export async function generateHashtags(input, brandData, platform = 'instagram') {
+export async function generateHashtags(input, brandData, platform = 'instagram', options = {}) {
   const request = typeof input === 'string'
     ? { topic: input, platform }
     : { ...(input || {}), platform: input?.platform || platform };
@@ -1455,6 +1848,8 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
   const selectedHook = request.selectedHook || '';
   const caption = request.caption || '';
   const isFullPostBuilderRequest = typeof input === 'object' && input !== null;
+  const fullPostBuilder = options.fullPostBuilder === true && isFullPostBuilderRequest;
+  const captionForPrompt = truncateForAiPrompt(caption, 2400);
 
   // Check if demo mode is enabled AND no real input - return mock data
   if (isDemoMode() && !topic?.trim()) {
@@ -1472,12 +1867,14 @@ export async function generateHashtags(input, brandData, platform = 'instagram')
   try {
     const platformData = getPlatform(platform);
     const hashtagCount = isFullPostBuilderRequest ? 10 : (getHashtagGuidelines(platform)?.max || 10);
-    const realtimeResearch = await getRealtimeHashtagResearch({
-      topic,
-      platform,
-      selectedHook,
-      caption,
-    }, brandData);
+    const realtimeResearch = fullPostBuilder
+      ? { success: false, research: '', citations: [] }
+      : await getRealtimeHashtagResearch({
+        topic,
+        platform,
+        selectedHook,
+        caption: captionForPrompt,
+      }, brandData);
     const niche = getNiche(brandData, topic || 'general creator');
     const audience = getTargetAudience(brandData, 'general audience');
     const liveResearchText = realtimeResearch.success
@@ -1517,7 +1914,7 @@ ${buildPromptGuardrails({ readyToUse: true })}`
 - Niche (<100K posts): 2–3 community or long-tail hashtags where a smaller account can realistically rank.`
         : `- Include a deliberate mix of Popular, Medium, and Niche tiers scaled to exactly ${hashtagCount} total tags (e.g., at least one Popular for discovery, multiple Medium for intent, multiple Niche for rankability).`;
 
-    const userMessage = `You are generating hashtags for the following context:
+    let userMessage = `You are generating hashtags for the following context:
 
 Platform: ${platformLabel}
 Keywords / niche: ${topic}
@@ -1573,7 +1970,24 @@ Rules:
 
 Post context (optional):
 - Selected hook: ${selectedHook || 'Not provided'}
-- Caption context: ${caption || 'Not provided'}`;
+- Caption context: ${captionForPrompt || 'Not provided'}`;
+
+    const regenNonce =
+      typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
+        ? options.forceFreshRegeneration.trim().slice(0, 80)
+        : '';
+    if (regenNonce) {
+      userMessage += `\n\n— Regeneration request (${regenNonce}) — Produce a substantively different set of hashtags (new tags and/or tier mix) while staying on-topic and platform-appropriate. Avoid repeating a previous default list.`;
+    }
+
+    const grokHashtagOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    if (fullPostBuilder) {
+      grokHashtagOpts.grok_debug_fullpost = true;
+      grokHashtagOpts.grok_debug_fullpost_step = 'hashtags';
+    }
+    if (regenNonce) {
+      grokHashtagOpts.forceCacheRefresh = true;
+    }
 
     const data = await callGrokAPI([
       {
@@ -1584,12 +1998,14 @@ Post context (optional):
         role: 'user',
         content: userMessage
       }
-    ], 0.4);
+    ], 0.4, grokHashtagOpts);
     const hashtagData = normalizeRankedHashtagData(parseJsonFromResponse(data.content), hashtagCount);
 
     if (hashtagData.length === 0) {
       throw new Error('Could not parse ranked hashtags response.');
     }
+
+    const streamlined = fullPostBuilder || !hasRealtimeResearch;
 
     return {
       success: true,
@@ -1599,6 +2015,7 @@ Post context (optional):
       research: liveResearchText,
       usage: data.usage,
       realtime: hasRealtimeResearch,
+      streamlined,
     };
   } catch (error) {
     console.error('Grok API Error:', error);
@@ -1620,6 +2037,7 @@ Post context (optional):
       usage: { fallback: true },
       note: 'Using fallback hashtags due to API unavailability',
       realtime: false,
+      streamlined: true,
     };
   }
 }
@@ -1652,7 +2070,7 @@ Requirements:
 
 Provide the improved version.`
       }
-    ], 0.7);
+    ], 0.7, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -1703,7 +2121,7 @@ Requirements:
 
 Return ONLY the polished caption with hashtags, no explanations.`
       }
-    ], 0.6);
+    ], 0.6, { mode: GROK_MODE_QUALITY });
 
     const content = data.content || '';
     
@@ -1794,7 +2212,7 @@ VARIATION 2: [Hook Type]
 
 etc.`
       }
-    ], 0.8);
+    ], 0.8, { mode: GROK_MODE_QUALITY });
 
     const content = data.content || '';
     
@@ -1944,7 +2362,7 @@ Format: Use "### Platform Name" as headers for each platform section, and clearl
         role: 'user',
         content: userPrompt
       }
-    ], mode === 'sales' ? 0.7 : 0.8);
+    ], mode === 'sales' ? 0.7 : 0.8, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -2001,7 +2419,7 @@ Caption: [optimized caption]
 Hashtags: [platform-appropriate hashtags]
 ---`
       }
-    ], 0.7);
+    ], 0.7, { mode: GROK_MODE_QUALITY });
 
     const content_response = data.content || '';
     
@@ -2124,7 +2542,7 @@ The content should be specifically relevant to the topic: "${prompt}"
 
 Number them 1-4.`
       }
-    ], 0.8);
+    ], 0.8, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
@@ -2254,7 +2672,8 @@ Return ONLY a JSON array of 3–6 objects:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      outputType === 'ai-prompt' ? 0.8 : 0.7
+      outputType === 'ai-prompt' ? 0.8 : 0.7,
+      { mode: GROK_MODE_QUALITY },
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -2338,7 +2757,7 @@ Return ONLY a JSON array of 3–6 objects:
  * Score how "human" vs AI-generated content sounds.
  * Returns structured JSON with overall score, 4 dimension scores, and flagged phrases.
  */
-export async function scoreHumanness(content, brandData = null) {
+export async function scoreHumanness(content, brandData = null, options = {}) {
   if (isDemoMode()) {
     await simulateDelay(800, 1500);
     return {
@@ -2421,17 +2840,30 @@ ${buildPromptGuardrails()}`,
 Analyze how human this content sounds. Score it and flag specific AI-sounding phrases with natural alternatives.${brandSection}
 
 Content:
-${content}`,
+${truncateForAiPrompt(content, 8000)}`,
       },
     ];
-    const data = await callGrokAPI([...messages], 0.3);
+    const fp = options.fullPostBuilder === true;
+    const grokHumanOpts = { mode: fp ? GROK_MODE_QUALITY : 'fast', max_tokens: 2048 };
+    if (fp) {
+      grokHumanOpts.grok_debug_fullpost = true;
+      grokHumanOpts.grok_debug_fullpost_step = 'humanizer';
+    }
+    const data = await callGrokAPI([...messages], 0.3, grokHumanOpts);
 
     const parsed = parseJsonFromResponse(data.content);
     if (parsed) {
       return { success: true, score: parsed, usage: data.usage };
     }
+    if (fp) {
+      return { success: true, unavailable: true, usage: data.usage };
+    }
     return { success: true, rawAnalysis: data.content, usage: data.usage };
   } catch (error) {
+    if (options.fullPostBuilder) {
+      console.warn('Humanizer score skipped:', error?.message);
+      return { success: true, unavailable: true };
+    }
     console.error('Humanizer score error:', error);
     return { success: false, error: error.message };
   }
@@ -2459,7 +2891,7 @@ ${fullContent}
 Return the full content with that phrase rewritten to sound more human. Keep the meaning intact, avoid AI clichés, and make the local edit feel genuinely different.`,
       },
     ];
-    const data = await callGrokAPI([...messages], 0.5);
+    const data = await callGrokAPI([...messages], 0.5, { mode: GROK_MODE_QUALITY });
 
     return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
   } catch (error) {
@@ -2538,7 +2970,7 @@ ${content}`,
       data = await callClaudeAPI([...messages], 0.3);
     } catch (claudeError) {
       if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.3);
+        data = await callGrokAPI([...messages], 0.3, { mode: GROK_MODE_QUALITY });
       } else {
         throw claudeError;
       }
@@ -2662,7 +3094,7 @@ For content ideas:
 - Include one strong hook per idea`,
       },
     ];
-    const data = await callGrokAPI(messages, 0.7);
+    const data = await callGrokAPI(messages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096 });
 
     const parsed = parseJsonFromResponse(data.content);
     const normalizedAnalysis = normalizeNicheAnalysisPayload(parsed, platform);

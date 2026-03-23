@@ -16,10 +16,20 @@ import ScoreBadge from '../components/ScoreBadge';
 import UpgradeModal from '../components/UpgradeModal';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
-import { generateFullPostHooks, generateCaption, generateHashtags, generateStyledCTAs, scoreContentQuality } from '../services/grokAPI';
+import {
+  generateFullPostHooks,
+  generateHooks,
+  generateCaption,
+  generateHashtags,
+  generateStyledCTAs,
+  scoreContentQuality,
+  mapFullPostHookTypeToHookBuilderTheme,
+  enhanceCaptionWithGrokFallback,
+} from '../services/grokAPI';
+import { extractHooksFromHookBuilderResult } from '../utils/fullPostHooksParser';
 import { saveContentLibraryItem, FULL_POST_BUILDER_CREDITS_PER_RUN } from '../config/supabase';
 import { getPlatform } from '../utils/platformGuidelines';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { enhanceCaptionWithClaude } from '../services/claudeAPI';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -28,6 +38,10 @@ import LoadingSpinner from '../components/LoadingSpinner';
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function makeFreshRegenNonce(prefix) {
+  return `fpb-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 /** One-sentence explainer + example line for each hook style (topic-aware). */
 function getHookTypeHelp(type, topicSnippet) {
@@ -74,44 +88,66 @@ const GOALS = [
 
 const HOOK_TYPES = ['Question', 'Teaser', 'Shocking Stat', 'Story', 'Bold Claim'];
 
-function parseHooksFromText(text) {
-  if (!text) return [];
-  const raw = String(text).trim();
+function shouldSkipFullPostHookRetries(code) {
+  return code === 'GROK_AUTH_FAILED' || code === 'GROK_UPSTREAM_INVALID';
+}
 
-  try {
-    const direct = JSON.parse(raw);
-    if (Array.isArray(direct)) {
-      return direct.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
-    }
-    if (direct && typeof direct === 'object' && Array.isArray(direct.hooks)) {
-      return direct.hooks.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
-    }
-  } catch {
-    /* fall through */
-  }
+/** @param {{ code?: string, status?: number, error?: string }} res */
+function classifyGrokFailure(res) {
+  const code = res?.code;
+  const status = res?.status;
+  const msg = String(res?.error || '').toLowerCase();
+  if (code === 'GROK_AUTH_FAILED' || status === 401) return 'auth_config';
+  if (status === 503 && msg.includes('not configured')) return 'auth_config';
+  if (status === 429 || msg.includes('rate limit')) return 'rate_limit';
+  if (code === 'HOOKS_EMPTY') return 'parser_hooks';
+  if (code === 'GROK_UPSTREAM_INVALID' || code === 'VALIDATION') return 'auth_config';
+  return 'upstream';
+}
 
-  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fence?.[1]) {
-    try {
-      const parsed = JSON.parse(fence[1].trim());
-      if (Array.isArray(parsed)) {
-        return parsed.map((h) => String(h || '').trim()).filter((h) => h.length > 2).slice(0, 6);
-      }
-    } catch {
-      /* fall through */
-    }
+function hookFailureUserMessage(bucket) {
+  if (bucket === 'auth_config') {
+    return 'We could not reach the AI service with your account. Refresh the page, confirm you are logged in, or contact support if this continues.';
   }
+  if (bucket === 'rate_limit') {
+    return "You've hit your current AI usage limit for this feature. Wait a minute and try again, or enter your own hook below.";
+  }
+  if (bucket === 'parser_hooks') {
+    return 'We hit a temporary AI formatting issue. Try again or enter your own hook.';
+  }
+  return 'The AI service is temporarily unavailable. Please retry in a minute.';
+}
 
-  const hooks = [];
-  const lines = raw.split('\n').filter((l) => l.trim());
-  for (const line of lines) {
-    let cleaned = line.replace(/^\d+[.)]\s*/, '').replace(/^[-*]\s*/, '').trim();
-    cleaned = cleaned.replace(/^\*\*|\*\*$/g, '').replace(/\*\*(.*?)\*\*/g, '$1').trim();
-    if (cleaned && cleaned.length > 2) {
-      hooks.push(cleaned);
+function stepToolFailureMessage(step, bucket) {
+  if (bucket === 'rate_limit') {
+    if (step === 'caption') {
+      return "You've hit your current AI usage limit for this feature. Wait briefly and tap Regenerate, or write the caption yourself.";
     }
+    if (step === 'hashtags') {
+      return "You've hit your current AI usage limit for this feature. Wait briefly and tap Regenerate, or add hashtags manually.";
+    }
+    return "You've hit your current AI usage limit for this feature. Wait briefly and tap Regenerate, or write your own CTA.";
   }
-  return hooks.slice(0, 6);
+  if (bucket === 'auth_config') {
+    return 'We could not authorize this AI request. Refresh the page or check your login.';
+  }
+  if (step === 'caption') {
+    return 'The AI service hiccupped. Tap Regenerate in a moment, or keep writing manually — your draft is unchanged.';
+  }
+  if (step === 'hashtags') {
+    return 'The AI service hiccupped. Tap Regenerate in a moment, or edit hashtags manually — previous steps are unchanged.';
+  }
+  return 'The AI service hiccupped. Tap Regenerate in a moment, or use your own CTA below — previous steps are unchanged.';
+}
+
+/** @param {{ success?: boolean, code?: string, status?: number } | null} res */
+function shouldAttemptHookBuilderFallback(res) {
+  if (!res || res.success) return false;
+  const { code, status } = res;
+  if (status === 429 || status === 401) return false;
+  if (code === 'GROK_AUTH_FAILED' || code === 'GROK_UPSTREAM_INVALID') return false;
+  if (code === 'VALIDATION') return false;
+  return true;
 }
 
 function parseHashtagsFromResponse(text) {
@@ -158,11 +194,19 @@ export default function FullPostBuilder() {
   const [hooks, setHooks] = useState([]);
   const [selectedHook, setSelectedHook] = useState(null);
   const [loadingHooks, setLoadingHooks] = useState(false);
+  const [hooksErrorHint, setHooksErrorHint] = useState(null);
+  const [manualHookMode, setManualHookMode] = useState(false);
+  const [manualHookDraft, setManualHookDraft] = useState('');
 
   // Step 3 state
   const [caption, setCaption] = useState('');
   const [loadingCaption, setLoadingCaption] = useState(false);
   const [loadingCaptionEnhancement, setLoadingCaptionEnhancement] = useState(false);
+  const [captionStreamlinedNotice, setCaptionStreamlinedNotice] = useState(null);
+  const [hashtagStreamlinedNotice, setHashtagStreamlinedNotice] = useState(null);
+  const [ctaStreamlinedNotice, setCtaStreamlinedNotice] = useState(null);
+  const [hashtagStepError, setHashtagStepError] = useState(null);
+  const [qualityScoreNotice, setQualityScoreNotice] = useState(null);
 
   // Step 4 state
   const [hashtags, setHashtags] = useState([]);
@@ -172,6 +216,7 @@ export default function FullPostBuilder() {
   const [ctas, setCtas] = useState([]);
   const [selectedCTA, setSelectedCTA] = useState(null);
   const [loadingCTAs, setLoadingCTAs] = useState(false);
+  const [customCtaDraft, setCustomCtaDraft] = useState('');
 
   // Score state
   const [qualityScore, setQualityScore] = useState(null);
@@ -179,12 +224,23 @@ export default function FullPostBuilder() {
   const [algorithmScore, setAlgorithmScore] = useState(null);
   const [loadingQuality, setLoadingQuality] = useState(false);
   const [savedPartIds, setSavedPartIds] = useState({});
+  /** Bumps when entering the final panel so score widgets remount and recompute from latest assembly. */
+  const [scoreSessionKey, setScoreSessionKey] = useState(0);
 
   const hasAccess = checkFeatureAccess('full-post-builder');
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}:${user?.id || 'guest'}`, [user?.id]);
   const hasHydratedRef = useRef(false);
+  /** Prevents localStorage / URL hydrate from re-applying when effect deps churn (stale overwrite after async). */
+  const hydrationSigRef = useRef(null);
   const pendingTrendingRef = useRef(null);
   const appliedTrendingRef = useRef(false);
+  const captionReqIdRef = useRef(0);
+  const hashtagReqIdRef = useRef(0);
+  const enhanceReqIdRef = useRef(0);
+  const ctaReqIdRef = useRef(0);
+  const scoringReqIdRef = useRef(0);
+  const wizardRef = useRef({});
+  const assembledPostRef = useRef('');
   /** One billable hook-generation charge per visit to step 1 (type changes / regenerate stay within the same run). */
   const hooksRunPaidRef = useRef(false);
   /** After the user edits the topic field, never auto-reapply brand niche over their text. */
@@ -198,7 +254,7 @@ export default function FullPostBuilder() {
   const prefillGoal = searchParams.get('goal')?.trim() || '';
   const hasExplicitPrefill = Boolean(prefillTopic || prefillPlatform || prefillGoal);
 
-  // Hydrate from URL params, trending navigation state, and local draft.
+  // Hydrate from URL params, trending navigation state, and local draft (once per hydration signature).
   useEffect(() => {
     try {
       const t = pendingTrendingRef.current;
@@ -206,6 +262,7 @@ export default function FullPostBuilder() {
         appliedTrendingRef.current = true;
         pendingTrendingRef.current = null;
         trendingContextRef.current = t;
+        hydrationSigRef.current = `trending:${storageKey}`;
         setTrendingBanner(t);
         setTopic(t.topic || '');
         setPlatform(t.platform ? String(t.platform).toLowerCase() : 'instagram');
@@ -237,6 +294,13 @@ export default function FullPostBuilder() {
         hasHydratedRef.current = true;
         return;
       }
+
+      const draftSig = `draft:${storageKey}:${hasExplicitPrefill}:${prefillTopic}:${prefillPlatform}:${prefillGoal}`;
+      if (hydrationSigRef.current === draftSig) {
+        hasHydratedRef.current = true;
+        return;
+      }
+      hydrationSigRef.current = draftSig;
 
       const draft = JSON.parse(localStorage.getItem(storageKey) || 'null');
       const shouldStartFresh = hasExplicitPrefill;
@@ -320,15 +384,49 @@ export default function FullPostBuilder() {
 
   const platformData = getPlatform(platform);
 
+  const assembledPost = useMemo(() => {
+    const hashtagStr = hashtags.map((h) => h.tag).join(' ');
+    return [selectedHook, caption, hashtagStr, selectedCTA?.cta].filter(Boolean).join('\n\n');
+  }, [selectedHook, caption, hashtags, selectedCTA]);
+
+  useEffect(() => {
+    assembledPostRef.current = assembledPost;
+  }, [assembledPost]);
+
+  wizardRef.current = {
+    topic,
+    platform,
+    goal,
+    selectedHook,
+    caption,
+    hashtags,
+    selectedCTA,
+    brandData,
+  };
+
   const resetDownstream = (fromStep) => {
     if (fromStep <= 1) {
       setHooks([]);
       setSelectedHook(null);
       hooksRunPaidRef.current = false;
+      setManualHookMode(false);
+      setManualHookDraft('');
     }
-    if (fromStep <= 2) { setCaption(''); }
-    if (fromStep <= 3) { setHashtags([]); }
-    if (fromStep <= 4) { setCtas([]); setSelectedCTA(null); }
+    if (fromStep <= 2) {
+      setCaption('');
+      setCaptionStreamlinedNotice(null);
+    }
+    if (fromStep <= 3) {
+      setHashtags([]);
+      setHashtagStreamlinedNotice(null);
+      setHashtagStepError(null);
+    }
+    if (fromStep <= 4) {
+      setCtas([]);
+      setSelectedCTA(null);
+      setCustomCtaDraft('');
+      setCtaStreamlinedNotice(null);
+    }
     setShowFinalPanel(false);
     setQualityScore(null);
     setHumanScore(null);
@@ -343,10 +441,29 @@ export default function FullPostBuilder() {
     setShowFinalPanel(false);
   };
 
-  // Step 2: Generate hooks (with retries — Grok occasionally returns empty or malformed lines)
+  const applyManualHook = () => {
+    const t = manualHookDraft.trim();
+    if (t.length < 12) {
+      addToast('Enter a hook with a bit more detail (at least 12 characters).', 'warning');
+      return;
+    }
+    setHooks([t]);
+    setSelectedHook(t);
+    setManualHookMode(false);
+    setHooksErrorHint(null);
+    resetDownstream(2);
+  };
+
+  // Step 2: Generate hooks (limited retries; credits only after a non-empty batch; single Hook Builder fallback)
   const handleGenerateHooks = async (hookTypeOverride) => {
     if (!topic.trim()) { addToast('Enter a topic first', 'warning'); return; }
-    const effectiveHookType = hookTypeOverride ?? selectedHookType;
+    // `onClick={handleGenerateHooks}` passes a SyntheticEvent — never treat that as a hook type.
+    const effectiveHookType =
+      typeof hookTypeOverride === 'string' && hookTypeOverride.trim()
+        ? hookTypeOverride.trim()
+        : selectedHookType;
+    setHooksErrorHint(null);
+    setManualHookMode(false);
     setLoadingHooks(true);
     try {
       const tc = trendingContextRef.current;
@@ -359,155 +476,368 @@ export default function FullPostBuilder() {
         trendDescription: tc?.description,
       };
 
-      let lastErr = null;
-      let parsed = [];
+      const maxAttempts = 3;
+      let lastRes = null;
 
-      for (let attempt = 0; attempt <= 2; attempt++) {
-        if (attempt > 0) {
-          console.warn('[FullPostBuilder] Retrying hook generation', { attempt, topic: topic.slice(0, 80) });
-          await sleep(1000);
+      const chargeOnceIfNeeded = async () => {
+        if (hooksRunPaidRef.current) return true;
+        const usage = await trackFeatureUsage({
+          step: 'hooks',
+          overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
+        });
+        if (!usage.allowed) {
+          addToast('AI limit reached', 'warning');
+          return false;
         }
-        try {
-          const res = await generateFullPostHooks(payload, brandData);
-          const rawHooks = res.hooks ?? res.content ?? '';
-          if (res.success && rawHooks) {
-            parsed = parseHooksFromText(typeof rawHooks === 'string' ? rawHooks : String(rawHooks));
-          }
-          if (parsed.length > 0) break;
-          lastErr = new Error('Empty or unparseable hook list');
-        } catch (e) {
-          lastErr = e;
-          console.error('[FullPostBuilder] Hook generation attempt failed', { attempt, message: e?.message });
-        }
-      }
+        hooksRunPaidRef.current = true;
+        return true;
+      };
 
-      if (parsed.length > 0) {
-        if (!hooksRunPaidRef.current) {
-          const usage = await trackFeatureUsage({
-            step: 'hooks',
-            overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
-          });
-          if (!usage.allowed) {
-            addToast('AI limit reached', 'warning');
-            setLoadingHooks(false);
-            return;
-          }
-          hooksRunPaidRef.current = true;
-        }
-        setHooks(parsed.slice(0, 4));
-        setSelectedHook(null);
+      const applyHookBatch = async (nextHooks, source) => {
+        const ok = await chargeOnceIfNeeded();
+        if (!ok) return false;
+        const trimmed = nextHooks.slice(0, 4);
+        setHooks(trimmed);
+        setSelectedHook(trimmed[0]);
         resetDownstream(2);
-      } else {
-        console.error('[FullPostBuilder] Hook generation failed after retries', lastErr);
-        addToast('We could not generate hooks right now. Check your connection and try again.', 'error');
+        setHooksErrorHint(null);
+        if (import.meta.env.DEV && source === 'backup') {
+          console.debug('[FullPostBuilder] Hooks applied from Hook Builder fallback');
+        }
+        return true;
+      };
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) {
+          const delayMs = 800 * 2 ** (attempt - 1);
+          console.warn('[FullPostBuilder] Retrying hook generation', { attempt, delayMs, topic: topic.slice(0, 80) });
+          await sleep(delayMs);
+        }
+
+        const res = await generateFullPostHooks(payload, brandData);
+        lastRes = res;
+
+        if (shouldSkipFullPostHookRetries(res.code)) {
+          break;
+        }
+
+        if (res.success && Array.isArray(res.hooks) && res.hooks.length > 0) {
+          await applyHookBatch(res.hooks, 'primary');
+          return;
+        }
       }
+
+      if (shouldAttemptHookBuilderFallback(lastRes)) {
+        try {
+          const theme = mapFullPostHookTypeToHookBuilderTheme(effectiveHookType);
+          const fb = await generateHooks(topic.trim(), brandData, theme, platform, { skipRealtimeResearch: true });
+          const list = extractHooksFromHookBuilderResult(fb);
+          if (list.length > 0) {
+            const applied = await applyHookBatch(list, 'backup');
+            if (applied) return;
+          }
+        } catch (fbErr) {
+          console.error('[FullPostBuilder] Hook Builder fallback failed', fbErr);
+        }
+      }
+
+      console.error('[FullPostBuilder] Hook generation failed after retries', lastRes);
+      const bucket = classifyGrokFailure(lastRes || {});
+      const hint = lastRes?.code === 'GROK_AUTH_FAILED' && lastRes?.error
+        ? lastRes.error
+        : hookFailureUserMessage(bucket);
+      setHooksErrorHint(hint);
+      addToast(hint, 'error');
     } catch (e) {
       console.error('[FullPostBuilder] Hook generation error', e);
-      addToast('Hook generation failed. Please try again.', 'error');
+      const bucket = classifyGrokFailure({ code: e?.code, status: e?.status, error: e?.message });
+      const hint = hookFailureUserMessage(bucket);
+      setHooksErrorHint(hint);
+      addToast(hint, 'error');
     } finally {
       setLoadingHooks(false);
     }
   };
 
   // Step 3: Generate caption
-  const handleGenerateCaption = async () => {
-    if (!selectedHook) return;
+  const handleGenerateCaption = async ({ forceFresh = false } = {}) => {
+    const w = wizardRef.current;
+    if (!w.selectedHook) return;
+    const rid = ++captionReqIdRef.current;
+    if (import.meta.env.DEV) {
+      console.debug('[FullPostBuilder] caption generate start', { rid, forceFresh });
+    }
     setLoadingCaption(true);
+    setCaptionStreamlinedNotice(null);
     try {
       let captionText;
       const tc = trendingContextRef.current;
+      const goalLabel = GOALS.find((g) => g.id === w.goal)?.label || w.goal;
       const res = await generateCaption({
-        topic,
-        platform,
-        selectedHook,
-        goal: GOALS.find(g => g.id === goal)?.label || goal,
-        tone: brandData?.brandVoice || '',
+        topic: w.topic,
+        platform: w.platform,
+        selectedHook: w.selectedHook,
+        goal: goalLabel,
+        tone: w.brandData?.brandVoice || '',
         formatType: tc?.format_type,
         nicheAngle: tc?.niche_angle,
         trendDescription: tc?.description,
-      }, brandData);
+      }, w.brandData, {
+        fullPostBuilder: true,
+        forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('cap') : undefined,
+      });
+      if (rid !== captionReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale caption response ignored', rid);
+        return;
+      }
       if (res.success && res.caption) {
-        const captions = res.caption.split(/\d+\.\s+/).filter(c => c.trim());
+        const captions = res.caption.split(/\d+\.\s+/).filter((c) => c.trim());
         captionText = captions[0]?.trim() || res.caption.trim();
       }
-      
+
       if (captionText) {
         setCaption(captionText);
+        setCaptionStreamlinedNotice(res.streamlined ? 'Using streamlined caption generation right now.' : null);
         resetDownstream(3);
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate success', { rid });
       } else {
-        addToast('Caption generation failed', 'error');
+        addToast('We hit a temporary AI formatting issue. Try Regenerate or write your own caption.', 'warning');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate empty payload', { rid });
       }
-    } catch { addToast('Caption generation failed', 'error'); }
-    finally { setLoadingCaption(false); }
+    } catch (e) {
+      if (rid !== captionReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale caption error ignored', rid);
+        return;
+      }
+      const bucket = classifyGrokFailure({ code: e?.code, status: e?.status, error: e?.message });
+      addToast(stepToolFailureMessage('caption', bucket), 'error');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate fail', { rid, bucket });
+    } finally {
+      if (rid === captionReqIdRef.current) {
+        setLoadingCaption(false);
+      }
+    }
   };
 
   const handleEnhanceCaption = async () => {
-    if (!caption.trim()) {
+    const w = wizardRef.current;
+    const cap = String(w.caption || '').trim();
+    if (!cap) {
       addToast('Generate or write a caption first', 'warning');
       return;
     }
 
+    const rid = ++enhanceReqIdRef.current;
+    const enhanceNonce = makeFreshRegenNonce('enh');
+    if (import.meta.env.DEV) {
+      console.debug('[FullPostBuilder] caption enhance start', { rid });
+    }
     setLoadingCaptionEnhancement(true);
     try {
-      const res = await enhanceCaptionWithClaude({
-        caption,
-        platform,
-        topic,
-        selectedHook,
-      }, brandData);
+      try {
+        const res = await enhanceCaptionWithClaude({
+          caption: cap,
+          platform: w.platform,
+          topic: w.topic,
+          selectedHook: w.selectedHook,
+        }, w.brandData);
 
-      if (res.success && res.caption) {
-        setCaption(res.caption);
-        resetDownstream(3);
-        addToast('Caption enhanced with Sonnet 4.6', 'success');
-      } else {
-        addToast('Caption enhancement failed', 'error');
+        if (rid !== enhanceReqIdRef.current) {
+          if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance (Claude) ignored', rid);
+          return;
+        }
+
+        if (res.success && res.caption) {
+          setCaption(res.caption);
+          resetDownstream(3);
+          addToast('Caption updated.', 'success');
+          if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance success (Claude)', { rid });
+          return;
+        }
+      } catch {
+        /* try Grok */
       }
-    } catch (error) {
-      addToast(error.message || 'Caption enhancement failed', 'error');
+      const grokRes = await enhanceCaptionWithGrokFallback({
+        caption: cap,
+        platform: w.platform,
+        topic: w.topic,
+        selectedHook: w.selectedHook,
+      }, w.brandData, { forceFreshRegeneration: enhanceNonce });
+      if (rid !== enhanceReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance (Grok) ignored', rid);
+        return;
+      }
+      if (grokRes.success && grokRes.caption) {
+        setCaption(grokRes.caption);
+        resetDownstream(3);
+        addToast('Caption updated.', 'success');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance success (Grok)', { rid });
+      } else {
+        addToast('Enhancement is temporarily unavailable. Try again shortly or edit manually.', 'warning');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance fail', { rid });
+      }
+    } catch {
+      if (rid !== enhanceReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance error ignored', rid);
+        return;
+      }
+      addToast('Enhancement is temporarily unavailable. Try again shortly or edit manually.', 'warning');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance error', { rid });
     } finally {
-      setLoadingCaptionEnhancement(false);
+      if (rid === enhanceReqIdRef.current) {
+        setLoadingCaptionEnhancement(false);
+      }
     }
   };
 
   // Step 4: Generate hashtags
-  const handleGenerateHashtags = async () => {
+  const handleGenerateHashtags = async ({ forceFresh = false } = {}) => {
+    const w = wizardRef.current;
+    const rid = ++hashtagReqIdRef.current;
+    if (import.meta.env.DEV) {
+      console.debug('[FullPostBuilder] hashtags generate start', { rid, forceFresh });
+    }
     setLoadingHashtags(true);
+    setHashtagStepError(null);
+    setHashtagStreamlinedNotice(null);
     try {
       const res = await generateHashtags({
-        topic,
-        platform,
-        selectedHook,
-        caption,
-        goal,
-      }, brandData, platform);
+        topic: w.topic,
+        platform: w.platform,
+        selectedHook: w.selectedHook,
+        caption: w.caption,
+        goal: w.goal,
+      }, w.brandData, w.platform, {
+        fullPostBuilder: true,
+        forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('tag') : undefined,
+      });
+      if (rid !== hashtagReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hashtags response ignored', rid);
+        return;
+      }
       if (res.success) {
         const parsed = Array.isArray(res.hashtagData) && res.hashtagData.length > 0
           ? res.hashtagData
           : parseHashtagsFromResponse(res.hashtags);
-        setHashtags(parsed.slice(0, 10));
-        resetDownstream(4);
+        const next = parsed.slice(0, 10);
+        if (next.length === 0) {
+          const msg = 'No usable hashtags returned. Try Regenerate or add your own.';
+          setHashtagStepError(msg);
+          addToast(msg, 'warning');
+        } else {
+          setHashtags(next);
+          setHashtagStreamlinedNotice(res.streamlined ? 'Using streamlined hashtag generation right now.' : null);
+          resetDownstream(4);
+          if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate success', { rid });
+        }
+      } else {
+        const bucket = classifyGrokFailure(res);
+        const msg = stepToolFailureMessage('hashtags', bucket);
+        setHashtagStepError(msg);
+        addToast(msg, 'error');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate fail', { rid });
       }
-    } catch { addToast('Hashtag generation failed', 'error'); }
-    finally { setLoadingHashtags(false); }
+    } catch (e) {
+      if (rid !== hashtagReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hashtags error ignored', rid);
+        return;
+      }
+      const bucket = classifyGrokFailure({ code: e?.code, status: e?.status, error: e?.message });
+      const msg = stepToolFailureMessage('hashtags', bucket);
+      setHashtagStepError(msg);
+      addToast(msg, 'error');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate error', { rid });
+    } finally {
+      if (rid === hashtagReqIdRef.current) {
+        setLoadingHashtags(false);
+      }
+    }
   };
 
   // Step 5: Generate CTAs
+  const applyCustomCta = () => {
+    const t = customCtaDraft.trim();
+    if (t.length < 3) {
+      addToast('Enter a short CTA (at least 3 characters).', 'warning');
+      return;
+    }
+    setSelectedCTA({ style: 'Custom', cta: t, tip: '' });
+  };
+
   const handleGenerateCTAs = async () => {
+    const w = wizardRef.current;
+    const rid = ++ctaReqIdRef.current;
     setLoadingCTAs(true);
+    setCtaStreamlinedNotice(null);
     try {
       const res = await generateStyledCTAs({
-        promoting: topic,
-        goalType: goal,
-        selectedHook,
-        caption,
-      }, brandData, platform);
-      if (res.success && res.ctas) {
+        promoting: w.topic,
+        goalType: w.goal,
+        selectedHook: w.selectedHook,
+        caption: w.caption,
+      }, w.brandData, w.platform, { fullPostBuilder: true });
+      if (rid !== ctaReqIdRef.current) return;
+      if (res.success && Array.isArray(res.ctas) && res.ctas.length > 0) {
         setCtas(res.ctas.slice(0, 5));
         setSelectedCTA(null);
+        setCustomCtaDraft('');
+        setCtaStreamlinedNotice(res.streamlined ? 'Using streamlined CTA generation right now.' : null);
+      } else {
+        const bucket = classifyGrokFailure(res || {});
+        addToast(stepToolFailureMessage('cta', bucket), 'warning');
       }
-    } catch { addToast('CTA generation failed', 'error'); }
-    finally { setLoadingCTAs(false); }
+    } catch (e) {
+      if (rid !== ctaReqIdRef.current) return;
+      const bucket = classifyGrokFailure({ code: e?.code, status: e?.status, error: e?.message });
+      addToast(stepToolFailureMessage('cta', bucket), 'error');
+    } finally {
+      if (rid === ctaReqIdRef.current) {
+        setLoadingCTAs(false);
+      }
+    }
+  };
+
+  const runScoring = async () => {
+    const post = assembledPostRef.current;
+    if (!String(post || '').trim()) return;
+    const rid = ++scoringReqIdRef.current;
+    if (import.meta.env.DEV) {
+      console.debug('[FullPostBuilder] score recompute start', { rid });
+    }
+    setLoadingQuality(true);
+    setQualityScoreNotice(null);
+    try {
+      const res = await scoreContentQuality(post, wizardRef.current.brandData, { fullPostBuilder: true });
+      if (rid !== scoringReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale score response ignored', rid);
+        return;
+      }
+      if (res.success) {
+        if (res.score?.overall != null) {
+          setQualityScore(res.score.overall);
+        } else {
+          try {
+            const parsed = typeof res.analysis === 'string' ? JSON.parse(res.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}') : res.analysis;
+            const n = parsed.totalScore ?? parsed.overallScore ?? parsed.overall;
+            if (n != null) setQualityScore(n);
+          } catch { /* keep previous quality score */ }
+        }
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] score recompute success', { rid });
+      } else if (res.code === 'SCORING_UNAVAILABLE') {
+        setQualityScoreNotice('Quality scoring is temporarily unavailable. Your post is still ready to copy.');
+      }
+    } catch {
+      if (rid !== scoringReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale score error ignored', rid);
+        return;
+      }
+      setQualityScoreNotice('Quality scoring is temporarily unavailable. Your post is still ready to copy.');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] score recompute fail', { rid });
+    } finally {
+      if (rid === scoringReqIdRef.current) {
+        setLoadingQuality(false);
+      }
+    }
   };
 
   const handleNext = async () => {
@@ -516,35 +846,17 @@ export default function FullPostBuilder() {
       setDirection(1);
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
-      if (nextStep === 1 && hooks.length === 0) handleGenerateHooks();
-      if (nextStep === 2 && !caption && selectedHook) handleGenerateCaption();
-      if (nextStep === 3 && hashtags.length === 0) handleGenerateHashtags();
-      if (nextStep === 4 && ctas.length === 0) handleGenerateCTAs();
+      if (nextStep === 1 && hooks.length === 0) void handleGenerateHooks();
+      if (nextStep === 2 && !caption && selectedHook) void handleGenerateCaption({ forceFresh: false });
+      if (nextStep === 3 && hashtags.length === 0) void handleGenerateHashtags({ forceFresh: false });
+      if (nextStep === 4 && ctas.length === 0) void handleGenerateCTAs();
     } else {
+      setHumanScore(null);
+      setAlgorithmScore(null);
+      setScoreSessionKey((k) => k + 1);
       setShowFinalPanel(true);
-      runScoring();
+      void runScoring();
     }
-  };
-
-  const assembledPost = [selectedHook, caption, hashtags.map(h => h.tag).join(' '), selectedCTA?.cta].filter(Boolean).join('\n\n');
-
-  const runScoring = async () => {
-    if (!assembledPost) return;
-    setLoadingQuality(true);
-    try {
-      const res = await scoreContentQuality(assembledPost, brandData);
-      if (res.success) {
-        if (res.score?.overall != null) {
-          setQualityScore(res.score.overall);
-        } else {
-          try {
-            const parsed = typeof res.analysis === 'string' ? JSON.parse(res.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}') : res.analysis;
-            setQualityScore(parsed.totalScore || parsed.overallScore || parsed.overall || 0);
-          } catch { setQualityScore(null); }
-        }
-      }
-    } catch { /* silent */ }
-    finally { setLoadingQuality(false); }
   };
 
   const handleCopyAll = async () => {
@@ -661,17 +973,11 @@ export default function FullPostBuilder() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
-      {(loadingHooks || loadingCaption || loadingHashtags || loadingCTAs || loadingQuality) && (
+      {loadingHooks && (
         <LoadingSpinner
           fullScreen
           variant="huttle"
-          text={
-            loadingHooks ? 'Crafting scroll-stopping hooks…'
-              : loadingCaption ? 'Writing your caption…'
-                : loadingHashtags ? 'Ranking hashtags…'
-                  : loadingCTAs ? 'Generating CTAs…'
-                    : 'Scoring your post…'
-          }
+          text="Crafting scroll-stopping hooks…"
         />
       )}
       <div className="max-w-3xl mx-auto">
@@ -856,6 +1162,57 @@ export default function FullPostBuilder() {
                       </p>
                     </div>
                   </div>
+                  {hooksErrorHint && (
+                    <div
+                      role="alert"
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                    >
+                      <p>{hooksErrorHint}</p>
+                      <p className="mt-2 text-xs text-amber-900/90">
+                        <Link
+                          to="/dashboard/ai-tools?tab=hooks"
+                          className="font-medium text-huttle-primary hover:text-huttle-primary-dark underline-offset-2 hover:underline"
+                        >
+                          Open Hook Builder
+                        </Link>
+                        {' '}if you need hooks right away.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualHookMode(true);
+                        setHooksErrorHint(null);
+                      }}
+                      className="text-sm font-medium text-huttle-primary hover:text-huttle-primary-dark underline-offset-2 hover:underline"
+                    >
+                      Skip AI and write my own hook
+                    </button>
+                  </div>
+                  {manualHookMode && (
+                    <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/90 p-4">
+                      <label htmlFor="full-post-manual-hook" className="block text-sm font-medium text-gray-700">
+                        Paste or type your hook
+                      </label>
+                      <textarea
+                        id="full-post-manual-hook"
+                        value={manualHookDraft}
+                        onChange={(e) => setManualHookDraft(e.target.value)}
+                        rows={3}
+                        placeholder="Your opening line — the first thing viewers read."
+                        className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={applyManualHook}
+                        className="rounded-xl bg-huttle-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-huttle-primary-dark transition-colors"
+                      >
+                        Use this hook
+                      </button>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Hook type</label>
                     <p className="text-xs text-gray-500 mb-3">Each style uses a different psychological pull. Pick one, then choose a generated line below.</p>
@@ -871,6 +1228,9 @@ export default function FullPostBuilder() {
                               setSelectedHookType(type);
                               setHooks([]);
                               setSelectedHook(null);
+                              setHooksErrorHint(null);
+                              setManualHookMode(false);
+                              setManualHookDraft('');
                               resetDownstream(2);
                               void handleGenerateHooks(type);
                             }}
@@ -918,7 +1278,8 @@ export default function FullPostBuilder() {
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={handleGenerateHooks}
+                      type="button"
+                      onClick={() => void handleGenerateHooks()}
                       disabled={loadingHooks}
                       className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
                     >
@@ -957,8 +1318,11 @@ export default function FullPostBuilder() {
                         rows={8}
                         className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
                       />
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{caption.length} characters</span>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>
+                          Caption length: <span className="font-medium text-gray-700 tabular-nums">{caption.length}</span>
+                          {' '}characters
+                        </span>
                         <span className={caption.length > (platformData?.charLimit || 2200) ? 'text-red-500 font-medium' : ''}>
                           Limit: {(platformData?.charLimit || 2200).toLocaleString()}
                         </span>
@@ -966,19 +1330,24 @@ export default function FullPostBuilder() {
                     </>
                   )}
                   <button
-                    onClick={handleGenerateCaption}
+                    type="button"
+                    onClick={() => void handleGenerateCaption({ forceFresh: true })}
                     disabled={loadingCaption || !selectedHook}
                     className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingCaption ? 'animate-spin' : ''}`} /> Regenerate caption
                   </button>
+                  {captionStreamlinedNotice && (
+                    <p className="text-xs text-gray-500">{captionStreamlinedNotice}</p>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={handleEnhanceCaption}
-                      disabled={loadingCaptionEnhancement || !caption.trim()}
+                      type="button"
+                      onClick={() => void handleEnhanceCaption()}
+                      disabled={loadingCaptionEnhancement || loadingCaption || !caption.trim()}
                       className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
                     >
-                      <Sparkles className={`w-3.5 h-3.5 ${loadingCaptionEnhancement ? 'animate-pulse' : ''}`} /> {loadingCaptionEnhancement ? 'Enhancing with Sonnet 4.6...' : 'Enhance with Sonnet 4.6'}
+                      <Sparkles className={`w-3.5 h-3.5 ${loadingCaptionEnhancement ? 'animate-pulse' : ''}`} /> {loadingCaptionEnhancement ? 'Enhancing…' : 'Enhance'}
                     </button>
                     {caption.trim() && (
                       <button
@@ -997,6 +1366,17 @@ export default function FullPostBuilder() {
               {/* Step 4: Hashtags */}
               {currentStep === 3 && (
                 <div className="space-y-4 mt-4">
+                  {hashtagStepError && (
+                    <div
+                      role="alert"
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                    >
+                      {hashtagStepError}
+                    </div>
+                  )}
+                  {hashtagStreamlinedNotice && (
+                    <p className="text-xs text-gray-500">{hashtagStreamlinedNotice}</p>
+                  )}
                   {loadingHashtags ? (
                     <div className="space-y-2">
                       {[1, 2, 3, 4, 5].map((i) => (
@@ -1012,7 +1392,9 @@ export default function FullPostBuilder() {
                             {ht.tier && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 uppercase">{ht.tier}</span>}
                           </div>
                           <div className="flex items-center gap-3">
-                            {ht.score > 0 && <span className="text-xs text-huttle-primary font-medium">{ht.score}%</span>}
+                            {Number.isFinite(Number(ht.score)) && (
+                              <span className="text-xs text-huttle-primary font-medium">{ht.score}%</span>
+                            )}
                             <button onClick={() => setHashtags(hashtags.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -1028,7 +1410,8 @@ export default function FullPostBuilder() {
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={handleGenerateHashtags}
+                      type="button"
+                      onClick={() => void handleGenerateHashtags({ forceFresh: true })}
                       disabled={loadingHashtags}
                       className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
                     >
@@ -1051,6 +1434,9 @@ export default function FullPostBuilder() {
               {/* Step 5: CTA */}
               {currentStep === 4 && (
                 <div className="space-y-4 mt-4">
+                  {ctaStreamlinedNotice && (
+                    <p className="text-xs text-gray-500">{ctaStreamlinedNotice}</p>
+                  )}
                   {loadingCTAs ? (
                     <div className="space-y-3">
                       {[1, 2, 3].map((i) => (
@@ -1062,7 +1448,11 @@ export default function FullPostBuilder() {
                       {ctas.map((cta, i) => (
                         <button
                           key={i}
-                          onClick={() => setSelectedCTA(cta)}
+                          type="button"
+                          onClick={() => {
+                            setCustomCtaDraft('');
+                            setSelectedCTA(cta);
+                          }}
                           className={`w-full text-left p-4 rounded-xl border transition-all ${
                             selectedCTA?.cta === cta.cta
                               ? 'bg-huttle-primary/5 border-huttle-primary/30 ring-2 ring-huttle-primary/20'
@@ -1086,6 +1476,26 @@ export default function FullPostBuilder() {
                       <p className="text-sm">No CTAs generated yet</p>
                     </div>
                   )}
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4 space-y-2">
+                    <label htmlFor="full-post-custom-cta" className="block text-sm font-medium text-gray-700">
+                      Or write your own CTA
+                    </label>
+                    <textarea
+                      id="full-post-custom-cta"
+                      value={customCtaDraft}
+                      onChange={(e) => setCustomCtaDraft(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Comment SAVE if you want the checklist."
+                      className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCustomCta}
+                      className="text-sm font-semibold text-huttle-primary hover:text-huttle-primary-dark"
+                    >
+                      Use this CTA
+                    </button>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={handleGenerateCTAs}
@@ -1121,7 +1531,7 @@ export default function FullPostBuilder() {
                   onClick={handleNext}
                   disabled={
                     (currentStep === 0 && !topic.trim()) ||
-                    (currentStep === 1 && !selectedHook) ||
+                    (currentStep === 1 && (!selectedHook || loadingHooks)) ||
                     (currentStep === 2 && !caption.trim()) ||
                     (currentStep === 4 && !selectedCTA)
                   }
@@ -1158,8 +1568,16 @@ export default function FullPostBuilder() {
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             {/* Score Badges */}
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:gap-2">
-              <ScoreBadge label="Quality" score={qualityScore} icon={Sparkles} loading={loadingQuality} thresholds={{ green: 80, teal: 60, amber: 40 }} />
+              <ScoreBadge
+                key={`quality-${scoreSessionKey}`}
+                label="Quality"
+                score={qualityScore}
+                icon={Sparkles}
+                loading={loadingQuality}
+                thresholds={{ green: 80, teal: 60, amber: 40 }}
+              />
               <HumanizerScore
+                key={`human-${scoreSessionKey}`}
                 content={caption}
                 onScoreChange={setHumanScore}
                 onTrackUsage={(meta) => trackFeatureUsage({ ...meta, incrementFeatureCounter: false, overallCredits: 1 })}
@@ -1167,19 +1585,38 @@ export default function FullPostBuilder() {
                 compact
                 autoRun
                 hideInput
+                fullPostBuilderContext
               />
-              <AlgorithmChecker content={assembledPost} platform={platform} onScoreChange={setAlgorithmScore} compact />
+              <AlgorithmChecker
+                key={`algo-${scoreSessionKey}`}
+                content={assembledPost}
+                platform={platform}
+                onScoreChange={setAlgorithmScore}
+                compact
+                hideInput
+              />
             </div>
-            <p className="text-xs text-gray-400">
-              Quality {qualityScore ?? '—'} · Human {humanScore ?? '—'} · Algorithm {algorithmScore ?? '—'}
+            <p className="text-xs text-gray-500">
+              Quality {qualityScore != null ? Math.round(qualityScore) : '—'}
+              {' · '}
+              Human {humanScore != null ? humanScore : '—'}
+              {' · '}
+              Algorithm {algorithmScore != null ? algorithmScore : '—'}
             </p>
+            {qualityScoreNotice && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">{qualityScoreNotice}</p>
+            )}
 
             {/* Platform Badge */}
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-1 bg-gray-100 rounded-lg text-xs font-medium text-gray-600">
                 {platformData?.name || platform}
               </span>
-              <span className="text-xs text-gray-400">{assembledPost.length} chars</span>
+              <span className="text-xs text-gray-500">
+                Assembled post length:{' '}
+                <span className="font-medium text-gray-700 tabular-nums">{assembledPost.length}</span>
+                {' '}characters
+              </span>
             </div>
 
             {/* Assembled Post */}

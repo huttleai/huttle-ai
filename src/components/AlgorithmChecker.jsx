@@ -32,8 +32,25 @@ export default function AlgorithmChecker({
   }, [content, platform]);
 
   useEffect(() => {
-    onScoreChange?.(result?.overallScore ?? 0);
+    if (!onScoreChange) return;
+    if (!result) {
+      onScoreChange(null);
+      return;
+    }
+    onScoreChange(result.overallScore);
   }, [onScoreChange, result]);
+
+  if (compact && !result) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50 border-gray-200">
+        <Shield className="w-4 h-4 text-gray-400" />
+        <div className="flex flex-col">
+          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">Algorithm</span>
+          <span className="text-lg font-bold leading-tight text-gray-400">—</span>
+        </div>
+      </div>
+    );
+  }
 
   if (compact && result) {
     const color = scoreColor(result.overallScore);

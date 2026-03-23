@@ -13,17 +13,49 @@ import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
-const GROK_API_KEY = process.env.GROK_API_KEY;
+const _rawGrokKey = process.env.GROK_API_KEY;
+const GROK_API_KEY =
+  typeof _rawGrokKey === 'string' && _rawGrokKey.trim() ? _rawGrokKey.trim() : null;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
-/** Override with GROK_CHAT_MODEL in Vercel / .env if xAI renames models. */
-const DEFAULT_MODEL = process.env.GROK_CHAT_MODEL || process.env.GROK_MODEL || 'grok-3-latest';
+/**
+ * Default chat model when env is unset. xAI’s current catalog centers on Grok 4.x;
+ * legacy aliases like grok-3-latest often return 400 invalid model.
+ * @see https://docs.x.ai/docs/models
+ */
+const DEFAULT_GROK_MODEL = 'grok-4-1-fast-non-reasoning';
+
+function resolveGrokModelId() {
+  const fromChat = typeof process.env.GROK_CHAT_MODEL === 'string' ? process.env.GROK_CHAT_MODEL.trim() : '';
+  const fromLegacy = typeof process.env.GROK_MODEL === 'string' ? process.env.GROK_MODEL.trim() : '';
+  const nonReasoning = typeof process.env.GROK_MODEL_NON_REASONING === 'string' ? process.env.GROK_MODEL_NON_REASONING.trim() : '';
+  return fromChat || fromLegacy || nonReasoning || DEFAULT_GROK_MODEL;
+}
+
+/** Allow only xAI-style model ids from the client; no other semantics in the proxy. */
+function sanitizeUpstreamModelId(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s || s.length > 96) return null;
+  // xAI ids: grok-4-1-fast-non-reasoning, grok-3, grok-2-vision-1212, etc.
+  if (!/^grok-[a-zA-Z0-9._-]+$/.test(s)) return null;
+  return s;
+}
+
+/** Strip client message objects to OpenAI/xAI-compatible { role, content } only. */
+function normalizeMessagesForUpstream(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages.map((m) => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
+  }));
+}
 
 /** CORS for this route only (Vercel serverless; no reliance on VITE_ env). */
 function setGrokCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-grok-debug');
 }
 
 // Initialize Supabase for auth verification
@@ -208,10 +240,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Verify Grok API key is configured
+    // Verify Grok API key is configured (never accept client-supplied keys or model ids)
     if (!GROK_API_KEY) {
-      logError('grok.missing_api_key');
-      return res.status(500).json({ error: true, message: 'AI service not configured' });
+      logError('grok.missing_api_key', { detail: 'GROK_API_KEY missing or whitespace-only' });
+      return res.status(503).json({
+        error: true,
+        code: 'GROK_AUTH_FAILED',
+        message: 'AI service not configured. Set GROK_API_KEY in the server environment (e.g. Vercel).',
+      });
     }
 
     // Authenticate user
@@ -255,6 +291,26 @@ export default async function handler(req, res) {
       });
     }
 
+    const rawBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const debugStep =
+      typeof rawBody.grok_debug_fullpost_step === 'string'
+        ? rawBody.grok_debug_fullpost_step.trim().slice(0, 64)
+        : '';
+    const debugFullPost =
+      String(req.headers['x-grok-debug'] || '').toLowerCase() === 'fullpost'
+      || rawBody.grok_debug_fullpost === true
+      || Boolean(debugStep);
+
+    if (debugFullPost) {
+      logInfo('grok.debug_fullpost_request', {
+        hasModel: Boolean(rawBody.model),
+        clientModelRaw: rawBody.model,
+        messageCount: Array.isArray(rawBody.messages) ? rawBody.messages.length : 0,
+        hasMaxTokens: typeof rawBody.max_tokens !== 'undefined',
+        step: debugStep || undefined,
+      });
+    }
+
     // Extract request parameters
     const {
       messages,
@@ -265,8 +321,8 @@ export default async function handler(req, res) {
       targetAudience,
       brandContext,
       forceCacheRefresh,
-      model: _clientModelIgnored,
-    } = req.body;
+      model: clientModelRaw,
+    } = rawBody;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: true, message: 'Messages array is required', code: 'VALIDATION' });
@@ -290,7 +346,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const safeModel = DEFAULT_MODEL;
+    const safeModel = sanitizeUpstreamModelId(clientModelRaw) || resolveGrokModelId();
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -316,19 +372,27 @@ export default async function handler(req, res) {
       }
     }
 
-    // Forward request to Grok API
+    const normalizedMessages = normalizeMessagesForUpstream(messages);
+
+    // Upstream body aligned with dev smoke script: model, messages, temperature; optional max_tokens only.
+    const upstreamBody = {
+      model: safeModel,
+      messages: normalizedMessages,
+      temperature: safeTemperature,
+    };
+    if (typeof max_tokens === 'number' && max_tokens > 0 && max_tokens <= 8192) {
+      upstreamBody.max_tokens = max_tokens;
+    }
+
+    logInfo('grok.upstream_call', { model: safeModel, messageCount: normalizedMessages.length });
+
     const response = await fetch(GROK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+        'Authorization': `Bearer ${GROK_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: safeModel,
-        messages,
-        temperature: safeTemperature,
-        ...(max_tokens && { max_tokens: Number(max_tokens) || 1024 }),
-      })
+      body: JSON.stringify(upstreamBody),
     });
 
     if (!response.ok) {
@@ -338,21 +402,33 @@ export default async function handler(req, res) {
         snippet: (errorText || '').slice(0, 280),
         model: safeModel,
       });
-      if (response.status === 403) {
+      if (debugFullPost) {
+        logError('grok.debug_fullpost_upstream', {
+          status: response.status,
+          snippet: (errorText || '').slice(0, 500),
+          model: safeModel,
+        });
+      }
+      if (response.status === 401 || response.status === 403) {
         return res.status(502).json({
           error: true,
-          message: 'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.'
+          code: 'GROK_AUTH_FAILED',
+          message:
+            'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.',
         });
       }
       if (response.status === 400) {
         return res.status(502).json({
           error: true,
-          message: 'Grok API rejected the request. The model name may be invalid or the request was malformed.'
+          code: 'GROK_UPSTREAM_INVALID',
+          message:
+            'Grok API rejected the request. The model name may be invalid or the request was malformed.',
         });
       }
-      return res.status(502).json({ 
+      return res.status(502).json({
         error: true,
-        message: 'AI service error. Please try again.' 
+        code: 'GROK_UPSTREAM_ERROR',
+        message: 'AI service error. Please try again.',
       });
     }
 
@@ -376,9 +452,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     logError('grok.proxy_error', { error: error.message });
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: true,
-      message: 'An unexpected error occurred. Please try again.' 
+      code: 'GROK_PROXY_ERROR',
+      message: 'An unexpected error occurred. Please try again.',
     });
   }
 }
