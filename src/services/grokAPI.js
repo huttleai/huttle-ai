@@ -445,6 +445,9 @@ async function getAuthHeaders() {
 function getGrokProxyErrorMessage(errorData, status) {
   if (errorData?.message && typeof errorData.message === 'string') return errorData.message;
   if (typeof errorData?.error === 'string') return errorData.error;
+  if (errorData?.upstreamDetail && typeof errorData.upstreamDetail === 'string') {
+    return `${errorData.message || 'Grok API error'} (${errorData.upstreamDetail})`;
+  }
   return `API error: ${status}`;
 }
 
@@ -456,10 +459,33 @@ function truncateForAiPrompt(text, maxChars = 2800) {
 
 const DEFAULT_GROK_MODEL_CLIENT = 'grok-4-1-fast-non-reasoning';
 
+/**
+ * xAI model ids use hyphens in the minor version (4-1), not dots (4.1).
+ * Aligns with `normalizeGrokModelIdAliases` in `api/ai/grok.js`.
+ * @param {string} modelId
+ */
+function normalizeClientGrokModelId(modelId) {
+  if (typeof modelId !== 'string') return modelId;
+  const t = modelId.trim();
+  if (!t) return t;
+  const lower = t.toLowerCase();
+  const map = new Map([
+    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+    ['grok-4.1-fast', 'grok-4-1-fast'],
+    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+  ]);
+  if (map.has(lower)) return map.get(lower);
+  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
+  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
+  return t;
+}
+
 function resolveGrokModelIdClientFallback() {
   const chat = (import.meta.env.VITE_GROK_CHAT_MODEL || '').trim();
   const legacy = (import.meta.env.VITE_GROK_MODEL || '').trim();
-  return chat || legacy || DEFAULT_GROK_MODEL_CLIENT;
+  return normalizeClientGrokModelId(chat || legacy || DEFAULT_GROK_MODEL_CLIENT);
 }
 
 /**
@@ -467,8 +493,8 @@ function resolveGrokModelIdClientFallback() {
  * @param {'fast'|'reasoning'} [mode]
  */
 function getGrokModel(mode = 'fast') {
-  const fast = String(__GROK_FAST_MODEL__ || '').trim();
-  const reasoning = String(__GROK_REASONING_MODEL__ || '').trim();
+  const fast = normalizeClientGrokModelId(String(__GROK_FAST_MODEL__ || '').trim());
+  const reasoning = normalizeClientGrokModelId(String(__GROK_REASONING_MODEL__ || '').trim());
   if (mode === 'reasoning' && reasoning) return reasoning;
   if (fast) return fast;
   return resolveGrokModelIdClientFallback();
@@ -876,6 +902,24 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
   "notes": string
 }`;
 
+    if (fullPostBuilder) {
+      const igTik = ['instagram', 'tiktok'].includes(String(platform).toLowerCase());
+      userMessage += igTik
+        ? `
+
+FULL POST BUILDER — platform-native caption (Instagram/TikTok):
+- Open with a strong line that echoes or adapts the selected hook (do not paste it twice verbatim if it already works as line 1).
+- Add 1–3 short, concrete value beats (benefits, objection handling, or proof-style specifics tied to THIS topic — not generic filler).
+- End with one clear CTA suited to the platform: Instagram → save, share, comment, DM, or link in bio; TikTok → comment keyword, follow, stitch/duet, or DM as appropriate.
+- Sound like a strong human creator in this niche — avoid vague AI phrases ("unlock", "game-changer", "in today's world", "whether you're a beginner or pro").
+- Keep total length sensible for feed viewing; no markdown in caption body.`
+        : `
+
+FULL POST BUILDER:
+- Structure: hook echo → concrete value → single clear CTA.
+- Stay specific to the topic; avoid generic templates.`;
+    }
+
     const captionRegenNonce =
       typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
         ? options.forceFreshRegeneration.trim().slice(0, 80)
@@ -919,8 +963,14 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
     };
   } catch (error) {
     console.error('Grok API Error:', error);
-    
-    // Fallback: generate simple captions using the user's actual topic
+    if (fullPostBuilder) {
+      return {
+        success: false,
+        error: error?.message || 'Caption generation failed',
+        code: error?.code || 'GROK_CAPTION_FAILED',
+        status: error?.status,
+      };
+    }
     const topic = contentData.topic || 'your content';
     const fallbackCaptions = [
       `1. Discover the amazing world of ${topic}! Ready to transform your approach? Let us show you how.`,
@@ -1011,7 +1061,9 @@ export async function scoreContentQuality(content, brandData = null, options = {
     const brandSection = brandContext ? `\n${creatorBlock}\nBrand Profile to evaluate against:\n${brandContext}` : (creatorBlock || '');
     const promptProfile = getPromptBrandProfile(brandData);
     const platformSlug = String(
-      (Array.isArray(promptProfile.platforms) && promptProfile.platforms[0]) || 'instagram'
+      options.platform
+        || (Array.isArray(promptProfile.platforms) && promptProfile.platforms[0])
+        || 'instagram'
     ).toLowerCase();
     const platformDisplay = getPlatform(platformSlug)?.name || platformSlug;
     const signalBlock =
@@ -1062,7 +1114,8 @@ Return ONLY valid JSON with this exact shape:
 Rules:
 - All six scores are 0–100 integers.
 - strengths: 2–4 items; risks: 2–4 items; fixes: 3–6 items with concrete suggestedRewrite lines.
-- Be ruthless and specific; avoid generic praise.`,
+- Be ruthless and specific; avoid generic praise.
+${fullPostBuilder ? '- Full Post Builder: Reference the algorithm signal themes above in strengths/risks/fixes where relevant; every fix must name what to change and why.' : ''}`,
       },
     ];
     const grokScorerOpts = { mode: GROK_MODE_QUALITY, max_tokens: 4096 };
@@ -1229,17 +1282,24 @@ const HOOK_BUILDER_MOCK_THEME_NEEDLE = {
   authority: 'shocking',
 };
 
+const FORBIDDEN_GENERIC_HOOK_FRAMES = `FORBIDDEN (do not use, even with the topic swapped in): frames like "Most advice about [topic] is backwards — here's what actually works", "[topic] is overrated unless you fix this first", "Stop treating [topic] like a hobby if you want real results", "What if everything you thought about [topic] was wrong?", "Why do so many people still get [topic] backwards?", "Ready to transform your [topic]?" — these are mad-lib templates; replace with topic-native detail.`;
+
 const HOOK_BUILDER_THEME_DIRECTIVES = {
-  curiosity:
-    'Theme "curiosity": compelling questions that stop the scroll; most hooks end with "?". Avoid generic "what if everything you knew about [topic] was wrong" — ask something only someone who understands the topic would ask.',
-  intrigue:
-    'Theme "intrigue": tease a concrete secret, result, or insider angle about the topic — not vague mystery; do not reveal the payoff in the hook line.',
-  surprise:
-    'Theme "surprise": counterintuitive contrasts or real-feeling pattern breaks about the topic; do not invent fake statistics or precise percentages — use qualitative surprises grounded in reality.',
-  storytelling:
-    'Theme "storytelling": first person, mid-moment, with tangible sensory or emotional detail about the topic — not abstract "I was deep into [topic]" or "I didn\'t plan to care about [topic]" frames.',
-  authority:
-    'Theme "authority": strong, specific, disagreeable opinions about the topic — not vague motivation; someone familiar with the subject should feel you took a real stance.',
+  curiosity: `Theme "curiosity" (Question): A specific question about a real aspect of the topic that the reader needs answered. Must end with "?". Not a generic "gotcha" question — something only someone familiar with the topic would ask.
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`,
+  intrigue: `Theme "intrigue" (Teaser): Tease a specific secret, result, or insider insight about the topic. Create curiosity about something concrete; do not reveal the payoff in the hook line.
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`,
+  surprise: `Theme "surprise" (Shocking Stat): A surprising contrast or counterintuitive truth about the topic. Do NOT invent fake numbers or precise percentages. Use qualitative surprises grounded in reality.
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`,
+  storytelling: `Theme "storytelling" (Story): Start mid-moment in a real-feeling personal experience with the topic. Use first person. Include tangible sensory or emotional details — not vague lines like "I was deep into [topic] when everything clicked."
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`,
+  authority: `Theme "authority" (Bold Claim): A strong, specific, opinionated statement about the topic that takes a concrete stance someone could disagree with — not vague motivation.
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`,
   _default:
     'Match the requested hook theme in every object; stay stylistically consistent with that theme.',
 };
@@ -1276,6 +1336,7 @@ function normalizeHookBuilderThemeKey(theme) {
 
 /**
  * Map Full Post Builder hook-type label to Hook Builder theme slug (for fallback generation).
+ * Question→curiosity, Teaser→intrigue, Shocking Stat→surprise, Story→storytelling, Bold Claim→authority.
  * @param {string} fullPostHookType
  * @returns {string}
  */
@@ -1332,16 +1393,24 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
 
     const topicTrimmed = String(input ?? '').trim();
     const topicQuoted = topicTrimmed ? `"${topicTrimmed}"` : 'the topic';
-    const topicSpecificityAndCasing = `Topic-specificity and language (mandatory for every hook):
-- Every hook must reference a real detail, experience, misconception, pain point, or insight specific to ${topicQuoted}. Do NOT write generic sentence templates with the topic word inserted. If the hook would still make sense with any random topic swapped in, rewrite it.
-- Use natural English grammar: the topic should be lowercase mid-sentence unless it is a proper noun or brand name (e.g. write "the truth about microneedling" not "the truth about Microneedling" when the topic is a common noun).`;
+    const topicSpecificityAndCasing = `CRITICAL — TOPIC SPECIFICITY (every hook):
+Every hook must demonstrate SPECIFIC knowledge about ${topicQuoted}. Reference real details, experiences, common misconceptions, pain points, or outcomes that someone familiar with ${topicQuoted} would recognize.
+
+TEST: If you can replace ${topicQuoted} with any random topic and the hook still makes sense, it is too generic. Rewrite until it could ONLY be about ${topicQuoted}.
+
+BAD (generic template): "Most advice about ${topicQuoted} is backwards — here's what actually works."
+GOOD (topic-specific): Name an actual aspect, myth, technique, outcome, or experience unique to ${topicQuoted}.
+
+CAPITALIZATION: Use natural English grammar. Lowercase the topic phrase mid-sentence unless it is a proper noun or brand name. Write "the truth about microneedling" NOT "the truth about Microneedling" when the topic is a common procedure or generic noun.
+
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`;
 
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'hooks',
       brandData,
       `${themeDirective}
 
-Generate hooks using the "${canonicalTheme}" theme (user-selected label: "${themeRaw}"). The hooks must feel stylistically consistent with this theme; do not default to generic question-style hooks unless the theme is curiosity.
+Generate hooks using theme "${canonicalTheme}" (user label: "${themeRaw}"). Every hook must match THIS theme only — do not drift into other hook types.
 
 ${topicSpecificityAndCasing}
 
@@ -1353,12 +1422,12 @@ Return ONLY valid JSON (no markdown): a JSON array of 6–10 HookIdea objects as
     const userMessage = `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 
 ${researchBlock}
-Generate hooks using the "${themeRaw}" theme. Stylistic target (canonical): "${canonicalTheme}". Every hook must match this theme; see system message for theme rules and topic-specificity rules.
+Generate hooks for theme "${themeRaw}" (canonical: "${canonicalTheme}"). Interpolate this theme into every hook mentally: each line must read as "${themeRaw}" / "${canonicalTheme}" — see system message for the exact style rules for this theme.
 
 Generate hooks for:
 - Platform: ${platformData?.name || platform}
 - Topic / idea: ${topicTrimmed || input}
-- Hook theme (mandatory): ${themeRaw} → apply "${canonicalTheme}" style to every hook
+- Hook theme (mandatory — apply to every hook): ${themeRaw} → "${canonicalTheme}"
 - Niche: ${niche}
 - Audience: ${audience}
 - Brand tone: ${brandVoice}
@@ -1382,16 +1451,26 @@ Return ONLY a JSON array with 6–10 objects. Each object:
   "complexity": "simple" | "moderate" | "story-driven"
 }
 
-At least 6 of the hooks must clearly embody "${canonicalTheme}" (theme "${themeRaw}"); any remaining variety must still fit the same theme (no mixing in unrelated hook types).`;
+Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); no mixing in unrelated hook types. No two hooks may share the same generic sentence frame with only a noun swapped.`;
 
-    const data = await callGrokAPI(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      0.8,
-      { mode: GROK_MODE_QUALITY },
-    );
+    const hookBuilderMessages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+    let data;
+    try {
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: GROK_MODE_QUALITY });
+    } catch (firstErr) {
+      const retryable =
+        firstErr?.code === 'GROK_UPSTREAM_INVALID'
+        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
+        || firstErr?.status === 502;
+      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      if (import.meta.env.DEV) {
+        console.warn('[generateHooks] Quality model failed; retrying with fast model', firstErr?.code);
+      }
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: 'fast' });
+    }
 
     const parsed = parseJsonFromResponse(data.content || '');
     const hooksText = hooksFromHookIdeasArray(parsed) || (typeof data.content === 'string' ? data.content : '');
@@ -1406,51 +1485,13 @@ At least 6 of the hooks must clearly embody "${canonicalTheme}" (theme "${themeR
     };
   } catch (error) {
     console.error('Grok API Error:', error);
-
-    const t = String(input || 'this').trim() || 'this';
-    const fallbackByCanonical = {
-      curiosity: [
-        `1. What if everything you thought about ${t} was wrong?`,
-        `2. Why do so many people still get ${t} backwards?`,
-        `3. Is ${t} actually the bottleneck you think it is?`,
-        `4. Have you been making ${t} harder than it needs to be?`,
-      ],
-      intrigue: [
-        `1. The part of ${t} nobody explains until it's too late...`,
-        `2. I almost didn't share this about ${t}...`,
-        `3. There's a hidden layer to ${t} most people miss.`,
-        `4. Wait until you see what changes ${t} completely.`,
-      ],
-      surprise: [
-        `1. Everything you assumed about ${t}? Flip it.`,
-        `2. The quiet pattern behind ${t} that breaks the usual rules.`,
-        `3. ${t} works backward from what most people expect.`,
-        `4. If ${t} feels obvious, you're probably skipping the real move.`,
-      ],
-      storytelling: [
-        `1. I was deep into ${t} when everything clicked.`,
-        `2. I didn't plan to care about ${t} until this moment.`,
-        `3. Last week I messed up ${t} — and learned fast.`,
-        `4. Here's the honest version of my ${t} story.`,
-      ],
-      authority: [
-        `1. ${t} is overrated unless you fix this first.`,
-        `2. Stop treating ${t} like a hobby if you want real results.`,
-        `3. Most advice about ${t} is backwards — here's what actually works.`,
-        `4. If you're serious about ${t}, commit to this non-negotiable.`,
-      ],
-    };
-    const fallbackHooks = fallbackByCanonical[canonicalTheme] || [
-      `1. What if everything you knew about ${t} was wrong?`,
-      `2. Stop scrolling — this changes everything about ${t}.`,
-      `3. I tried ${t} for 30 days. Here's what happened...`,
-      `4. The truth about ${t} that nobody talks about.`,
-    ];
+    const message = typeof error?.message === 'string' ? error.message : 'Hook generation failed';
+    const code = typeof error?.code === 'string' ? error.code : 'GROK_HOOK_BUILDER_FAILED';
     return {
-      success: true,
-      hooks: fallbackHooks.join('\n'),
-      usage: { fallback: true },
-      note: 'Using fallback hooks due to API unavailability'
+      success: false,
+      error: message,
+      code,
+      status: typeof error?.status === 'number' ? error.status : undefined,
     };
   }
 }
@@ -1476,43 +1517,43 @@ ${trendDescription ? `- Brief: ${trendDescription}` : ''}
 `
       : '';
 
-    const fullPostHooksInstruction = `You are a viral social media copywriter. Generate exactly 4 hooks about ${topicQuoted} in the "${safeHookType}" style for ${platformName}.
+    const fullPostHooksInstruction = `You are a viral social media copywriter who deeply understands ${topicQuoted}. Generate exactly 4 hooks in the "${safeHookType}" style for ${platformName}.
 
-CRITICAL RULES:
-1. Every hook must show SPECIFIC knowledge about ${topicQuoted}. Reference real details, experiences, common misconceptions, pain points, or outcomes that someone familiar with the subject would recognize. Do NOT write generic templates that could apply to any topic — if you could swap the topic word for any other word and the hook still works, it is too generic. Rewrite it.
+CRITICAL — TOPIC SPECIFICITY:
+Every hook must demonstrate SPECIFIC knowledge about ${topicQuoted}. Reference real details, experiences, common misconceptions, pain points, or outcomes that someone familiar with ${topicQuoted} would recognize.
 
-2. Hook style — follow "${safeHookType}" strictly:
-   - "Question": A specific, compelling question about the topic that the reader needs answered. Must end with "?". Bad: "What if everything you knew about [topic] was wrong?" (generic). Good: a question referencing a real aspect of the topic.
-   - "Teaser": Tease a specific secret, result, or insider insight about the topic. Create curiosity about something concrete, not vague mystery.
-   - "Shocking Stat": A surprising contrast, counterintuitive truth, or unexpected pattern about the topic. Do NOT invent fake numbers. Use qualitative surprises grounded in reality.
-   - "Story": Start mid-moment in a real-feeling personal experience with the topic. Use first person. Reference tangible sensory or emotional details — not abstract statements about "caring" or being "deep into" the topic.
-   - "Bold Claim": A strong, specific, opinionated statement about the topic that takes a real stance. Not vague motivation — a concrete opinion someone could disagree with.
+TEST: If you can replace ${topicQuoted} with any random topic and the hook still makes sense, it is too generic. Rewrite it until it could ONLY be about ${topicQuoted}.
 
-3. Capitalization: Use natural English grammar. The topic phrase should be lowercase mid-sentence unless it is a proper noun or brand name (e.g. write "the truth about microneedling" not "the truth about Microneedling" when microneedling is a common noun).
+BAD (generic template): "Most advice about ${topicQuoted} is backwards — here's what actually works."
+GOOD (topic-specific): Reference an actual aspect, myth, technique, outcome, or experience unique to ${topicQuoted}.
 
-4. Each hook must be one sentence, under 20 words, and immediately make someone stop scrolling.
+HOOK STYLE — follow "${safeHookType}" strictly:
+- "Question": A specific question about a real aspect of ${topicQuoted} that the reader needs answered. Must end with "?".
+- "Teaser": Tease a specific secret, result, or insider insight about ${topicQuoted}. Create curiosity about something concrete.
+- "Shocking Stat": A surprising contrast or counterintuitive truth about ${topicQuoted}. Do NOT invent fake numbers. Use qualitative surprises grounded in reality.
+- "Story": Start mid-moment in a real-feeling personal experience with ${topicQuoted}. Use first person. Include tangible sensory or emotional details — not vague statements like "I was deep into ${topicQuoted} when everything clicked."
+- "Bold Claim": A strong, specific, opinionated statement about ${topicQuoted} that takes a concrete stance someone could disagree with.
 
-5. Do NOT just insert the topic word into a generic sentence frame. Every hook must be specific enough that it could ONLY be about this topic.
+CAPITALIZATION: Use natural English grammar. Lowercase ${topicQuoted} mid-sentence unless it is a proper noun or brand name. Write "the truth about microneedling" NOT "the truth about Microneedling."
 
-Generate exactly 4 hooks in the "${safeHookType}" style ONLY. Do not mix styles.`;
+Each hook: one sentence, under 20 words, scroll-stopping. Do not mix styles.
 
-    // Full Post Builder: non-reasoning model + explicit max_tokens (model id from getGrokModel via proxy body).
+${FORBIDDEN_GENERIC_HOOK_FRAMES}`;
+
     const systemMsg = {
       role: 'system',
       content: buildAIPowerBrainSystemPrompt(
         'hooks',
         brandData,
         `Full Post Builder mode: output exactly 4 hooks.
-Format (required): plain numbered lines only, one hook per line:
-1. First hook here
-2. Second hook here
-3. Third hook here
-4. Fourth hook here
-Do not wrap in markdown code fences. Do not use JSON unless you output ONLY a JSON array of 4 strings.
+Format (required): plain numbered lines only, one hook per line, OR a JSON array of exactly 4 strings only.
+
+Variety rule: use different angles across the set (e.g. objection, outcome, misconception, moment, mechanism) while staying within the single selected hook TYPE "${safeHookType}" — avoid repeating the same sentence shape twice.
 
 ${fullPostHooksInstruction}
 
 Each hook must be platform-native for ${platformName} and strictly follow the "${safeHookType}" rules above.
+No markdown fences. No emojis unless the user brand explicitly uses them.
 
 ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
       ),
@@ -1522,27 +1563,45 @@ ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
       role: 'user',
       content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 ${trendBlock}
-Generate 4 hooks for this full-post workflow. Use ONLY the "${safeHookType}" style (see system message). Do not mix hook styles.
+Generate exactly 4 hooks for this full-post workflow. Use ONLY the "${safeHookType}" style (see system message). Do not mix hook styles.
 
 Topic: ${topicQuoted}
 Platform: ${platformName}
 ${getAudiencePainPointGuidance(promptProfile.niche)}
 
 Requirements:
-- Hook type (mandatory): ${safeHookType} — all four lines must match this style
+- Hook type (mandatory): ${safeHookType} — every line must match this style
 - Match the creator's brand tone: ${promptProfile.tone}
 - Stay under 20 words per hook; one sentence each
-- Show topic-specific knowledge — no generic mad-lib frames; obey capitalization rule (lowercase common nouns mid-sentence)
+- Show topic-specific knowledge — no generic mad-lib frames; obey capitalization (lowercase common nouns / procedure names mid-sentence unless proper noun)
 - Make each hook platform-native for ${platformName}
+- Plain text only for hooks (no #, no bullets)
 
-Return only the four numbered hooks (or a JSON array of 4 strings). No preamble or explanation.`,
+Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamble or explanation.`,
     };
 
-    const data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-      mode: GROK_MODE_QUALITY,
-      max_tokens: 1024,
-      grok_debug_fullpost: true,
-    });
+    let data;
+    try {
+      data = await callGrokAPI([systemMsg, userMsg], 0.7, {
+        mode: GROK_MODE_QUALITY,
+        max_tokens: 1024,
+        grok_debug_fullpost: true,
+      });
+    } catch (firstErr) {
+      const retryable =
+        firstErr?.code === 'GROK_UPSTREAM_INVALID'
+        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
+        || firstErr?.status === 502;
+      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      if (import.meta.env.DEV) {
+        console.warn('[generateFullPostHooks] Quality model request failed; retrying with fast model', firstErr?.code);
+      }
+      data = await callGrokAPI([systemMsg, userMsg], 0.7, {
+        mode: 'fast',
+        max_tokens: 1024,
+        grok_debug_fullpost: true,
+      });
+    }
 
     const rawContent = typeof data.content === 'string' ? data.content : '';
     const hooks = parseFullPostHookList(rawContent);
@@ -1690,16 +1749,28 @@ Return ONLY JSON:
 
 Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
 
+    const ctaRegenNonce =
+      typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
+        ? options.forceFreshRegeneration.trim().slice(0, 80)
+        : '';
+    let ctaUserMessage = userMessage;
+    if (ctaRegenNonce) {
+      ctaUserMessage += `\n\n— Regeneration (${ctaRegenNonce}) — Produce fresh CTAs from the latest topic/caption/goal; do not repeat a previous default set verbatim.`;
+    }
+
     const grokCtaOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
     if (fullPostBuilder) {
       grokCtaOpts.grok_debug_fullpost = true;
       grokCtaOpts.grok_debug_fullpost_step = 'ctas';
     }
+    if (ctaRegenNonce) {
+      grokCtaOpts.forceCacheRefresh = true;
+    }
 
     const data = await callGrokAPI(
       [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
+        { role: 'user', content: ctaUserMessage },
       ],
       0.7,
       grokCtaOpts,
@@ -1720,6 +1791,14 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
       };
     }
 
+    if (fullPostBuilder) {
+      return {
+        success: false,
+        error: 'Could not parse CTA response.',
+        code: 'CTA_PARSE',
+      };
+    }
+
     // Fallback parsing
     return {
       success: true,
@@ -1736,6 +1815,14 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
     };
   } catch (error) {
     console.error('Grok API Error:', error);
+    if (fullPostBuilder) {
+      return {
+        success: false,
+        error: error?.message || 'CTA generation failed',
+        code: error?.code || 'GROK_CTA_FAILED',
+        status: error?.status,
+      };
+    }
     return {
       success: true,
       ctas: [
@@ -2836,6 +2923,7 @@ ${buildPromptGuardrails()}`,
       {
         role: 'user',
         content: `${buildPromptBrandSection(brandData)}
+${options.platform ? `\nPrimary platform: ${String(options.platform)}\n` : ''}
 
 Analyze how human this content sounds. Score it and flag specific AI-sounding phrases with natural alternatives.${brandSection}
 
@@ -2849,7 +2937,26 @@ ${truncateForAiPrompt(content, 8000)}`,
       grokHumanOpts.grok_debug_fullpost = true;
       grokHumanOpts.grok_debug_fullpost_step = 'humanizer';
     }
-    const data = await callGrokAPI([...messages], 0.3, grokHumanOpts);
+
+    let data;
+    if (fp) {
+      try {
+        data = await callClaudeAPI([...messages], 0.3);
+        const claudeParsed = parseJsonFromResponse(data.content || '');
+        if (claudeParsed?.overall != null) {
+          return { success: true, score: claudeParsed, usage: data.usage };
+        }
+        if (import.meta.env.DEV) {
+          console.debug('[scoreHumanness] Claude returned no usable JSON; falling back to Grok');
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.debug('[scoreHumanness] Claude failed, using Grok', e?.message);
+        }
+      }
+    }
+
+    data = await callGrokAPI([...messages], 0.3, grokHumanOpts);
 
     const parsed = parseJsonFromResponse(data.content);
     if (parsed) {

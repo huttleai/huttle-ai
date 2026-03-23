@@ -22,17 +22,32 @@ function normalizeHookItem(entry) {
 }
 
 function tryParseJsonHooks(raw) {
-  try {
-    const direct = JSON.parse(raw);
-    if (Array.isArray(direct)) {
-      return direct.map(normalizeHookItem).filter((h) => h.length > 2);
+  const s = String(raw ?? '').trim();
+  const tryParse = (chunk) => {
+    try {
+      const direct = JSON.parse(chunk);
+      if (Array.isArray(direct)) {
+        return direct.map(normalizeHookItem).filter((h) => h.length > 2);
+      }
+      if (direct && typeof direct === 'object' && Array.isArray(direct.hooks)) {
+        return direct.hooks.map(normalizeHookItem).filter((h) => h.length > 2);
+      }
+    } catch {
+      /* fall through */
     }
-    if (direct && typeof direct === 'object' && Array.isArray(direct.hooks)) {
-      return direct.hooks.map(normalizeHookItem).filter((h) => h.length > 2);
-    }
-  } catch {
-    /* fall through */
+    return [];
+  };
+
+  const fromFull = tryParse(s);
+  if (fromFull.length) return fromFull;
+
+  // Claude sometimes prepends text before the JSON array; extract outermost [...] block.
+  const start = s.indexOf('[');
+  const end = s.lastIndexOf(']');
+  if (start !== -1 && end > start) {
+    return tryParse(s.slice(start, end + 1));
   }
+
   return [];
 }
 

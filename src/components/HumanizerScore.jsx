@@ -23,6 +23,7 @@ const dimensionLabels = {
 
 export default function HumanizerScore({
   content: externalContent,
+  platform: scoringPlatform,
   onContentUpdate,
   onScoreChange,
   onTrackUsage,
@@ -73,7 +74,11 @@ export default function HumanizerScore({
         return;
       }
 
-      const scoreOpts = fullPostBuilderContext ? { fullPostBuilder: true } : undefined;
+      const scoreOpts = fullPostBuilderContext
+        ? { fullPostBuilder: true, platform: scoringPlatform }
+        : scoringPlatform
+          ? { platform: scoringPlatform }
+          : undefined;
       const res = await scoreHumanness(content, brandData, scoreOpts);
       if (isStale()) {
         if (import.meta.env.DEV) console.debug('[HumanizerScore] stale response ignored (after API)', reqId);

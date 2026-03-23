@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Lightbulb, PenTool, PenLine, Hash, MessageSquare, Check, ChevronLeft,
@@ -31,11 +31,32 @@ import { saveContentLibraryItem, FULL_POST_BUILDER_CREDITS_PER_RUN } from '../co
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
-import { enhanceCaptionWithClaude } from '../services/claudeAPI';
+import { getPromptBrandProfile } from '../utils/brandContextBuilder';
+import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../services/claudeAPI';
+import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
+
+/**
+ * --- Full Post Builder — implementation report (routing & reliability) ---
+ * Files touched: FullPostBuilder.jsx, claudeAPI.js, perplexityAPI.js, grokAPI.js,
+ *   api/ai/perplexity.js, HumanizerScore.jsx
+ *
+ * Model routing:
+ * - Hooks: Claude Sonnet (generateFullPostHooksWithClaude) → fallback Grok 4.1 Fast Reasoning (generateFullPostHooks / GROK_MODE_QUALITY).
+ * - Caption generate: Grok 4.1 Fast Reasoning (generateCaption, fullPostBuilder).
+ * - Caption enhance: Claude Sonnet (enhanceCaptionWithClaude) → fallback Grok reasoning (enhanceCaptionWithGrokFallback).
+ * - Hashtags: Perplexity llama-3.1-sonar-small-128k-online (generateFullPostHashtagsGrounded) → fallback sonar → fallback Grok (generateHashtags).
+ * - CTA: Grok 4.1 Fast Reasoning (generateStyledCTAs, fullPostBuilder).
+ * - Quality score: Claude Sonnet → Grok reasoning (scoreContentQuality); Humanizer: Claude JSON → Grok (scoreHumanness, fullPostBuilder).
+ * - Algorithm badge: local only (algorithmSignals.js via AlgorithmChecker).
+ *
+ * Root causes addressed: (1) Stuck buttons — hooks/caption/CTA use request ids + matching finally for loading; caption/CTA no longer return fake success fallbacks in Full Post Builder. (2) Repeated hashtags — FPB now uses Perplexity online first + regen nonce; Grok fallback forces fresh regeneration. (3) Missing Human/Quality — Humanizer gets platform context + Claude-first scoring in FPB; Quality uses wizard platform + full assembly; recomputes when the assembly changes on the final panel. (4) Algorithm “stuck at 50” — checklist weighted sum often ~50 when ~half of signals fail; labels under badges note AI vs checklist. Humanizer intentionally scores the caption only so “Humanize It” does not overwrite the whole assembly.
+ *
+ * Edge cases: Perplexity online model may be unavailable upstream (we fall back to sonar, then Grok). Web search quality varies by niche. Draft hydration still keyed by storageKey + prefill signature — avoid changing prefill query params mid-session.
+ */
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,6 +106,63 @@ const GOALS = [
   { id: 'leads', label: 'Generate leads' },
   { id: 'sales', label: 'Make a sale' },
 ];
+
+/** Richer goal copy for Claude hook generation (keeps UI labels unchanged). */
+function resolveClaudeHookGoalLabel(goalId, fallbackLabel) {
+  const map = {
+    followers: 'Build a follower base of people who match your ideal client',
+    engagement: 'Educate skeptical beginners and drive comments, saves, and shares',
+    leads: 'Book consultations and capture qualified leads',
+    sales: 'Sell treatment packages and convert interest into bookings',
+  };
+  return map[goalId] || fallbackLabel;
+}
+
+/**
+ * Single string for hook AI: full user topic plus trending context that is not already implied.
+ * @param {string} baseTopic
+ * @param {{ niche_angle?: string, format_type?: string, description?: string } | null | undefined} tc
+ */
+function buildFullPostClaudeHookTopic(baseTopic, tc) {
+  const t = String(baseTopic ?? '').trim();
+  if (!t) return t;
+  const segments = [t];
+  const tLow = t.toLowerCase();
+
+  const maybeAdd = (fragment) => {
+    const f = String(fragment ?? '').trim();
+    if (f.length < 3) return;
+    const fLow = f.toLowerCase();
+    if (tLow.includes(fLow)) return;
+    if (fLow.includes(tLow) && f.length > t.length) {
+      segments[0] = f;
+      return;
+    }
+    if (segments.some((s) => s.toLowerCase().includes(fLow) && fLow.length >= 8)) return;
+    segments.push(f);
+  };
+
+  maybeAdd(tc?.niche_angle);
+  maybeAdd(tc?.format_type);
+  maybeAdd(tc?.description);
+  return segments.join(' — ');
+}
+
+/** When brand profile has no target audience, infer a concrete default from the hook topic string. */
+function inferDefaultHookAudienceFromTopic(fullTopic) {
+  const t = String(fullTopic ?? '').toLowerCase();
+  if (t.includes('acne scar')) return 'women 25-45 worried about acne scars and texture';
+  if (t.includes('microneedling')) return 'people comparing microneedling options for texture and scars';
+  if (t.includes('botox') || t.includes('filler')) return 'people researching injectables and first-time med spa treatments';
+  if (t.includes('laser') || t.includes('ipl')) return 'people evaluating laser or light treatments for their skin goals';
+  return 'people scrolling for trustworthy, specific answers about this exact topic';
+}
+
+function resolveClaudeHookAudience(promptProfile, fullTopic) {
+  const raw = promptProfile?.targetAudience?.trim();
+  if (raw) return raw;
+  return inferDefaultHookAudienceFromTopic(fullTopic);
+}
 
 const HOOK_TYPES = ['Question', 'Teaser', 'Shocking Stat', 'Story', 'Bold Claim'];
 
@@ -234,6 +312,7 @@ export default function FullPostBuilder() {
   const hydrationSigRef = useRef(null);
   const pendingTrendingRef = useRef(null);
   const appliedTrendingRef = useRef(false);
+  const hooksReqIdRef = useRef(0);
   const captionReqIdRef = useRef(0);
   const hashtagReqIdRef = useRef(0);
   const enhanceReqIdRef = useRef(0);
@@ -454,7 +533,7 @@ export default function FullPostBuilder() {
     resetDownstream(2);
   };
 
-  // Step 2: Generate hooks (limited retries; credits only after a non-empty batch; single Hook Builder fallback)
+  // Step 2: Generate hooks (Claude primary → Grok reasoning fallback; limited retries; Hook Builder fallback)
   const handleGenerateHooks = async (hookTypeOverride) => {
     if (!topic.trim()) { addToast('Enter a topic first', 'warning'); return; }
     // `onClick={handleGenerateHooks}` passes a SyntheticEvent — never treat that as a hook type.
@@ -462,13 +541,21 @@ export default function FullPostBuilder() {
       typeof hookTypeOverride === 'string' && hookTypeOverride.trim()
         ? hookTypeOverride.trim()
         : selectedHookType;
+    const rid = ++hooksReqIdRef.current;
     setHooksErrorHint(null);
     setManualHookMode(false);
     setLoadingHooks(true);
     try {
       const tc = trendingContextRef.current;
+      const baseGoalLabel = GOALS.find((g) => g.id === goal)?.label || goal;
+      const promptProfileForHooks = getPromptBrandProfile(brandData, { platforms: [platform] });
+      const hookTopicFull = buildFullPostClaudeHookTopic(topic, tc);
+      const goalForClaude = resolveClaudeHookGoalLabel(goal, baseGoalLabel);
+      const audienceForClaude = resolveClaudeHookAudience(promptProfileForHooks, hookTopicFull);
+      const toneForClaude = promptProfileForHooks.tone || 'authentic';
+
       const payload = {
-        topic: topic.trim(),
+        topic: hookTopicFull,
         hookType: effectiveHookType,
         platform,
         formatType: tc?.format_type,
@@ -496,18 +583,65 @@ export default function FullPostBuilder() {
       const applyHookBatch = async (nextHooks, source) => {
         const ok = await chargeOnceIfNeeded();
         if (!ok) return false;
-        const trimmed = nextHooks.slice(0, 4);
+        const trimmed = nextHooks.slice(0, 6);
         setHooks(trimmed);
         setSelectedHook(trimmed[0]);
         resetDownstream(2);
         setHooksErrorHint(null);
-        if (import.meta.env.DEV && source === 'backup') {
-          console.debug('[FullPostBuilder] Hooks applied from Hook Builder fallback');
+        if (import.meta.env.DEV) {
+          console.debug('[FullPostBuilder] Hooks applied', { source, count: trimmed.length });
         }
         return true;
       };
 
+      if (import.meta.env.DEV) {
+        console.info('[FullPostBuilder] Claude hooks input', {
+          topic: hookTopicFull,
+          platform,
+          audience: audienceForClaude,
+          goal: goalForClaude,
+          tone: toneForClaude,
+        });
+      }
+
+      const claudeRes = await generateFullPostHooksWithClaude(
+        {
+          topic: hookTopicFull,
+          hookType: effectiveHookType,
+          platform,
+          goal: goalForClaude,
+          audience: audienceForClaude,
+          formatType: tc?.format_type,
+          nicheAngle: tc?.niche_angle,
+          trendDescription: tc?.description,
+        },
+        brandData,
+      );
+      if (rid !== hooksReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hooks (Claude) ignored', rid);
+        return;
+      }
+      if (claudeRes.success && Array.isArray(claudeRes.hooks) && claudeRes.hooks.length > 0) {
+        const applied = await applyHookBatch(claudeRes.hooks, 'claude');
+        if (applied) return;
+      } else if (import.meta.env.DEV) {
+        console.warn('[FullPostBuilder] Claude hooks empty or failed, using Grok fallback', {
+          code: claudeRes?.code,
+          error: claudeRes?.error,
+        });
+        const errText = String(claudeRes?.error || '');
+        if (errText.includes('404') || errText.toLowerCase().includes('not found')) {
+          console.warn(
+            '[FullPostBuilder] Claude proxy returned 404 — start the local API (npm run dev:local) so Vite can proxy /api to port 3001, or deploy with a working /api/ai/claude route.',
+          );
+        }
+      }
+
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (rid !== hooksReqIdRef.current) {
+          if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hooks loop exit', rid);
+          return;
+        }
         if (attempt > 0) {
           const delayMs = 800 * 2 ** (attempt - 1);
           console.warn('[FullPostBuilder] Retrying hook generation', { attempt, delayMs, topic: topic.slice(0, 80) });
@@ -521,16 +655,20 @@ export default function FullPostBuilder() {
           break;
         }
 
+        if (rid !== hooksReqIdRef.current) return;
+
         if (res.success && Array.isArray(res.hooks) && res.hooks.length > 0) {
-          await applyHookBatch(res.hooks, 'primary');
+          await applyHookBatch(res.hooks, 'grok');
           return;
         }
       }
 
+      if (rid !== hooksReqIdRef.current) return;
+
       if (shouldAttemptHookBuilderFallback(lastRes)) {
         try {
           const theme = mapFullPostHookTypeToHookBuilderTheme(effectiveHookType);
-          const fb = await generateHooks(topic.trim(), brandData, theme, platform, { skipRealtimeResearch: true });
+          const fb = await generateHooks(hookTopicFull, brandData, theme, platform, { skipRealtimeResearch: true });
           const list = extractHooksFromHookBuilderResult(fb);
           if (list.length > 0) {
             const applied = await applyHookBatch(list, 'backup');
@@ -555,7 +693,9 @@ export default function FullPostBuilder() {
       setHooksErrorHint(hint);
       addToast(hint, 'error');
     } finally {
-      setLoadingHooks(false);
+      if (rid === hooksReqIdRef.current) {
+        setLoadingHooks(false);
+      }
     }
   };
 
@@ -590,6 +730,12 @@ export default function FullPostBuilder() {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale caption response ignored', rid);
         return;
       }
+      if (!res.success) {
+        const bucket = classifyGrokFailure(res || {});
+        addToast(stepToolFailureMessage('caption', bucket), 'error');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate API fail', { rid, bucket });
+        return;
+      }
       if (res.success && res.caption) {
         const captions = res.caption.split(/\d+\.\s+/).filter((c) => c.trim());
         captionText = captions[0]?.trim() || res.caption.trim();
@@ -621,7 +767,7 @@ export default function FullPostBuilder() {
 
   const handleEnhanceCaption = async () => {
     const w = wizardRef.current;
-    const cap = String(w.caption || '').trim();
+    const cap = String(caption || '').trim();
     if (!cap) {
       addToast('Generate or write a caption first', 'warning');
       return;
@@ -629,34 +775,39 @@ export default function FullPostBuilder() {
 
     const rid = ++enhanceReqIdRef.current;
     const enhanceNonce = makeFreshRegenNonce('enh');
+    const goalLabel = GOALS.find((g) => g.id === goal)?.label || goal;
     if (import.meta.env.DEV) {
       console.debug('[FullPostBuilder] caption enhance start', { rid });
     }
     setLoadingCaptionEnhancement(true);
     try {
-      try {
-        const res = await enhanceCaptionWithClaude({
-          caption: cap,
-          platform: w.platform,
-          topic: w.topic,
-          selectedHook: w.selectedHook,
-        }, w.brandData);
+      const claudeRes = await enhanceCaptionWithClaude({
+        caption: cap,
+        platform: w.platform,
+        topic: w.topic,
+        selectedHook: w.selectedHook,
+        goal: goalLabel,
+        audience: w.brandData?.targetAudience,
+        brandVoice: w.brandData?.brandVoice,
+      }, w.brandData);
 
-        if (rid !== enhanceReqIdRef.current) {
-          if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance (Claude) ignored', rid);
-          return;
-        }
-
-        if (res.success && res.caption) {
-          setCaption(res.caption);
-          resetDownstream(3);
-          addToast('Caption updated.', 'success');
-          if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance success (Claude)', { rid });
-          return;
-        }
-      } catch {
-        /* try Grok */
+      if (rid !== enhanceReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance (Claude) ignored', rid);
+        return;
       }
+
+      if (claudeRes.success && claudeRes.caption) {
+        setCaption(claudeRes.caption);
+        resetDownstream(3);
+        addToast('Caption updated.', 'success');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance success (Claude)', { rid });
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        console.debug('[FullPostBuilder] Claude enhance unavailable, trying Grok', claudeRes?.error);
+      }
+
       const grokRes = await enhanceCaptionWithGrokFallback({
         caption: cap,
         platform: w.platform,
@@ -673,16 +824,16 @@ export default function FullPostBuilder() {
         addToast('Caption updated.', 'success');
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance success (Grok)', { rid });
       } else {
-        addToast('Enhancement is temporarily unavailable. Try again shortly or edit manually.', 'warning');
+        addToast('Enhancement is temporarily unavailable. Your caption is unchanged — try again shortly or edit manually.', 'warning');
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance fail', { rid });
       }
-    } catch {
+    } catch (e) {
       if (rid !== enhanceReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale enhance error ignored', rid);
         return;
       }
-      addToast('Enhancement is temporarily unavailable. Try again shortly or edit manually.', 'warning');
-      if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance error', { rid });
+      addToast('Enhancement is temporarily unavailable. Your caption is unchanged — try again shortly or edit manually.', 'warning');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption enhance error', { rid, e });
     } finally {
       if (rid === enhanceReqIdRef.current) {
         setLoadingCaptionEnhancement(false);
@@ -701,32 +852,64 @@ export default function FullPostBuilder() {
     setHashtagStepError(null);
     setHashtagStreamlinedNotice(null);
     try {
-      const res = await generateHashtags({
-        topic: w.topic,
-        platform: w.platform,
-        selectedHook: w.selectedHook,
-        caption: w.caption,
-        goal: w.goal,
-      }, w.brandData, w.platform, {
-        fullPostBuilder: true,
-        forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('tag') : undefined,
-      });
+      const goalLabel = GOALS.find((g) => g.id === w.goal)?.label || w.goal;
+      const nicheKw = Array.isArray(brandData?.niche) ? brandData.niche.filter(Boolean).join(', ') : (brandData?.niche || '');
+
+      const tagNonce = forceFresh ? makeFreshRegenNonce('tag') : undefined;
+      const sonarRes = await generateFullPostHashtagsGrounded(
+        {
+          topic: w.topic,
+          caption: w.caption,
+          platform: w.platform,
+          goal: goalLabel,
+          selectedHook: w.selectedHook,
+          nicheKeywords: nicheKw,
+        },
+        brandData,
+        { forceFreshRegeneration: tagNonce },
+      );
+
       if (rid !== hashtagReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hashtags response ignored', rid);
         return;
       }
+
+      let res = sonarRes;
+      if (!sonarRes.success || !Array.isArray(sonarRes.hashtagData) || sonarRes.hashtagData.length < 5) {
+        if (import.meta.env.DEV) {
+          console.debug('[FullPostBuilder] Perplexity hashtags fallback to Grok', sonarRes?.code, sonarRes?.error);
+        }
+        res = await generateHashtags({
+          topic: w.topic,
+          platform: w.platform,
+          selectedHook: w.selectedHook,
+          caption: w.caption,
+          goal: w.goal,
+        }, w.brandData, w.platform, {
+          fullPostBuilder: true,
+          forceFreshRegeneration: tagNonce || makeFreshRegenNonce('tag-fb'),
+        });
+      }
+
+      if (rid !== hashtagReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hashtags (after fallback) ignored', rid);
+        return;
+      }
+
       if (res.success) {
         const parsed = Array.isArray(res.hashtagData) && res.hashtagData.length > 0
           ? res.hashtagData
           : parseHashtagsFromResponse(res.hashtags);
-        const next = parsed.slice(0, 10);
+        const next = parsed.slice(0, 15);
         if (next.length === 0) {
           const msg = 'No usable hashtags returned. Try Regenerate or add your own.';
           setHashtagStepError(msg);
           addToast(msg, 'warning');
         } else {
           setHashtags(next);
-          setHashtagStreamlinedNotice(res.streamlined ? 'Using streamlined hashtag generation right now.' : null);
+          setHashtagStreamlinedNotice(
+            res.streamlined ? 'Using streamlined hashtag generation right now.' : 'Hashtags grounded with live search where available.',
+          );
           resetDownstream(4);
           if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate success', { rid });
         }
@@ -764,9 +947,12 @@ export default function FullPostBuilder() {
     setSelectedCTA({ style: 'Custom', cta: t, tip: '' });
   };
 
-  const handleGenerateCTAs = async () => {
+  const handleGenerateCTAs = async ({ forceFresh = false } = {}) => {
     const w = wizardRef.current;
     const rid = ++ctaReqIdRef.current;
+    if (import.meta.env.DEV) {
+      console.debug('[FullPostBuilder] CTA generate start', { rid, forceFresh });
+    }
     setLoadingCTAs(true);
     setCtaStreamlinedNotice(null);
     try {
@@ -775,21 +961,33 @@ export default function FullPostBuilder() {
         goalType: w.goal,
         selectedHook: w.selectedHook,
         caption: w.caption,
-      }, w.brandData, w.platform, { fullPostBuilder: true });
-      if (rid !== ctaReqIdRef.current) return;
+      }, w.brandData, w.platform, {
+        fullPostBuilder: true,
+        forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('cta') : undefined,
+      });
+      if (rid !== ctaReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale CTA response ignored', rid);
+        return;
+      }
       if (res.success && Array.isArray(res.ctas) && res.ctas.length > 0) {
         setCtas(res.ctas.slice(0, 5));
         setSelectedCTA(null);
         setCustomCtaDraft('');
         setCtaStreamlinedNotice(res.streamlined ? 'Using streamlined CTA generation right now.' : null);
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] CTA generate success', { rid });
       } else {
         const bucket = classifyGrokFailure(res || {});
         addToast(stepToolFailureMessage('cta', bucket), 'warning');
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] CTA generate fail', { rid, bucket });
       }
     } catch (e) {
-      if (rid !== ctaReqIdRef.current) return;
+      if (rid !== ctaReqIdRef.current) {
+        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale CTA error ignored', rid);
+        return;
+      }
       const bucket = classifyGrokFailure({ code: e?.code, status: e?.status, error: e?.message });
       addToast(stepToolFailureMessage('cta', bucket), 'error');
+      if (import.meta.env.DEV) console.debug('[FullPostBuilder] CTA generate error', { rid });
     } finally {
       if (rid === ctaReqIdRef.current) {
         setLoadingCTAs(false);
@@ -797,7 +995,7 @@ export default function FullPostBuilder() {
     }
   };
 
-  const runScoring = async () => {
+  const runScoring = useCallback(async () => {
     const post = assembledPostRef.current;
     if (!String(post || '').trim()) return;
     const rid = ++scoringReqIdRef.current;
@@ -807,7 +1005,11 @@ export default function FullPostBuilder() {
     setLoadingQuality(true);
     setQualityScoreNotice(null);
     try {
-      const res = await scoreContentQuality(post, wizardRef.current.brandData, { fullPostBuilder: true });
+      const w = wizardRef.current;
+      const res = await scoreContentQuality(post, w.brandData, {
+        fullPostBuilder: true,
+        platform: w.platform,
+      });
       if (rid !== scoringReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale score response ignored', rid);
         return;
@@ -838,7 +1040,14 @@ export default function FullPostBuilder() {
         setLoadingQuality(false);
       }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!showFinalPanel) return;
+    const post = assembledPostRef.current;
+    if (!String(post || '').trim()) return;
+    void runScoring();
+  }, [showFinalPanel, assembledPost, runScoring]);
 
   const handleNext = async () => {
     if (currentStep === 0 && !topic.trim()) { addToast('Enter a topic', 'warning'); return; }
@@ -849,13 +1058,12 @@ export default function FullPostBuilder() {
       if (nextStep === 1 && hooks.length === 0) void handleGenerateHooks();
       if (nextStep === 2 && !caption && selectedHook) void handleGenerateCaption({ forceFresh: false });
       if (nextStep === 3 && hashtags.length === 0) void handleGenerateHashtags({ forceFresh: false });
-      if (nextStep === 4 && ctas.length === 0) void handleGenerateCTAs();
+      if (nextStep === 4 && ctas.length === 0) void handleGenerateCTAs({ forceFresh: false });
     } else {
       setHumanScore(null);
       setAlgorithmScore(null);
       setScoreSessionKey((k) => k + 1);
       setShowFinalPanel(true);
-      void runScoring();
     }
   };
 
@@ -1498,7 +1706,8 @@ export default function FullPostBuilder() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={handleGenerateCTAs}
+                      type="button"
+                      onClick={() => void handleGenerateCTAs({ forceFresh: true })}
                       disabled={loadingCTAs}
                       className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
                     >
@@ -1579,6 +1788,7 @@ export default function FullPostBuilder() {
               <HumanizerScore
                 key={`human-${scoreSessionKey}`}
                 content={caption}
+                platform={platform}
                 onScoreChange={setHumanScore}
                 onTrackUsage={(meta) => trackFeatureUsage({ ...meta, incrementFeatureCounter: false, overallCredits: 1 })}
                 onContentUpdate={(nextContent) => { setCaption(nextContent); resetDownstream(3); }}
@@ -1597,11 +1807,11 @@ export default function FullPostBuilder() {
               />
             </div>
             <p className="text-xs text-gray-500">
-              Quality {qualityScore != null ? Math.round(qualityScore) : '—'}
+              Quality (AI) {qualityScore != null ? Math.round(qualityScore) : '—'}
               {' · '}
-              Human {humanScore != null ? humanScore : '—'}
+              Human (AI) {humanScore != null ? humanScore : '—'}
               {' · '}
-              Algorithm {algorithmScore != null ? algorithmScore : '—'}
+              Algorithm (checklist) {algorithmScore != null ? algorithmScore : '—'}
             </p>
             {qualityScoreNotice && (
               <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">{qualityScoreNotice}</p>

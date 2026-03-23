@@ -1252,3 +1252,144 @@ export async function getTrendContextForPrediction(platform, brandData = null) {
     return { success: false, error: error.message };
   }
 }
+
+const FULL_POST_ONLINE_HASHTAG_MODEL = 'llama-3.1-sonar-small-128k-online';
+
+function dedupeHashtagRows(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const key = String(row?.tag || '').toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function normalizeFullPostGroundedHashtagItem(item, index) {
+  const rawTag = String(item?.tag || item?.hashtag || '').trim();
+  if (!rawTag) return null;
+  const parsedScore = Number.parseInt(item?.score ?? item?.engagementScore ?? 0, 10);
+  const score = Number.isFinite(parsedScore)
+    ? Math.min(Math.max(parsedScore, 0), 100)
+    : Math.max(82 - index * 3, 45);
+  const tierRaw = String(item?.tier || item?.type || '').trim();
+  const tier = tierRaw || 'mid';
+  const reason = String(item?.rationale || item?.reason || item?.why || '').trim();
+  const tag = rawTag.startsWith('#') ? rawTag : `#${rawTag.replace(/^#+/, '')}`;
+  return { tag, score, tier, reason };
+}
+
+/**
+ * Full Post Builder — grounded hashtags via Perplexity online search (IG/TikTok).
+ * No cache key: every call hits the network (regen nonce still nudges the prompt).
+ */
+export async function generateFullPostHashtagsGrounded(
+  { topic, caption, platform, goal, selectedHook, nicheKeywords },
+  brandData,
+  options = {},
+) {
+  const plat = String(platform || 'instagram').toLowerCase();
+  const niche = nicheKeywords?.trim?.() || getNiche(brandData, topic || 'creator');
+  const audience = getTargetAudience(brandData, 'general audience');
+  const goalLabel = String(goal || 'engagement');
+  const brandSection = buildPromptBrandSection(brandData, { platforms: [plat] });
+  const brandContext = buildBrandContext(brandData) || '';
+  const regenNonce =
+    typeof options.forceFreshRegeneration === 'string' && options.forceFreshRegeneration.trim()
+      ? options.forceFreshRegeneration.trim().slice(0, 96)
+      : '';
+
+  const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
+You are a social discovery strategist. Use current public information about Instagram and TikTok hashtag and search behavior.
+Return ONLY valid JSON: a single array of 10–15 objects. No markdown, no commentary.`;
+
+  const user = `Using current, public information about Instagram and TikTok, suggest optimized hashtags for this post.
+
+Platform focus: ${PLATFORM_LABELS[plat] || plat} (still consider cross-post discovery where relevant).
+
+Topic: ${topic || '—'}
+Goal: ${goalLabel}
+Audience: ${audience}
+Niche / keywords: ${niche}
+Selected hook (context): ${selectedHook || '—'}
+
+Caption for relevance:
+${String(caption || '').slice(0, 2800)}
+
+Brand context:
+${brandSection}
+${brandContext ? `\nProfile notes:\n${brandContext}` : ''}
+
+Output rules:
+- 10–15 hashtags total.
+- Mix: 3–4 broad/high-volume (on-topic), 5–7 niche/intent, 1–3 branded or ultra-specific only if grounded in the caption/brand.
+- Avoid generic spam tags (#fyp, #viral, #explorepage) unless there is a strong, topic-specific reason (prefer omitting them).
+- All lowercase in the tag text, no spaces inside a tag, no duplicates.
+- Each object: { "tag": "#example", "tier": "broad" | "niche" | "branded", "score": integer 0-100, "rationale": "short" }
+- "tag" must start with #.
+
+${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively different set than any generic default list.` : ''}`;
+
+  const callModel = async (modelId) =>
+    callPerplexityAPI(
+      [
+        { role: 'system', content: system.trim() },
+        { role: 'user', content: user },
+      ],
+      0.25,
+      {
+        model: modelId,
+        requireRealtime: true,
+        webSearchOptions: { search_context_size: 'high' },
+        personalized: Boolean(brandData?.targetAudience || brandContext),
+        targetAudience: brandData?.targetAudience || undefined,
+        brandContext: brandContext || undefined,
+      },
+    );
+
+  try {
+    let data;
+    try {
+      data = await callModel(FULL_POST_ONLINE_HASHTAG_MODEL);
+    } catch (e) {
+      if (import.meta.env.DEV) {
+        console.warn('[generateFullPostHashtagsGrounded] online model failed, falling back to sonar', e?.message);
+      }
+      data = await callModel('sonar');
+    }
+
+    const parsed = Array.isArray(data.structuredData)
+      ? data.structuredData
+      : parseJsonFromText(data.content || '');
+    const rows = Array.isArray(parsed) ? parsed : null;
+    if (!rows?.length) {
+      return { success: false, error: 'Empty hashtag payload', code: 'HASHTAGS_PARSE' };
+    }
+
+    const hashtagData = dedupeHashtagRows(
+      rows.map((item, i) => normalizeFullPostGroundedHashtagItem(item, i)).filter(Boolean),
+    ).slice(0, 15);
+
+    if (hashtagData.length < 5) {
+      return { success: false, error: 'Too few hashtags parsed', code: 'HASHTAGS_PARSE' };
+    }
+
+    return {
+      success: true,
+      hashtagData,
+      research: data.content || '',
+      citations: data.citations || [],
+      usage: data.usage,
+      streamlined: false,
+    };
+  } catch (error) {
+    console.error('Full post grounded hashtags error:', error);
+    return {
+      success: false,
+      error: error.message || 'Hashtag generation failed',
+      code: 'PERPLEXITY_ERROR',
+    };
+  }
+}

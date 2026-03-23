@@ -22,6 +22,8 @@ const DEFAULT_MODEL = 'sonar';
 const ALLOWED_MODELS = new Set([
   'sonar',
   'sonar-pro',
+  /** Online / search-grounded small model — Full Post Builder hashtags */
+  'llama-3.1-sonar-small-128k-online',
 ]);
 const ALLOWED_SEARCH_CONTEXT_SIZES = new Set(['low', 'medium', 'high']);
 

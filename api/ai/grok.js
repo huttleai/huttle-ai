@@ -42,6 +42,45 @@ function sanitizeUpstreamModelId(raw) {
   return s;
 }
 
+/**
+ * Map common typos / legacy spellings to ids xAI accepts (hyphenated 4-1, not 4.1).
+ * @param {string} modelId
+ */
+function normalizeGrokModelIdAliases(modelId) {
+  if (typeof modelId !== 'string') return modelId;
+  const t = modelId.trim();
+  if (!t) return t;
+  const lower = t.toLowerCase();
+  const map = new Map([
+    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+    ['grok-4.1-fast', 'grok-4-1-fast'],
+    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+  ]);
+  if (map.has(lower)) return map.get(lower);
+  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
+  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
+  return t;
+}
+
+function summarizeXaiErrorBody(errorText) {
+  const raw = String(errorText || '').trim();
+  if (!raw) return '(empty response body)';
+  try {
+    const j = JSON.parse(raw);
+    const m = j?.error?.message ?? j?.message ?? j?.detail;
+    if (typeof m === 'string' && m.trim()) return m.trim().slice(0, 600);
+    return JSON.stringify(j).slice(0, 600);
+  } catch {
+    return raw.slice(0, 600);
+  }
+}
+
+function exposeGrokUpstreamErrors() {
+  return process.env.NODE_ENV !== 'production' || process.env.GROK_VERBOSE_ERRORS === '1';
+}
+
 /** Strip client message objects to OpenAI/xAI-compatible { role, content } only. */
 function normalizeMessagesForUpstream(messages) {
   if (!Array.isArray(messages)) return [];
@@ -346,7 +385,9 @@ export default async function handler(req, res) {
       }
     }
 
-    const safeModel = sanitizeUpstreamModelId(clientModelRaw) || resolveGrokModelId();
+    const safeModel = normalizeGrokModelIdAliases(
+      sanitizeUpstreamModelId(clientModelRaw) || resolveGrokModelId(),
+    );
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -418,11 +459,15 @@ export default async function handler(req, res) {
         });
       }
       if (response.status === 400) {
+        const upstreamDetail = summarizeXaiErrorBody(errorText);
+        const verbose = exposeGrokUpstreamErrors();
         return res.status(502).json({
           error: true,
           code: 'GROK_UPSTREAM_INVALID',
-          message:
-            'Grok API rejected the request. The model name may be invalid or the request was malformed.',
+          message: verbose
+            ? `Grok API rejected the request: ${upstreamDetail}`
+            : 'Grok API rejected the request. The model name may be invalid or the request was malformed.',
+          ...(verbose ? { upstreamDetail } : {}),
         });
       }
       return res.status(502).json({

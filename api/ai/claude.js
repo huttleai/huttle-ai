@@ -20,9 +20,21 @@ if (!ANTHROPIC_API_KEY) {
   console.warn('ANTHROPIC_API_KEY not set — Claude features will not work');
 }
 
-// Model: claude-sonnet-4-6-20250514 | Updated: March 2026
-// To upgrade: change the model string below and update .env.example
-const MODEL = "claude-sonnet-4-6-20250514";
+// Primary Messages API id (alias). Client may still send legacy snapshot strings; we normalize upstream.
+// To upgrade: change DEFAULT_CLAUDE_MODEL and aliases below.
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+const CLAUDE_MODEL_ALIASES = {
+  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
+  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
+};
+
+function resolveUpstreamClaudeModel(requested) {
+  const r = typeof requested === 'string' ? requested.trim() : '';
+  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
+  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
+  return DEFAULT_CLAUDE_MODEL;
+}
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -87,8 +99,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    const ALLOWED_MODELS = [MODEL];
-    const safeModel = ALLOWED_MODELS.includes(model) ? model : MODEL;
+    const safeModel = resolveUpstreamClaudeModel(model);
 
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
 
