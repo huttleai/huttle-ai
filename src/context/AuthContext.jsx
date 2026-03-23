@@ -447,16 +447,29 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      // Clear all auth-related state
+      // Local scope clears persisted session first so refresh-token work stops immediately
+      await supabase.auth.signOut({ scope: 'local' });
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch {
+        /* network/global sign-out is best-effort */
+      }
+      clearCachedAuthState();
       setUser(null);
       setUserProfile(null);
       setNeedsOnboarding(false);
+      setSessionConfirmed(true);
+      profileCheckedRef.current = false;
+      currentUserIdRef.current = null;
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear state even on error to ensure user is logged out locally
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        /* ignore */
+      }
+      clearCachedAuthState();
       setUser(null);
       setUserProfile(null);
       setNeedsOnboarding(false);

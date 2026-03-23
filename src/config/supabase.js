@@ -110,6 +110,9 @@ export function getTierAccessLevel(userTier) {
   return null;
 }
 
+/** Full Post Builder: credits deducted from monthly AI pool per completed wizard run (charged at hook generation). */
+export const FULL_POST_BUILDER_CREDITS_PER_RUN = 4;
+
 // Tier limits based on Huttle AI's paid-only plans.
 export const TIER_LIMITS = {
   [TIERS.FREE]: {
@@ -126,6 +129,7 @@ export const TIER_LIMITS = {
     trendLab: false,
     igniteEngine: 0, // HUTTLE AI: updated 3
     fullPostBuilder: false,
+    fullPostBuilderRuns: 0,
     humanizerScore: false,
     performancePrediction: false,
     algorithmChecker: false,
@@ -148,11 +152,13 @@ export const TIER_LIMITS = {
     trendLab: true, // Full access
     igniteEngine: 15, // HUTTLE AI: updated 3
     fullPostBuilder: true,
+    fullPostBuilderRuns: 12,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
     nicheIntel: 0, // Pro+ only
     aiPlanBuilderDays: 14, // 7 or 14 days
+    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
     storageLimit: 5 * 1024 * 1024 * 1024, // 5GB in bytes
     scheduledPostsLimit: 50,
   },
@@ -163,7 +169,7 @@ export const TIER_LIMITS = {
     trendDeepDive: 50,
     contentRemix: 75,
     igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20,
+    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -175,6 +181,7 @@ export const TIER_LIMITS = {
     trendForecaster: true, // Pro feature
     trendLab: true, // Full access
     fullPostBuilder: true,
+    fullPostBuilderRuns: 40,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
@@ -191,7 +198,7 @@ export const TIER_LIMITS = {
     trendDeepDive: 50,
     contentRemix: 75,
     igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20,
+    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -203,6 +210,7 @@ export const TIER_LIMITS = {
     trendForecaster: true,
     trendLab: true,
     fullPostBuilder: true,
+    fullPostBuilderRuns: 40,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
@@ -218,7 +226,7 @@ export const TIER_LIMITS = {
     trendDeepDive: 50,
     contentRemix: 75,
     igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20,
+    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -230,6 +238,7 @@ export const TIER_LIMITS = {
     trendForecaster: true,
     trendLab: true,
     fullPostBuilder: true,
+    fullPostBuilderRuns: 40,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
@@ -331,6 +340,8 @@ export async function getRemainingUsage(userId, feature, userTier) {
  */
 export async function getFeatureUsageCount(userId, feature) {
   try {
+    // KNOWN EDGE: `startOfMonth` is local midnight on the 1st; `created_at` is timestamptz (UTC). Rows within a few
+    // hours of the boundary can count toward different "months" than a strict UTC month — document before changing.
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -357,6 +368,7 @@ export async function getFeatureUsageCount(userId, feature) {
  */
 export async function getOverallAIUsageCount(userId) {
   try {
+    // KNOWN EDGE: local start-of-month vs UTC `created_at` — same caveat as getFeatureUsageCount; keep rollover logic aligned.
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);

@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers, Loader2 } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, ChevronDown, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -159,6 +159,13 @@ export default function AITools() {
   const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
   const [visualBrainstormResult, setVisualBrainstormResult] = useState(null);
+
+  /** Per-hashtag "Why this tag?" open state */
+  const [hashtagWhyOpen, setHashtagWhyOpen] = useState({});
+  /** Content scorer AI Power Brain insight panel */
+  const [scorerInsightOpen, setScorerInsightOpen] = useState(false);
+  /** Per–visual-concept details (scene beats, motifs) */
+  const [visualConceptDetailsOpen, setVisualConceptDetailsOpen] = useState({});
   
   // AI Usage Tracking
   const [aiGensUsed, setAiGensUsed] = useState(0);
@@ -564,23 +571,53 @@ export default function AITools() {
       const result = await scoreContentQuality(contentToScore, brandData);
 
       if (result.success) {
+        const insightFromRaw = (raw) => {
+          if (!raw || typeof raw !== 'object') return null;
+          const strengths = Array.isArray(raw.strengths) ? raw.strengths : [];
+          const risks = Array.isArray(raw.risks) ? raw.risks : [];
+          const fixes = Array.isArray(raw.fixes) ? raw.fixes : [];
+          if (strengths.length === 0 && risks.length === 0 && fixes.length === 0) return null;
+          return { strengths, risks, fixes };
+        };
+
         // Check if we have pre-parsed score data (from demo mode)
         if (result.score) {
+          const rawParsed =
+            result.score.raw ||
+            (typeof result.analysis === 'string' ? (() => {
+              try {
+                const j = JSON.parse(result.analysis);
+                return typeof j === 'object' ? j : null;
+              } catch {
+                return null;
+              }
+            })() : null);
           setContentScore({
             overall: result.score.overall,
             breakdown: result.score.breakdown,
             suggestions: result.score.suggestions,
-            rewriteExample: result.score.weakestSection?.rewriteExample || '',
-            rawAnalysis: result.analysis
+            rewriteExample: result.score.weakestSection?.rewriteExample || result.score.rewriteExample || '',
+            rawAnalysis: result.analysis,
+            scoreInsight: insightFromRaw(rawParsed),
           });
+          setScorerInsightOpen(false);
         } else if (result.analysis) {
           // Try to parse the raw analysis from the API
           const parsed = parseScoreFromText(result.analysis);
           if (parsed) {
+            let scoreInsight = null;
+            try {
+              const j = JSON.parse(result.analysis);
+              scoreInsight = insightFromRaw(j);
+            } catch {
+              /* ignore */
+            }
             setContentScore({
               ...parsed,
-              rawAnalysis: result.analysis
+              rawAnalysis: result.analysis,
+              scoreInsight,
             });
+            setScorerInsightOpen(false);
           } else {
             // Could not parse - use the raw analysis as suggestions
             setContentScore({
@@ -598,8 +635,10 @@ export default function AITools() {
                 'End with a CTA that tells the reader exactly what to do next.'
               ],
               rewriteExample: 'Try opening with a more specific pain point and ending with one clear next step.',
-              rawAnalysis: result.analysis
+              rawAnalysis: result.analysis,
+              scoreInsight: null,
             });
+            setScorerInsightOpen(false);
           }
         }
         incrementAIUsage();
@@ -767,6 +806,9 @@ export default function AITools() {
               <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
                 AI Power Tools
               </h1>
+              <p className="text-xs md:text-sm text-gray-600 mt-1 font-medium">
+                All tools are powered by Huttle AI&apos;s AI Power Brain – a cross-platform strategist trained on live niche patterns.
+              </p>
               <p className="text-xs md:text-sm text-gray-500 mt-0.5">
                 Already have a draft? Use these tools to sharpen specific parts —
               </p>
@@ -833,7 +875,9 @@ export default function AITools() {
                   </div>
                   <span className="text-base md:text-lg">Caption Generator</span>
                 </h2>
-                <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Create engaging captions from simple inputs</p>
+                <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                  Powered by AI Power Brain – captions tuned to your niche, platform, and brand voice in real time.
+                </p>
               </div>
 
             <div className="p-4 md:p-5 space-y-3 md:space-y-4">
@@ -993,7 +1037,9 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">Hashtag Generator</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Find trending hashtags to boost discoverability</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                Tiered by real-world competition and trends so small accounts can actually rank.
+              </p>
             </div>
 
             <div className="p-4 md:p-5 space-y-4">
@@ -1078,25 +1124,78 @@ export default function AITools() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {generatedHashtags.map((hashtag, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 md:p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 text-xs md:text-sm truncate">{hashtag.tag}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-huttle-primary font-medium">Score: {hashtag.score}%</span>
-                            <span className="text-xs text-gray-500">{formatHashtagPostCount(hashtag.posts)}</span>
+                    {generatedHashtags.map((hashtag, i) => {
+                      const volumeDisplay = hashtag.volumeLabel || hashtag.posts;
+                      const whyOpen = Boolean(hashtagWhyOpen[i]);
+                      return (
+                        <div
+                          key={i}
+                          className="flex flex-col p-2.5 md:p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 text-xs md:text-sm truncate">{hashtag.tag}</p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-xs text-huttle-primary font-medium">Score: {hashtag.score}%</span>
+                                <span className="text-xs text-gray-500">{formatHashtagPostCount(volumeDisplay)}</span>
+                                {hashtag.tier && (
+                                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-600">
+                                    {hashtag.tier}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleAddToLibrary(hashtag.tag, 'hashtag', { input: hashtagInput }, `hashtag-${i}`)}
+                                className="p-1.5 hover:bg-white rounded transition-colors"
+                                title="Save to Vault"
+                              >
+                                {savedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(hashtag.tag, `hashtag-${i}`)}
+                                className="p-1.5 hover:bg-white rounded transition-colors"
+                              >
+                                {copiedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 ml-2">
-                          <button onClick={() => handleAddToLibrary(hashtag.tag, 'hashtag', { input: hashtagInput }, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0" title="Save to Vault">
-                            {savedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <FolderPlus className="w-4 h-4 text-huttle-primary" />}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setHashtagWhyOpen((prev) => ({ ...prev, [i]: !prev[i] }))
+                            }
+                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-huttle-primary hover:text-huttle-primary-dark"
+                            aria-expanded={whyOpen}
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${whyOpen ? 'rotate-180' : ''}`} aria-hidden />
+                            {whyOpen ? 'Hide why' : 'Why this tag?'}
                           </button>
-                          <button onClick={() => handleCopy(hashtag.tag, `hashtag-${i}`)} className="p-1.5 hover:bg-white rounded transition-colors flex-shrink-0">
-                            {copiedIndex === `hashtag-${i}` ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                          </button>
+                          {whyOpen && (
+                            <div className="mt-2 text-xs text-gray-600 space-y-1.5 border-l-2 border-huttle-primary/25 pl-2.5 py-1">
+                              <p>
+                                <span className="font-semibold text-gray-800">Tier: </span>
+                                {hashtag.tier || '—'}
+                                {volumeDisplay ? (
+                                  <span className="text-gray-500">
+                                    {' '}
+                                    – {formatHashtagPostCount(volumeDisplay)}
+                                  </span>
+                                ) : null}
+                              </p>
+                              {hashtag.reason ? (
+                                <p className="text-gray-700 leading-snug">{renderAIText(hashtag.reason)}</p>
+                              ) : (
+                                <p className="text-gray-400 italic">No rationale returned for this tag.</p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1114,7 +1213,9 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">Hook Builder</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Craft attention-grabbing opening lines</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                First-3-seconds hooks engineered from what&apos;s currently working in your niche.
+              </p>
             </div>
 
             <div className="p-4 md:p-5 space-y-3 md:space-y-4">
@@ -1238,7 +1339,9 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">CTA Suggester</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Generate powerful call-to-action phrases tailored to your goal</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                Conversion-focused CTAs matched to your goal, audience, and platform culture.
+              </p>
             </div>
 
             <div className="p-4 md:p-5 space-y-4">
@@ -1396,7 +1499,7 @@ export default function AITools() {
                 </span>
               </h2>
               <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
-                Is this well-written content?
+                Scores and rewrites based on platform signals, humanizer checks, and performance patterns.
               </p>
             </div>
 
@@ -1460,6 +1563,73 @@ export default function AITools() {
                           <p className="text-xs md:text-sm text-gray-500">{contentScore.overall >= 70 ? 'Great content!' : contentScore.overall >= 50 ? 'Good, with room to improve' : 'Needs work'}</p>
                         </div>
                       </div>
+                      {contentScore.scoreInsight && (
+                        <div className="w-full max-w-md">
+                          <button
+                            type="button"
+                            onClick={() => setScorerInsightOpen((o) => !o)}
+                            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-huttle-primary hover:bg-gray-50 transition-colors"
+                            aria-expanded={scorerInsightOpen}
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${scorerInsightOpen ? 'rotate-180' : ''}`} aria-hidden />
+                            {scorerInsightOpen
+                              ? 'Hide score breakdown'
+                              : `Show why this scored ${contentScore.overall}/100`}
+                          </button>
+                          {scorerInsightOpen && (
+                            <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-left space-y-3 text-xs text-gray-700">
+                              {contentScore.scoreInsight.strengths?.length > 0 && (
+                                <div>
+                                  <p className="font-semibold text-gray-900 mb-1.5 flex items-center gap-1">
+                                    <Lightbulb className="w-3.5 h-3.5 text-green-600" aria-hidden />
+                                    Strengths
+                                  </p>
+                                  <ul className="space-y-1 list-disc list-inside text-gray-600">
+                                    {contentScore.scoreInsight.strengths.slice(0, 5).map((s, idx) => (
+                                      <li key={idx}>{renderAIText(s)}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {contentScore.scoreInsight.risks?.length > 0 && (
+                                <div>
+                                  <p className="font-semibold text-gray-900 mb-1.5">Risks</p>
+                                  <ul className="space-y-1 list-disc list-inside text-gray-600">
+                                    {contentScore.scoreInsight.risks.slice(0, 5).map((r, idx) => (
+                                      <li key={idx}>{renderAIText(r)}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {contentScore.scoreInsight.fixes?.length > 0 && (
+                                <div>
+                                  <p className="font-semibold text-gray-900 mb-1.5">Top fixes</p>
+                                  <ul className="space-y-2">
+                                    {contentScore.scoreInsight.fixes.slice(0, 3).map((f, idx) => (
+                                      <li key={idx} className="border-l-2 border-huttle-primary/30 pl-2">
+                                        {f?.area && (
+                                          <span className="font-medium text-gray-800 capitalize">{f.area}: </span>
+                                        )}
+                                        <span className="text-gray-600">{renderAIText(f?.issue || '')}</span>
+                                        {f?.suggestedRewrite && (
+                                          <p className="text-gray-700 mt-1 italic">
+                                            Rewrite: {renderAIText(f.suggestedRewrite)}
+                                          </p>
+                                        )}
+                                        {f?.impact && (
+                                          <p className="text-[10px] text-gray-500 mt-0.5">
+                                            Impact: {renderAIText(f.impact)}
+                                          </p>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
                         {Object.entries(contentScore.breakdown).map(([key, value]) => (
                           <div key={key} className="p-2.5 md:p-3 bg-gray-50 rounded-lg">
@@ -1549,7 +1719,9 @@ export default function AITools() {
                 </div>
                 <span className="text-base md:text-lg">Visual Brainstormer</span>
               </h2>
-              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">Get AI image prompts or a manual shoot guide for your content</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-2 ml-0 md:ml-[52px]">
+                Creative director-level visual concepts aligned with current visual trends.
+              </p>
             </div>
 
             <div className="p-4 md:p-5 space-y-4">
@@ -1666,22 +1838,112 @@ export default function AITools() {
                     Copy these prompts directly into Midjourney, DALL-E, or any AI image generator.
                   </p>
                   <div className="space-y-3">
-                    {visualBrainstormResult.prompts.map((prompt, i) => (
-                      <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-huttle-primary/30 transition-all">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded">Prompt {i + 1}</span>
+                    {visualBrainstormResult.prompts.map((prompt, i) => {
+                      const concept = Array.isArray(visualBrainstormResult.visualConcepts)
+                        ? visualBrainstormResult.visualConcepts[i]
+                        : null;
+                      const detailsOpen = Boolean(visualConceptDetailsOpen[i]);
+                      const beats = Array.isArray(concept?.sceneBeats) ? concept.sceneBeats : [];
+                      const motifs = Array.isArray(concept?.visualMotifs) ? concept.visualMotifs : [];
+                      const hasDetails =
+                        concept &&
+                        (beats.length > 0 ||
+                          motifs.length > 0 ||
+                          (concept.hookAlignment && String(concept.hookAlignment).trim()));
+                      return (
+                        <div
+                          key={i}
+                          className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-huttle-primary/30 transition-all"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded">
+                              {concept?.conceptTitle ? renderAIText(concept.conceptTitle) : `Prompt ${i + 1}`}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-800 leading-relaxed mb-3">{renderAIText(prompt)}</p>
+                          {hasDetails && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setVisualConceptDetailsOpen((prev) => ({ ...prev, [i]: !prev[i] }))
+                                }
+                                className="mb-2 inline-flex items-center gap-1 text-[11px] font-semibold text-huttle-primary hover:text-huttle-primary-dark"
+                                aria-expanded={detailsOpen}
+                              >
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`}
+                                  aria-hidden
+                                />
+                                {detailsOpen ? 'Hide creative details' : 'Creative details'}
+                              </button>
+                              {detailsOpen && (
+                                <div className="mb-3 text-xs text-gray-600 space-y-2 border-l-2 border-huttle-primary/25 pl-2.5">
+                                  {concept.hookAlignment && (
+                                    <p>
+                                      <span className="font-semibold text-gray-800">Hook alignment: </span>
+                                      {renderAIText(concept.hookAlignment)}
+                                    </p>
+                                  )}
+                                  {beats.length > 0 && (
+                                    <div>
+                                      <p className="font-semibold text-gray-800 mb-1">Scene beats</p>
+                                      <ul className="list-disc list-inside space-y-0.5 text-gray-600">
+                                        {beats.map((b, j) => (
+                                          <li key={j}>{renderAIText(b)}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {motifs.length > 0 && (
+                                    <div>
+                                      <p className="font-semibold text-gray-800 mb-1">Visual motifs</p>
+                                      <p className="text-gray-600">{motifs.map((m) => renderAIText(m)).join(' · ')}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              onClick={() => handleCopy(prompt, `vb-prompt-${i}`)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all"
+                            >
+                              {copiedIndex === `vb-prompt-${i}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-green-600" />
+                                  <span className="text-green-600">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-gray-600" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleAddToLibrary(prompt, 'visual-prompt', { input: visualPrompt }, `vb-prompt-${i}`)
+                              }
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all"
+                            >
+                              {savedIndex === `vb-prompt-${i}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-green-600" />
+                                  <span className="text-green-600">Added!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FolderPlus className="w-3 h-3" />
+                                  <span>Save</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-800 leading-relaxed mb-3">{renderAIText(prompt)}</p>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button onClick={() => handleCopy(prompt, `vb-prompt-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded text-xs font-medium transition-all">
-                            {copiedIndex === `vb-prompt-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Copied</span></> : <><Copy className="w-3 h-3 text-gray-600" /><span>Copy</span></>}
-                          </button>
-                          <button onClick={() => handleAddToLibrary(prompt, 'visual-prompt', { input: visualPrompt }, `vb-prompt-${i}`)} className="flex items-center gap-1 px-2.5 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all">
-                            {savedIndex === `vb-prompt-${i}` ? <><Check className="w-3 h-3 text-green-600" /><span className="text-green-600">Added!</span></> : <><FolderPlus className="w-3 h-3" /><span>Save</span></>}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -9,7 +9,10 @@ import {
   X,
   Loader2,
   Check,
+  PenLine,
+  Wand2,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { PLATFORM_CONTENT_TYPES } from '../data/postKitSlots';
@@ -116,6 +119,32 @@ export function PostKitCreateModal({ isOpen, onClose, onCreated }) {
         </div>
 
         <form onSubmit={handleSubmit} className="overflow-y-auto p-4 space-y-5">
+          <div className="rounded-xl border border-huttle-primary/15 bg-gradient-to-br from-huttle-primary/5 to-white p-4">
+            <p className="text-sm font-semibold text-gray-900">How do you want to build this kit?</p>
+            <p className="mt-1 text-xs text-gray-600">
+              Start empty and fill slots yourself, or generate captions, hooks, and more in AI Tools and save them here.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3">
+                <PenLine className="h-5 w-5 shrink-0 text-huttle-primary" aria-hidden />
+                <div>
+                  <p className="text-xs font-bold text-gray-900">Manual</p>
+                  <p className="text-[11px] text-gray-600 mt-0.5">Create the shell now, add assets from the vault as you go.</p>
+                </div>
+              </div>
+              <Link
+                to="/dashboard/ai-tools"
+                onClick={() => onClose?.()}
+                className="flex items-start gap-2 rounded-lg border border-huttle-primary/30 bg-white p-3 transition hover:border-huttle-primary/50 hover:bg-huttle-primary/5"
+              >
+                <Wand2 className="h-5 w-5 shrink-0 text-huttle-primary" aria-hidden />
+                <div>
+                  <p className="text-xs font-bold text-gray-900">Generate in AI tools</p>
+                  <p className="text-[11px] text-gray-600 mt-0.5">Open AI Tools, then use &quot;Add to post kit&quot; on anything you create.</p>
+                </div>
+              </Link>
+            </div>
+          </div>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
               Platform

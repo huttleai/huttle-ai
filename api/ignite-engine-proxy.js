@@ -24,6 +24,27 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube', 'LinkedIn']);
 
+const PLATFORM_ALIASES = {
+  instagram: 'Instagram',
+  ig: 'Instagram',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+  fb: 'Facebook',
+  twitter: 'X',
+  x: 'X',
+  youtube: 'YouTube',
+  yt: 'YouTube',
+  linkedin: 'LinkedIn',
+};
+
+function normalizeWebhookPlatform(raw) {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim();
+  if (ALLOWED_PLATFORMS.has(s)) return s;
+  const alias = PLATFORM_ALIASES[String(s).toLowerCase()];
+  return alias && ALLOWED_PLATFORMS.has(alias) ? alias : null;
+}
+
 function hasUsefulBlueprintContent(payload) {
   if (!payload) return false;
   if (typeof payload === 'string') return payload.trim().length > 0;
@@ -38,6 +59,10 @@ function hasUsefulBlueprintContent(payload) {
   ];
 
   if (meaningfulKeys.some((key) => payload[key])) return true;
+
+  if (Array.isArray(payload) && payload.length > 0) {
+    return hasUsefulBlueprintContent(payload[0]);
+  }
 
   return ['data', 'result', 'output', 'response', 'payload'].some((key) =>
     hasUsefulBlueprintContent(payload[key])
@@ -89,13 +114,14 @@ export default async function handler(req, res) {
     if (!platform || !topic) {
       return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
     }
-    if (!ALLOWED_PLATFORMS.has(platform)) {
+    const canonicalPlatform = normalizeWebhookPlatform(platform);
+    if (!canonicalPlatform) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
     const sanitizedPayload = {
       topic: String(topic).substring(0, 500),
-      platform,
+      platform: canonicalPlatform,
       content_type: content_type || 'Post',
       goal: goal || 'Grow Followers',
       niche: niche ? String(niche).substring(0, 200) : '',
@@ -136,9 +162,13 @@ export default async function handler(req, res) {
     }
 
     const rawResponse = await response.text().catch(() => '');
-    const data = rawResponse ? (() => {
+    let data = rawResponse ? (() => {
       try { return JSON.parse(rawResponse); } catch { return null; }
     })() : {};
+
+    if (Array.isArray(data) && data.length > 0) {
+      data = data[0];
+    }
 
     if (!hasUsefulBlueprintContent(data || rawResponse)) {
       return res.status(502).json({

@@ -16,7 +16,8 @@ import { logError, logInfo } from '../_utils/observability.js';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
-const DEFAULT_MODEL = 'grok-4.1-fast-reasoning';
+/** Override with GROK_CHAT_MODEL in Vercel / .env if xAI renames models. */
+const DEFAULT_MODEL = process.env.GROK_CHAT_MODEL || process.env.GROK_MODEL || 'grok-3-latest';
 
 /** CORS for this route only (Vercel serverless; no reliance on VITE_ env). */
 function setGrokCorsHeaders(res) {
@@ -264,10 +265,29 @@ export default async function handler(req, res) {
       targetAudience,
       brandContext,
       forceCacheRefresh,
+      model: _clientModelIgnored,
     } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: true, message: 'Messages array is required' });
+      return res.status(400).json({ error: true, message: 'Messages array is required', code: 'VALIDATION' });
+    }
+
+    for (let i = 0; i < messages.length; i += 1) {
+      const m = messages[i];
+      if (!m || typeof m !== 'object') {
+        return res.status(400).json({ error: true, message: `Invalid message at index ${i}`, code: 'VALIDATION' });
+      }
+      const role = m.role;
+      if (!['system', 'user', 'assistant'].includes(role)) {
+        return res.status(400).json({ error: true, message: `Invalid role at message ${i}`, code: 'VALIDATION' });
+      }
+      const content = m.content;
+      if (typeof content !== 'string' || !content.trim()) {
+        return res.status(400).json({ error: true, message: `Message ${i} must have non-empty string content`, code: 'VALIDATION' });
+      }
+      if (content.length > 120000) {
+        return res.status(400).json({ error: true, message: 'Request payload too large', code: 'VALIDATION' });
+      }
     }
 
     const safeModel = DEFAULT_MODEL;
@@ -313,7 +333,11 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      logError('grok.upstream_error', { status: response.status, errorText });
+      logError('grok.upstream_error', {
+        status: response.status,
+        snippet: (errorText || '').slice(0, 280),
+        model: safeModel,
+      });
       if (response.status === 403) {
         return res.status(502).json({
           error: true,

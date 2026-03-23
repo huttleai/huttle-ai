@@ -34,11 +34,11 @@ export default function Help() {
   const faqs = [
     {
       question: 'How do AI generations work?',
-      answer: 'AI generations power Huttle AI\'s intelligent features. Plans are billed annually:\n\n• Essentials (annual) — 200 generations per billing year\n• Pro (annual) — 800 generations per billing year\n• Founders Club — $199/year (full Pro feature access)\n• Builders Club — $249/year (full Pro feature access)\n\nAdvanced tools also have per-feature limits per billing period (for example Niche Intel, Deep Dive, Content Remix, Ignite Engine, and AI Plan Builder). Other tools (captions, hashtags, hooks, CTAs, scorer, visual brainstormer) count toward your overall generation pool without separate caps.\n\nUsage resets on each billing anniversary. Track it in the sidebar AI meter or on each feature page.'
+      answer: 'Huttle AI runs premium models through secure proxies. Each time you press generate on a gated step, we log a usage event.\n\n• Monthly AI pool — Your plan includes a bucket of AI credits (see Subscription). Many quick tools (captions, hashtags, hooks, CTAs, visual ideas) spend 1 credit per generation.\n• Full Post Builder — One guided run bills 4 credits the first time hooks successfully generate in that session; changing hook style or regenerating hooks in the same visit does not start a new run. Caption, hashtag, and CTA steps in that same flow do not charge extra runs.\n• Feature runs — Some tools have their own monthly caps (Niche Intel, Content Remix, Ignite Engine, AI Plan Builder, etc.). A “run” is one completed job or generation action that the feature counts toward its cap.\n• What counts — We record usage when the app receives a successful AI response for a billable step (failed calls should not consume a run).\n\nTrack the sidebar meter and each feature page for remaining usage. Reset timing follows your plan’s billing period.'
     },
     {
       question: 'When do my AI generations reset?',
-      answer: 'AI generations reset at the start of each billing period (your annual renewal date). Unused generations do not roll over. You can track usage in the sidebar or on the Subscription page.'
+      answer: 'In-app usage meters and per-feature monthly caps reset on the 1st of each calendar month, matching the counters shown in the app. Unused generations do not roll over. Your Stripe renewal date is for billing charges only — track live usage in the sidebar and on the Subscription page.'
     },
     {
       question: 'How do I publish to social media?',
@@ -50,7 +50,7 @@ export default function Help() {
     },
     {
       question: 'What is Niche Intel?',
-      answer: 'Niche Intel is an AI-powered research engine available on Pro and Founders Club plans. Enter your niche keywords or competitor handles and select a platform — the AI researches what content is actually working and returns Trending Themes (with momentum badges), Top Hook Patterns, Content Gap Opportunities, and 5 tailored Content Ideas. Click "Build Post" on any idea to send it directly to the Full Post Builder.'
+      answer: 'Niche Intel is an AI-powered research engine on Pro, Founders Club, and Builders Club plans. Enter your niche keywords or competitor handles and select a platform — the AI researches what content is actually working and returns Trending Themes (with momentum badges), Top Hook Patterns, Content Gap Opportunities, and tailored Content Ideas. Click "Build Post" on any idea to send it directly to the Full Post Builder.'
     },
     {
       question: 'How does the Trend Lab work?',
@@ -58,7 +58,7 @@ export default function Help() {
     },
     {
       question: 'How do I save and organize content?',
-      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Free 250 MB, Essentials 5 GB, Pro 25 GB. Track your usage in the storage meter on the Content Vault page.'
+      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Free 250 MB, Essentials 5 GB, Pro / Founders / Builders 50 GB. Track your usage in the storage meter on the Content Vault page.'
     },
     {
       question: 'What is Brand Voice and how do I set it up?',
@@ -83,7 +83,7 @@ export default function Help() {
       icon: LayoutDashboard,
       description: 'Your personalized daily content intelligence hub',
       tips: [
-        'Trending Now shows 4 AI-curated trending topics in your niche with momentum badges and content angles',
+        'Trending Now shows six curated trends (live data plus safe fallbacks so the row stays full) with momentum badges and content angles',
         'Hashtags of the Day gives you daily curated hashtags with reach estimates — click to copy any or all',
         'AI Insights delivers 3 daily tips on timing, audience, platform strategy, and content types',
         'Quick Create shortcuts let you jump straight into any of the 6 AI Power Tools',

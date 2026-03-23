@@ -7,6 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { PLAN_BUILDER_MONTHLY_BY_TIER } from './_utils/planBuilderLimits.js';
 
 // SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -82,18 +83,15 @@ export default async function handler(req, res) {
       .gte('created_at', startOfMonth.toISOString());
 
     const currentUsage = usageData?.length || 0;
-    
-    // Define limits per tier
-    const limits = {
-      essentials: 20,
-      pro: Infinity,
-      founder: Infinity,
-      builder: Infinity,
-    };
 
-    const limit = limits[userTier] ?? 0;
+    const limit = PLAN_BUILDER_MONTHLY_BY_TIER[userTier];
+    if (limit == null || limit <= 0) {
+      return res.status(403).json({
+        error: 'Plan Builder not available for this subscription tier.',
+      });
+    }
 
-    if (currentUsage >= limit && limit !== Infinity) {
+    if (currentUsage >= limit) {
       return res.status(429).json({ 
         error: 'AI usage limit reached',
         message: `You've reached your monthly limit of ${limit} AI Plan generations. Upgrade to generate more!`,

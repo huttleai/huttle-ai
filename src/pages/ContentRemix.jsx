@@ -305,18 +305,20 @@ export default function ContentRemix() {
     }
 
     setIsLoading(true);
-    // Track usage
-    await remixUsage.trackFeatureUsage({ mode: remixGoal });
     setRemixError(null);
     setRemixResults(null);
     setUsedAiFallback(false);
 
-    const applyRemixSuccess = (raw, sections, fromFallback) => {
+    const applyRemixSuccess = async (raw, sections, fromFallback) => {
+      const usage = await remixUsage.trackFeatureUsage({ mode: remixGoal });
       setRemixResults({ raw, sections });
       setUsedAiFallback(Boolean(fromFallback));
       const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
       showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
       setCurrentStep(4);
+      if (!usage.allowed) {
+        showToast('Your remix is ready, but we could not record this run against your plan limits. Refresh usage if the meter looks off.', 'warning');
+      }
     };
 
     try {
@@ -354,7 +356,7 @@ export default function ContentRemix() {
         if (!parsed.length && safeContent) {
           parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
         }
-        applyRemixSuccess(safeContent, parsed, false);
+        await applyRemixSuccess(safeContent, parsed, false);
         return;
       }
 
@@ -376,7 +378,7 @@ export default function ContentRemix() {
           console.error('[ContentRemix] Grok remix parse error', parseErr);
           parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
         }
-        applyRemixSuccess(safeContent, parsed, true);
+        await applyRemixSuccess(safeContent, parsed, true);
         return;
       }
 
@@ -397,7 +399,7 @@ export default function ContentRemix() {
             console.error('[ContentRemix] Grok remix parse error', parseErr);
             parsed = [{ platform: 'All Platforms', variations: [safeContent] }];
           }
-          applyRemixSuccess(safeContent, parsed, true);
+          await applyRemixSuccess(safeContent, parsed, true);
           return;
         }
       } catch (grokError) {

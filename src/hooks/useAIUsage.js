@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { getFeatureUsageCount, getOverallAIUsageCount, trackUsage, TIER_LIMITS, TIERS } from '../config/supabase';
+import {
+  getFeatureUsageCount,
+  getOverallAIUsageCount,
+  trackUsage,
+  TIER_LIMITS,
+  TIERS,
+} from '../config/supabase';
 
 /**
  * useAIUsage — track and gate AI feature usage.
@@ -32,16 +38,19 @@ export default function useAIUsage(featureName = null) {
 
   // Get limits from tier config instead of hardcoding
   const tierLimits = (userTier && TIER_LIMITS[userTier]) || {};
-  const featureLimit = featureName ? (tierLimits[featureName] ?? null) : null;
+  const rawFeatureLimit = featureName ? (tierLimits[featureName] ?? null) : null;
+  /** Only numeric caps participate in per-feature gating (booleans are access flags, not quotas). */
+  const numericFeatureLimit = typeof rawFeatureLimit === 'number' ? rawFeatureLimit : null;
   const overallLimit = tierLimits.aiGenerations ?? 0;
 
-  const isOverallLimitReached = overallUsed >= overallLimit;
-  const isFeatureLimitReached = featureLimit !== null && featureUsed >= featureLimit;
+  const isOverallLimitReached = overallLimit > 0 && overallUsed >= overallLimit;
+  const isFeatureLimitReached =
+    numericFeatureLimit !== null && numericFeatureLimit > 0 && featureUsed >= numericFeatureLimit;
   const canGenerate = !isOverallLimitReached && !isFeatureLimitReached;
 
   const percentage = overallLimit > 0 ? Math.round((overallUsed / overallLimit) * 100) : 0;
-  const featurePercentage = featureLimit
-    ? Math.round((featureUsed / featureLimit) * 100)
+  const featurePercentage = numericFeatureLimit
+    ? Math.round((featureUsed / numericFeatureLimit) * 100)
     : 0;
 
   const refreshUsage = useCallback(async () => {
@@ -50,7 +59,7 @@ export default function useAIUsage(featureName = null) {
       const overall = await getOverallAIUsageCount(user.id);
       if (mountedRef.current) setOverallUsed(overall);
 
-      if (featureName) {
+      if (featureName && numericFeatureLimit !== null) {
         const count = await getFeatureUsageCount(user.id, featureName);
         if (mountedRef.current) setFeatureUsed(count);
       }
@@ -59,7 +68,7 @@ export default function useAIUsage(featureName = null) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [user?.id, featureName]);
+  }, [user?.id, featureName, numericFeatureLimit]);
 
   // Load usage on mount
   useEffect(() => {
@@ -75,44 +84,57 @@ export default function useAIUsage(featureName = null) {
   const trackFeatureUsage = useCallback(async (metadata = {}) => {
     if (!user?.id) return { allowed: false };
 
+    const incrementFeatureCounter = metadata.incrementFeatureCounter !== false;
+    const rawCredits = metadata.overallCredits;
+    const overallCredits =
+      Number.isFinite(Number(rawCredits)) && Number(rawCredits) >= 0
+        ? Math.floor(Number(rawCredits))
+        : (incrementFeatureCounter && featureName ? 1 : 0);
+
     // Re-check limits before tracking (prevent race conditions)
     const currentOverall = await getOverallAIUsageCount(user.id);
-    if (currentOverall >= overallLimit) {
+    if (overallLimit > 0 && currentOverall + overallCredits > overallLimit) {
       if (mountedRef.current) setOverallUsed(currentOverall);
       return { allowed: false, reason: 'overall_limit' };
     }
 
-    if (featureName && featureLimit !== null) {
+    if (incrementFeatureCounter && featureName && numericFeatureLimit !== null && numericFeatureLimit > 0) {
       const currentFeature = await getFeatureUsageCount(user.id, featureName);
-      if (currentFeature >= featureLimit) {
+      if (currentFeature >= numericFeatureLimit) {
         if (mountedRef.current) setFeatureUsed(currentFeature);
         return { allowed: false, reason: 'feature_limit' };
       }
     }
 
-    // Track the feature usage
     const featureKey = featureName || 'aiGenerations';
-    await trackUsage(user.id, featureKey, metadata);
 
-    // Also track toward the overall counter if using a specific feature
-    if (featureName && featureName !== 'aiGenerations') {
-      await trackUsage(user.id, 'aiGenerations', { ...metadata, sourceFeature: featureName });
+    if (incrementFeatureCounter) {
+      await trackUsage(user.id, featureKey, metadata);
     }
 
-    // Optimistic update
+    for (let i = 0; i < overallCredits; i += 1) {
+      await trackUsage(user.id, 'aiGenerations', {
+        ...metadata,
+        sourceFeature: featureName || metadata.sourceFeature || 'aiGenerations',
+        creditIndex: i,
+      });
+    }
+
     if (mountedRef.current) {
-      setOverallUsed(prev => prev + 1);
-      if (featureName) setFeatureUsed(prev => prev + 1);
+      setOverallUsed((prev) => prev + overallCredits);
+      if (incrementFeatureCounter && featureName && numericFeatureLimit !== null) {
+        setFeatureUsed((prev) => prev + 1);
+      }
     }
 
     return { allowed: true };
-  }, [user?.id, featureName, featureLimit, overallLimit]);
+  }, [user?.id, featureName, numericFeatureLimit, overallLimit]);
 
   return {
     overallUsed,
     overallLimit,
     featureUsed,
-    featureLimit,
+    featureLimit: numericFeatureLimit,
     isOverallLimitReached,
     isFeatureLimitReached,
     canGenerate,

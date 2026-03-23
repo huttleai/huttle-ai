@@ -275,7 +275,7 @@ function normalizeSections(rawSections, requestedPlatforms) {
         const canonicalPlatform = requestedLookup.get(platformName.toLowerCase()) || platformName;
         const variations = normalizeVariations(section?.variations);
 
-        if (!canonicalPlatform || variations.length < 2) {
+        if (!canonicalPlatform || variations.length < 1) {
           return null;
         }
 
@@ -303,7 +303,7 @@ function normalizeSections(rawSections, requestedPlatforms) {
 
         const variations = normalizeVariations(matchingValue);
 
-        if (variations.length < 2) {
+        if (variations.length < 1) {
           return null;
         }
 
@@ -480,7 +480,20 @@ ${READY_TO_USE_GUARDRAIL}`,
         : '';
 
       const parsed = parseJsonFromResponse(responseText);
-      const sections = normalizeSections(parsed?.sections || parsed?.platforms || parsed, normalizedPlatforms);
+      let sections = normalizeSections(parsed?.sections || parsed?.platforms || parsed, normalizedPlatforms);
+
+      if (sections.length === 0 && responseText.trim()) {
+        const body = responseText.trim().slice(0, 12000);
+        const n = body.length;
+        const a = sanitizeVariationText(body.slice(0, Math.max(1, Math.ceil(n / 3))));
+        const b = sanitizeVariationText(body.slice(Math.ceil(n / 3), Math.max(1, Math.ceil((2 * n) / 3))));
+        const c = sanitizeVariationText(body.slice(Math.ceil((2 * n) / 3))) || a;
+        const triple = [a, b || a, c || a].filter(Boolean);
+        sections = normalizedPlatforms.map((platform) => ({
+          platform,
+          variations: triple.length >= 3 ? triple : [body.slice(0, 4000), body.slice(0, 4000), body.slice(0, 4000)],
+        }));
+      }
 
       if (sections.length === 0) {
         logError('content_remix.invalid_response', { userId: authenticatedUserId });

@@ -313,32 +313,38 @@ export async function getRealtimeHashtagResearch({ topic, platform = 'instagram'
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media hashtag research specialist. Your job is to find the most currently trending and high-performing hashtags for a specific topic and platform right now.'
+        content: `You are a research engine collecting up-to-date hashtag data for social media strategists.
+Given a niche and platform, you return concise, factual notes about:
+- Commonly used hashtags in this space
+- Their approximate relative popularity and volume tiers (Popular / Medium / Niche)
+- Any clear signs of momentum (growing, stable, declining)
+You never fabricate precise post counts if the data is unclear.
+Prefer relative comparisons ("A is used far more than B") and rough ranges ("tens of thousands of posts") rather than fake precision.`
       },
       {
         role: 'user',
         content: `${buildPromptBrandSection(brandData, { niche, targetAudience: audience, platforms: [platform] })}
 
-Topic: ${topic}
+We are preparing to generate hashtags for:
+
 Platform: ${platform}
-Hook context: ${selectedHook || 'Not provided'}
-Caption context: ${caption || 'Not provided'}
+Keywords / niche: ${topic}
 
-Search for the most currently trending and high-performing hashtags for ${topic} on ${platform} right now in 2026.
+Optional post context:
+- Hook: ${selectedHook || 'Not provided'}
+- Caption: ${caption || 'Not provided'}
 
-Return a raw list of 20 candidate hashtags with:
-- The hashtag
-- Current estimated post count
-- Whether it's trending up, stable, or declining
-- Niche relevance score (1-10)
+Task:
+1. Identify 15–25 relevant hashtags used on this platform for this niche.
+2. For each, estimate:
+   - Relative volume tier: Popular (1M+ posts), Medium (100K–1M), or Niche (<100K).
+   - Rough volume description in natural language (e.g., "millions of posts", "tens of thousands of posts").
+   - Any clear trend signals (e.g., "rising fast among dermatology creators", "stable but saturated").
 
-Focus on hashtags that are active right now, not oversaturated, and relevant to ${niche}.
-
-Return JSON only as an array of exactly 20 objects with these keys:
-- hashtag
-- estimatedPostCount
-- trend
-- nicheRelevanceScore`
+Output:
+- Use short, bullet-style lines or a simple list.
+- This output will be consumed by another model; clarity and signal matter more than style.
+- Do NOT output JSON here; plain text is fine as long as each line clearly pairs a hashtag with its tier, volume description, and trend note.`
       }
     ], 0.2, {
       cache: {
@@ -368,6 +374,167 @@ Return JSON only as an array of exactly 20 objects with these keys:
       error: error.message,
     };
   }
+}
+
+const PERPLEXITY_RESEARCH_ENGINE_SYSTEM = `You are a research engine collecting up-to-date social media data for strategists.
+Your job is to return concise, factual notes about patterns, not long essays.
+Do not fabricate precise metrics when unclear; prefer relative comparisons and ranges.`;
+
+async function runToolResearch({
+  userContent,
+  brandData,
+  cacheParts,
+  cacheType,
+  ttlHours = 8,
+  requireRealtime = false,
+}) {
+  try {
+    const niche = getNiche(brandData, 'general creator');
+    const audience = getTargetAudience(brandData, 'general audience');
+    const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
+    const currentDate = new Date().toISOString().slice(0, 10);
+    const cacheKey = buildCacheKey([...cacheParts, currentDate, cacheType]);
+
+    const data = await callPerplexityAPI(
+      [
+        { role: 'system', content: PERPLEXITY_RESEARCH_ENGINE_SYSTEM },
+        { role: 'user', content: `${buildPromptBrandSection(brandData, { niche, targetAudience: audience, platforms: cacheParts[1] ? [cacheParts[1]] : [] })}\n\n${userContent}` },
+      ],
+      0.2,
+      {
+        cache: {
+          key: cacheKey,
+          niche: normalizeNiche(niche),
+          platform: typeof cacheParts[1] === 'string' ? cacheParts[1] : 'instagram',
+          type: cacheType,
+          ttlHours,
+        },
+        personalized: Boolean(brandContext || brandData?.targetAudience),
+        targetAudience: brandData?.targetAudience || undefined,
+        brandContext: brandContext || undefined,
+        requireRealtime,
+      }
+    );
+
+    return {
+      success: true,
+      research: data.content || '',
+      citations: data.citations || [],
+      usage: data.usage,
+      cached: Boolean(data.cached),
+    };
+  } catch (error) {
+    console.error(`Perplexity ${cacheType} research error:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Live caption / feed copy patterns for Grok context (AI Power Tools — Captions).
+ */
+export async function getRealtimeCaptionPatterns({ topic, platform = 'instagram' } = {}, brandData = null) {
+  return runToolResearch({
+    userContent: `We will generate performance captions for:
+
+Platform: ${platform}
+Topic / keywords: ${topic || 'general'}
+
+Task: List 12–22 bullet lines covering:
+- Caption structures and angles performing now (hooks, line breaks, saves/comments prompts)
+- Language and tone patterns creators use in this niche on this platform
+- What to avoid (overused openers, algorithm-unfriendly patterns)
+- Any timely trend or format tied to this topic
+
+Output: plain text bullets only. No JSON. Another model will read this.`,
+    brandData,
+    cacheParts: [topic, platform, 'caption_patterns'],
+    cacheType: 'caption_patterns',
+    ttlHours: 8,
+    requireRealtime: true,
+  });
+}
+
+/**
+ * Live hook / first-frame patterns for Grok (AI Power Tools — Hooks).
+ */
+export async function getRealtimeHookPatterns({ topic, platform = 'instagram' } = {}, brandData = null) {
+  return runToolResearch({
+    userContent: `We will generate viral-style hooks for:
+
+Platform: ${platform}
+Topic: ${topic || 'general'}
+
+Task: List 12–22 bullet lines covering:
+- Hook patterns that stop the scroll now (questions, POV, bold claims, story opens)
+- Niche-specific examples or phrasing that is working
+- Platform-native pacing (e.g. Reels vs Shorts vs carousel cover)
+- What feels tired or overused in this space
+
+Output: plain text bullets only. No JSON.`,
+    brandData,
+    cacheParts: [topic, platform, 'hook_patterns'],
+    cacheType: 'hook_patterns',
+    ttlHours: 8,
+    requireRealtime: true,
+  });
+}
+
+/**
+ * Live CTA / conversion patterns for Grok (AI Power Tools — CTAs).
+ */
+export async function getRealtimeCTAPatterns(
+  { promoting, platform = 'instagram', goalType = 'engagement' } = {},
+  brandData = null
+) {
+  return runToolResearch({
+    userContent: `We will generate CTAs for:
+
+Platform: ${platform}
+What they promote: ${promoting || 'their offer'}
+Stated goal key: ${goalType}
+
+Task: List 12–22 bullet lines covering:
+- CTA mechanics working now for this goal on this platform (comments, saves, DMs, bio link, etc.)
+- Friction levels that match cold vs warm audiences
+- Platform culture (what feels native vs spammy)
+- Example phrasing patterns (not long copy — short pattern notes)
+
+Output: plain text bullets only. No JSON.`,
+    brandData,
+    cacheParts: [promoting, platform, goalType, 'cta_patterns'],
+    cacheType: 'cta_patterns',
+    ttlHours: 8,
+    requireRealtime: true,
+  });
+}
+
+/**
+ * Live visual / creative patterns for Grok (AI Power Tools — Visuals).
+ */
+export async function getRealtimeVisualPatterns(
+  { topic, platform = 'instagram', contentFormat = 'Image' } = {},
+  brandData = null
+) {
+  return runToolResearch({
+    userContent: `We will brainstorm visuals for:
+
+Platform: ${platform}
+Content format: ${contentFormat}
+Topic: ${topic || 'general'}
+
+Task: List 12–22 bullet lines covering:
+- Visual tropes, compositions, and color/mood trends in this niche on this platform
+- What reads well in-feed for ${contentFormat} (first frame, text overlay habits, etc.)
+- Stock or AI-image clichés to avoid
+- Practical shoot or prompt directions that feel current
+
+Output: plain text bullets only. No JSON.`,
+    brandData,
+    cacheParts: [topic, platform, contentFormat, 'visual_patterns'],
+    cacheType: 'visual_patterns',
+    ttlHours: 12,
+    requireRealtime: true,
+  });
 }
 
 /**

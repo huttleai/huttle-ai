@@ -17,7 +17,7 @@ import UpgradeModal from '../components/UpgradeModal';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { generateFullPostHooks, generateCaption, generateHashtags, generateStyledCTAs, scoreContentQuality } from '../services/grokAPI';
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveContentLibraryItem, FULL_POST_BUILDER_CREDITS_PER_RUN } from '../config/supabase';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
@@ -134,7 +134,7 @@ export default function FullPostBuilder() {
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
-  const { featureUsed, featureLimit, trackFeatureUsage } = useAIUsage('fullPostBuilder');
+  const { featureUsed, featureLimit, trackFeatureUsage } = useAIUsage('fullPostBuilderRuns');
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -185,6 +185,8 @@ export default function FullPostBuilder() {
   const hasHydratedRef = useRef(false);
   const pendingTrendingRef = useRef(null);
   const appliedTrendingRef = useRef(false);
+  /** One billable hook-generation charge per visit to step 1 (type changes / regenerate stay within the same run). */
+  const hooksRunPaidRef = useRef(false);
   /** After the user edits the topic field, never auto-reapply brand niche over their text. */
   const userEditedTopicRef = useRef(false);
   if (location.state?.source === 'trending') {
@@ -319,7 +321,11 @@ export default function FullPostBuilder() {
   const platformData = getPlatform(platform);
 
   const resetDownstream = (fromStep) => {
-    if (fromStep <= 1) { setHooks([]); setSelectedHook(null); }
+    if (fromStep <= 1) {
+      setHooks([]);
+      setSelectedHook(null);
+      hooksRunPaidRef.current = false;
+    }
     if (fromStep <= 2) { setCaption(''); }
     if (fromStep <= 3) { setHashtags([]); }
     if (fromStep <= 4) { setCtas([]); setSelectedCTA(null); }
@@ -332,22 +338,21 @@ export default function FullPostBuilder() {
   const goToStep = (step) => {
     setDirection(step > currentStep ? 1 : -1);
     if (step < currentStep) resetDownstream(step + 1);
+    if (step === 0) hooksRunPaidRef.current = false;
     setCurrentStep(step);
     setShowFinalPanel(false);
   };
 
   // Step 2: Generate hooks (with retries — Grok occasionally returns empty or malformed lines)
-  const handleGenerateHooks = async () => {
+  const handleGenerateHooks = async (hookTypeOverride) => {
     if (!topic.trim()) { addToast('Enter a topic first', 'warning'); return; }
+    const effectiveHookType = hookTypeOverride ?? selectedHookType;
     setLoadingHooks(true);
     try {
-      const usage = await trackFeatureUsage({ step: 'hooks' });
-      if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingHooks(false); return; }
-
       const tc = trendingContextRef.current;
       const payload = {
         topic: topic.trim(),
-        hookType: selectedHookType,
+        hookType: effectiveHookType,
         platform,
         formatType: tc?.format_type,
         nicheAngle: tc?.niche_angle,
@@ -377,6 +382,18 @@ export default function FullPostBuilder() {
       }
 
       if (parsed.length > 0) {
+        if (!hooksRunPaidRef.current) {
+          const usage = await trackFeatureUsage({
+            step: 'hooks',
+            overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
+          });
+          if (!usage.allowed) {
+            addToast('AI limit reached', 'warning');
+            setLoadingHooks(false);
+            return;
+          }
+          hooksRunPaidRef.current = true;
+        }
         setHooks(parsed.slice(0, 4));
         setSelectedHook(null);
         resetDownstream(2);
@@ -397,9 +414,6 @@ export default function FullPostBuilder() {
     if (!selectedHook) return;
     setLoadingCaption(true);
     try {
-      const usage = await trackFeatureUsage({ step: 'caption' });
-      if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingCaption(false); return; }
-
       let captionText;
       const tc = trendingContextRef.current;
       const res = await generateCaption({
@@ -435,13 +449,6 @@ export default function FullPostBuilder() {
 
     setLoadingCaptionEnhancement(true);
     try {
-      const usage = await trackFeatureUsage({ step: 'caption-enhancement' });
-      if (!usage.allowed) {
-        addToast('AI limit reached', 'warning');
-        setLoadingCaptionEnhancement(false);
-        return;
-      }
-
       const res = await enhanceCaptionWithClaude({
         caption,
         platform,
@@ -467,8 +474,6 @@ export default function FullPostBuilder() {
   const handleGenerateHashtags = async () => {
     setLoadingHashtags(true);
     try {
-      const usage = await trackFeatureUsage({ step: 'hashtags' });
-      if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingHashtags(false); return; }
       const res = await generateHashtags({
         topic,
         platform,
@@ -491,8 +496,6 @@ export default function FullPostBuilder() {
   const handleGenerateCTAs = async () => {
     setLoadingCTAs(true);
     try {
-      const usage = await trackFeatureUsage({ step: 'cta' });
-      if (!usage.allowed) { addToast('AI limit reached', 'warning'); setLoadingCTAs(false); return; }
       const res = await generateStyledCTAs({
         promoting: topic,
         goalType: goal,
@@ -687,9 +690,12 @@ export default function FullPostBuilder() {
             <AIUsageMeter
               used={featureUsed}
               limit={featureLimit}
-              label="Posts this month"
+              label="Full Post runs this month"
               compact
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} AI credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
+            </p>
           </div>
         </div>
 
@@ -866,6 +872,7 @@ export default function FullPostBuilder() {
                               setHooks([]);
                               setSelectedHook(null);
                               resetDownstream(2);
+                              void handleGenerateHooks(type);
                             }}
                             className={`text-left rounded-xl border p-3 transition-all ${
                               isSel
@@ -1152,7 +1159,15 @@ export default function FullPostBuilder() {
             {/* Score Badges */}
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:gap-2">
               <ScoreBadge label="Quality" score={qualityScore} icon={Sparkles} loading={loadingQuality} thresholds={{ green: 80, teal: 60, amber: 40 }} />
-              <HumanizerScore content={caption} onScoreChange={setHumanScore} onTrackUsage={trackFeatureUsage} onContentUpdate={(nextContent) => { setCaption(nextContent); resetDownstream(3); }} compact autoRun hideInput />
+              <HumanizerScore
+                content={caption}
+                onScoreChange={setHumanScore}
+                onTrackUsage={(meta) => trackFeatureUsage({ ...meta, incrementFeatureCounter: false, overallCredits: 1 })}
+                onContentUpdate={(nextContent) => { setCaption(nextContent); resetDownstream(3); }}
+                compact
+                autoRun
+                hideInput
+              />
               <AlgorithmChecker content={assembledPost} platform={platform} onScoreChange={setAlgorithmScore} compact />
             </div>
             <p className="text-xs text-gray-400">

@@ -212,8 +212,13 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
       throw new Error('Invalid plan selected');
     }
 
-    // Get the correct price ID based on billing cycle
-    const priceId = billingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
+    // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; Founders/Builders are annual-only
+    // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL / BUILDER_ANNUAL). Never send monthly for those.
+    const monthlyPriceMissing =
+      plan.monthlyPrice == null || !plan.priceId || String(plan.priceId).trim() === '';
+    const effectiveBillingCycle = monthlyPriceMissing ? 'annual' : billingCycle;
+    const priceId =
+      effectiveBillingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
     
     // Demo mode: Simulate successful checkout without Stripe
     if (!priceId || isDemoMode()) {
@@ -231,7 +236,7 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
         body: JSON.stringify({
           priceId,
           planId: plan.id,
-          billingCycle,
+          billingCycle: effectiveBillingCycle,
         }),
       });
     } catch (fetchError) {

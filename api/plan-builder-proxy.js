@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 const N8N_WEBHOOK_URL =
+  process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
   process.env.N8N_PLAN_BUILDER_WEBHOOK ||
   process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
 

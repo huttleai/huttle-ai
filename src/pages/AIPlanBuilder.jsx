@@ -19,6 +19,7 @@ import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: br
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { getCachedTrends } from '../services/dashboardCacheService';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { normalizePlanResultShape } from '../utils/planBuilderJobResult';
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -37,51 +38,6 @@ const PLATFORM_OPTIMAL_TIMES = {
   'YouTube': '15:00',   // 3 PM - Afternoon watch time
   'Facebook': '13:00',  // 1 PM - Post-lunch browsing
 };
-
-function normalizePlanResultShape(result) {
-  if (!result || typeof result !== 'object') {
-    return { isValid: false, error: 'No plan data was returned from the workflow.' };
-  }
-
-  const platforms = Array.isArray(result.platforms)
-    ? result.platforms.filter(Boolean)
-    : [];
-  const contentMix = result.contentMix && typeof result.contentMix === 'object'
-    ? result.contentMix
-    : null;
-  const rawSchedule = Array.isArray(result.schedule) ? result.schedule : [];
-
-  const schedule = rawSchedule
-    .map((dayItem, index) => ({
-      day: Number(dayItem?.day) || index + 1,
-      posts: Array.isArray(dayItem?.posts) ? dayItem.posts : [],
-    }))
-    .filter((dayItem) => dayItem.posts.length > 0);
-
-  if (platforms.length === 0) {
-    return { isValid: false, error: 'Generated plan is missing platform details.' };
-  }
-
-  if (!contentMix || Number.isNaN(Number(contentMix?.educational ?? 0))) {
-    return { isValid: false, error: 'Generated plan is missing content mix details.' };
-  }
-
-  if (schedule.length === 0) {
-    return { isValid: false, error: 'Generated plan is missing a valid posting schedule.' };
-  }
-
-  const totalPosts = schedule.reduce((sum, dayItem) => sum + dayItem.posts.length, 0);
-  return {
-    isValid: true,
-    plan: {
-      ...result,
-      platforms,
-      contentMix,
-      schedule,
-      totalPosts: result.totalPosts || totalPosts,
-    },
-  };
-}
 
 /**
  * AI Plan Builder Page

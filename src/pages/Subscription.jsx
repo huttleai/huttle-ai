@@ -295,7 +295,8 @@ export default function Subscription() {
 
   const handleDowngrade = async (planId) => {
     setShowCancelModal(false);
-    await handleCheckout(planId, 'monthly');
+    const billingCycle = planId === 'founder' || planId === 'builder' ? 'annual' : 'monthly';
+    await handleCheckout(planId, billingCycle);
   };
 
   return (
@@ -560,7 +561,6 @@ export default function Subscription() {
                       <span className="text-4xl font-display font-bold text-gray-900">{formatMoney(plan.annualPrice)}</span>
                       <span className="text-gray-500 font-medium">/year</span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">${plan.monthlyEquivalent}/mo equivalent</p>
                   </div>
 
                   <ul className="space-y-3 mb-6 flex-grow">

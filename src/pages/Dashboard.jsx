@@ -99,6 +99,87 @@ function platformIdFromTrend(trend) {
 /**
  * Round-robin up to `cap` trends across platform buckets so multi-platform users see a mix.
  */
+const FALLBACK_TREND_SEEDS = [
+  {
+    topic: 'Behind-the-scenes storytelling',
+    description: 'Audiences still reward process clips and imperfect, real moments over heavy editing.',
+    format_type: 'Reel',
+    momentum: 'Rising',
+    trend_type: 'niche',
+    niche_angle: 'Show the setup, bloopers, or “how we made this” beats.',
+    hook_starter: 'Nobody told me this part of the process would be the hook…',
+    why_its_working: 'BTS content builds trust fast because it feels human, not staged.',
+  },
+  {
+    topic: 'Myth-busting carousels',
+    description: 'Short, confident corrections to common beliefs still stop the scroll.',
+    format_type: 'Carousel',
+    momentum: 'Peaking',
+    trend_type: 'hybrid',
+    niche_angle: 'Lead with the myth, then replace it with a clearer mental model.',
+    hook_starter: 'Myth: “You need perfect lighting.” Truth: you need this one framing choice.',
+    why_its_working: 'Contrast + clarity triggers saves and shares in the feed.',
+  },
+  {
+    topic: 'Voice-first hot takes',
+    description: 'Talking-head clips with a strong opinion outperform generic tips.',
+    format_type: 'Short-form video',
+    momentum: 'Rising',
+    trend_type: 'global',
+    niche_angle: 'One belief you disagree with in your industry—say it plainly in 20 seconds.',
+    hook_starter: 'Unpopular opinion: this “best practice” is costing you reach.',
+    why_its_working: 'Polarity drives comments, which signals relevance to ranking systems.',
+  },
+  {
+    topic: 'Before / after micro-stories',
+    description: 'Tiny arcs (“then vs now”) still outperform static advice posts.',
+    format_type: 'Reel',
+    momentum: 'Steady',
+    trend_type: 'niche',
+    niche_angle: 'Pick a single metric or feeling that changed—not ten.',
+    hook_starter: 'Same niche. Same offer. Two different hooks—only one scaled.',
+    why_its_working: 'Narrative motion keeps watch time up without needing a long script.',
+  },
+  {
+    topic: 'Comment-driven prompts',
+    description: 'Posts that beg for a one-word or “this or that” reply still juice distribution.',
+    format_type: 'Static',
+    momentum: 'Rising',
+    trend_type: 'hybrid',
+    niche_angle: 'Ask for a keyword comment that doubles as segmentation.',
+    hook_starter: 'Type “READY” if you want the checklist I used this week.',
+    why_its_working: 'Comment velocity is a strong signal on most major platforms.',
+  },
+  {
+    topic: 'Founder-style lessons learned',
+    description: '“What I’d do differently” posts feel personal and save-worthy.',
+    format_type: 'Carousel',
+    momentum: 'Steady',
+    trend_type: 'niche',
+    niche_angle: 'Three lessons, one mistake you almost repeated, one you avoided.',
+    hook_starter: 'If I restarted today, I’d delete these three tasks first.',
+    why_its_working: 'Specific regrets beat vague inspiration for saves and shares.',
+  },
+];
+
+function padTrendingListToCount(items, count, platformLabels) {
+  const base = Array.isArray(items) ? [...items] : [];
+  if (base.length >= count) return base.slice(0, count);
+  const labels = platformLabels?.length ? platformLabels : ['Instagram'];
+  for (let i = base.length; i < count; i += 1) {
+    const seed = FALLBACK_TREND_SEEDS[(i - base.length) % FALLBACK_TREND_SEEDS.length];
+    const platform = labels[i % labels.length];
+    base.push({
+      ...seed,
+      relevant_platform: platform,
+      platform: platform.toLowerCase().replace(/\s+/g, ''),
+      confidence: 'medium',
+      _isSampleTrend: true,
+    });
+  }
+  return base;
+}
+
 function interleaveTrendsByPlatform(topics, cap, preferredPlatformLabels) {
   if (!Array.isArray(topics) || topics.length === 0) return [];
 
@@ -673,26 +754,35 @@ export default function Dashboard() {
     return 'bg-huttle-100 text-huttle-primary-dark';
   };
 
-  // Welcome notification
+  // Welcome notification — once per account (guarded before delayed enqueue so navigation never replays it)
   useEffect(() => {
     if (!user?.id) return;
     const welcomeKey = `hasSeenWelcome:${user.id}`;
-    const hasSeenWelcome = localStorage.getItem(welcomeKey);
-    if (!hasSeenWelcome) {
-      const timer = setTimeout(() => {
-        addNotification({
-          type: 'info',
-          title: 'Welcome to Huttle AI!',
-          message: 'Your AI-powered content creation assistant is ready. Generate your first piece of content to get started!',
-          dismissKey: `welcome_${user.id}`,
-          actionUrl: '/dashboard/ai-tools',
-          actionLabel: 'Start Creating',
-          persistent: false,
-        });
+    const dismissStorageKey = `huttleDismissed:${user.id}`;
+    const dismissKey = `welcome_${user.id}`;
+    try {
+      const dismissed = new Set(JSON.parse(localStorage.getItem(dismissStorageKey) || '[]'));
+      if (dismissed.has(dismissKey)) return;
+    } catch { /* ignore */ }
+    if (localStorage.getItem(welcomeKey)) return;
+
+    const timer = setTimeout(() => {
+      addNotification({
+        type: 'info',
+        title: 'Welcome to Huttle AI!',
+        message: 'Your AI-powered content creation assistant is ready. Generate your first piece of content to get started!',
+        dismissKey,
+        actionUrl: '/dashboard/ai-tools',
+        actionLabel: 'Start Creating',
+        persistent: false,
+      });
+      try {
         localStorage.setItem(welcomeKey, 'true');
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [addNotification, user?.id]);
 
   const getToolBadge = (name) => {
@@ -727,7 +817,11 @@ export default function Dashboard() {
   }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
 
   const displayedDashboardTrendingTopics = useMemo(
-    () => interleaveTrendsByPlatform(dashboardTrendingTopics, TRENDING_NOW_CARD_CAP, resolvedDashboardPlatformLabels),
+    () => padTrendingListToCount(
+      interleaveTrendsByPlatform(dashboardTrendingTopics, TRENDING_NOW_CARD_CAP, resolvedDashboardPlatformLabels),
+      TRENDING_NOW_CARD_CAP,
+      resolvedDashboardPlatformLabels,
+    ),
     [dashboardTrendingTopics, resolvedDashboardPlatformLabels]
   );
 
@@ -1015,9 +1109,6 @@ export default function Dashboard() {
                         : hasNicheConfigured
                           ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
                           : 'General trends across platforms'}
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      Up to {TRENDING_NOW_CARD_CAP} trends, balanced across your platforms
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
                       <span>{trendWidgetTimestamp}</span>

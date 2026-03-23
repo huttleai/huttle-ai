@@ -65,12 +65,15 @@ export function NotificationProvider({ children }) {
    */
   const addNotification = (notification) => {
     // Deduplicate: skip if same title exists unread OR has been permanently dismissed
+    const dismissKeyEarly = notification.dismissKey || notification.title;
     const isDuplicate = notifications.some(
-      n => n.title === notification.title && !n.read
+      (n) =>
+        (dismissKeyEarly && n.dismissKey === dismissKeyEarly)
+        || (n.title === notification.title && !n.read),
     );
     if (isDuplicate) return null;
 
-    const dismissKey = notification.dismissKey || notification.title;
+    const dismissKey = dismissKeyEarly;
     const dismissStorageKey = getDismissalStorageKey(currentUserId);
     if (dismissKey && dismissStorageKey) {
       try {
