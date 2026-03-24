@@ -18,6 +18,10 @@ Visit: **http://localhost:5173/**
 
 That's it! Your Huttle AI app is now running! 🎉
 
+### Local API (Full Post Builder and `/api/ai/*`)
+
+`npm run dev` runs **both** the Vite frontend and [server/local-api-server.js](server/local-api-server.js) on **port 3001** (see `npm run dev:local` in [package.json](package.json)). The dev server proxies `/api` to that process. If you only run the frontend (`npm run dev:frontend`) or use `vite preview`, requests to `/api/ai/claude`, `/api/ai/grok`, or `/api/ai/perplexity` will fail (often **404**), and AI flows such as Full Post Builder will not work. After changing `GROK_*` model env vars, restart Vite so baked client model ids stay in sync.
+
 ## 📱 Features Built
 
 ### ✅ Complete Pages

@@ -10,7 +10,7 @@ export const BrandContext = createContext();
  * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
  */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification';
 
 const QUERY_TIMEOUT_MS = 5000;
 
@@ -49,6 +49,8 @@ function createEmptyBrandData() {
     biggestChallenge: '',
     hookStylePreference: '',
     emotionalTriggers: [],
+    /** true = already shown or legacy user; false = new profile, eligible for one-time welcome notification */
+    hasSeenWelcomeNotification: true,
   };
 }
 
@@ -247,6 +249,7 @@ export function BrandProvider({ children }) {
             biggestChallenge: data.biggest_challenge ? normalizeOptionalEnum(data.biggest_challenge) : '',
             hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
+            hasSeenWelcomeNotification: data.has_seen_welcome_notification !== false,
           };
 
           const mergedData = userPreferences

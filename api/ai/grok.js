@@ -6,6 +6,11 @@
  * 
  * Required environment variables:
  * - GROK_API_KEY: Your Grok API key (NOT prefixed with VITE_)
+ *
+ * DEV NOTE — common failures:
+ * - 401/403 from xAI: wrong or expired GROK_API_KEY → rotate in .env (local-api-server loads via dotenv) or Vercel env.
+ * - 400 invalid model: set GROK_CHAT_MODEL / GROK_MODEL to a current id (see xAI docs); default here is grok-4-1-fast-non-reasoning.
+ * - 401 from this proxy (JSON): no Supabase session → pass Authorization: Bearer <access_token> from the logged-in app.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -29,7 +34,9 @@ function resolveGrokModelId() {
   const fromChat = typeof process.env.GROK_CHAT_MODEL === 'string' ? process.env.GROK_CHAT_MODEL.trim() : '';
   const fromLegacy = typeof process.env.GROK_MODEL === 'string' ? process.env.GROK_MODEL.trim() : '';
   const nonReasoning = typeof process.env.GROK_MODEL_NON_REASONING === 'string' ? process.env.GROK_MODEL_NON_REASONING.trim() : '';
-  return fromChat || fromLegacy || nonReasoning || DEFAULT_GROK_MODEL;
+  const fromFast = typeof process.env.GROK_FAST_MODEL === 'string' ? process.env.GROK_FAST_MODEL.trim() : '';
+  const raw = fromChat || fromLegacy || nonReasoning || fromFast || DEFAULT_GROK_MODEL;
+  return normalizeGrokModelIdAliases(raw);
 }
 
 /** Allow only xAI-style model ids from the client; no other semantics in the proxy. */
@@ -104,6 +111,12 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per user
+
+function devAiProxyLog(message, meta = undefined) {
+  if (process.env.NODE_ENV === 'production' && process.env.DEV_AI_PROXY_LOG !== '1') return;
+  if (meta !== undefined) console.log(`[DEV AI proxy] ${message}`, meta);
+  else console.log(`[DEV AI proxy] ${message}`);
+}
 
 function hasPersonalizationSignals(body = {}) {
   return Boolean(
@@ -335,6 +348,12 @@ export default async function handler(req, res) {
       typeof rawBody.grok_debug_fullpost_step === 'string'
         ? rawBody.grok_debug_fullpost_step.trim().slice(0, 64)
         : '';
+    const requestPath = typeof req.url === 'string' ? req.url : '';
+    const fpbGrokHookDevLogEnabled =
+      process.env.NODE_ENV !== 'production' || process.env.DEV_AI_PROXY_LOG === '1';
+    const isFpbGrokHookRequest =
+      rawBody.grok_debug_fullpost === true
+      && (debugStep === 'hooks' || debugStep === '');
     const debugFullPost =
       String(req.headers['x-grok-debug'] || '').toLowerCase() === 'fullpost'
       || rawBody.grok_debug_fullpost === true
@@ -385,9 +404,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const safeModel = normalizeGrokModelIdAliases(
-      sanitizeUpstreamModelId(clientModelRaw) || resolveGrokModelId(),
-    );
+    const clientSanitized = sanitizeUpstreamModelId(clientModelRaw);
+    const safeModel = normalizeGrokModelIdAliases(clientSanitized || resolveGrokModelId());
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -414,43 +432,82 @@ export default async function handler(req, res) {
     }
 
     const normalizedMessages = normalizeMessagesForUpstream(messages);
+    const serverPreferredModel = normalizeGrokModelIdAliases(resolveGrokModelId());
 
-    // Upstream body aligned with dev smoke script: model, messages, temperature; optional max_tokens only.
-    const upstreamBody = {
-      model: safeModel,
-      messages: normalizedMessages,
-      temperature: safeTemperature,
+    /** If env + client agree on one invalid id, still try known-good default last. */
+    const modelCandidates = [];
+    const pushModel = (id) => {
+      const m = normalizeGrokModelIdAliases(typeof id === 'string' ? id.trim() : '');
+      if (!m || modelCandidates.includes(m)) return;
+      modelCandidates.push(m);
     };
-    if (typeof max_tokens === 'number' && max_tokens > 0 && max_tokens <= 8192) {
-      upstreamBody.max_tokens = max_tokens;
-    }
+    pushModel(safeModel);
+    pushModel(serverPreferredModel);
+    pushModel(DEFAULT_GROK_MODEL);
 
-    logInfo('grok.upstream_call', { model: safeModel, messageCount: normalizedMessages.length });
-
-    const response = await fetch(GROK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`,
-      },
-      body: JSON.stringify(upstreamBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logError('grok.upstream_error', {
-        status: response.status,
-        snippet: (errorText || '').slice(0, 280),
-        model: safeModel,
-      });
-      if (debugFullPost) {
-        logError('grok.debug_fullpost_upstream', {
-          status: response.status,
-          snippet: (errorText || '').slice(0, 500),
-          model: safeModel,
-        });
+    const runUpstreamOnce = async (modelId) => {
+      const isReasoningModel =
+        typeof modelId === 'string'
+        && modelId.includes('reasoning')
+        && !modelId.includes('non-reasoning');
+      const upstreamBody = {
+        model: modelId,
+        messages: normalizedMessages,
+      };
+      if (!isReasoningModel) {
+        upstreamBody.temperature = safeTemperature;
       }
+      // xAI deprecates max_tokens in favor of max_completion_tokens for /v1/chat/completions
+      if (typeof max_tokens === 'number' && max_tokens > 0 && max_tokens <= 8192) {
+        upstreamBody.max_completion_tokens = max_tokens;
+      }
+      if (fpbGrokHookDevLogEnabled && isFpbGrokHookRequest) {
+        console.log(
+          '[FPB Grok Hook] path=%s route=fullpost_step2_hooks → xAI request body: %s',
+          requestPath || '/api/ai/grok',
+          JSON.stringify(upstreamBody),
+        );
+      }
+      devAiProxyLog('grok → xAI request', { model: modelId, messageCount: normalizedMessages.length });
+      return fetch(GROK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROK_API_KEY}`,
+        },
+        body: JSON.stringify(upstreamBody),
+      });
+    };
+
+    logInfo('grok.upstream_call', { models: modelCandidates, messageCount: normalizedMessages.length });
+
+    let response;
+    let lastErrorText = '';
+
+    for (let ci = 0; ci < modelCandidates.length; ci += 1) {
+      const modelId = modelCandidates[ci];
+      response = await runUpstreamOnce(modelId);
+      devAiProxyLog('grok ← xAI response', { model: modelId, status: response.status, ok: response.ok });
+
+      if (response.ok) break;
+
+      lastErrorText = await response.text();
+      console.error('[GROK UPSTREAM RAW]', response.status, lastErrorText); // TODO: remove after QA
+
+      if (fpbGrokHookDevLogEnabled && isFpbGrokHookRequest && response.status >= 400) {
+        console.error(
+          '[FPB Grok Hook] xAI error status=%s body=%s',
+          response.status,
+          lastErrorText,
+        );
+      }
+
       if (response.status === 401 || response.status === 403) {
+        logError('grok.upstream_error', {
+          status: response.status,
+          snippet: (lastErrorText || '').slice(0, 280),
+          model: modelId,
+        });
         return res.status(502).json({
           error: true,
           code: 'GROK_AUTH_FAILED',
@@ -458,8 +515,30 @@ export default async function handler(req, res) {
             'Grok API authentication failed. Verify that GROK_API_KEY is set correctly in Vercel environment variables.',
         });
       }
+
+      if (response.status === 400 && ci < modelCandidates.length - 1) {
+        devAiProxyLog('grok upstream 400; trying next model candidate', {
+          attempted: modelId,
+          next: modelCandidates[ci + 1],
+          snippet: summarizeXaiErrorBody(lastErrorText),
+        });
+        continue;
+      }
+
+      logError('grok.upstream_error', {
+        status: response.status,
+        snippet: (lastErrorText || '').slice(0, 280),
+        model: modelId,
+      });
+      if (debugFullPost) {
+        logError('grok.debug_fullpost_upstream', {
+          status: response.status,
+          snippet: (lastErrorText || '').slice(0, 500),
+          model: modelId,
+        });
+      }
       if (response.status === 400) {
-        const upstreamDetail = summarizeXaiErrorBody(errorText);
+        const upstreamDetail = summarizeXaiErrorBody(lastErrorText);
         const verbose = exposeGrokUpstreamErrors();
         return res.status(502).json({
           error: true,
@@ -470,6 +549,14 @@ export default async function handler(req, res) {
           ...(verbose ? { upstreamDetail } : {}),
         });
       }
+      return res.status(502).json({
+        error: true,
+        code: 'GROK_UPSTREAM_ERROR',
+        message: 'AI service error. Please try again.',
+      });
+    }
+
+    if (!response.ok) {
       return res.status(502).json({
         error: true,
         code: 'GROK_UPSTREAM_ERROR',

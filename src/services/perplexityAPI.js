@@ -96,7 +96,7 @@ async function callGrokAPI(messages, temperature = 0.2, options = {}) {
     body: JSON.stringify({
       messages,
       temperature,
-      model: options.model || 'grok-4.1-fast-reasoning',
+      model: options.model || 'grok-4-1-fast-reasoning',
       cache: options.cache,
       personalized: options.personalized,
       targetAudience: options.targetAudience,

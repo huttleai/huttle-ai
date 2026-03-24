@@ -6,6 +6,11 @@
  * 
  * Required environment variables:
  * - PERPLEXITY_API_KEY: Your Perplexity API key (NOT prefixed with VITE_)
+ *
+ * DEV NOTE — common failures:
+ * - 401 from Perplexity: invalid PERPLEXITY_API_KEY → set in .env (server loads via dotenv in local-api-server).
+ * - 401 from this proxy: Supabase Bearer token required from the logged-in app.
+ * - 400 invalid model: body.model must be one of ALLOWED_MODELS (sonar, sonar-pro, llama-3.1-sonar-small-128k-online).
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -34,6 +39,21 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user (more restrictive for Perplexity)
+
+function devAiProxyLog(message, meta = undefined) {
+  if (process.env.NODE_ENV === 'production' && process.env.DEV_AI_PROXY_LOG !== '1') return;
+  if (meta !== undefined) console.log(`[DEV AI proxy] ${message}`, meta);
+  else console.log(`[DEV AI proxy] ${message}`);
+}
+
+/** OpenAI-style chat messages only — extra client fields break some providers. */
+function normalizeMessagesForUpstream(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages.map((m) => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
+  }));
+}
 
 function parseStructuredJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
@@ -447,12 +467,20 @@ export default async function handler(req, res) {
       if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
         return res.status(400).json({ error: 'Messages array is required' });
       }
+      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: 'grok-3-fast' });
       const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
-        body: JSON.stringify({ model: 'grok-3-fast', messages: fallbackMessages, temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2) })
+        body: JSON.stringify({
+          model: 'grok-3-fast',
+          messages: normalizeMessagesForUpstream(fallbackMessages),
+          temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2),
+        }),
       });
+      devAiProxyLog('perplexity (no key) ← xAI Grok fallback response', { status: grokRes.status, ok: grokRes.ok });
       if (!grokRes.ok) {
+        const grokErrText = await grokRes.text();
+        console.error('[PERPLEXITY GROK-FALLBACK RAW]', grokRes.status, grokErrText); // TODO: remove after QA
         return res.status(502).json({ error: 'AI service error. Please try again.' });
       }
       const grokData = await grokRes.json();
@@ -550,6 +578,8 @@ export default async function handler(req, res) {
     }
 
     // Forward request to Perplexity API
+    const normalizedMessages = normalizeMessagesForUpstream(messages);
+    devAiProxyLog('perplexity → Perplexity request', { model: safeModel, messageCount: normalizedMessages.length });
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
@@ -558,7 +588,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: safeModel,
-        messages,
+        messages: normalizedMessages,
         temperature: safeTemperature,
         web_search_options: {
           search_context_size: safeSearchContextSize
@@ -566,8 +596,11 @@ export default async function handler(req, res) {
       })
     });
 
+    devAiProxyLog('perplexity ← Perplexity response', { status: response.status, ok: response.ok });
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[PERPLEXITY UPSTREAM RAW]', response.status, errorText); // TODO: remove after QA
       logError('perplexity.upstream_error', { status: response.status, errorText });
 
       if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')) {
@@ -579,7 +612,19 @@ export default async function handler(req, res) {
       });
     }
 
-    const data = await response.json();
+    const rawSuccessBody = await response.text();
+    let data;
+    try {
+      data = rawSuccessBody ? JSON.parse(rawSuccessBody) : {};
+    } catch (parseErr) {
+      console.error('[PERPLEXITY UPSTREAM RAW]', 'non-json-200', rawSuccessBody?.slice?.(0, 800)); // TODO: remove after QA
+      logError('perplexity.upstream_non_json', { message: parseErr?.message });
+      if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')) {
+        return respondWithDashboardFallback(res, cache, 'non-json');
+      }
+      return res.status(502).json({ error: 'AI service error. Please try again.' });
+    }
+
     const content = data.choices?.[0]?.message?.content || '';
     let structuredData = cache?.key ? parseStructuredJson(content) : null;
 

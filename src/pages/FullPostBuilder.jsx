@@ -23,6 +23,7 @@ import {
   generateHashtags,
   generateStyledCTAs,
   scoreContentQuality,
+  scoreHumanness,
   mapFullPostHookTypeToHookBuilderTheme,
   enhanceCaptionWithGrokFallback,
 } from '../services/grokAPI';
@@ -36,26 +37,18 @@ import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../se
 import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import LoadingSpinner from '../components/LoadingSpinner';
+import { checkAlgorithmAlignment } from '../data/algorithmSignals';
 
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
 
+/** Set to `true` locally to show “Run Smoke Test” under the header (dev build only). Off after QA. */
+const FPB_DEV_SMOKE_UI_ENABLED = false;
+
 /**
- * --- Full Post Builder — implementation report (routing & reliability) ---
- * Files touched: FullPostBuilder.jsx, claudeAPI.js, perplexityAPI.js, grokAPI.js,
- *   api/ai/perplexity.js, HumanizerScore.jsx
- *
- * Model routing:
- * - Hooks: Claude Sonnet (generateFullPostHooksWithClaude) → fallback Grok 4.1 Fast Reasoning (generateFullPostHooks / GROK_MODE_QUALITY).
- * - Caption generate: Grok 4.1 Fast Reasoning (generateCaption, fullPostBuilder).
- * - Caption enhance: Claude Sonnet (enhanceCaptionWithClaude) → fallback Grok reasoning (enhanceCaptionWithGrokFallback).
- * - Hashtags: Perplexity llama-3.1-sonar-small-128k-online (generateFullPostHashtagsGrounded) → fallback sonar → fallback Grok (generateHashtags).
- * - CTA: Grok 4.1 Fast Reasoning (generateStyledCTAs, fullPostBuilder).
- * - Quality score: Claude Sonnet → Grok reasoning (scoreContentQuality); Humanizer: Claude JSON → Grok (scoreHumanness, fullPostBuilder).
- * - Algorithm badge: local only (algorithmSignals.js via AlgorithmChecker).
- *
- * Root causes addressed: (1) Stuck buttons — hooks/caption/CTA use request ids + matching finally for loading; caption/CTA no longer return fake success fallbacks in Full Post Builder. (2) Repeated hashtags — FPB now uses Perplexity online first + regen nonce; Grok fallback forces fresh regeneration. (3) Missing Human/Quality — Humanizer gets platform context + Claude-first scoring in FPB; Quality uses wizard platform + full assembly; recomputes when the assembly changes on the final panel. (4) Algorithm “stuck at 50” — checklist weighted sum often ~50 when ~half of signals fail; labels under badges note AI vs checklist. Humanizer intentionally scores the caption only so “Humanize It” does not overwrite the whole assembly.
- *
- * Edge cases: Perplexity online model may be unavailable upstream (we fall back to sonar, then Grok). Web search quality varies by niche. Draft hydration still keyed by storageKey + prefill signature — avoid changing prefill query params mid-session.
+ * --- FPB QA notes (smoke + fixes, Mar 2026) ---
+ * Smoke stages that were brittle before fixes: (1) hooks — smoke only called Claude; now mirrors UI (Claude → Grok). (2) enhance — smoke only called Claude; now Claude → Grok fallback like the wizard. (3) quality — scorer sometimes returned JSON with `overall` instead of `overallScore`; normalizeContentScoreV2 now accepts both. (4) human — Grok occasionally returned JSON embedded in prose; scoreHumanness uses a loose `overall` extractor before marking unavailable.
+ * Unchanged routing summary: Hooks Claude→Grok→Hook Builder; Caption Grok; Enhance Claude→Grok; Hashtags Perplexity online→sonar→Grok; CTA Grok; Quality Claude→Grok; Human Claude→Grok; Algorithm local checklist (AlgorithmChecker).
+ * Limitations: Smoke requires a logged-in session (proxies return 401 without Bearer). Algorithm score is heuristic (weighted checklist), not an API. Humanizer on the final panel scores caption-only by design.
  */
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1042,6 +1035,206 @@ export default function FullPostBuilder() {
     }
   }, []);
 
+  const runDevFpSmokeTest = useCallback(async () => {
+    const SMOKE_TOPIC = 'microneedling for acne scars';
+    const plat = 'instagram';
+    const goalId = 'engagement';
+    const goalLabel = GOALS.find((g) => g.id === goalId)?.label || goalId;
+    const log = (step, ok, detail) => {
+      const msg = `[FPB Smoke] ${step} ${ok ? 'success' : 'fail'}`;
+      if (ok) console.log(msg, detail !== undefined ? detail : '');
+      else console.warn(msg, detail !== undefined ? detail : '');
+    };
+
+    const qualitySmokeOk = (qRes) => {
+      if (!qRes?.success) return false;
+      if (qRes.score?.overall != null) return true;
+      try {
+        const parsed =
+          typeof qRes.analysis === 'string'
+            ? JSON.parse(qRes.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}')
+            : qRes.analysis;
+        const n = parsed?.totalScore ?? parsed?.overallScore ?? parsed?.overall;
+        return n != null;
+      } catch {
+        return false;
+      }
+    };
+
+    try {
+      let hook0;
+      const claudeHookRes = await generateFullPostHooksWithClaude(
+        {
+          topic: SMOKE_TOPIC,
+          hookType: 'Question',
+          platform: plat,
+          goal: resolveClaudeHookGoalLabel(goalId, goalLabel),
+          audience: inferDefaultHookAudienceFromTopic(SMOKE_TOPIC),
+        },
+        brandData,
+      );
+      if (claudeHookRes.success && Array.isArray(claudeHookRes.hooks) && claudeHookRes.hooks.length > 0) {
+        hook0 = claudeHookRes.hooks[0];
+        log('hooks', true, { count: claudeHookRes.hooks.length, source: 'claude' });
+      } else {
+        const grokHookRes = await generateFullPostHooks(
+          { topic: SMOKE_TOPIC, hookType: 'Question', platform: plat },
+          brandData,
+        );
+        if (!grokHookRes.success || !Array.isArray(grokHookRes.hooks) || grokHookRes.hooks.length === 0) {
+          log('hooks', false, grokHookRes);
+          return;
+        }
+        hook0 = grokHookRes.hooks[0];
+        log('hooks', true, { count: grokHookRes.hooks.length, source: 'grok' });
+      }
+
+      const capRes = await generateCaption(
+        {
+          topic: SMOKE_TOPIC,
+          platform: plat,
+          selectedHook: hook0,
+          goal: goalLabel,
+          tone: brandData?.brandVoice || '',
+        },
+        brandData,
+        { fullPostBuilder: true },
+      );
+      if (!capRes.success || !String(capRes.caption || '').trim()) {
+        log('caption', false, capRes);
+        return;
+      }
+      log('caption', true, { length: String(capRes.caption).length });
+
+      const capTrimmed = String(capRes.caption).trim();
+      let captionBody = capTrimmed;
+      const enhClaude = await enhanceCaptionWithClaude(
+        {
+          caption: capTrimmed,
+          platform: plat,
+          topic: SMOKE_TOPIC,
+          selectedHook: hook0,
+          goal: goalLabel,
+          audience: brandData?.targetAudience,
+          brandVoice: brandData?.brandVoice,
+        },
+        brandData,
+      );
+      if (enhClaude.success && String(enhClaude.caption || '').trim()) {
+        captionBody = String(enhClaude.caption).trim();
+        log('enhance', true, { length: captionBody.length, source: 'claude' });
+      } else {
+        const enhGrok = await enhanceCaptionWithGrokFallback(
+          {
+            caption: capTrimmed,
+            platform: plat,
+            topic: SMOKE_TOPIC,
+            selectedHook: hook0,
+          },
+          brandData,
+          { forceFreshRegeneration: makeFreshRegenNonce('smoke-enh') },
+        );
+        if (enhGrok.success && String(enhGrok.caption || '').trim()) {
+          captionBody = String(enhGrok.caption).trim();
+          log('enhance', true, { length: captionBody.length, source: 'grok' });
+        } else {
+          log('enhance', false, { claude: enhClaude, grok: enhGrok });
+        }
+      }
+
+      const nicheKw = Array.isArray(brandData?.niche)
+        ? brandData.niche.filter(Boolean).join(', ')
+        : (brandData?.niche || '');
+      let tagSource = 'perplexity';
+      let tagRes = await generateFullPostHashtagsGrounded(
+        {
+          topic: SMOKE_TOPIC,
+          caption: capRes.caption,
+          platform: plat,
+          goal: goalLabel,
+          selectedHook: hook0,
+          nicheKeywords: nicheKw,
+        },
+        brandData,
+        { forceFreshRegeneration: makeFreshRegenNonce('smoke-tag') },
+      );
+      if (!tagRes.success || !Array.isArray(tagRes.hashtagData) || tagRes.hashtagData.length < 5) {
+        tagSource = 'grok';
+        tagRes = await generateHashtags(
+          {
+            topic: SMOKE_TOPIC,
+            platform: plat,
+            selectedHook: hook0,
+            caption: capRes.caption,
+            goal: goalId,
+          },
+          brandData,
+          plat,
+          { fullPostBuilder: true, forceFreshRegeneration: makeFreshRegenNonce('smoke-tag-fb') },
+        );
+      }
+      const hashtagRows =
+        Array.isArray(tagRes.hashtagData) && tagRes.hashtagData.length > 0
+          ? tagRes.hashtagData
+          : parseHashtagsFromResponse(tagRes.hashtags || '');
+      log('hashtags', Boolean(tagRes.success && hashtagRows.length > 0), {
+        count: hashtagRows.length,
+        source: tagSource,
+      });
+      if (!tagRes.success || hashtagRows.length === 0) {
+        return;
+      }
+
+      const ctaRes = await generateStyledCTAs(
+        {
+          promoting: SMOKE_TOPIC,
+          goalType: goalId,
+          selectedHook: hook0,
+          caption: captionBody,
+        },
+        brandData,
+        plat,
+        { fullPostBuilder: true },
+      );
+      log('cta', Boolean(ctaRes.success && Array.isArray(ctaRes.ctas) && ctaRes.ctas.length > 0), ctaRes);
+      if (!ctaRes.success || !ctaRes.ctas?.length) {
+        return;
+      }
+
+      const hashtagStr = hashtagRows.map((h) => h.tag).join(' ');
+      const ctaText = String(ctaRes.ctas[0]?.cta || '').trim();
+      const assembled = [hook0, captionBody, hashtagStr, ctaText].filter(Boolean).join('\n\n');
+
+      const qRes = await scoreContentQuality(assembled, brandData, { fullPostBuilder: true, platform: plat });
+      let qualityOverall = qRes.score?.overall;
+      if (qualityOverall == null && qRes.success) {
+        try {
+          const parsed =
+            typeof qRes.analysis === 'string'
+              ? JSON.parse(qRes.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}')
+              : qRes.analysis;
+          const n = parsed?.totalScore ?? parsed?.overallScore ?? parsed?.overall;
+          if (n != null) qualityOverall = n;
+        } catch { /* keep null */ }
+      }
+      log('quality', qualitySmokeOk(qRes), { overall: qualityOverall });
+
+      const humRes = await scoreHumanness(captionBody, brandData, { fullPostBuilder: true, platform: plat });
+      log(
+        'human',
+        Boolean(humRes.success && humRes.score && humRes.score.overall != null && !humRes.unavailable),
+        humRes.success && humRes.score ? { overall: humRes.score.overall } : humRes,
+      );
+
+      const algo = checkAlgorithmAlignment(assembled, plat);
+      log('algorithm', Boolean(algo && algo.overallScore != null), { overallScore: algo?.overallScore });
+
+      console.log('[FPB Smoke] pipeline complete');
+    } catch (e) {
+      console.error('[FPB Smoke] exception', e);
+    }
+  }, [brandData]);
+
   useEffect(() => {
     if (!showFinalPanel) return;
     const post = assembledPostRef.current;
@@ -1211,6 +1404,20 @@ export default function FullPostBuilder() {
               Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} AI credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
             </p>
           </div>
+          {import.meta.env.DEV && FPB_DEV_SMOKE_UI_ENABLED && (
+            <div className="mt-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+              <button
+                type="button"
+                className="font-semibold text-amber-950 underline-offset-2 hover:underline"
+                onClick={() => void runDevFpSmokeTest()}
+              >
+                Run Smoke Test
+              </button>
+              <span className="ml-2 text-amber-900/90">
+                Console: [FPB Smoke] … — requires login and local API (npm run dev).
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Stepper — compact on mobile */}

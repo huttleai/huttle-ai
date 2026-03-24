@@ -17,8 +17,24 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Under concurrently without a TTY, stdin can reach EOF and (on some setups) end the process
+// even though the HTTP server is listening — keep stdin open and ignore end.
+if (!process.stdin.isTTY) {
+  try {
+    process.stdin.resume();
+    process.stdin.on('end', () => {});
+    process.stdin.on('error', () => {});
+  } catch {
+    /* ignore */
+  }
+}
+
 const app = express();
-const PORT = process.env.LOCAL_API_PORT || 3001;
+const PORT = Number(process.env.LOCAL_API_PORT) || 3001;
+/** Bind address — use 127.0.0.1 so Vite’s proxy (same host) matches; override with 0.0.0.0 for LAN. */
+const HOST = typeof process.env.LOCAL_API_HOST === 'string' && process.env.LOCAL_API_HOST.trim()
+  ? process.env.LOCAL_API_HOST.trim()
+  : '127.0.0.1';
 
 // Middleware
 app.use(cors({
@@ -28,7 +44,7 @@ app.use(cors({
   allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Helper to load and wrap serverless function
@@ -194,10 +210,18 @@ async function setupRoutes() {
 
 // Start server
 setupRoutes().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Local API server running on http://localhost:${PORT}`);
-    console.log(`📡 API routes available at http://localhost:${PORT}/api/*`);
-    console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`🚀 Local API server running on http://${HOST}:${PORT} (pid ${process.pid})`);
+    console.log(`📡 API routes available at http://${HOST}:${PORT}/api/*`);
+    console.log(`🏥 Health check: http://${HOST}:${PORT}/health`);
+    console.log('   Keep this process running — if it exits, Vite will return 404/502 for /api/*');
+  });
+  server.on('error', (err) => {
+    console.error(`❌ Cannot bind ${HOST}:${PORT}:`, err.message);
+    if (err.code === 'EADDRINUSE') {
+      console.error('   Another process is using this port (often a second `npm run dev`). Free it or set LOCAL_API_PORT.');
+    }
+    process.exit(1);
   });
 }).catch(error => {
   console.error('❌ Failed to start server:', error);

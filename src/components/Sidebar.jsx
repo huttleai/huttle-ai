@@ -59,7 +59,6 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       localStorage.removeItem('brandData');
-      localStorage.removeItem('hasSeenWelcome');
 
       const result = await logout();
       if (result.success) {

@@ -93,6 +93,10 @@ ALTER TABLE public.user_profile
 ALTER TABLE public.user_profile
   ADD COLUMN IF NOT EXISTS has_seen_tour          BOOLEAN NOT NULL DEFAULT false;
 
+-- ── Welcome notification (one-time bell) — backfill: 20260323120000 ────────
+ALTER TABLE public.user_profile
+  ADD COLUMN IF NOT EXISTS has_seen_welcome_notification BOOLEAN NOT NULL DEFAULT false;
+
 -- ── Profile type index ─────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_user_profile_profile_type
   ON public.user_profile (profile_type);

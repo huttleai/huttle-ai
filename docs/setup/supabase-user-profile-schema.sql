@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.user_profile (
   quiz_completed_at TIMESTAMP WITH TIME ZONE, -- NULL = needs onboarding, timestamp = completed
   onboarding_step INTEGER DEFAULT 0, -- Track which step of onboarding they're on
   has_seen_tour BOOLEAN DEFAULT false NOT NULL, -- Track if user has completed the guided tour
+  has_seen_welcome_notification BOOLEAN DEFAULT false NOT NULL, -- One-time post-signup welcome in notification bell
   
   -- Additional preferences
   preferred_platforms TEXT[], -- Array of platforms they use most

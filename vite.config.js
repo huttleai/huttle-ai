@@ -1,11 +1,47 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
+/** Align with api/ai/grok.js — xAI expects hyphens (4-1), not dots (4.1). */
+function normalizeGrokModelIdForClient(modelId) {
+  const t = String(modelId || '').trim()
+  if (!t) return t
+  const lower = t.toLowerCase()
+  const map = new Map([
+    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+    ['grok-4.1-fast', 'grok-4-1-fast'],
+    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
+    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
+  ])
+  if (map.has(lower)) return map.get(lower)
+  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-')
+  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1')
+  return t
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const fastModel = (env.GROK_MODEL_NON_REASONING || 'grok-4-1-fast-non-reasoning').trim()
-  const reasoningModel = (env.GROK_MODEL_REASONING || 'grok-4-1-fast-reasoning').trim()
+  const localApiPort = String(env.LOCAL_API_PORT || env.VITE_LOCAL_API_PORT || '3001').trim() || '3001'
+  const localApiHost = String(env.LOCAL_API_HOST || '127.0.0.1').trim() || '127.0.0.1'
+  // Keep client-baked ids aligned with api/ai/grok.js resolveGrokModelId() so a single
+  // GROK_CHAT_MODEL / GROK_MODEL in .env works for both Vite and local-api-server.
+  const fastModel = normalizeGrokModelIdForClient(
+    env.GROK_FAST_MODEL
+    || env.GROK_MODEL_NON_REASONING
+    || env.GROK_CHAT_MODEL
+    || env.GROK_MODEL
+    || 'grok-4-1-fast-non-reasoning',
+  )
+  const reasoningModel = normalizeGrokModelIdForClient(
+    env.GROK_REASONING_MODEL
+    || env.GROK_MODEL_REASONING
+    || env.GROK_CHAT_MODEL
+    || env.GROK_FAST_MODEL
+    || env.GROK_MODEL_NON_REASONING
+    || env.GROK_MODEL
+    || 'grok-4-1-fast-reasoning',
+  )
 
   return {
     plugins: [react()],
@@ -25,11 +61,12 @@ export default defineConfig(({ mode }) => {
       // Proxy API requests to local API server
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          // 127.0.0.1 avoids IPv6 localhost (::1) vs IPv4-only listen mismatches on some macOS setups
+          target: `http://${localApiHost}:${localApiPort}`,
           changeOrigin: true,
-          secure: false
-        }
-      }
+          secure: false,
+        },
+      },
     },
     cacheDir: 'node_modules/.vite',
     build: {

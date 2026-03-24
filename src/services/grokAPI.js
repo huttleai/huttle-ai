@@ -225,7 +225,10 @@ function normalizeStyledCtasPayload(parsed) {
 }
 
 function normalizeContentScoreV2(parsed) {
-  if (!parsed || typeof parsed !== 'object' || parsed.overallScore == null) return null;
+  if (!parsed || typeof parsed !== 'object') return null;
+  // Some models return "overall" instead of the requested "overallScore"
+  const overallRaw = parsed.overallScore != null ? parsed.overallScore : parsed.overall;
+  if (overallRaw == null) return null;
 
   const fixes = Array.isArray(parsed.fixes) ? parsed.fixes : [];
   const strengths = Array.isArray(parsed.strengths) ? parsed.strengths : [];
@@ -247,7 +250,7 @@ function normalizeContentScoreV2(parsed) {
   const humanScore = clampScore(parsed.humanizerScore);
 
   return {
-    overall: clampScore(parsed.overallScore),
+    overall: clampScore(overallRaw),
     breakdown: {
       hookStrength: hookScore,
       audienceRelevance: valueScore,
@@ -567,7 +570,15 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     const errorData = await response.json().catch(() => ({}));
     const msg = getGrokProxyErrorMessage(errorData, response.status);
     const err = new Error(msg);
-    if (errorData.code) err.code = errorData.code;
+    const rawCode = errorData?.code;
+    if (typeof rawCode === 'string' && rawCode.trim()) {
+      err.code = rawCode.trim();
+    } else if (
+      response.status === 502
+      && /invalid or the request was malformed|Grok API rejected/i.test(msg)
+    ) {
+      err.code = 'GROK_UPSTREAM_INVALID';
+    }
     err.status = response.status;
     throw err;
   }
@@ -1282,7 +1293,18 @@ const HOOK_BUILDER_MOCK_THEME_NEEDLE = {
   authority: 'shocking',
 };
 
-const FORBIDDEN_GENERIC_HOOK_FRAMES = `FORBIDDEN (do not use, even with the topic swapped in): frames like "Most advice about [topic] is backwards — here's what actually works", "[topic] is overrated unless you fix this first", "Stop treating [topic] like a hobby if you want real results", "What if everything you thought about [topic] was wrong?", "Why do so many people still get [topic] backwards?", "Ready to transform your [topic]?" — these are mad-lib templates; replace with topic-native detail.`;
+const FORBIDDEN_GENERIC_HOOK_FRAMES = `FORBIDDEN (do not use, even with the topic swapped in): mad-lib / template frames including:
+- "I was deep into [topic] when everything clicked"
+- "I didn't plan to care about [topic] until this moment"
+- "Have you been making [topic] harder than it needs to be?"
+- "[topic] is overrated unless you fix this first" (or same with capitalized topic word)
+- "Stop treating [topic] like a hobby if you want real results"
+- "Here's the honest version of my [topic] story"
+- "Most advice about [topic] is backwards — here's what actually works"
+- "What if everything you thought about [topic] was wrong?"
+- "Why do so many people still get [topic] backwards?"
+- "Ready to transform your [topic]?"
+These repeat for every topic with only the noun swapped — replace each hook with topic-native detail a reader could not reuse for an unrelated niche.`;
 
 const HOOK_BUILDER_THEME_DIRECTIVES = {
   curiosity: `Theme "curiosity" (Question): A specific question about a real aspect of the topic that the reader needs answered. Must end with "?". Not a generic "gotcha" question — something only someone familiar with the topic would ask.
@@ -1467,7 +1489,11 @@ Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); n
         || firstErr?.status === 502;
       if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
       if (import.meta.env.DEV) {
-        console.warn('[generateHooks] Quality model failed; retrying with fast model', firstErr?.code);
+        console.warn('[generateHooks] Quality model failed; retrying with fast model', {
+          code: firstErr?.code,
+          status: firstErr?.status,
+          fastModel: getGrokModel('fast'),
+        });
       }
       data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: 'fast' });
     }
@@ -1519,22 +1545,24 @@ ${trendDescription ? `- Brief: ${trendDescription}` : ''}
 
     const fullPostHooksInstruction = `You are a viral social media copywriter who deeply understands ${topicQuoted}. Generate exactly 4 hooks in the "${safeHookType}" style for ${platformName}.
 
+MANDATORY: Before writing hooks, silently identify 4-5 specific real-world aspects of the topic (techniques, common mistakes, surprising facts, sensory experiences, measurable outcomes). Then write each hook referencing one of these specific aspects. The reader should be able to tell what the topic is WITHOUT seeing the topic word in the hook.
+
 CRITICAL — TOPIC SPECIFICITY:
 Every hook must demonstrate SPECIFIC knowledge about ${topicQuoted}. Reference real details, experiences, common misconceptions, pain points, or outcomes that someone familiar with ${topicQuoted} would recognize.
 
 TEST: If you can replace ${topicQuoted} with any random topic and the hook still makes sense, it is too generic. Rewrite it until it could ONLY be about ${topicQuoted}.
 
 BAD (generic template): "Most advice about ${topicQuoted} is backwards — here's what actually works."
-GOOD (topic-specific): Reference an actual aspect, myth, technique, outcome, or experience unique to ${topicQuoted}.
+GOOD (topic-specific): Reference an actual aspect, myth, technique, outcome, or experience unique to ${topicQuoted} (e.g. a mechanism, tradeoff, timeline, sensation, or common mistake — not vague motivation).
 
-HOOK STYLE — follow "${safeHookType}" strictly:
+HOOK STYLE — follow "${safeHookType}" strictly (each of the 4 hooks must sound like THIS type, not a blend):
 - "Question": A specific question about a real aspect of ${topicQuoted} that the reader needs answered. Must end with "?".
 - "Teaser": Tease a specific secret, result, or insider insight about ${topicQuoted}. Create curiosity about something concrete.
 - "Shocking Stat": A surprising contrast or counterintuitive truth about ${topicQuoted}. Do NOT invent fake numbers. Use qualitative surprises grounded in reality.
 - "Story": Start mid-moment in a real-feeling personal experience with ${topicQuoted}. Use first person. Include tangible sensory or emotional details — not vague statements like "I was deep into ${topicQuoted} when everything clicked."
-- "Bold Claim": A strong, specific, opinionated statement about ${topicQuoted} that takes a concrete stance someone could disagree with.
+- "Bold Claim": A strong, specific, opinionated statement about ${topicQuoted} that takes a concrete stance someone could disagree with — name a mechanism, tradeoff, or myth, not a hollow hype line.
 
-CAPITALIZATION: Use natural English grammar. Lowercase ${topicQuoted} mid-sentence unless it is a proper noun or brand name. Write "the truth about microneedling" NOT "the truth about Microneedling."
+CAPITALIZATION: Lowercase the topic phrase mid-sentence unless it is a proper noun or brand name. Write "the truth about microneedling" NOT "the truth about Microneedling." Only capitalize at the start of a sentence.
 
 Each hook: one sentence, under 20 words, scroll-stopping. Do not mix styles.
 
@@ -1573,7 +1601,7 @@ Requirements:
 - Hook type (mandatory): ${safeHookType} — every line must match this style
 - Match the creator's brand tone: ${promptProfile.tone}
 - Stay under 20 words per hook; one sentence each
-- Show topic-specific knowledge — no generic mad-lib frames; obey capitalization (lowercase common nouns / procedure names mid-sentence unless proper noun)
+- First silently pick 4-5 concrete topic angles, then write hooks that use those angles; avoid repeating the same sentence frame; topic phrase lowercase mid-sentence unless proper noun; only capitalize at sentence start
 - Make each hook platform-native for ${platformName}
 - Plain text only for hooks (no #, no bullets)
 
@@ -1582,10 +1610,13 @@ Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamb
 
     let data;
     try {
+      // Match dev-test-grok.mjs / server default: non-reasoning id first (GROK_CHAT_MODEL || GROK_MODEL || default).
+      // Reasoning is retried second so accounts where only the fast catalog works still get hooks without a 502.
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: GROK_MODE_QUALITY,
+        mode: 'fast',
         max_tokens: 1024,
         grok_debug_fullpost: true,
+        grok_debug_fullpost_step: 'hooks',
       });
     } catch (firstErr) {
       const retryable =
@@ -1594,12 +1625,18 @@ Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamb
         || firstErr?.status === 502;
       if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
       if (import.meta.env.DEV) {
-        console.warn('[generateFullPostHooks] Quality model request failed; retrying with fast model', firstErr?.code);
+        const qualityId = getGrokModel(GROK_MODE_QUALITY);
+        console.warn('[generateFullPostHooks] Fast model request failed; retrying with quality (reasoning) model', {
+          code: firstErr?.code,
+          status: firstErr?.status,
+          qualityModel: qualityId,
+        });
       }
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: 'fast',
+        mode: GROK_MODE_QUALITY,
         max_tokens: 1024,
         grok_debug_fullpost: true,
+        grok_debug_fullpost_step: 'hooks',
       });
     }
 
@@ -2840,6 +2877,21 @@ Return ONLY a JSON array of 3–6 objects:
   }
 }
 
+/** When Grok wraps JSON in prose, extract at least `overall` for Full Post Builder. */
+function parseHumannessScoreLoose(rawContent) {
+  const text = typeof rawContent === 'string' ? rawContent : '';
+  if (!text.trim()) return null;
+  const m = text.match(/"overall"\s*:\s*(\d+)/);
+  if (!m) return null;
+  const overall = clampScore(m[1]);
+  return {
+    overall,
+    label: overall >= 80 ? 'Sounds like you' : overall >= 60 ? 'Mostly natural' : overall >= 40 ? 'Slightly robotic' : 'AI detectable',
+    dimensions: {},
+    flaggedPhrases: [],
+  };
+}
+
 /**
  * Score how "human" vs AI-generated content sounds.
  * Returns structured JSON with overall score, 4 dimension scores, and flagged phrases.
@@ -2959,8 +3011,12 @@ ${truncateForAiPrompt(content, 8000)}`,
     data = await callGrokAPI([...messages], 0.3, grokHumanOpts);
 
     const parsed = parseJsonFromResponse(data.content);
-    if (parsed) {
+    if (parsed && typeof parsed === 'object' && parsed.overall != null) {
       return { success: true, score: parsed, usage: data.usage };
+    }
+    const loose = parseHumannessScoreLoose(data.content || '');
+    if (loose) {
+      return { success: true, score: loose, usage: data.usage };
     }
     if (fp) {
       return { success: true, unavailable: true, usage: data.usage };

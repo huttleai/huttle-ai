@@ -39,7 +39,7 @@ import confetti from 'canvas-confetti';
 import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
-import { getContentLibraryItems } from '../config/supabase';
+import { supabase, getContentLibraryItems } from '../config/supabase';
 import {
   generateDashboardData,
   getDashboardCache, // HUTTLE AI: cache fix
@@ -319,10 +319,10 @@ const QUICK_CREATE_TOOLS = [
 ];
 
 export default function Dashboard() {
-  const { user, userProfile, loading: authLoading } = useContext(AuthContext); // HUTTLE AI: updated 2
+  const { user, userProfile, loading: authLoading } = useContext(AuthContext);
   const { getDashboardSnapshot, loadSessionDashboardSnapshot, setDashboardSnapshot, clearDashboardSnapshot } = useDashboardCache(); // HUTTLE AI: cache fix
   const navigate = useNavigate();
-  const { brandProfile } = useBrand();
+  const { brandProfile, brandFetchComplete } = useBrand();
   const { showToast } = useToast();
   const { addNotification, addSocialUpdate } = useNotifications();
   const {
@@ -754,36 +754,66 @@ export default function Dashboard() {
     return 'bg-huttle-100 text-huttle-primary-dark';
   };
 
-  // Welcome notification — once per account (guarded before delayed enqueue so navigation never replays it)
+  // Welcome notification — once per account: DB atomic claim (survives cleared storage / fast navigation)
   useEffect(() => {
-    if (!user?.id) return;
-    const welcomeKey = `hasSeenWelcome:${user.id}`;
+    if (!user?.id || authLoading || !brandFetchComplete) return;
+    if (userProfile?.has_completed_onboarding === false) return;
+    if (brandProfile.hasSeenWelcomeNotification !== false) return;
+
     const dismissStorageKey = `huttleDismissed:${user.id}`;
     const dismissKey = `welcome_${user.id}`;
     try {
       const dismissed = new Set(JSON.parse(localStorage.getItem(dismissStorageKey) || '[]'));
       if (dismissed.has(dismissKey)) return;
-    } catch { /* ignore */ }
-    if (localStorage.getItem(welcomeKey)) return;
+    } catch {
+      /* ignore */
+    }
 
-    const timer = setTimeout(() => {
-      addNotification({
-        type: 'info',
-        title: 'Welcome to Huttle AI!',
-        message: 'Your AI-powered content creation assistant is ready. Generate your first piece of content to get started!',
-        dismissKey,
-        actionUrl: '/dashboard/ai-tools',
-        actionLabel: 'Start Creating',
-        persistent: false,
-      });
-      try {
-        localStorage.setItem(welcomeKey, 'true');
-      } catch {
-        /* ignore quota / private mode */
+    let cancelled = false;
+    let showTimer = null;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('user_profile')
+        .update({
+          has_seen_welcome_notification: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+        .eq('has_seen_welcome_notification', false)
+        .select('user_id');
+
+      if (cancelled || error || !data?.length) {
+        if (error) console.error('[Dashboard] Welcome notification claim failed:', error);
+        return;
       }
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [addNotification, user?.id]);
+
+      showTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        addNotification({
+          type: 'info',
+          title: 'Welcome to Huttle AI!',
+          message: 'Your AI-powered content creation assistant is ready. Generate your first piece of content to get started!',
+          dismissKey,
+          actionUrl: '/dashboard/ai-tools',
+          actionLabel: 'Start Creating',
+          persistent: false,
+        });
+      }, 2000);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (showTimer !== null) window.clearTimeout(showTimer);
+    };
+  }, [
+    addNotification,
+    authLoading,
+    brandFetchComplete,
+    brandProfile.hasSeenWelcomeNotification,
+    user?.id,
+    userProfile?.has_completed_onboarding,
+  ]);
 
   const getToolBadge = (name) => {
     if (!name) return 'Content';

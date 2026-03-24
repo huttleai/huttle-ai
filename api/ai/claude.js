@@ -6,6 +6,11 @@
  * 
  * Required environment variables:
  * - ANTHROPIC_API_KEY: Your Anthropic API key (NOT prefixed with VITE_)
+ *
+ * DEV NOTE — common failures:
+ * - 503 "coming soon" from this proxy: ANTHROPIC_API_KEY missing → add to .env for local-api-server.
+ * - 401 from this proxy: valid Supabase Bearer token required (log in via the app).
+ * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is claude-sonnet-4-6.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -13,7 +18,9 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_API_KEY =
+  typeof _rawAnthropicKey === 'string' && _rawAnthropicKey.trim() ? _rawAnthropicKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 if (!ANTHROPIC_API_KEY) {
@@ -42,6 +49,12 @@ const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceK
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user
+
+function devAiProxyLog(message, meta = undefined) {
+  if (process.env.NODE_ENV === 'production' && process.env.DEV_AI_PROXY_LOG !== '1') return;
+  if (meta !== undefined) console.log(`[DEV AI proxy] ${message}`, meta);
+  else console.log(`[DEV AI proxy] ${message}`);
+}
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -128,6 +141,8 @@ export default async function handler(req, res) {
       requestBody.system = systemPrompt;
     }
 
+    devAiProxyLog('claude → Anthropic request', { model: safeModel, messageCount: filteredMessages.length });
+
     const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
@@ -138,8 +153,11 @@ export default async function handler(req, res) {
       body: JSON.stringify(requestBody)
     });
 
+    devAiProxyLog('claude ← Anthropic response', { status: response.status, ok: response.ok });
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[CLAUDE UPSTREAM RAW]', response.status, errorText); // TODO: remove after QA
       logError('claude.upstream_error', { status: response.status, errorText });
       return res.status(response.status).json({ 
         error: 'AI service error. Please try again.' 
