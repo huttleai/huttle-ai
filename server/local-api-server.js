@@ -95,6 +95,7 @@ async function setupRoutes() {
   // Content remix route
   app.all('/api/ai/content-remix', await loadHandler('api/ai/content-remix.js'));
   app.all('/api/ai/claude', await loadHandler('api/ai/claude.js'));
+  app.all('/api/ai/humanize', await loadHandler('api/ai/humanize.js'));
 
   // Legacy n8n-generator route
   app.all('/api/ai/n8n-generator', await loadHandler('api/ai/n8n-generator.js'));

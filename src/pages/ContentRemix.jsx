@@ -1,5 +1,5 @@
-import { useState, useContext, useEffect } from 'react';
-import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useState, useContext, useEffect, useRef } from 'react';
+import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -15,6 +15,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { saveContentLibraryItem } from '../config/supabase';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import humanizeContent, {
+  mapBrandVoiceToHumanizeType,
+  normalizeHumanizePlatform,
+} from '../services/humanizeContent';
 
 /**
  * Remix goal options with metadata
@@ -88,6 +92,8 @@ export default function ContentRemix() {
   const [usedAiFallback, setUsedAiFallback] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [savedId, setSavedId] = useState(null);
+  const [isPolishingRemix, setIsPolishingRemix] = useState(false);
+  const remixPolishGenRef = useRef(0);
 
   // Initialize selected platforms from Brand Voice (extract names from platform objects)
   useEffect(() => {
@@ -311,6 +317,7 @@ export default function ContentRemix() {
 
     const applyRemixSuccess = async (raw, sections, fromFallback) => {
       const usage = await remixUsage.trackFeatureUsage({ mode: remixGoal });
+      const polishGen = ++remixPolishGenRef.current;
       setRemixResults({ raw, sections });
       setUsedAiFallback(Boolean(fromFallback));
       const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
@@ -319,6 +326,31 @@ export default function ContentRemix() {
       if (!usage.allowed) {
         showToast('Your remix is ready, but we could not record this run against your plan limits. Refresh usage if the meter looks off.', 'warning');
       }
+
+      setIsPolishingRemix(true);
+      (async () => {
+        try {
+          const brandVoiceType = mapBrandVoiceToHumanizeType(brandData?.brandVoice);
+          const nextSections = await Promise.all(
+            (sections || []).map(async (sec) => ({
+              ...sec,
+              variations: await Promise.all(
+                (sec.variations || []).map((v) =>
+                  humanizeContent({
+                    text: ensureString(v),
+                    brandVoiceType,
+                    platform: normalizeHumanizePlatform(sec.platform),
+                  })
+                )
+              ),
+            }))
+          );
+          if (polishGen !== remixPolishGenRef.current) return;
+          setRemixResults((prev) => (prev && prev.raw === raw ? { raw, sections: nextSections } : prev));
+        } finally {
+          if (polishGen === remixPolishGenRef.current) setIsPolishingRemix(false);
+        }
+      })();
     };
 
     try {
@@ -807,6 +839,12 @@ export default function ContentRemix() {
               </p>
               {usedAiFallback && (
                 <p className="text-xs text-gray-400 ml-10 mt-1">Powered by AI fallback</p>
+              )}
+              {isPolishingRemix && (
+                <p className="flex items-center gap-2 text-xs text-gray-500 ml-10 mt-2" role="status">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-huttle-primary" aria-hidden />
+                  Polishing…
+                </p>
               )}
             </div>
 

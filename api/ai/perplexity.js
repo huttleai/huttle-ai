@@ -309,7 +309,6 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'trending',
     payload: cachePayload,
-    result_data: cachePayload,
     generated_at: now.toISOString(),
     expires_at: expiresAt.toISOString(),
     hit_count: 0,

@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion as Motion } from 'framer-motion';
 import { useBrand } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -28,6 +28,7 @@ import {
   Info,
   Clock,
   Camera,
+  Loader2,
 } from 'lucide-react';
 import {
   TikTokIcon,
@@ -55,6 +56,10 @@ import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { parseJsonLenient } from '../utils/parseAiJson';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { getCachedTrends } from '../services/dashboardCacheService';
+import humanizeContent, {
+  mapBrandVoiceToHumanizeType,
+  normalizeHumanizePlatform,
+} from '../services/humanizeContent';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
 
@@ -187,6 +192,9 @@ export default function IgniteEngine() {
   const [currentView, setCurrentView] = useState('input');
   const [usageCount, setUsageCount] = useState(0);
   const [usageLimit, setUsageLimit] = useState(0);
+  const [isPolishingScript, setIsPolishingScript] = useState(false);
+  const [briefGenerationError, setBriefGenerationError] = useState('');
+  const scriptPolishGenRef = useRef(0);
 
   const hasMismatch = generatedBrief && (selectedPlatform !== generatedForPlatform || selectedPostType !== generatedForPostType);
   const mismatchLabel = hasMismatch ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
@@ -259,6 +267,26 @@ export default function IgniteEngine() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const scheduleScriptHumanize = useCallback((brief, gen) => {
+    const raw = brief?.script?.trim();
+    if (!raw) {
+      setIsPolishingScript(false);
+      return;
+    }
+    setIsPolishingScript(true);
+    (async () => {
+      try {
+        const brandVoiceType = mapBrandVoiceToHumanizeType(brandProfile?.brandVoice);
+        const platform = normalizeHumanizePlatform(selectedPlatform);
+        const h = await humanizeContent({ text: raw, brandVoiceType, platform });
+        if (gen !== scriptPolishGenRef.current) return;
+        setGeneratedBrief((prev) => (prev ? { ...prev, script: h } : null));
+      } finally {
+        if (gen === scriptPolishGenRef.current) setIsPolishingScript(false);
+      }
+    })();
+  }, [brandProfile?.brandVoice, selectedPlatform]);
+
   const handleGenerate = async () => {
     if (!hasAccess) { setShowUpgradeModal(true); return; }
     if (isAtLimit || !blueprintUsage.canGenerate) {
@@ -269,9 +297,14 @@ export default function IgniteEngine() {
 
     setIsGenerating(true);
     setParseError(false);
+    setBriefGenerationError('');
     await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
 
+    let scriptPolishGen = 0;
     try {
+      scriptPolishGenRef.current += 1;
+      scriptPolishGen = scriptPolishGenRef.current;
+
       const { required, optional, excluded } = getSectionsForType(selectedPlatform, selectedPostType);
       const viralWeights = getViralScoreWeights(selectedPlatform, selectedPostType);
       const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
@@ -317,7 +350,7 @@ export default function IgniteEngine() {
       const authToken = session?.access_token;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
 
       let response;
       try {
@@ -332,10 +365,12 @@ export default function IgniteEngine() {
           signal: controller.signal,
           mode: 'cors',
         });
-      } catch (fetchError) {
+      } catch (err) {
         clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') throw new Error('REQUEST_TIMEOUT');
-        throw fetchError;
+        if (err.name === 'AbortError') {
+          throw new Error('Generation timed out after 90 seconds. Please try again.');
+        }
+        throw err;
       }
 
       clearTimeout(timeoutId);
@@ -386,6 +421,7 @@ export default function IgniteEngine() {
       setGeneratedBrief(normalized);
       setGeneratedForPlatform(selectedPlatform);
       setGeneratedForPostType(selectedPostType);
+      scheduleScriptHumanize(normalized, scriptPolishGen);
 
       const newUsage = usageCount + 1;
       setUsageCount(newUsage);
@@ -396,20 +432,27 @@ export default function IgniteEngine() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
     } catch (error) {
-      console.error('[IgniteEngine] Generation error:', error.message);
+      console.error('[IgniteEngine] Generation error:', error);
 
-      if (error.message === 'INVALID_JSON' || error.message === 'INVALID_BRIEF_STRUCTURE') {
+      const isParseFailure = error.message === 'INVALID_JSON' || error.message === 'INVALID_BRIEF_STRUCTURE';
+      if (isParseFailure) {
         setParseError(true);
         setCurrentView('results');
+      } else {
+        setBriefGenerationError('Generation failed. Please try again.');
       }
 
       let msg = "We're having trouble generating your brief. Please try again in a moment.";
-      if (error.message === 'REQUEST_TIMEOUT') msg = 'This request is taking longer than expected. Please try again.';
-      else if (error.message.startsWith('HTTP_ERROR')) msg = 'We received an unexpected response. Please try again.';
+      if (error.message.includes('timed out after 90 seconds')) {
+        msg = 'Generation timed out after 90 seconds. Please try again.';
+        setBriefGenerationError(msg);
+      } else if (error.message.startsWith('HTTP_ERROR')) {
+        msg = 'We received an unexpected response. Please try again.';
+      }
 
       showToast(msg, 'error');
 
-      if (topic.trim() && !parseError) {
+      if (topic.trim() && !isParseFailure) {
         try {
           const fallbackBrief = await attemptGrokFallback(
             selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
@@ -419,7 +462,9 @@ export default function IgniteEngine() {
             setGeneratedForPlatform(selectedPlatform);
             setGeneratedForPostType(selectedPostType);
             setParseError(false);
+            setBriefGenerationError('');
             setCurrentView('results');
+            scheduleScriptHumanize(fallbackBrief, scriptPolishGen);
             showToast('Brief generated via direct AI.', 'success');
           }
         } catch {
@@ -483,6 +528,7 @@ export default function IgniteEngine() {
     setGeneratedForPlatform('');
     setGeneratedForPostType('');
     setParseError(false);
+    setBriefGenerationError('');
     setCopiedSection(null);
     setCurrentView('input');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -491,6 +537,7 @@ export default function IgniteEngine() {
   const handleRegenerate = () => {
     setGeneratedBrief(null);
     setParseError(false);
+    setBriefGenerationError('');
     setCurrentView('input');
     setTimeout(() => handleGenerate(), 100);
   };
@@ -763,6 +810,11 @@ export default function IgniteEngine() {
                       </>
                     )}
                   </button>
+                  {briefGenerationError ? (
+                    <p className="text-sm text-red-600 text-center mt-3 max-w-md mx-auto" role="alert">
+                      {briefGenerationError}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-gray-500 text-center mt-3">Deep research & strategy generation takes 60-90 seconds. Please keep this tab open.</p>
                 </div>
               </>
@@ -927,6 +979,12 @@ export default function IgniteEngine() {
                           <CopyBtn label="Copy" copiedLabel="Copied!" active={copiedSection === 'script'} onClick={() => handleCopy(bp.script, 'script')} />
                         }>
                           <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">{sanitizeAIOutput(bp.script)}</div>
+                          {isPolishingScript && (
+                            <p className="flex items-center gap-2 text-xs text-gray-500 mt-2" role="status">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-huttle-primary" aria-hidden />
+                              Polishing…
+                            </p>
+                          )}
                           <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5" />
                             Estimated read time: ~{Math.max(1, Math.round(bp.script.split(/\s+/).length / 130))} min

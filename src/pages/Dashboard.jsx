@@ -46,9 +46,10 @@ import {
   deleteDashboardCache, // HUTTLE AI: cache fix
   getDashboardGeneratedDate, // HUTTLE AI: cache fix
   getNextLocalDashboardRefreshAt,
+  hasPersistableTrendingTopics,
   trackDashboardGenerationUsage,
   fetchDashboardForYouHashtags,
-  fetchDashboardTrendingHashtags,
+  fetchDashboardTrendingHashtagsForPlatforms,
   setCachedTrends,
 } from '../services/dashboardCacheService';
 import { formatRelativeTime } from '../utils/formatRelativeTime';
@@ -444,7 +445,7 @@ export default function Dashboard() {
       } // HUTTLE AI: cache fix
     } else { // HUTTLE AI: cache fix
       const memorySnapshot = getDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
-      if (memorySnapshot?.data) { // HUTTLE AI: cache fix
+      if (memorySnapshot?.data && hasPersistableTrendingTopics(memorySnapshot.data.trending_topics)) { // HUTTLE AI: cache fix
         applyDashboardPayload(memorySnapshot.data, generatedDate); // HUTTLE AI: cache fix
         hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
         setIsDashboardLoading(false); // HUTTLE AI: cache fix
@@ -453,7 +454,7 @@ export default function Dashboard() {
       } // HUTTLE AI: cache fix
 
       const sessionSnapshot = loadSessionDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
-      if (sessionSnapshot?.data) { // HUTTLE AI: cache fix
+      if (sessionSnapshot?.data && hasPersistableTrendingTopics(sessionSnapshot.data.trending_topics)) { // HUTTLE AI: cache fix
         applyDashboardPayload(sessionSnapshot.data, generatedDate); // HUTTLE AI: cache fix
         hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
         setIsDashboardLoading(false); // HUTTLE AI: cache fix
@@ -1054,15 +1055,13 @@ export default function Dashboard() {
     (async () => {
       setTrendingTabLoading(true);
       try {
-        const results = await Promise.all(
-          resolvedDashboardPlatformLabels.map((platformLabel) =>
-            fetchDashboardTrendingHashtags({
-              primaryPlatform: platformLabel,
-              userId: user.id,
-              generatedDate,
-              forceRefresh: false,
-            })
-          )
+        const results = await fetchDashboardTrendingHashtagsForPlatforms(
+          resolvedDashboardPlatformLabels,
+          {
+            userId: user.id,
+            generatedDate,
+            forceRefresh: false,
+          },
         );
         if (cancelled) return;
         const itemsPerPlatform = results.map((r) => r.items || []);

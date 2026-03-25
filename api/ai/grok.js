@@ -215,7 +215,6 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'grok',
     payload: cachePayload,
-    result_data: cachePayload,
     generated_at: now.toISOString(),
     expires_at: expiresAt.toISOString(),
     hit_count: 0,

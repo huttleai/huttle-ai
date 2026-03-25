@@ -395,6 +395,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Run async work for each item in order with a fixed delay after each step (reduces API rate limits).
+ * @template T, R
+ * @param {T[]} items
+ * @param {(item: T) => Promise<R>} asyncFn
+ * @param {number} [delayMs=1200]
+ * @returns {Promise<R[]>}
+ */
+async function sequential(items, asyncFn, delayMs = 1200) {
+  const results = [];
+  for (const item of items) {
+    results.push(await asyncFn(item));
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return results;
+}
+
 async function getDashboardSession() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -466,7 +483,7 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
   try {
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('payload, result_data, hit_count')
+      .select('payload, hit_count')
       .eq('cache_key', cacheKey)
       .is('user_id', null)
       .gt('expires_at', new Date().toISOString())
@@ -480,7 +497,7 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
       return null;
     }
 
-    const rowPayload = data?.payload ?? data?.result_data;
+    const rowPayload = data?.payload;
 
     if (type === 'trending') {
       const hit = Boolean(rowPayload) && isValidDashboardTrendingWarmPayload(rowPayload);
@@ -520,7 +537,7 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('cache_key, payload, result_data, generated_at')
+      .select('cache_key, payload, generated_at')
       .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
@@ -535,7 +552,7 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     }
 
     const [previousCache] = data;
-    const prevPayload = previousCache.payload ?? previousCache.result_data;
+    const prevPayload = previousCache.payload;
     if (type === 'trending' && !isValidDashboardTrendingWarmPayload(prevPayload)) {
       console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
         niche: context.cacheNiche,
@@ -878,11 +895,15 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
 
       if (response.status === 429) {
         if (attempt === MAX_RETRIES) {
-          console.warn('[Perplexity] Max retries reached for', platform, type, '- giving up');
+          console.warn(
+            '[Perplexity] Rate limited (429) after retries — continuing without this platform response:',
+            platform,
+            type,
+          );
           return null;
         }
 
-        const delayMs = attempt === 0 ? 2000 : 4000;
+        const delayMs = attempt === 0 ? 1000 : 3000;
         console.warn(`[Perplexity] Rate limited, retrying in ${delayMs / 1000}s...`, platform);
         await sleep(delayMs);
         continue;
@@ -1656,6 +1677,28 @@ export async function fetchDashboardTrendingHashtags({
 }
 
 /**
+ * Fetches `trending_hashtags_widget` Perplexity data for each platform one at a time (avoids 429s from parallel calls).
+ * @param {string[]} platformLabels
+ * @param {{ userId: string, generatedDate?: string, forceRefresh?: boolean }} options
+ * @returns {Promise<Array<{ items: object[], fromCache: boolean }>>}
+ */
+export async function fetchDashboardTrendingHashtagsForPlatforms(platformLabels, options) {
+  const labels = ensureArray(platformLabels).filter(Boolean);
+  if (!options?.userId || labels.length === 0) {
+    return [];
+  }
+  const { userId, generatedDate, forceRefresh = false } = options;
+  return sequential(labels, (platformLabel) =>
+    fetchDashboardTrendingHashtags({
+      primaryPlatform: platformLabel,
+      userId,
+      generatedDate,
+      forceRefresh,
+    }),
+  );
+}
+
+/**
  * Personalized "For you" hashtags via Grok (server-cached in niche_content_cache, user-scoped).
  * @returns {Promise<{ items: object[], fromCache: boolean }>}
  */
@@ -1866,7 +1909,7 @@ async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: ca
   return data || null; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
-function hasPersistableTrendingTopics(trendingTopics) {
+export function hasPersistableTrendingTopics(trendingTopics) {
   const topics = ensureArray(trendingTopics);
   if (!topics.length) return false;
   const sampleCount = topics.filter((t) => t?._isSampleTrend).length;
@@ -2008,11 +2051,17 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
     }
   }
 
+  const normalizedRow = normalizeDashboardCacheRow(cachedRow, context);
+  if (!hasPersistableTrendingTopics(normalizedRow.trending_topics)) {
+    console.warn('[Dashboard] daily_dashboard_cache ignored — trending empty or all sample (will regenerate)');
+    return { success: true, cacheHit: false, generatedDate, data: null };
+  }
+
   return { // HUTTLE AI: cache fix
     success: true, // HUTTLE AI: cache fix
     cacheHit: true, // HUTTLE AI: cache fix
     generatedDate, // HUTTLE AI: cache fix
-    data: normalizeDashboardCacheRow(cachedRow, context), // HUTTLE AI: cache fix
+    data: normalizedRow, // HUTTLE AI: cache fix
   }; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 

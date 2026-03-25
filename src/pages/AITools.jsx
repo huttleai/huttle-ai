@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, ChevronDown, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
@@ -29,6 +29,10 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import AddToKitModal from '../components/AddToKitModal';
 import { getCachedTrends } from '../services/dashboardCacheService';
+import humanizeContent, {
+  mapBrandVoiceToHumanizeType,
+  normalizeHumanizePlatform,
+} from '../services/humanizeContent';
 
 function pickCachedTrendTopicChips() {
   const raw = getCachedTrends();
@@ -122,6 +126,8 @@ export default function AITools() {
   const [captionPlatform, setCaptionPlatform] = useState('instagram');
   const [generatedCaptions, setGeneratedCaptions] = useState([]);
   const [isLoadingCaptions, setIsLoadingCaptions] = useState(false);
+  const [isPolishingCaptions, setIsPolishingCaptions] = useState(false);
+  const captionPolishGenRef = useRef(0);
 
   // Hashtag Generator State
   const [hashtagInput, setHashtagInput] = useState('');
@@ -135,6 +141,8 @@ export default function AITools() {
   const [hookPlatform, setHookPlatform] = useState('instagram');
   const [generatedHooks, setGeneratedHooks] = useState([]);
   const [isLoadingHooks, setIsLoadingHooks] = useState(false);
+  const [isPolishingHooks, setIsPolishingHooks] = useState(false);
+  const hookPolishGenRef = useRef(0);
 
   // CTA Suggester State (redesigned)
   const [ctaPromoting, setCtaPromoting] = useState('');
@@ -144,6 +152,8 @@ export default function AITools() {
   const [generatedCTAs, setGeneratedCTAs] = useState([]);
   const [styledCTAs, setStyledCTAs] = useState(null);
   const [isLoadingCTAs, setIsLoadingCTAs] = useState(false);
+  const [isPolishingCTAs, setIsPolishingCTAs] = useState(false);
+  const ctaPolishGenRef = useRef(0);
 
   // Content Quality Scorer State
   const [contentToScore, setContentToScore] = useState('');
@@ -304,6 +314,27 @@ export default function AITools() {
     }
   }, [searchParams, setSearchParams]);
 
+  const scheduleCaptionPolish = useCallback((captionsList) => {
+    if (!Array.isArray(captionsList) || captionsList.length === 0) return;
+    const polishGen = ++captionPolishGenRef.current;
+    setIsPolishingCaptions(true);
+    (async () => {
+      try {
+        const brandVoiceType = mapBrandVoiceToHumanizeType(
+          applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : captionTone
+        );
+        const platform = normalizeHumanizePlatform(captionPlatform);
+        const polished = await Promise.all(
+          captionsList.map((c) => humanizeContent({ text: c, brandVoiceType, platform }))
+        );
+        if (polishGen !== captionPolishGenRef.current) return;
+        setGeneratedCaptions(polished);
+      } finally {
+        if (polishGen === captionPolishGenRef.current) setIsPolishingCaptions(false);
+      }
+    })();
+  }, [applyBrandVoice, brandData?.brandVoice, captionTone, captionPlatform]);
+
   // Caption Generator Handler
   const handleGenerateCaptions = async () => {
     if (!captionInput.trim()) {
@@ -341,21 +372,27 @@ export default function AITools() {
           setGeneratedCaptions(finalCaptions);
           incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
+          scheduleCaptionPolish(finalCaptions);
         } else {
-          setGeneratedCaptions(fallbackCaptions);
+          const fb = fallbackCaptions;
+          setGeneratedCaptions(fb);
           showToast(`Using fallback captions. ${getToastDisclaimer('general')}`, 'info');
+          scheduleCaptionPolish(fb);
         }
       } else {
         // Handle error with user-friendly messages
         const errorMessage = result.error || 'API error - using fallback captions';
-        
-        setGeneratedCaptions(buildCaptionFallbacks(captionInput, captionPlatform, captionTone));
+        const fb = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
+        setGeneratedCaptions(fb);
         showToast(errorMessage, 'warning');
+        scheduleCaptionPolish(fb);
       }
     } catch (error) {
       console.error('Caption generation error:', error);
-      setGeneratedCaptions(buildCaptionFallbacks(captionInput, captionPlatform, captionTone));
+      const fb = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
+      setGeneratedCaptions(fb);
       showToast('Error generating captions. Using fallbacks.', 'error');
+      scheduleCaptionPolish(fb);
     } finally {
       setIsLoadingCaptions(false);
     }
@@ -456,9 +493,27 @@ export default function AITools() {
 
       if (result.success && result.hooks) {
         const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
-        setGeneratedHooks(hooks.length > 0 ? hooks : [result.hooks]);
+        const finalHooks = hooks.length > 0 ? hooks : [result.hooks];
+        setGeneratedHooks(finalHooks);
         incrementAIUsage();
         showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
+        const polishGen = ++hookPolishGenRef.current;
+        setIsPolishingHooks(true);
+        (async () => {
+          try {
+            const brandVoiceType = mapBrandVoiceToHumanizeType(
+              applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : null
+            );
+            const platform = normalizeHumanizePlatform(hookPlatform);
+            const polished = await Promise.all(
+              finalHooks.map((h) => humanizeContent({ text: h, brandVoiceType, platform }))
+            );
+            if (polishGen !== hookPolishGenRef.current) return;
+            setGeneratedHooks(polished);
+          } finally {
+            if (polishGen === hookPolishGenRef.current) setIsPolishingHooks(false);
+          }
+        })();
       } else {
         // Handle error with user-friendly messages
         const errorMessage = result.error || 'Failed to generate hooks';
@@ -497,6 +552,26 @@ export default function AITools() {
         setStyledCTAs(result);
         incrementAIUsage();
         showToast(`CTAs generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
+        const polishGen = ++ctaPolishGenRef.current;
+        setIsPolishingCTAs(true);
+        (async () => {
+          try {
+            const brandVoiceType = mapBrandVoiceToHumanizeType(
+              applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : null
+            );
+            const platform = normalizeHumanizePlatform(ctaPlatform);
+            const polishedCtas = await Promise.all(
+              (result.ctas || []).map(async (item) => ({
+                ...item,
+                cta: await humanizeContent({ text: item.cta || '', brandVoiceType, platform }),
+              }))
+            );
+            if (polishGen !== ctaPolishGenRef.current) return;
+            setStyledCTAs((prev) => (prev ? { ...prev, ctas: polishedCtas } : prev));
+          } finally {
+            if (polishGen === ctaPolishGenRef.current) setIsPolishingCTAs(false);
+          }
+        })();
       } else {
         showToast('Failed to generate CTAs', 'error');
       }
@@ -998,6 +1073,12 @@ export default function AITools() {
               {generatedCaptions.length > 0 && (
                 <div className="pt-4 border-t border-gray-100" data-testid="ai-result-container">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                  {isPolishingCaptions && (
+                    <p className="flex items-center gap-2 text-xs text-gray-500 mb-2" role="status">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-huttle-primary" aria-hidden />
+                      Polishing…
+                    </p>
+                  )}
                   <div className="space-y-3">
                     {generatedCaptions.map((caption, i) => (
                       <div key={i} className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
@@ -1300,6 +1381,12 @@ export default function AITools() {
               {generatedHooks.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={2} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                  {isPolishingHooks && (
+                    <p className="flex items-center gap-2 text-xs text-gray-500 mb-2" role="status">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-huttle-primary" aria-hidden />
+                      Polishing…
+                    </p>
+                  )}
                   <div className="space-y-2">
                     {generatedHooks.map((hook, i) => (
                       <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-huttle-primary/30 transition-all">
@@ -1427,7 +1514,13 @@ export default function AITools() {
               {styledCTAs?.ctas && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={3} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
-                  
+                  {isPolishingCTAs && (
+                    <p className="flex items-center gap-2 text-xs text-gray-500 mb-2" role="status">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-huttle-primary" aria-hidden />
+                      Polishing…
+                    </p>
+                  )}
+
                   {/* Platform tip */}
                   {styledCTAs.platformTip && (
                     <div className="text-xs text-huttle-primary bg-huttle-primary/5 border border-huttle-primary/10 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
