@@ -1331,20 +1331,6 @@ export default function FullPostBuilder() {
     localStorage.removeItem(storageKey);
   };
 
-  const handleSchedulePost = () => {
-    navigate('/dashboard', {
-      state: {
-        prefillContent: {
-          title: `Post - ${topic.slice(0, 50)}`,
-          caption: assembledPost,
-          platforms: [platformData?.name || platform],
-          source: 'full-post-builder',
-          tool: 'full-post-builder',
-        },
-      },
-    });
-  };
-
   if (!hasAccess) {
     return (
       <div className="flex-1 ml-0 md:ml-12 lg:ml-64 pt-16 md:pt-20 p-4 md:p-8">
@@ -2085,13 +2071,6 @@ export default function FullPostBuilder() {
               >
                 {saved ? <Check className="h-5 w-5 sm:h-4 sm:w-4" /> : <FolderPlus className="h-5 w-5 sm:h-4 sm:w-4" />}
                 {saved ? 'Saved ✓' : 'Save to Vault'}
-              </button>
-              <button
-                type="button"
-                onClick={handleSchedulePost}
-                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-base font-medium text-gray-600 transition-colors hover:bg-gray-50 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
-              >
-                <MessageSquare className="h-5 w-5 sm:h-4 sm:w-4" /> Schedule
               </button>
               <button
                 type="button"

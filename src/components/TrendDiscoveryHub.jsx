@@ -794,7 +794,9 @@ export default function TrendDiscoveryHub() {
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                         <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Live Results</span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">{sanitizeAIOutput(scanResults.scan_summary)}</p>
+                      {scanResults.scan_summary ? (
+                        <p className="text-sm text-gray-600 mt-1">{sanitizeAIOutput(scanResults.scan_summary)}</p>
+                      ) : null}
                     </div>
                     <button
                       onClick={handleQuickScan}

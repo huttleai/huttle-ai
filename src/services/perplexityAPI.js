@@ -295,9 +295,14 @@ function normalizeQuickScanData(scanData) {
     return null;
   }
 
+  const hasScanSummaryKey = Object.prototype.hasOwnProperty.call(source, 'scan_summary');
+  const scan_summary = hasScanSummaryKey
+    ? (source.scan_summary == null ? '' : String(source.scan_summary).trim())
+    : 'Live trend scan complete.';
+
   return {
     trends,
-    scan_summary: String(source.scan_summary || '').trim() || 'Live trend scan complete.',
+    scan_summary,
     last_updated: String(source.last_updated || '').trim() || new Date().toISOString(),
   };
 }

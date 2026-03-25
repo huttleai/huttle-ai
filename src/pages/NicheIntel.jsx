@@ -27,6 +27,24 @@ const MOMENTUM_COLORS = {
   Declining: 'bg-red-100 text-red-700',
 };
 
+/** @param {string} platform */
+function nicheIntelResearchStatusMessages(platform) {
+  const p = String(platform || 'instagram');
+  return [
+    `Scanning what's performing on ${p} right now…`,
+    'Still collecting live trends and competitor signals…',
+    'Gathering hashtag and momentum clues from recent content…',
+    'This can take a minute or two—you can keep this tab open.',
+  ];
+}
+
+const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
+  'Synthesizing themes, hook patterns, and content gaps…',
+  'Shaping original ideas that fit your brand voice…',
+  'Almost there—structuring your full niche report…',
+  'Still working—large reports sometimes need extra time.',
+];
+
 export default function NicheIntel() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
@@ -38,6 +56,9 @@ export default function NicheIntel() {
   const [nicheQuery, setNicheQuery] = useState('');
   const [platform, setPlatform] = useState('instagram');
   const [loading, setLoading] = useState(false);
+  /** 'research' | 'analyze' while analyzing; null when idle */
+  const [loadingPhase, setLoadingPhase] = useState(null);
+  const [loadingDetailIndex, setLoadingDetailIndex] = useState(0);
   const [analysis, setAnalysis] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -89,6 +110,40 @@ export default function NicheIntel() {
     }
   }, [analysisStorageKey]);
 
+  const researchStatusList = useMemo(
+    () => nicheIntelResearchStatusMessages(platform),
+    [platform],
+  );
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingDetailIndex(0);
+      return undefined;
+    }
+    const list =
+      loadingPhase === 'analyze' ? NICHE_INTEL_ANALYZE_STATUS_MESSAGES : researchStatusList;
+    const len = list.length;
+    if (len === 0) return undefined;
+    setLoadingDetailIndex(0);
+    const id = setInterval(() => {
+      setLoadingDetailIndex((i) => (i + 1) % len);
+    }, 4500);
+    return () => clearInterval(id);
+  }, [loading, loadingPhase, researchStatusList]);
+
+  const loadingHeadline =
+    loadingPhase === 'analyze'
+      ? 'Synthesizing trends, hooks, and ideas…'
+      : 'Gathering live data for your niche…';
+
+  const loadingDetailText = useMemo(() => {
+    if (!loading || !loadingPhase) return '';
+    const list =
+      loadingPhase === 'analyze' ? NICHE_INTEL_ANALYZE_STATUS_MESSAGES : researchStatusList;
+    if (!list.length) return '';
+    return list[loadingDetailIndex % list.length];
+  }, [loading, loadingPhase, loadingDetailIndex, researchStatusList]);
+
   const handleAnalyze = async () => {
     if (!canGenerate) {
       addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
@@ -98,16 +153,17 @@ export default function NicheIntel() {
     const resolvedQuery = nicheQuery.trim() || brandData?.niche || 'small business';
 
     setLoading(true);
+    setLoadingPhase('research');
     setAnalysis(null);
 
     try {
       const researchRes = await researchNicheContent(resolvedQuery, platform, brandData);
       if (!researchRes.success) {
         addToast('Research failed. Try again.', 'error');
-        setLoading(false);
         return;
       }
 
+      setLoadingPhase('analyze');
       const analysisRes = await analyzeNiche(researchRes.research, brandData, platform);
       if (analysisRes.success && analysisRes.analysis) {
         const usage = await trackFeatureUsage({
@@ -145,6 +201,7 @@ export default function NicheIntel() {
       addToast('Something went wrong. Try again.', 'error');
     } finally {
       setLoading(false);
+      setLoadingPhase(null);
     }
   };
 
@@ -253,7 +310,13 @@ export default function NicheIntel() {
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
       {loading && (
-        <LoadingSpinner fullScreen variant="huttle" text="Researching your niche and synthesizing insights…" />
+        <LoadingSpinner
+          fullScreen
+          variant="huttle"
+          size="lg"
+          text={loadingHeadline}
+          detail={loadingDetailText}
+        />
       )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}

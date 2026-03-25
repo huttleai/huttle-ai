@@ -4,10 +4,11 @@ import { Sparkles } from 'lucide-react';
  * @param {object} props
  * @param {'sm'|'md'|'lg'|'xl'} [props.size]
  * @param {string} [props.text]
+ * @param {string} [props.detail] — secondary line (huttle variant only), e.g. rotating status
  * @param {'default'|'huttle'|'dots'} [props.variant]
  * @param {boolean} [props.fullScreen] — fixed viewport overlay, centered (use for page-level async work)
  */
-export default function LoadingSpinner({ size = 'md', text = '', variant = 'default', fullScreen = false }) {
+export default function LoadingSpinner({ size = 'md', text = '', detail = '', variant = 'default', fullScreen = false }) {
   const sizes = {
     sm: { spinner: 'w-4 h-4', text: 'text-xs', logo: 'w-2 h-2' },
     md: { spinner: 'w-8 h-8', text: 'text-sm', logo: 'w-3 h-3' },
@@ -29,8 +30,15 @@ export default function LoadingSpinner({ size = 'md', text = '', variant = 'defa
             <Sparkles className={`${sizeConfig.logo} text-huttle-blue animate-pulse`} />
           </div>
         </div>
-        {text && (
-          <p className={`${sizeConfig.text} font-medium text-gray-600`}>{text}</p>
+        {(text || detail) && (
+          <div className="flex flex-col items-center gap-1 max-w-sm px-4 text-center">
+            {text && (
+              <p className={`${sizeConfig.text} font-medium text-gray-600`}>{text}</p>
+            )}
+            {detail && (
+              <p className="text-xs text-gray-500">{detail}</p>
+            )}
+          </div>
         )}
       </div>
     );

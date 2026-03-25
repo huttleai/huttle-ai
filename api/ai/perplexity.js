@@ -270,6 +270,14 @@ function toTitleCase(value) {
     .join(' ');
 }
 
+function isAllPlatformsSelection(value) {
+  const n = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  return n === 'all' || n === 'all platforms';
+}
+
 function resolveFallbackLocation(value) {
   const location = toTitleCase(value);
   if (!location) return '';
@@ -340,20 +348,24 @@ function normalizeDashboardHashtagPayload(items, cacheConfig = {}) {
 
 function buildDashboardFallbackData(cacheConfig = {}) {
   const niche = toTitleCase(cacheConfig.niche || 'Small Business');
-  const platform = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
+  const allPlatforms = isAllPlatformsSelection(cacheConfig.platform);
+  const platform = toTitleCase(
+    (allPlatforms ? 'instagram' : cacheConfig.platform) || 'instagram'
+  ) || 'Instagram';
+  const platformProse = allPlatforms ? 'all platforms' : platform;
+  const topicPlatform = allPlatforms ? 'Cross-platform' : platform;
   const city = resolveFallbackLocation(cacheConfig.city);
 
   if (cacheConfig.type === 'trending_hashtags_widget') {
-    const p = toTitleCase(cacheConfig.platform || 'instagram') || 'Instagram';
     const base = [
-      { tag: '#viral', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#trending', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#explorepage', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#reels', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#fyp', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#smallbusiness', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#contentcreator', volume: 'High', status: 'Trending', platform: p, type: 'hashtag' },
-      { tag: '#growthmindset', volume: 'Medium', status: 'Trending', platform: p, type: 'hashtag' },
+      { tag: '#viral', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#trending', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#explorepage', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#reels', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#fyp', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#smallbusiness', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#contentcreator', volume: 'High', status: 'Trending', platform, type: 'hashtag' },
+      { tag: '#growthmindset', volume: 'Medium', status: 'Trending', platform, type: 'hashtag' },
     ];
     return base;
   }
@@ -383,20 +395,22 @@ function buildDashboardFallbackData(cacheConfig = {}) {
       {
         topic: `${niche} myths people still believe`,
         category: 'Industry Shift',
-        why_trending: `Educational explainers about ${niche.toLowerCase()} are performing well on ${platform}.`,
+        why_trending: `Educational explainers about ${niche.toLowerCase()} are performing well on ${platformProse}.`,
         relevance_to_niche: 'Audiences are responding to clear, practical takes they can apply quickly.',
         momentum: 'rising',
-        platforms_active: [platform],
+        platforms_active: allPlatforms ? ['Multi-platform'] : [platform],
         estimated_lifespan: 'days',
         opportunity_window: 'Plan this week',
       },
       {
-        topic: `${platform} audience questions this week`,
+        topic: `${topicPlatform} audience questions this week`,
         category: 'Cultural Wave',
         why_trending: 'Localized question-led content is a reliable angle when live trend data is unavailable.',
-        relevance_to_niche: `Grounding posts in current ${platform} audience questions helps your content feel more specific and relevant.`,
+        relevance_to_niche: allPlatforms
+          ? 'Grounding posts in questions audiences are asking across platforms helps your content feel more specific and relevant.'
+          : `Grounding posts in current ${platform} audience questions helps your content feel more specific and relevant.`,
         momentum: 'peaking',
-        platforms_active: [platform],
+        platforms_active: allPlatforms ? ['Multi-platform'] : [platform],
         estimated_lifespan: 'days',
         opportunity_window: 'Act now',
       },
@@ -406,12 +420,12 @@ function buildDashboardFallbackData(cacheConfig = {}) {
         why_trending: 'Process content continues to earn attention because it feels practical and authentic.',
         relevance_to_niche: 'Showing your workflow builds trust while giving followers a reason to save the post.',
         momentum: 'rising',
-        platforms_active: [platform],
+        platforms_active: allPlatforms ? ['Multi-platform'] : [platform],
         estimated_lifespan: '1-2 weeks',
         opportunity_window: 'Plan this week',
       },
     ],
-    scan_summary: `Fallback trend snapshot for ${niche} on ${platform}.`,
+    scan_summary: '',
     last_updated: new Date().toISOString(),
   };
 }
