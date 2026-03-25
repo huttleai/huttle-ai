@@ -23,6 +23,11 @@ import {
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { supabase } from '../config/supabase';
 import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
+import {
+  getHashtagConstraint,
+  getHashtagMaxForPlatform,
+  getMinAcceptableHashtagCountForPlatform,
+} from '../data/platformContentRules.js';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -1286,7 +1291,8 @@ function normalizeFullPostGroundedHashtagItem(item, index) {
 }
 
 /**
- * Full Post Builder — grounded hashtags via Perplexity online search (IG/TikTok).
+ * Full Post Builder — grounded hashtags via Perplexity online search.
+ * Counts and mix follow `platformContentRules` for the selected platform.
  * No cache key: every call hits the network (regen nonce still nudges the prompt).
  */
 export async function generateFullPostHashtagsGrounded(
@@ -1305,14 +1311,26 @@ export async function generateFullPostHashtagsGrounded(
       ? options.forceFreshRegeneration.trim().slice(0, 96)
       : '';
 
+  const hashtagTarget = getHashtagMaxForPlatform(plat);
+  const minAcceptable = getMinAcceptableHashtagCountForPlatform(plat);
+  const platformLabel = PLATFORM_LABELS[plat] || plat;
+  const tierMix =
+    hashtagTarget <= 2
+      ? `- Use exactly ${hashtagTarget} tags; each must be tightly on-topic for ${platformLabel} (discovery + niche or two complementary intents).`
+      : hashtagTarget <= 4
+        ? `- Mix broad discovery and niche/intent tags; total exactly ${hashtagTarget}.`
+        : `- Mix broad/high-volume (on-topic), niche/intent, and branded only if grounded in caption/brand; total exactly ${hashtagTarget}.`;
+
   const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
-You are a social discovery strategist. Use current public information about Instagram and TikTok hashtag and search behavior.
-Return ONLY valid JSON: a single array of 10–15 objects. No markdown, no commentary.`;
+You are a social discovery strategist. Use current public information about ${platformLabel} hashtag and search behavior (and cross-platform discovery only where it helps this post).
+Return ONLY valid JSON: a single array of exactly ${hashtagTarget} objects. No markdown, no commentary.`;
 
-  const user = `Using current, public information about Instagram and TikTok, suggest optimized hashtags for this post.
+  const hashtagRulesInject = String(options.fullPostBuilderHashtagRules ?? '').trim();
 
-Platform focus: ${PLATFORM_LABELS[plat] || plat} (still consider cross-post discovery where relevant).
+  const user = `Suggest optimized hashtags for this post using current, public discovery signals for ${platformLabel}.
 
+Platform focus: ${platformLabel} (${getHashtagConstraint(plat)})
+${hashtagRulesInject ? `\n${hashtagRulesInject}\n` : ''}
 Topic: ${topic || '—'}
 Goal: ${goalLabel}
 Audience: ${audience}
@@ -1327,8 +1345,8 @@ ${brandSection}
 ${brandContext ? `\nProfile notes:\n${brandContext}` : ''}
 
 Output rules:
-- 10–15 hashtags total.
-- Mix: 3–4 broad/high-volume (on-topic), 5–7 niche/intent, 1–3 branded or ultra-specific only if grounded in the caption/brand.
+- ${getHashtagConstraint(plat)}. Return exactly ${hashtagTarget} hashtags in the JSON array (minimum useful set for this platform is ${minAcceptable}).
+${tierMix}
 - Avoid generic spam tags (#fyp, #viral, #explorepage) unless there is a strong, topic-specific reason (prefer omitting them).
 - All lowercase in the tag text, no spaces inside a tag, no duplicates.
 - Each object: { "tag": "#example", "tier": "broad" | "niche" | "branded", "score": integer 0-100, "rationale": "short" }
@@ -1374,9 +1392,9 @@ ${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively differe
 
     const hashtagData = dedupeHashtagRows(
       rows.map((item, i) => normalizeFullPostGroundedHashtagItem(item, i)).filter(Boolean),
-    ).slice(0, 15);
+    ).slice(0, hashtagTarget);
 
-    if (hashtagData.length < 5) {
+    if (hashtagData.length < minAcceptable) {
       return { success: false, error: 'Too few hashtags parsed', code: 'HASHTAGS_PARSE' };
     }
 

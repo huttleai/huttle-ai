@@ -16,7 +16,7 @@ import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
 import { useNavigate } from 'react-router-dom';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -206,12 +206,48 @@ export default function NicheIntel() {
   };
 
   const handleBuildPost = (idea) => {
+    const title = String(idea?.title ?? idea?.headline ?? idea?.topic ?? '').trim();
+    const hook = String(idea?.hook ?? idea?.opening ?? '').trim();
     const searchParams = new URLSearchParams({
-      topic: idea.title || idea.hook || '',
-      platform: String(idea.platformFit || platform || 'instagram').toLowerCase(),
+      topic: title || hook || '',
+      platform: String(idea?.platformFit || idea?.platform || platform || 'instagram').toLowerCase(),
     });
 
     navigate(`/dashboard/full-post-builder?${searchParams.toString()}`);
+  };
+
+  /**
+   * Build vault text from an idea; supports cached / legacy shapes (not only normalized Grok fields).
+   */
+  const getNicheIdeaVaultPayload = (idea) => {
+    const title = String(idea?.title ?? idea?.headline ?? idea?.topic ?? idea?.name ?? '').trim();
+    const hook = String(idea?.hook ?? idea?.openingHook ?? idea?.opening ?? '').trim();
+    const why = String(idea?.whyThisWorks ?? idea?.why_it_works ?? '').trim();
+    const hashtags = Array.isArray(idea?.hashtags)
+      ? idea.hashtags.map((tag) => String(tag || '').trim()).filter(Boolean)
+      : [];
+    const platformFit = String(idea?.platformFit ?? idea?.platform ?? '').trim();
+
+    const lines = [];
+    if (title) lines.push(title);
+    if (hook) lines.push(`Hook: ${hook}`);
+    if (why) lines.push(why);
+    if (hashtags.length > 0) lines.push(hashtags.join(' '));
+    if (platformFit) lines.push(`Best on: ${platformFit}`);
+
+    const contentText = lines.join('\n\n').trim();
+    const displayTitle = title || hook.slice(0, 72) || nicheQuery.trim().slice(0, 72) || 'Niche idea';
+
+    return {
+      contentText,
+      name: `Niche idea - ${displayTitle.slice(0, 48)}`,
+      topic: String(displayTitle || nicheQuery).slice(0, 120),
+      platform: String(platformFit || platform || 'instagram').toLowerCase(),
+      metadata: {
+        idea_format: idea?.format,
+        idea_momentum: idea?.momentum,
+      },
+    };
   };
 
   const handleSaveIdeaToVault = async (idea, ideaIndex) => {
@@ -219,35 +255,37 @@ export default function NicheIntel() {
       addToast('Please log in to save', 'error');
       return;
     }
-    const lines = [
-      idea.title,
-      idea.hook && `Hook: ${idea.hook}`,
-      idea.whyThisWorks && idea.whyThisWorks,
-      Array.isArray(idea.hashtags) && idea.hashtags.length > 0 ? idea.hashtags.join(' ') : '',
-      idea.platformFit && `Best on: ${idea.platformFit}`,
-    ].filter(Boolean);
-    const contentText = lines.join('\n\n');
-    if (!contentText.trim()) return;
+
+    const payload = getNicheIdeaVaultPayload(idea);
+    if (!payload.contentText) {
+      addToast('Nothing to save for this idea — try analyzing again or pick another card.', 'warning');
+      console.warn('[NicheIntel] save skipped: empty idea body after normalizing fields', idea);
+      return;
+    }
 
     try {
-      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
-        name: `Niche idea - ${String(idea.title || '').slice(0, 48)}`,
-        contentText,
+      const result = await saveToVault(user.id, buildContentVaultPayload({
+        name: payload.name,
+        contentText: payload.contentText,
         contentType: 'caption',
         toolSource: 'niche_intel',
         toolLabel: 'Niche Intel',
-        topic: String(idea.title || nicheQuery).slice(0, 120),
-        platform: String(idea.platformFit || platform || 'instagram').toLowerCase(),
+        topic: payload.topic,
+        platform: payload.platform,
         description: 'Saved from Niche Intel',
-        metadata: { idea_format: idea.format, idea_momentum: idea.momentum },
+        metadata: payload.metadata,
       }));
 
-      if (!result.success) throw new Error(result.error || 'Save failed');
+      if (!result.success) {
+        console.error('[NicheIntel] saveToVault failed:', result.error);
+        addToast(result.error || 'Could not save idea', 'error');
+        return;
+      }
       setSavedIdeaId(ideaIndex);
       setTimeout(() => setSavedIdeaId(null), 2500);
       addToast('Saved to vault ✓', 'success');
     } catch (e) {
-      console.error(e);
+      console.error('[NicheIntel] saveToVault exception:', e);
       addToast('Could not save idea', 'error');
     }
   };

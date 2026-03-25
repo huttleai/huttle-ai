@@ -12,13 +12,18 @@ import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { Link, useSearchParams } from 'react-router-dom';
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import humanizeContent, {
   mapBrandVoiceToHumanizeType,
   normalizeHumanizePlatform,
 } from '../services/humanizeContent';
+import {
+  PLATFORM_CONTENT_RULES,
+  getPlatformPromptRule,
+  getHashtagConstraint,
+} from '../data/platformContentRules';
 
 /**
  * Remix goal options with metadata
@@ -315,6 +320,21 @@ export default function ContentRemix() {
     setRemixResults(null);
     setUsedAiFallback(false);
 
+    const platformRemixRules = selectedPlatforms
+      .map((platform) => {
+        const raw = typeof platform === 'object' && platform !== null ? platform.name : platform;
+        let key = String(raw ?? '').trim().toLowerCase() || 'instagram';
+        if (key === 'twitter') key = 'x';
+        const rules = PLATFORM_CONTENT_RULES[key] || PLATFORM_CONTENT_RULES.instagram;
+        const effectiveKey = PLATFORM_CONTENT_RULES[key] ? key : 'instagram';
+        const platformContext = getPlatformPromptRule(effectiveKey);
+        const hashtagContext = getHashtagConstraint(effectiveKey);
+        return `When remixing for ${rules.displayName}:
+   ${platformContext}
+   Hashtags: ${hashtagContext}`;
+      })
+      .join('\n\n');
+
     const applyRemixSuccess = async (raw, sections, fromFallback) => {
       const usage = await remixUsage.trackFeatureUsage({ mode: remixGoal });
       const polishGen = ++remixPolishGenRef.current;
@@ -366,7 +386,8 @@ export default function ContentRemix() {
           niche: getNiche(brandData),
           targetAudience: getTargetAudience(brandData),
           targetPlatforms: selectedPlatforms,
-          ...brandData
+          ...brandData,
+          platformRemixRules,
         }
       });
 
@@ -463,7 +484,7 @@ export default function ContentRemix() {
 
     try {
       const contentText = ensureString(variation);
-      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+      const result = await saveToVault(user.id, buildContentVaultPayload({
         name: `Remix - ${platformName}`,
         contentText,
         contentType: 'remix',

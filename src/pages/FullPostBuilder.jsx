@@ -28,16 +28,24 @@ import {
   enhanceCaptionWithGrokFallback,
 } from '../services/grokAPI';
 import { extractHooksFromHookBuilderResult } from '../utils/fullPostHooksParser';
-import { saveContentLibraryItem, FULL_POST_BUILDER_CREDITS_PER_RUN } from '../config/supabase';
+import { FULL_POST_BUILDER_CREDITS_PER_RUN } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../services/claudeAPI';
 import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
+import { getHashtagMaxForPlatform, getMinAcceptableHashtagCountForPlatform } from '../data/platformContentRules';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import LoadingSpinner from '../components/LoadingSpinner';
 import { checkAlgorithmAlignment } from '../data/algorithmSignals';
+import {
+  PLATFORM_CONTENT_RULES,
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  normalizePlatformRulesKey,
+} from '../data/platformContentRules';
 
 const STORAGE_KEY_PREFIX = 'fullPostBuilderDraft';
 
@@ -456,6 +464,28 @@ export default function FullPostBuilder() {
 
   const platformData = getPlatform(platform);
 
+  const fpbAiSnippets = useMemo(() => {
+    const rulesKey = normalizePlatformRulesKey(platform) || 'instagram';
+    const rules = PLATFORM_CONTENT_RULES[rulesKey] || PLATFORM_CONTENT_RULES.instagram;
+    const visible =
+      rules.caption.visibleBeforeTruncation
+      ?? rules.caption.descriptionVisibleInSearch
+      ?? rules.caption.titleVisibleInSearch
+      ?? rules.caption.maxChars
+      ?? '—';
+    const optimal =
+      rules.caption.optimalChars
+      ?? (rules.caption.maxChars != null ? `${rules.caption.maxChars} chars max` : null)
+      ?? (rules.caption.descriptionMaxChars != null ? `${rules.caption.descriptionMaxChars} description max` : null)
+      ?? 'see platform limits';
+    return {
+      hookRequirement: `Hook requirement: ${rules.video?.hook || 'Grab attention immediately'}\n\n${getPlatformPromptRule(platform)}`,
+      captionHints: `Caption visible limit: ${visible} chars.\nOptimal length: ${optimal}. ${rules.caption.tip}`,
+      hashtagRules: `Hashtag rules: ${getHashtagConstraint(platform)}`,
+      ctaHints: `CTA placement tip: ${rules.caption.tip}\nPlatform style: ${rules.promptRule}`,
+    };
+  }, [platform]);
+
   const assembledPost = useMemo(() => {
     const hashtagStr = hashtags.map((h) => h.tag).join(' ');
     return [selectedHook, caption, hashtagStr, selectedCTA?.cta].filter(Boolean).join('\n\n');
@@ -609,6 +639,7 @@ export default function FullPostBuilder() {
           trendDescription: tc?.description,
         },
         brandData,
+        { fullPostBuilderHookRequirement: fpbAiSnippets.hookRequirement },
       );
       if (rid !== hooksReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale hooks (Claude) ignored', rid);
@@ -641,7 +672,9 @@ export default function FullPostBuilder() {
           await sleep(delayMs);
         }
 
-        const res = await generateFullPostHooks(payload, brandData);
+        const res = await generateFullPostHooks(payload, brandData, {
+          fullPostBuilderHookRequirement: fpbAiSnippets.hookRequirement,
+        });
         lastRes = res;
 
         if (shouldSkipFullPostHookRetries(res.code)) {
@@ -718,6 +751,7 @@ export default function FullPostBuilder() {
       }, w.brandData, {
         fullPostBuilder: true,
         forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('cap') : undefined,
+        fullPostBuilderCaptionHints: fpbAiSnippets.captionHints,
       });
       if (rid !== captionReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale caption response ignored', rid);
@@ -859,7 +893,10 @@ export default function FullPostBuilder() {
           nicheKeywords: nicheKw,
         },
         brandData,
-        { forceFreshRegeneration: tagNonce },
+        {
+          forceFreshRegeneration: tagNonce,
+          fullPostBuilderHashtagRules: fpbAiSnippets.hashtagRules,
+        },
       );
 
       if (rid !== hashtagReqIdRef.current) {
@@ -868,7 +905,8 @@ export default function FullPostBuilder() {
       }
 
       let res = sonarRes;
-      if (!sonarRes.success || !Array.isArray(sonarRes.hashtagData) || sonarRes.hashtagData.length < 5) {
+      const minHashtagsOk = getMinAcceptableHashtagCountForPlatform(w.platform);
+      if (!sonarRes.success || !Array.isArray(sonarRes.hashtagData) || sonarRes.hashtagData.length < minHashtagsOk) {
         if (import.meta.env.DEV) {
           console.debug('[FullPostBuilder] Perplexity hashtags fallback to Grok', sonarRes?.code, sonarRes?.error);
         }
@@ -881,6 +919,7 @@ export default function FullPostBuilder() {
         }, w.brandData, w.platform, {
           fullPostBuilder: true,
           forceFreshRegeneration: tagNonce || makeFreshRegenNonce('tag-fb'),
+          fullPostBuilderHashtagRules: fpbAiSnippets.hashtagRules,
         });
       }
 
@@ -893,7 +932,7 @@ export default function FullPostBuilder() {
         const parsed = Array.isArray(res.hashtagData) && res.hashtagData.length > 0
           ? res.hashtagData
           : parseHashtagsFromResponse(res.hashtags);
-        const next = parsed.slice(0, 15);
+        const next = parsed.slice(0, getHashtagMaxForPlatform(w.platform));
         if (next.length === 0) {
           const msg = 'No usable hashtags returned. Try Regenerate or add your own.';
           setHashtagStepError(msg);
@@ -957,6 +996,7 @@ export default function FullPostBuilder() {
       }, w.brandData, w.platform, {
         fullPostBuilder: true,
         forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('cta') : undefined,
+        fullPostBuilderCtaHints: fpbAiSnippets.ctaHints,
       });
       if (rid !== ctaReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale CTA response ignored', rid);
@@ -1158,7 +1198,8 @@ export default function FullPostBuilder() {
         brandData,
         { forceFreshRegeneration: makeFreshRegenNonce('smoke-tag') },
       );
-      if (!tagRes.success || !Array.isArray(tagRes.hashtagData) || tagRes.hashtagData.length < 5) {
+      const smokeMinTags = getMinAcceptableHashtagCountForPlatform(plat);
+      if (!tagRes.success || !Array.isArray(tagRes.hashtagData) || tagRes.hashtagData.length < smokeMinTags) {
         tagSource = 'grok';
         tagRes = await generateHashtags(
           {
@@ -1272,7 +1313,7 @@ export default function FullPostBuilder() {
   const handleSaveToVault = async () => {
     if (!user?.id) return;
     try {
-      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+      const result = await saveToVault(user.id, buildContentVaultPayload({
         name: `Post - ${topic.slice(0, 50)}`,
         contentText: assembledPost,
         contentType: 'full_post',
@@ -1290,14 +1331,20 @@ export default function FullPostBuilder() {
       if (result.success) {
         setSaved(true);
         addToast('Saved to vault ✓', 'success');
+      } else {
+        console.error('[FullPostBuilder] saveToVault failed:', result.error);
+        addToast(result.error || 'Failed to save', 'error');
       }
-    } catch { addToast('Failed to save', 'error'); }
+    } catch (err) {
+      console.error('[FullPostBuilder] saveToVault exception:', err);
+      addToast('Failed to save', 'error');
+    }
   };
 
   const saveWizardPartToVault = async (key, contentText, contentType, label) => {
     if (!user?.id || !String(contentText || '').trim()) return;
     try {
-      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+      const result = await saveToVault(user.id, buildContentVaultPayload({
         name: `${label} - ${topic.slice(0, 40)}`,
         contentText: String(contentText).trim(),
         contentType,
@@ -1312,8 +1359,12 @@ export default function FullPostBuilder() {
         setSavedPartIds((prev) => ({ ...prev, [key]: true }));
         addToast('Saved to vault ✓', 'success');
         setTimeout(() => setSavedPartIds((prev) => ({ ...prev, [key]: false })), 2500);
+      } else {
+        console.error('[FullPostBuilder] save part to vault failed:', key, result.error);
+        addToast(result.error || 'Failed to save', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('[FullPostBuilder] save part to vault exception:', key, err);
       addToast('Failed to save', 'error');
     }
   };

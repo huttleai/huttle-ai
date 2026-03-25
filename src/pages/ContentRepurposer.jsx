@@ -51,7 +51,8 @@ const REPURPOSER_EXAMPLES = [
     }
   }
 ];
-import { saveContentLibraryItem, supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 
 const FORMAT_OPTIONS = [
   { from: 'script', to: 'story', label: 'Script → Story Board', description: 'Outline story beats from your video script', icon: '📋' },
@@ -256,7 +257,7 @@ Format as JSON with fields: content, hashtags, tips, hooks`
         },
       });
 
-      const result = await saveContentLibraryItem(user.id, itemData);
+      const result = await saveToVault(user.id, itemData);
 
       if (result.success) {
         setSaved(true);

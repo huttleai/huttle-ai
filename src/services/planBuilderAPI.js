@@ -135,7 +135,14 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     timePeriod: String(formData.timePeriod || formData.duration || '7'),
     platformFocus: formData.platformFocus || formData.platforms || [],
     brandVoice: formData.brandVoice || '',
-    trendContext: formData.trendContext || ''
+    trendContext: formData.trendContext || '',
+    platform_rules_block: typeof formData.platform_rules_block === 'string' ? formData.platform_rules_block : '',
+    platforms_list:
+      typeof formData.platforms_list === 'string'
+        ? formData.platforms_list
+        : Array.isArray(formData.platformFocus || formData.platforms)
+          ? (formData.platformFocus || formData.platforms).join(', ')
+          : '',
   };
 
   for (let attempt = 0; attempt <= retries; attempt++) {

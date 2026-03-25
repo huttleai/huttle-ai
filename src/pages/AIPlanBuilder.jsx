@@ -7,10 +7,11 @@ import { useBrand } from '../context/BrandContext';
 import { formatTo12Hour } from '../utils/timeFormatter';
 import HoverPreview from '../components/HoverPreview';
 import { createJobDirectly, triggerN8nWebhook } from '../services/planBuilderAPI';
-import { supabase, saveContentLibraryItem } from '../config/supabase';
+import { supabase } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { AuthContext } from '../context/AuthContext';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformIcon } from '../components/SocialIcons';
-import { usePreferredPlatforms, ALL_PLATFORMS } from '../hooks/usePreferredPlatforms';
+import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -20,6 +21,12 @@ import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { getCachedTrends } from '../services/dashboardCacheService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { normalizePlanResultShape } from '../utils/planBuilderJobResult';
+import {
+  PLATFORM_CONTENT_RULES,
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  normalizePlatformRulesKey,
+} from '../data/platformContentRules';
 
 // Full list of all platforms (used as fallback for Settings display)
 const FALLBACK_PLATFORMS = [
@@ -276,11 +283,29 @@ export default function AIPlanBuilder() {
         ? `Current trending topics in the user's niche:\n${cachedTrends.slice(0, 4).map((t) => `- "${t.title || t.topic}" (${t.format_type || 'short-form'}, ${t.momentum || 'steady'})`).join('\n')}\nIncorporate 1-2 of these trending topics into the content plan where they naturally fit.`
         : '';
 
+      const platformsArray = Array.isArray(selectedPlatforms)
+        ? selectedPlatforms
+        : [selectedPlatforms].filter(Boolean);
+
+      const platformRulesBlock = platformsArray
+        .map((p) => {
+          const key = normalizePlatformRulesKey(p);
+          const rules =
+            PLATFORM_CONTENT_RULES[key] || PLATFORM_CONTENT_RULES.instagram;
+          return [
+            `--- ${rules.displayName} ---`,
+            getPlatformPromptRule(key),
+            `Posting frequency: ${rules.postingFrequency ?? 'Match cadence to your plan period and platform norms'}`,
+            `Hashtags per post: ${getHashtagConstraint(key)}`,
+          ].join('\n');
+        })
+        .join('\n\n');
+
       // Step 1: Create job directly in Supabase
       const { jobId, error: createError } = await createJobDirectly({
         goal: selectedGoal,
         duration: selectedPeriod,
-        platforms: selectedPlatforms,
+        platforms: platformsArray,
         niche: brandProfile?.niche || 'general',
         brandVoice: brandVoice,
         trendContext,
@@ -312,10 +337,12 @@ export default function AIPlanBuilder() {
       const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
         contentGoal: selectedGoal,
         timePeriod: String(selectedPeriod),
-        platformFocus: selectedPlatforms,
+        platformFocus: platformsArray,
         brandVoice: brandVoice,
         brandContext: brandBlock, // HUTTLE AI: brand context injected
         trendContext,
+        platform_rules_block: platformRulesBlock,
+        platforms_list: platformsArray.join(', '),
       });
       
       if (!webhookSuccess) {
@@ -325,9 +352,10 @@ export default function AIPlanBuilder() {
         try {
           const { generateContentPlan } = await import('../services/grokAPI');
           const grokResult = await generateContentPlan(
-            `${selectedGoal} on ${selectedPlatforms.join(', ')}. Brand voice: ${brandVoice || 'engaging'}`,
+            `${selectedGoal} on ${platformsArray.join(', ')}. Brand voice: ${brandVoice || 'engaging'}`,
             brandProfile,
-            selectedPeriod
+            selectedPeriod,
+            { platformRulesBlock }
           );
           
           if (grokResult.success && grokResult.plan) {
@@ -335,7 +363,7 @@ export default function AIPlanBuilder() {
             const planText = grokResult.plan;
             const schedule = [];
             for (let day = 1; day <= selectedPeriod; day++) {
-              const posts = selectedPlatforms.slice(0, 2).map(platform => ({
+              const posts = platformsArray.slice(0, 2).map(platform => ({
                 topic: `${selectedGoal} content for ${platform}`,
                 content_type: 'Post',
                 platform,
@@ -349,7 +377,7 @@ export default function AIPlanBuilder() {
               goal: selectedGoal,
               period: selectedPeriod,
               totalPosts: schedule.reduce((sum, d) => sum + d.posts.length, 0),
-              platforms: selectedPlatforms,
+              platforms: platformsArray,
               contentMix: { educational: 60, entertaining: 30, promotional: 10 },
               schedule,
               rawPlan: planText
@@ -675,7 +703,7 @@ export default function AIPlanBuilder() {
                     contentMix: generatedPlan.contentMix,
                     savedAt: new Date().toISOString(),
                   };
-                  const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+                  const result = await saveToVault(user.id, buildContentVaultPayload({
                     name: `Content Plan - ${generatedPlan.goal}`,
                     contentText: JSON.stringify(planData, null, 2),
                     contentType: 'plan',
@@ -690,8 +718,14 @@ export default function AIPlanBuilder() {
                     },
                   }));
                   if (result.success) showToast('Saved to vault ✓', 'success');
-                  else showToast('Failed to save plan', 'error');
-                } catch { showToast('Failed to save plan', 'error'); }
+                  else {
+                    console.error('[AIPlanBuilder] save full plan to vault failed:', result.error);
+                    showToast('Failed to save plan', 'error');
+                  }
+                } catch (err) {
+                  console.error('[AIPlanBuilder] save full plan exception:', err);
+                  showToast('Failed to save plan', 'error');
+                }
               }}
               className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-all"
             >
@@ -775,7 +809,7 @@ export default function AIPlanBuilder() {
                       onClick={async () => {
                         if (!user?.id) return;
                         try {
-                          const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+                          const result = await saveToVault(user.id, buildContentVaultPayload({
                             name: `Day ${daySchedule.day} - ${post.topic || post.theme || 'Content'}`,
                             contentText: `Platform: ${post.platform}\nTopic: ${post.topic || post.theme}\nFormat: ${post.content_type || post.type || 'Post'}\nGoal: ${generatedPlan.goal}`,
                             contentType: 'plan',
@@ -790,7 +824,14 @@ export default function AIPlanBuilder() {
                             },
                           }));
                           if (result.success) showToast('Saved to vault ✓', 'success');
-                        } catch { showToast('Failed to save', 'error'); }
+                          else {
+                            console.error('[AIPlanBuilder] save post idea to vault failed:', result.error);
+                            showToast('Failed to save', 'error');
+                          }
+                        } catch (err) {
+                          console.error('[AIPlanBuilder] save post idea exception:', err);
+                          showToast('Failed to save', 'error');
+                        }
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all"
                     >

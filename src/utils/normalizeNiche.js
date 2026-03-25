@@ -78,6 +78,18 @@ const ALIASES = {
 
 const CACHE_KEY_DELIMITER = '__';
 
+/**
+ * Sanitize any string used as (or embedded in) a niche_content_cache key for Supabase lookups.
+ * Lowercase, spaces → underscores, then strip everything except a-z, 0-9, underscore, hyphen.
+ */
+export function sanitizeNicheContentCacheKey(key) {
+  if (key == null) return '';
+  return String(key)
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_-]/g, '');
+}
+
 export function normalizeNiche(rawInput) {
   if (!rawInput || typeof rawInput !== 'string') {
     console.log('[NicheCache] Key lookup', {
@@ -88,14 +100,10 @@ export function normalizeNiche(rawInput) {
     return 'general';
   }
 
-  // Step 1: clean the raw input
-  const cleaned = rawInput
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s_]/g, '') // strip special chars except underscore
-    .replace(/\s+/g, '_') // spaces → underscores
-    .replace(/_+/g, '_') // collapse multiple underscores
-    .replace(/^_|_$/g, '') // strip leading/trailing underscores
+  // Step 1: clean the raw input (cache-safe charset for niche_content_cache keys)
+  const cleaned = sanitizeNicheContentCacheKey(rawInput)
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
     .slice(0, 40); // cap length for DB safety
 
   if (!cleaned) {
@@ -109,10 +117,7 @@ export function normalizeNiche(rawInput) {
 
   // Step 2: check ALIASES (Layer 1)
   for (const [canonical, aliases] of Object.entries(ALIASES)) {
-    const normalizedAliases = aliases.map((a) => a
-      .toLowerCase()
-      .replace(/[^a-z0-9\s_]/g, '')
-      .replace(/\s+/g, '_')
+    const normalizedAliases = aliases.map((a) => sanitizeNicheContentCacheKey(a)
       .replace(/_+/g, '_'));
     if (cleaned === canonical || normalizedAliases.includes(cleaned)) {
       console.log('[NicheCache] Key lookup', {
@@ -165,13 +170,11 @@ function resolveCacheKeyInput(input) {
 }
 
 function sanitizeCacheKeyPart(value) {
-  return String(value ?? '').trim().replace(/:/g, '_');
+  return sanitizeNicheContentCacheKey(String(value ?? '').trim().replace(/:/g, '_'));
 }
 
 function normalizeCacheToken(value, fallback = '') {
-  const normalized = sanitizeCacheKeyPart(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '_')
+  const normalized = sanitizeNicheContentCacheKey(value)
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 
@@ -198,9 +201,7 @@ function normalizeNicheIntelToken(token) {
   if (!trimmed) return '';
 
   const isHandle = trimmed.startsWith('@');
-  const normalized = trimmed
-    .replace(/^@/, '')
-    .replace(/[^a-z0-9]+/g, '_')
+  const normalized = sanitizeNicheContentCacheKey(trimmed.replace(/^@/, ''))
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 
@@ -250,7 +251,8 @@ function normalizeCacheKeyParts(parts) {
 }
 
 function formatCacheKey(parts) {
-  return normalizeCacheKeyParts(parts).join(CACHE_KEY_DELIMITER);
+  const joined = normalizeCacheKeyParts(parts).join(CACHE_KEY_DELIMITER);
+  return sanitizeNicheContentCacheKey(joined);
 }
 
 function runCacheKeyFormatAssertions() {
@@ -275,7 +277,8 @@ function runCacheKeyFormatAssertions() {
 export function buildDashboardForYouCacheKey(userId, generatedDate, rawNiche, platform) {
   const nicheKey = normalizeNiche(rawNiche) || 'general';
   const platformKey = String(platform || 'instagram').toLowerCase();
-  return `dashboard_for_you__${userId}__${generatedDate}__${nicheKey}__${platformKey}__foryou_v2`;
+  const raw = `dashboard_for_you__${userId}__${generatedDate}__${nicheKey}__${platformKey}__foryou_v2`;
+  return sanitizeNicheContentCacheKey(raw);
 }
 
 export function buildCacheKey(...input) {

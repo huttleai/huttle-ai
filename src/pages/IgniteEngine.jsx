@@ -39,7 +39,8 @@ import {
   LinkedInIcon,
 } from '../components/SocialIcons';
 import UpgradeModal from '../components/UpgradeModal';
-import { saveContentLibraryItem, supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
@@ -51,6 +52,11 @@ import {
   getSectionMeta,
 } from '../data/blueprintSchema';
 import { buildN8nSystemPrompt } from '../utils/blueprintPromptBuilder';
+import {
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  PLATFORM_CONTENT_RULES,
+} from '../data/platformContentRules';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { parseJsonLenient } from '../utils/parseAiJson';
@@ -310,6 +316,8 @@ export default function IgniteEngine() {
       const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: brandProfile?.firstName }); // HUTTLE AI: brand context injected
+      const platform = selectedPlatform?.toLowerCase() || 'instagram';
+      const rules = PLATFORM_CONTENT_RULES[platform] || PLATFORM_CONTENT_RULES['instagram'];
       const briefContext = {
         topic: topic.trim(),
         platform: selectedPlatform,
@@ -323,6 +331,16 @@ export default function IgniteEngine() {
         excluded_sections: excluded,
         viral_score_weights: viralWeights,
         blueprint_label: briefLabel,
+        hashtag_instruction: getHashtagConstraint(selectedPlatform),
+        platform_content_rules: getPlatformPromptRule(selectedPlatform),
+        platform_rules: getPlatformPromptRule(platform),
+        hashtag_constraint: getHashtagConstraint(platform),
+        hashtag_max: rules.hashtags.max,
+        hashtag_optimal: rules.hashtags.optimal,
+        caption_visible_chars: rules.caption.visibleBeforeTruncation,
+        caption_optimal_length: rules.caption.optimalChars || `max ${rules.caption.maxChars}`,
+        video_hook_guidance: rules.video?.hook || 'Hook must land in first 2 seconds',
+        platform_display_name: rules.displayName,
         user_type: brandProfile?.profileType || 'brand',
         brand_name: brandProfile?.brandName || '',
         handle: brandProfile?.socialHandle || '',
@@ -490,7 +508,7 @@ export default function IgniteEngine() {
       if (bp.proTip) textParts.push(`Pro Tip:\n${bp.proTip}`);
 
       const briefText = textParts.filter(Boolean).join('\n\n');
-      const result = await saveContentLibraryItem(user.id, buildContentVaultPayload({
+      const result = await saveToVault(user.id, buildContentVaultPayload({
         name: `Brief - ${topic.slice(0, 50) || selectedPlatform || 'Content'}`,
         contentText: briefText,
         contentType: 'blueprint',
@@ -843,43 +861,6 @@ export default function IgniteEngine() {
               </div>
             )}
 
-            {/* Action Bar */}
-            <div className="relative overflow-hidden rounded-2xl glass-panel p-6 md:p-8 transition-all duration-500">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
-                      <Check className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Brief Generated!</h2>
-                      <p className="text-sm text-gray-500">Your Ignite Engine brief is ready</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {selectedPlatform && (
-                      <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold flex items-center gap-1.5">
-                        {(() => { const p = PLATFORMS.find(pl => pl.id === selectedPlatform); const I = p?.icon; return I ? <I className="w-3.5 h-3.5" /> : null; })()}
-                        {selectedPlatform}
-                      </span>
-                    )}
-                    {selectedPostType && <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">{selectedPostType}</span>}
-                    {topic && <span className="px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold max-w-xs truncate">{topic.length > 40 ? topic.substring(0, 40) + '...' : topic}</span>}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" data-testid="ignite-save-vault" onClick={handleSaveBrief} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
-                    {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
-                    <span>{savedBrief ? 'Saved ✓' : 'Save to Vault'}</span>
-                  </button>
-                  <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
-                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                    <span>Create New Brief</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* Parse Error */}
             {parseError && !bp && (
               <div className="text-center py-16 card-glass rounded-2xl">
@@ -905,58 +886,6 @@ export default function IgniteEngine() {
                       {briefLabel}
                     </span>
                   </div>
-                )}
-
-                {/* ── Performance Score Card ── */}
-                {performanceScore > 0 && (
-                  <Motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
-                    <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-8 md:p-12">
-                      <div className="flex items-center justify-center">
-                        <ViralScoreGauge score={performanceScore} />
-                      </div>
-
-                      {bp.scoreBreakdown && (
-                        <div className="mt-8 space-y-3 max-w-md mx-auto">
-                          {BREAKDOWN_ITEMS.map((item, i) => {
-                            const value = bp.scoreBreakdown[item.key] ?? 0;
-                            return (
-                              <div key={item.key}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-medium text-gray-600">{item.label}</span>
-                                  <span className="text-xs font-bold text-gray-900">{value}/25</span>
-                                </div>
-                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <Motion.div
-                                    className={`h-full rounded-full ${value >= 20 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : value >= 15 ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : value >= 10 ? 'bg-gradient-to-r from-amber-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${(value / 25) * 100}%` }}
-                                    transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {bp.scoreReason && (
-                        <p className="text-center text-sm text-gray-400 italic mt-6 max-w-lg mx-auto">
-                          {sanitizeAIOutput(bp.scoreReason)}
-                        </p>
-                      )}
-
-                      {performanceScore > 0 && (() => {
-                        const verdict = getVerdict(performanceScore);
-                        return (
-                          <div className="flex justify-center mt-5">
-                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold border ${verdict.className}`}>
-                              {verdict.label}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </Motion.div>
                 )}
 
                 {/* ── Conditional Content Sections ── */}
@@ -1062,8 +991,97 @@ export default function IgniteEngine() {
                     )}
                   </>
                 )}
+
+                {/* ── Performance Score Card ── */}
+                {performanceScore > 0 && (
+                  <Motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
+                    <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-8 md:p-12">
+                      <div className="flex items-center justify-center">
+                        <ViralScoreGauge score={performanceScore} />
+                      </div>
+
+                      {bp.scoreBreakdown && (
+                        <div className="mt-8 space-y-3 max-w-md mx-auto">
+                          {BREAKDOWN_ITEMS.map((item, i) => {
+                            const value = bp.scoreBreakdown[item.key] ?? 0;
+                            return (
+                              <div key={item.key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                                  <span className="text-xs font-bold text-gray-900">{value}/25</span>
+                                </div>
+                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <Motion.div
+                                    className={`h-full rounded-full ${value >= 20 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : value >= 15 ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : value >= 10 ? 'bg-gradient-to-r from-amber-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(value / 25) * 100}%` }}
+                                    transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {bp.scoreReason && (
+                        <p className="text-center text-sm text-gray-400 italic mt-6 max-w-lg mx-auto">
+                          {sanitizeAIOutput(bp.scoreReason)}
+                        </p>
+                      )}
+
+                      {performanceScore > 0 && (() => {
+                        const verdict = getVerdict(performanceScore);
+                        return (
+                          <div className="flex justify-center mt-5">
+                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold border ${verdict.className}`}>
+                              {verdict.label}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </Motion.div>
+                )}
               </div>
             )}
+
+            {/* Action Bar */}
+            <div className="relative overflow-hidden rounded-2xl glass-panel p-6 md:p-8 transition-all duration-500">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                      <Check className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Brief Generated!</h2>
+                      <p className="text-sm text-gray-500">Your Ignite Engine brief is ready</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {selectedPlatform && (
+                      <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold flex items-center gap-1.5">
+                        {(() => { const p = PLATFORMS.find(pl => pl.id === selectedPlatform); const I = p?.icon; return I ? <I className="w-3.5 h-3.5" /> : null; })()}
+                        {selectedPlatform}
+                      </span>
+                    )}
+                    {selectedPostType && <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">{selectedPostType}</span>}
+                    {topic && <span className="px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold max-w-xs truncate">{topic.length > 40 ? topic.substring(0, 40) + '...' : topic}</span>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" data-testid="ignite-save-vault" onClick={handleSaveBrief} className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+                    {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
+                    <span>{savedBrief ? 'Saved ✓' : 'Save to Vault'}</span>
+                  </button>
+                  <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
+                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                    <span>Create New Brief</span>
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* Dev Panel */}
             {import.meta.env.DEV && bp && (
@@ -1444,7 +1462,6 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
 
 function N8nPromptPanel({ platform, contentType }) {
   const [expanded, setExpanded] = useState(false);
-
   const { required, optional, excluded } = getSectionsForType(platform, contentType);
   const weights = getViralScoreWeights(platform, contentType);
   const label = getBlueprintLabel(platform, contentType);

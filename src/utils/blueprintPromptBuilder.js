@@ -1,3 +1,14 @@
+import { getPlatformPromptRule, getHashtagConstraint } from '../data/platformContentRules.js';
+
+/**
+ * Platform-specific hashtag limits for Ignite Engine / Viral Blueprint (n8n + dev prompt panel).
+ * @param {string} platform
+ * @returns {string}
+ */
+export function getHashtagInstructionForPlatform(platform) {
+  return getHashtagConstraint(platform);
+}
+
 /**
  * Builds the n8n system prompt for the Anthropic Chat Model node.
  * This prompt forces the AI to generate content-type-specific blueprints.
@@ -18,6 +29,9 @@ export function buildN8nSystemPrompt(context) {
     brand_voice_tone = '{{brand_voice_tone}}',
   } = context;
 
+  const platformRules = getPlatformPromptRule(platform);
+  const platformRulesBlock = platformRules ? `\n\n${platformRules}\n` : '';
+
   const weightKeys = Object.keys(viral_score_weights);
   const weightExample = weightKeys.map(k => `      "${k}": <number 0-${viral_score_weights[k]}>`).join(',\n');
 
@@ -37,8 +51,7 @@ CONTEXT:
 
 STRICT EXCLUSION RULES:
 NEVER include these sections in your response: ${excluded_sections.join(', ')}.
-If you include any of these, the response will be rejected.
-
+If you include any of these, the response will be rejected.${platformRulesBlock}
 REQUIRED SECTIONS:
 Your response must include ONLY these sections: ${required_sections.join(', ')}.
 You may optionally include: ${optional_sections.join(', ')}.
@@ -64,7 +77,7 @@ For "directors_cut": { "scenes": [{ "scene_number": <number>, "shot_type": "<str
 For "script": { "full_script": "<string with spoken word formatting>", "word_count": <number>, "estimated_read_time": "<string>", "timestamps": [{ "time": "<timestamp>", "label": "<description>" }] }
 For "audio_vibe": { "options": [{ "mood": "<string>", "genre_style": "<string>", "bpm_label": "<string>" }], "trending_sound_tip": "<string>" }
 For "caption_framework": { "variations": [{ "style": "Short/Punchy|Storytelling|Question-Based", "text": "<caption>", "character_count": <number>, "emoji_placement": "<suggestion>" }], "line_break_guide": "<string>" }
-For "hashtag_strategy": { "tiers": { "niche": { "hashtags": ["#tag", ...], "reach_range": "<string>" }, "mid": { "hashtags": [...], "reach_range": "<string>" }, "broad": { "hashtags": [...], "reach_range": "<string>" } } }
+For "hashtag_strategy": { "tiers": { "niche": { "hashtags": ["#tag", ...], "reach_range": "<string>" }, "mid": { "hashtags": [...], "reach_range": "<string>" }, "broad": { "hashtags": [...], "reach_range": "<string>" } } } — Hashtags: ${getHashtagConstraint(platform)}. Total hashtags across niche + mid + broad combined must obey this limit (no extra tags beyond the platform rule).
 For "carousel_structure": { "slides": [{ "headline": "<string>", "key_point": "<string>", "visual_direction": "<string>" }], "total_slides": <number>, "save_bait_explanation": "<string>" }
 For "story_arc": { "frames": [{ "visual_description": "<string>", "text_overlay": "<string>", "interactive_element": "<string>" }], "interactive_suggestions": ["Poll", "Quiz", ...], "link_cta_placement": "<string>" }
 For "thread_structure": { "tweets": [{ "text": "<tweet text>", "character_count": <number> }] }

@@ -85,7 +85,16 @@ export default async function handler(req, res) {
   }
 
   // Validate request body
-  const { job_id, contentGoal, timePeriod, platformFocus, brandVoice, trendContext } = req.body || {};
+  const {
+    job_id,
+    contentGoal,
+    timePeriod,
+    platformFocus,
+    brandVoice,
+    trendContext,
+    platform_rules_block,
+    platforms_list,
+  } = req.body || {};
 
   if (!job_id) {
     console.error('[plan-builder-proxy] Missing job_id in request body', { requestId });
@@ -121,7 +130,15 @@ export default async function handler(req, res) {
       timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
       platformFocus,
       brandVoice: brandVoice || '',
-      trendContext: typeof trendContext === 'string' ? trendContext : ''
+      trendContext: typeof trendContext === 'string' ? trendContext : '',
+      platform_rules_block:
+        typeof platform_rules_block === 'string' ? platform_rules_block : '',
+      platforms_list:
+        typeof platforms_list === 'string'
+          ? platforms_list
+          : Array.isArray(platformFocus)
+            ? platformFocus.join(', ')
+            : '',
     };
 
     // Forward request to n8n webhook

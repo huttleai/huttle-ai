@@ -10,7 +10,8 @@ import { getAudienceInsights, scanTrendingTopics } from '../services/perplexityA
 import { getTrendDeepDive } from '../services/n8nWorkflowAPI';
 import { useToast } from '../context/ToastContext';
 import { getToastDisclaimer } from './AIDisclaimer';
-import { saveContentLibraryItem, supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from './AIUsageMeter';
 import { getPlatformIcon } from './SocialIcons';
@@ -535,7 +536,7 @@ export default function TrendDiscoveryHub() {
         description: 'Structured trend intelligence report from Trend Lab Deep Dive'
       };
 
-      const result = await saveContentLibraryItem(user.id, itemData);
+      const result = await saveToVault(user.id, itemData);
       if (result.success) {
         setSavedTrendIndex('deep-report');
         setTimeout(() => setSavedTrendIndex(null), 2000);
@@ -568,7 +569,7 @@ export default function TrendDiscoveryHub() {
         description: `Generated from Trend Discovery Hub`,
       };
 
-      const result = await saveContentLibraryItem(user.id, itemData);
+      const result = await saveToVault(user.id, itemData);
 
       if (result.success) {
         setSavedTrendIndex(itemIndex);

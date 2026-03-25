@@ -34,6 +34,16 @@ import {
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
+import {
+  PLATFORM_CONTENT_RULES,
+  getCaptionOptimalLengthPhrase,
+  getCaptionVisibleBeforeHint,
+  getHashtagConstraint,
+  getHashtagMaxForPlatform,
+  getPlatformContentRulesRecord,
+  getPlatformPromptRule,
+  normalizePlatformRulesKey,
+} from '../data/platformContentRules';
 import { supabase } from '../config/supabase';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { 
@@ -828,6 +838,7 @@ export async function generateCaption(contentData, brandData, options = {}) {
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const isSingleCaptionMode = Boolean(contentData.selectedHook || contentData.singleCaption);
     const platform = contentData.platform || 'instagram';
+    const platformRule = getPlatformPromptRule(platform) || getPlatformPromptRule('instagram');
     const platformContext = buildPlatformContext(platform, 'caption');
     const platformData = getPlatform(platform);
     const hashtagGuidelines = getHashtagGuidelines(platform);
@@ -897,6 +908,10 @@ ${platformContext}
 - CTA style hint: ${ctaGuidelines.style} (examples: ${ctaGuidelines.examples.slice(0, 3).join(', ')})
 - ${getCaptionPlatformInstructions(platform)}
 ${contentData.selectedHook ? `- Use this exact opening line for every variant: ${JSON.stringify(contentData.selectedHook)}` : ''}
+
+PLATFORM CONTEXT:
+${platformRule}
+Write the caption following the length and style guidance above. Ensure the hook is front-loaded within the visible character limit.
 ${creatorPromptGuidance.creatorType === 'solo_creator'
   ? '- Prefer authentic first-person creator voice.'
   : '- Prefer polished brand/service voice with clear outcomes.'}
@@ -929,6 +944,13 @@ FULL POST BUILDER — platform-native caption (Instagram/TikTok):
 FULL POST BUILDER:
 - Structure: hook echo → concrete value → single clear CTA.
 - Stay specific to the topic; avoid generic templates.`;
+      const captionHints = String(options.fullPostBuilderCaptionHints ?? '').trim();
+      if (captionHints) {
+        userMessage += `
+
+Platform caption constraints (Full Post Builder):
+${captionHints}`;
+      }
     }
 
     const captionRegenNonce =
@@ -1076,6 +1098,8 @@ export async function scoreContentQuality(content, brandData = null, options = {
         || (Array.isArray(promptProfile.platforms) && promptProfile.platforms[0])
         || 'instagram'
     ).toLowerCase();
+    const platformRule = getPlatformPromptRule(platformSlug) || getPlatformPromptRule('instagram');
+    const hashtagRule = getHashtagConstraint(platformSlug);
     const platformDisplay = getPlatform(platformSlug)?.name || platformSlug;
     const signalBlock =
       formatAlgorithmSignalsForScorer(platformSlug) || formatAlgorithmSignalsForScorer('instagram');
@@ -1102,6 +1126,12 @@ ${buildPromptBrandSection(brandData, { platforms: [platformSlug] })}
 
 Algorithm-weighted signals for this platform (use to inform algorithmAlignmentScore; guidance, not a rigid checklist):
 ${signalBlock}
+
+Score this content against these platform-specific rules:
+${platformRule}
+Hashtag rules: ${hashtagRule}
+Deduct points if hashtag count exceeds platform max, hook is not front-loaded within visible limit, or tone mismatches platform.
+Award bonus points if all platform constraints are respected.
 
 Content to analyze:
 ${truncateForAiPrompt(content, 14000)}
@@ -1221,7 +1251,12 @@ ${fullPostBuilder ? '- Full Post Builder: Reference the algorithm signal themes 
   }
 }
 
-export async function generateContentPlan(goals, brandData, days = 7) {
+export async function generateContentPlan(goals, brandData, days = 7, options = {}) {
+  const platformRulesBlock = options?.platformRulesBlock || '';
+  const platformRulesSection = platformRulesBlock.trim()
+    ? `\n\nPLATFORM-SPECIFIC RULES TO FOLLOW:\n${platformRulesBlock}\n\n`
+    : '\n\n';
+
   try {
     const systemPrompt = buildSystemPromptWithBrandBlock(
       'You are an AI content strategist. Create detailed, actionable content calendars that align with brand goals.',
@@ -1235,9 +1270,7 @@ export async function generateContentPlan(goals, brandData, days = 7) {
       },
       {
         role: 'user',
-        content: `Create a detailed ${days}-day content calendar to achieve: ${goals}
-
-Include for each day:
+        content: `Create a detailed ${days}-day content calendar to achieve: ${goals}${platformRulesSection}Include for each day:
 - Post type (reel, carousel, story, etc.)
 - Topic/theme
 - Optimal posting time
@@ -1404,6 +1437,7 @@ export async function generateHooks(input, brandData, theme = 'question', platfo
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
     const hookGuidelines = getHookGuidelines(platform);
     const platformData = getPlatform(platform);
+    const rules = getPlatformContentRulesRecord(platform);
 
     const hookResearch = skipRealtimeResearch
       ? { success: false, research: '' }
@@ -1460,6 +1494,10 @@ Platform hook guidance:
 - Style: ${hookGuidelines.style}
 - Examples: ${hookGuidelines.examples.join(', ')}
 - Tip: ${hookGuidelines.tip}
+Platform: ${rules.displayName}
+Hook requirement: ${rules.video?.hook || 'Grab attention immediately'}
+Visible character limit before truncation: ${getCaptionVisibleBeforeHint(platform)}
+Write hooks that land within this visible window.
 ${creatorPromptGuidance.creatorType === 'solo_creator'
   ? '- Prefer first-person, relatable creator-native phrasing.'
   : '- Prefer authority, outcomes, and credibility-forward phrasing.'}
@@ -1524,7 +1562,8 @@ Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); n
 
 export async function generateFullPostHooks(
   { topic, hookType = 'Question', platform = 'instagram', formatType, nicheAngle, trendDescription },
-  brandData
+  brandData,
+  options = {},
 ) {
   try {
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
@@ -1587,6 +1626,8 @@ ${buildPromptGuardrails({ includeStats: true, readyToUse: true })}`,
       ),
     };
 
+    const hookRequirementInject = String(options.fullPostBuilderHookRequirement ?? '').trim();
+
     const userMsg = {
       role: 'user',
       content: `${buildPromptBrandSection(brandData, { platforms: [platform] })}
@@ -1604,6 +1645,7 @@ Requirements:
 - First silently pick 4-5 concrete topic angles, then write hooks that use those angles; avoid repeating the same sentence frame; topic phrase lowercase mid-sentence unless proper noun; only capitalize at sentence start
 - Make each hook platform-native for ${platformName}
 - Plain text only for hooks (no #, no bullets)
+${hookRequirementInject ? `\n${hookRequirementInject}` : ''}
 
 Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamble or explanation.`,
     };
@@ -1712,6 +1754,7 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
   try {
     const platformData = getPlatform(platform);
     const ctaGuidelines = getCTAGuidelines(platform);
+    const rules = getPlatformContentRulesRecord(platform);
     const promptProfile = getPromptBrandProfile(brandData, { platforms: [platform] });
     const creatorPromptGuidance = getCreatorPromptGuidance(promptProfile, brandData);
 
@@ -1760,6 +1803,10 @@ Platform CTA guidance:
 - Style: ${ctaGuidelines.style}
 - Examples: ${ctaGuidelines.examples.join(', ')}
 - Native patterns: ${platform === 'instagram' ? 'bio link, save, comment, DM' : platform === 'facebook' ? 'comment, share, button' : platform === 'tiktok' ? 'comment, follow, stitch/duet, DM' : platform === 'linkedin' ? 'comment, message, profile CTA' : 'platform-native next step'}
+Platform: ${rules.displayName}
+Caption optimal length: ${getCaptionOptimalLengthPhrase(platform)}.
+CTA placement tip: ${rules.caption.tip}
+Write CTAs that fit the platform's style and length constraints.
 ${creatorPromptGuidance.creatorType === 'solo_creator'
   ? '- Bias toward community, conversation, and creator-led trust.'
   : '- Bias toward bookings, consultations, lead capture, and clear outcomes.'}
@@ -1791,6 +1838,10 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
         ? options.forceFreshRegeneration.trim().slice(0, 80)
         : '';
     let ctaUserMessage = userMessage;
+    const ctaHints = fullPostBuilder ? String(options.fullPostBuilderCtaHints ?? '').trim() : '';
+    if (ctaHints) {
+      ctaUserMessage += `\n\nFull Post Builder — platform CTA constraints:\n${ctaHints}`;
+    }
     if (ctaRegenNonce) {
       ctaUserMessage += `\n\n— Regeneration (${ctaRegenNonce}) — Produce fresh CTAs from the latest topic/caption/goal; do not repeat a previous default set verbatim.`;
     }
@@ -1978,7 +2029,7 @@ export async function generateHashtags(input, brandData, platform = 'instagram',
   // Check if demo mode is enabled AND no real input - return mock data
   if (isDemoMode() && !topic?.trim()) {
     await simulateDelay(800, 1500);
-    const hashtagCount = isFullPostBuilderRequest ? 10 : (getHashtagGuidelines(platform)?.max || 10);
+    const hashtagCount = getHashtagMaxForPlatform(platform);
     const mockHashtags = getHashtagMocks(hashtagCount);
     return {
       success: true,
@@ -1990,7 +2041,7 @@ export async function generateHashtags(input, brandData, platform = 'instagram',
 
   try {
     const platformData = getPlatform(platform);
-    const hashtagCount = isFullPostBuilderRequest ? 10 : (getHashtagGuidelines(platform)?.max || 10);
+    const hashtagCount = getHashtagMaxForPlatform(platform);
     const realtimeResearch = fullPostBuilder
       ? { success: false, research: '', citations: [] }
       : await getRealtimeHashtagResearch({
@@ -2006,6 +2057,9 @@ export async function generateHashtags(input, brandData, platform = 'instagram',
       : '';
     const hasRealtimeResearch = Boolean(realtimeResearch.success && liveResearchText.trim());
     const platformLabel = platformData?.name || platform;
+    const hashtagRule = getHashtagConstraint(platform || 'instagram');
+    const hashtagConstraintLine = String(options.fullPostBuilderHashtagRules ?? '').trim()
+      || `Hashtag rules: ${hashtagRule}`;
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'hashtags',
       brandData,
@@ -2041,6 +2095,7 @@ ${buildPromptGuardrails({ readyToUse: true })}`
     let userMessage = `You are generating hashtags for the following context:
 
 Platform: ${platformLabel}
+${hashtagConstraintLine}
 Keywords / niche: ${topic}
 
 Candidate Hashtag Research (from live web data):
@@ -2051,7 +2106,7 @@ ${brandSection}
 
 Objective:
 Return exactly ${hashtagCount} **high-quality hashtags** that will help this post get discovered by the right people.
-We want a deliberate mix of three competition tiers, aligned with the Instagram Tips card in the UI:
+We want a deliberate mix of three competition tiers, consistent with the platform rules above:
 
 ${tierMixNote}
 
@@ -2475,7 +2530,24 @@ For each variation:
 Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`
     };
 
-    const userPrompt = userPrompts[mode] || userPrompts.viral;
+    const effectivePlatforms = platforms.length > 0 ? platforms : ['Instagram', 'TikTok', 'X'];
+    const platformRemixRulesBlock = effectivePlatforms
+      .map((platform) => {
+        const key = normalizePlatformRulesKey(String(platform ?? '').toLowerCase() || 'instagram');
+        const rules = PLATFORM_CONTENT_RULES[key] || PLATFORM_CONTENT_RULES.instagram;
+        const effectiveKey = PLATFORM_CONTENT_RULES[key] ? key : 'instagram';
+        const platformContext = getPlatformPromptRule(effectiveKey);
+        const hashtagContext = getHashtagConstraint(effectiveKey);
+        return `When remixing for ${rules.displayName}:
+   ${platformContext}
+   Hashtags: ${hashtagContext}`;
+      })
+      .join('\n\n');
+
+    const userPrompt = `${userPrompts[mode] || userPrompts.viral}
+
+PER-PLATFORM REMIX RULES:
+${platformRemixRulesBlock}`;
 
     const data = await callGrokAPI([
       {

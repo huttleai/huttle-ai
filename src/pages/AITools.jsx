@@ -9,6 +9,12 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import AIFeatureLock from '../components/AIFeatureLock';
 import PlatformSelector from '../components/PlatformSelector';
 import { getPlatformTips, getPlatform } from '../utils/platformGuidelines';
+import {
+  PLATFORM_CONTENT_RULES,
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  getHashtagMaxForPlatform,
+} from '../data/platformContentRules';
 import { 
   generateCaption, 
   scoreContentQuality, 
@@ -21,7 +27,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
-import { saveContentLibraryItem } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import HumanizerScore from '../components/HumanizerScore';
 import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
@@ -33,6 +39,11 @@ import humanizeContent, {
   mapBrandVoiceToHumanizeType,
   normalizeHumanizePlatform,
 } from '../services/humanizeContent';
+
+const _platformRulesImportAnchor =
+  Object.keys(PLATFORM_CONTENT_RULES).length +
+  getPlatformPromptRule('instagram').length +
+  getHashtagConstraint('instagram').length;
 
 function pickCachedTrendTopicChips() {
   const raw = getCachedTrends();
@@ -157,6 +168,7 @@ export default function AITools() {
 
   // Content Quality Scorer State
   const [contentToScore, setContentToScore] = useState('');
+  const [scorerPlatform, setScorerPlatform] = useState('instagram');
   const [contentScore, setContentScore] = useState(null);
   const [isLoadingScore, setIsLoadingScore] = useState(false);
   const [scorerSubTab, setScorerSubTab] = useState('quality');
@@ -300,6 +312,7 @@ export default function AITools() {
       if (toolForInputs === 'hooks') setHookPlatform(platformParam);
       if (toolForInputs === 'cta') setCtaPlatform(platformParam);
       if (toolForInputs === 'visual-brainstorm') setVisualPlatform(platformParam);
+      if (toolForInputs === 'scorer') setScorerPlatform(platformParam);
       didPrefill = true;
     }
 
@@ -438,7 +451,7 @@ export default function AITools() {
     try {
       const result = await generateHashtags(hashtagInput, brandData, hashtagPlatform);
       const platformData = getPlatform(hashtagPlatform);
-      const hashtagCount = platformData?.hashtags?.max || 10;
+      const hashtagCount = getHashtagMaxForPlatform(hashtagPlatform);
 
       if (result.success) {
         // Check if we have pre-parsed hashtag data (from demo mode)
@@ -643,7 +656,9 @@ export default function AITools() {
 
     setIsLoadingScore(true);
     try {
-      const result = await scoreContentQuality(contentToScore, brandData);
+      const result = await scoreContentQuality(contentToScore, brandData, {
+        platform: scorerPlatform || 'instagram',
+      });
 
       if (result.success) {
         const insightFromRaw = (raw) => {
@@ -825,7 +840,7 @@ export default function AITools() {
         || (activeTool === 'hooks' ? hookPlatform : '')
         || (activeTool === 'cta' ? ctaPlatform : '')
         || (activeTool === 'visual-brainstorm' ? visualPlatform : '')
-        || (activeTool === 'scorer' ? (metadata.platform || 'instagram') : '');
+        || (activeTool === 'scorer' ? scorerPlatform : '');
 
       const itemData = buildContentVaultPayload({
         name,
@@ -842,7 +857,7 @@ export default function AITools() {
         },
       });
 
-      const result = await saveContentLibraryItem(user.id, itemData);
+      const result = await saveToVault(user.id, itemData);
 
       if (result.success) {
         setSavedIndex(itemIndex);
@@ -1626,6 +1641,15 @@ export default function AITools() {
 
             <div className="p-4 md:p-5">
               {/* Shared content input for all sub-tabs */}
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
+                <PlatformSelector
+                  value={scorerPlatform}
+                  onChange={setScorerPlatform}
+                  contentType="caption"
+                  showTips={true}
+                />
+              </div>
               <div className="mb-4">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Paste Your Content</label>
                 <textarea value={contentToScore} onChange={(e) => setContentToScore(e.target.value)} placeholder="Paste your draft post, caption, or content here..." className="w-full p-3 border border-gray-200 rounded-lg resize-none h-36 focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />

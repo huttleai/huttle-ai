@@ -37,10 +37,10 @@ import {
   getContentCollectionItems,
   getContentCollections,
   getContentLibraryItems,
-  saveContentLibraryItem,
   setContentItemCollections,
   updateContentLibraryItem,
 } from '../config/supabase';
+import { saveToVault, CONTENT_VAULT_UPDATED_EVENT } from '../services/contentService';
 import {
   buildUseAgainTarget,
   CONTENT_TYPE_CONFIG,
@@ -530,6 +530,14 @@ export default function ContentLibrary() {
     loadVault();
   }, [loadVault]);
 
+  useEffect(() => {
+    const onVaultUpdated = () => {
+      if (user?.id) void loadVault();
+    };
+    window.addEventListener(CONTENT_VAULT_UPDATED_EVENT, onVaultUpdated);
+    return () => window.removeEventListener(CONTENT_VAULT_UPDATED_EVENT, onVaultUpdated);
+  }, [user?.id, loadVault]);
+
   const loadKits = useCallback(async () => {
     if (!user?.id) {
       setKits([]);
@@ -626,14 +634,14 @@ export default function ContentLibrary() {
     });
 
     if (selectedSort === 'oldest') {
-      return nextItems.toSorted((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+      return [...nextItems].sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
     }
 
     if (selectedSort === 'most_used') {
-      return nextItems.toSorted((left, right) => right.copyCount - left.copyCount || new Date(right.createdAt) - new Date(left.createdAt));
+      return [...nextItems].sort((left, right) => right.copyCount - left.copyCount || new Date(right.createdAt) - new Date(left.createdAt));
     }
 
-    return nextItems.toSorted((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    return [...nextItems].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [activeCollectionId, searchQuery, selectedPlatform, selectedSort, selectedType, vaultItems]);
 
   const stats = useMemo(() => {
@@ -890,7 +898,7 @@ export default function ContentLibrary() {
         copy_count: 0,
       };
 
-      const result = await saveContentLibraryItem(user.id, {
+      const result = await saveToVault(user.id, {
         name: 'Manual Post',
         content: postContent.trim(),
         type: 'text',

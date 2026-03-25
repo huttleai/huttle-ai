@@ -3,10 +3,10 @@ import { AuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import {
   getUserPreferences,
-  saveContentLibraryItem,
   uploadFileToStorage,
   getSignedUrl,
 } from '../config/supabase';
+import { saveToVault } from '../services/contentService';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 
 export const ContentContext = createContext();
@@ -73,7 +73,7 @@ export function ContentProvider({ children }) {
     if (!user?.id || !storagePath) return;
     
     // Fire-and-forget — don't block post creation
-    saveContentLibraryItem(user.id, {
+    saveToVault(user.id, {
       name: fileName || 'Uploaded Media',
       type: fileType === 'video' ? 'video' : 'image',
       storage_path: storagePath,
@@ -192,7 +192,7 @@ export function ContentProvider({ children }) {
     }
 
     try {
-      const result = await saveContentLibraryItem(user.id, {
+      const result = await saveToVault(user.id, {
         name: itemData.name || `Content - ${new Date().toLocaleDateString()}`,
         type: itemData.type || 'text',
         content: typeof itemData.content === 'string' ? itemData.content : JSON.stringify(itemData.content),

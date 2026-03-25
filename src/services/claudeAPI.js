@@ -132,6 +132,7 @@ export async function generateFullPostHooksWithClaude(
     trendDescription,
   },
   brandData,
+  options = {},
 ) {
   const topicTrimmed = String(topic ?? '').trim();
   if (!topicTrimmed) {
@@ -153,6 +154,8 @@ export async function generateFullPostHooksWithClaude(
   const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
 You write scroll-stopping social hooks. Output exactly as the user specifies.`.trim();
 
+  const hookRequirementInject = String(options.fullPostBuilderHookRequirement ?? '').trim();
+
   const user = `${buildPromptBrandSection(brandData, { platforms: [platform] })}
 
 You are an expert social media content strategist for ${platformName}.
@@ -161,6 +164,7 @@ Your job is to write 5 scroll-stopping hooks for this EXACT topic: "${topicTrimm
 
 Target audience: ${audience}
 Platform: ${platformName}
+Hook style: ${hookType}
 Goal: ${goalLabel}
 Tone: ${tone}
 
@@ -194,7 +198,7 @@ Style rule:
 - Follow standard English capitalization.
 - Only capitalize the first word of a sentence and proper nouns (brands, clinic names, product names).
 - Treatment and procedure names such as "microneedling", "botox", "fillers", "chemical peel", and "CO2 laser" should be lowercase when used in the middle of a sentence, unless they are part of an official brand name.
-${trendBlock ? `Extra context:\n${trendBlock}\n` : ''}`;
+${trendBlock ? `Extra context:\n${trendBlock}\n` : ''}${hookRequirementInject ? `${hookRequirementInject}\n` : ''}`;
 
   try {
     const data = await callClaudeAPI(

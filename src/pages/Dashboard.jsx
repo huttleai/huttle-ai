@@ -40,6 +40,7 @@ import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '..
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
 import { supabase, getContentLibraryItems } from '../config/supabase';
+import { CONTENT_VAULT_UPDATED_EVENT } from '../services/contentService';
 import {
   generateDashboardData,
   getDashboardCache, // HUTTLE AI: cache fix
@@ -657,32 +658,42 @@ export default function Dashboard() {
     { title: 'You\'re All Set!', content: 'Explore your dashboard to discover AI insights and trending topics. Save everything to your Content Vault. Track your AI generation usage in the sidebar. Happy creating!', icon: Sparkles },
   ];
 
-  // Load recent vault items
+  const loadRecentVaultItems = useCallback(async () => {
+    if (!user?.id) {
+      setRecentVaultItems([]);
+      return;
+    }
+    try {
+      const result = await getContentLibraryItems(user.id);
+      if (result.success && Array.isArray(result.data)) {
+        const sorted = [...result.data].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setRecentVaultItems(sorted.slice(0, 4).map((item) => ({
+          id: item.id,
+          name: item.name,
+          content: item.content,
+          type: item.type,
+          date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          description: item.description,
+        })));
+      }
+    } catch (err) {
+      console.error('[Dashboard] Failed to load vault items:', err);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
-    if (!user?.id) return;
-    let isMounted = true;
-    const loadRecentVault = async () => {
-      try {
-        const result = await getContentLibraryItems(user.id);
-        if (!isMounted) return;
-        if (result.success && Array.isArray(result.data)) {
-          const sorted = [...result.data].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-          setRecentVaultItems(sorted.slice(0, 4).map(item => ({
-            id: item.id,
-            name: item.name,
-            content: item.content,
-            type: item.type,
-            date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            description: item.description,
-          })));
-        }
-      } catch (err) {
-        console.error('[Dashboard] Failed to load vault items:', err);
+    void loadRecentVaultItems();
+  }, [loadRecentVaultItems]);
+
+  useEffect(() => {
+    const onVaultUpdated = (event) => {
+      if (user?.id && event?.detail?.userId === user.id) {
+        void loadRecentVaultItems();
       }
     };
-    loadRecentVault();
-    return () => { isMounted = false; };
-  }, [user?.id]);
+    window.addEventListener(CONTENT_VAULT_UPDATED_EVENT, onVaultUpdated);
+    return () => window.removeEventListener(CONTENT_VAULT_UPDATED_EVENT, onVaultUpdated);
+  }, [user?.id, loadRecentVaultItems]);
 
   useEffect(() => {
     hasFetchedTodayRef.current = false; // HUTTLE AI: cache fix

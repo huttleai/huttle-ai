@@ -10,6 +10,12 @@ import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import {
+  PLATFORM_CONTENT_RULES,
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  normalizePlatformRulesKey,
+} from '../../src/data/platformContentRules.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -128,6 +134,23 @@ function buildUserPrompt({
     'Variation 3: ...',
   ].join('\n');
 
+  const platformRemixRulesFromClient = typeof additionalContext?.platformRemixRules === 'string'
+    ? additionalContext.platformRemixRules.trim()
+    : '';
+  const platformRemixRulesBlock = platformRemixRulesFromClient
+    || platforms
+      .map((platform) => {
+        const key = normalizePlatformRulesKey(String(platform ?? '').toLowerCase() || 'instagram');
+        const rules = PLATFORM_CONTENT_RULES[key] || PLATFORM_CONTENT_RULES.instagram;
+        const effectiveKey = PLATFORM_CONTENT_RULES[key] ? key : 'instagram';
+        const platformContext = getPlatformPromptRule(effectiveKey);
+        const hashtagContext = getHashtagConstraint(effectiveKey);
+        return `When remixing for ${rules.displayName}:
+   ${platformContext}
+   Hashtags: ${hashtagContext}`;
+      })
+      .join('\n\n');
+
   return `${promptBrandSection}
 
 ${getModeInstructions(requestedMode, normalizedMode)}
@@ -144,6 +167,9 @@ ${brandVoice || 'Professional and engaging'}
 AUDIENCE CONTEXT:
 - Niche: ${niche}
 - Target audience: ${targetAudience}
+
+PER-PLATFORM REMIX RULES:
+${platformRemixRulesBlock}
 
 OUTPUT REQUIREMENTS:
 - Return ONLY valid JSON.

@@ -1,7 +1,11 @@
 import { supabase } from '../config/supabase';
+import { sanitizeNicheContentCacheKey } from './normalizeNiche';
 
 export async function getCachedResult(cacheKey) {
   try {
+    const safeKey = sanitizeNicheContentCacheKey(cacheKey);
+    if (!safeKey) return null;
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
 
@@ -11,7 +15,7 @@ export async function getCachedResult(cacheKey) {
     const readScopedCache = async (userScope) => supabase
       .from('niche_content_cache')
       .select('*')
-      .eq('cache_key', cacheKey)
+      .eq('cache_key', safeKey)
       .gt('expires_at', nowIso)
       .match(userScope)
       .maybeSingle();
@@ -29,7 +33,7 @@ export async function getCachedResult(cacheKey) {
       const { data, error } = await supabase
         .from('niche_content_cache')
         .select('*')
-        .eq('cache_key', cacheKey)
+        .eq('cache_key', safeKey)
         .gt('expires_at', nowIso)
         .is('user_id', null)
         .maybeSingle();

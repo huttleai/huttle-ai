@@ -694,36 +694,11 @@ export async function getSignedUrl(storagePath, expiresIn = 3600) {
 }
 
 /**
- * Save content library item to Supabase
+ * Save content library item to Supabase (delegates to shared saveToVault — sanitizes columns / metadata).
  */
 export async function saveContentLibraryItem(userId, itemData) {
-  try {
-    const { data, error } = await supabase
-      .from(TABLES.CONTENT_LIBRARY)
-      .insert({
-        user_id: userId,
-        ...itemData,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error saving content library item:', error);
-    
-    let errorMessage = error.message;
-    if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
-      errorMessage = 'Database setup error: user record may be missing. Please contact support.';
-    } else if (error.code === '42P01') {
-      errorMessage = 'Content library table not found. Please run the database migration.';
-    } else if (error.message?.includes('policy') || error.code === '42501') {
-      errorMessage = 'Permission denied. Please check database RLS policies.';
-    }
-    
-    return { success: false, error: errorMessage };
-  }
+  const { saveToVault } = await import('../services/contentService.js');
+  return saveToVault(userId, itemData);
 }
 
 /**

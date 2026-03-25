@@ -1,3 +1,5 @@
+import { PLATFORM_CONTENT_RULES, getAlgorithmHashtagBounds } from './platformContentRules';
+
 /**
  * Platform Algorithm Alignment Signals
  * Last updated: March 2026 — update monthly
@@ -8,6 +10,12 @@
  */
 
 export const lastUpdated = 'March 2026';
+
+const IG_HT = getAlgorithmHashtagBounds('instagram');
+const TT_HT = getAlgorithmHashtagBounds('tiktok');
+const YT_HT = getAlgorithmHashtagBounds('youtube');
+const YT_TITLE_CAP = PLATFORM_CONTENT_RULES.youtube.caption.titleMaxChars;
+const X_CHAR_LIMIT = PLATFORM_CONTENT_RULES.x.caption.maxChars;
 
 const wordCount = (text) => text.split(/\s+/).filter(Boolean).length;
 const sentenceCount = (text) => text.split(/[.!?]+/).filter((s) => s.trim()).length;
@@ -89,17 +97,21 @@ export const algorithmSignals = {
       },
       {
         id: 'hashtag_count',
-        label: '3-5 relevant hashtags',
+        label: `${IG_HT.optimal} relevant hashtags`,
         weight: 10,
         check: (text) => {
           const count = countHashtags(text);
-          const pass = count >= 3 && count <= 5;
+          const pass = count >= IG_HT.min && count <= IG_HT.max;
           return {
             pass,
             detail: pass
-              ? `${count} hashtags — within the optimal 3-5 range`
-              : `${count} hashtags — Instagram now favors 3-5 targeted tags`,
-            fix: pass ? null : count < 3 ? 'Add 3-5 niche-specific hashtags.' : 'Reduce to 3-5 highly relevant hashtags.',
+              ? `${count} hashtags — within the optimal ${IG_HT.optimal} range`
+              : `${count} hashtags — Instagram favors ${IG_HT.label.toLowerCase()}`,
+            fix: pass
+              ? null
+              : count < IG_HT.min
+                ? `Add ${IG_HT.min}–${IG_HT.max} niche-specific hashtags.`
+                : `Reduce to ${IG_HT.min}–${IG_HT.max} highly relevant hashtags.`,
           };
         },
       },
@@ -174,17 +186,21 @@ export const algorithmSignals = {
       },
       {
         id: 'niche_hashtags',
-        label: '3-5 niche hashtags only',
+        label: `${TT_HT.optimal} niche hashtags only`,
         weight: 10,
         check: (text) => {
           const count = countHashtags(text);
-          const pass = count >= 3 && count <= 5;
+          const pass = count >= TT_HT.min && count <= TT_HT.max;
           return {
             pass,
             detail: pass
               ? `${count} niche hashtags — TikTok sweet spot`
-              : `${count} hashtags — TikTok favors 3-5 targeted tags`,
-            fix: pass ? null : count < 3 ? 'Add 3-5 niche hashtags.' : 'Trim to 3-5 of your most relevant hashtags.',
+              : `${count} hashtags — TikTok favors ${TT_HT.label.toLowerCase()}`,
+            fix: pass
+              ? null
+              : count < TT_HT.min
+                ? `Add ${TT_HT.min}–${TT_HT.max} niche hashtags.`
+                : `Trim to ${TT_HT.min}–${TT_HT.max} of your most relevant hashtags.`,
           };
         },
       },
@@ -309,7 +325,7 @@ export const algorithmSignals = {
         weight: 10,
         check: (text) => {
           const wc = wordCount(text);
-          const isLong = wc > 50;
+          const isLong = text.length > X_CHAR_LIMIT || wc > 50;
           const hasThreadSignal = hasPattern(text, /\b(thread|🧵|1\/|part 1)\b/i);
           const pass = !isLong || hasThreadSignal;
           return {
@@ -317,7 +333,9 @@ export const algorithmSignals = {
             detail: pass
               ? isLong ? 'Thread format indicated for long content' : 'Content fits single-post format'
               : 'Long content without thread indicator — consider a thread',
-            fix: pass ? null : 'For content over 280 chars, break into a thread. Start with "🧵 Thread:"',
+            fix: pass
+              ? null
+              : `For content over ${X_CHAR_LIMIT} chars, break into a thread. Start with "🧵 Thread:"`,
           };
         },
       },
@@ -390,33 +408,37 @@ export const algorithmSignals = {
       },
       {
         id: 'keyword_tags',
-        label: '3-5 keyword-rich tags noted',
+        label: `${YT_HT.optimal} keyword-rich tags noted`,
         weight: 15,
         check: (text) => {
           const count = countHashtags(text);
-          const pass = count >= 3 && count <= 5;
+          const pass = count >= YT_HT.min && count <= YT_HT.max;
           return {
             pass,
             detail: pass
               ? `${count} tags — strong keyword signal`
-              : `${count} tags — aim for 3-5 keyword-rich tags`,
-            fix: pass ? null : count < 3 ? 'Add 3-5 keyword-rich hashtags.' : 'Reduce to 3-5 highly relevant tags.',
+              : `${count} tags — aim for ${YT_HT.min}–${YT_HT.max} keyword-rich tags`,
+            fix: pass
+              ? null
+              : count < YT_HT.min
+                ? `Add ${YT_HT.min}–${YT_HT.max} keyword-rich hashtags in the description.`
+                : `Reduce to ${YT_HT.min}–${YT_HT.max} highly relevant tags.`,
           };
         },
       },
       {
         id: 'hook_sentence',
-        label: 'Hook sentence under 100 characters',
+        label: `Hook sentence under ${YT_TITLE_CAP} characters`,
         weight: 10,
         check: (text) => {
           const first = firstSentence(text);
-          const pass = first.length > 0 && first.length <= 100;
+          const pass = first.length > 0 && first.length <= YT_TITLE_CAP;
           return {
             pass,
             detail: pass
               ? `Hook is ${first.length} chars — concise and compelling`
-              : `Hook is ${first.length} chars — trim to under 100 for mobile readability`,
-            fix: pass ? null : 'Shorten your opening sentence to under 100 characters.',
+              : `Hook is ${first.length} chars — trim to under ${YT_TITLE_CAP} for mobile readability`,
+            fix: pass ? null : `Shorten your opening sentence to under ${YT_TITLE_CAP} characters.`,
           };
         },
       },

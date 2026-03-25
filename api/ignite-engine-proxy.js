@@ -12,6 +12,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import {
+  getPlatformPromptRule,
+  getHashtagConstraint,
+  PLATFORM_CONTENT_RULES,
+} from '../src/data/platformContentRules.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_IGNITE_ENGINE_WEBHOOK || // HUTTLE AI: updated 3
@@ -119,6 +124,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
+    const platformRulesKey = canonicalPlatform.toLowerCase();
+    const rules =
+      PLATFORM_CONTENT_RULES[platformRulesKey] || PLATFORM_CONTENT_RULES.instagram;
+
     const sanitizedPayload = {
       topic: String(topic).substring(0, 500),
       platform: canonicalPlatform,
@@ -132,6 +141,18 @@ export default async function handler(req, res) {
       excluded_sections: Array.isArray(excluded_sections) ? excluded_sections : [],
       viral_score_weights: viral_score_weights && typeof viral_score_weights === 'object' ? viral_score_weights : {},
       blueprint_label: blueprint_label || '',
+      hashtag_instruction: getHashtagConstraint(canonicalPlatform),
+      platform_content_rules: getPlatformPromptRule(canonicalPlatform),
+      platform_rules: getPlatformPromptRule(platformRulesKey),
+      hashtag_constraint: getHashtagConstraint(platformRulesKey),
+      hashtag_max: rules.hashtags.max,
+      hashtag_optimal: rules.hashtags.optimal,
+      caption_visible_chars: rules.caption.visibleBeforeTruncation,
+      caption_optimal_length:
+        rules.caption.optimalChars || `max ${rules.caption.maxChars}`,
+      video_hook_guidance:
+        rules.video?.hook || 'Hook must land in first 2 seconds',
+      platform_display_name: rules.displayName,
       // Legacy fields for backward compatibility with existing n8n workflows
       format: content_type || 'Post',
       postType: content_type || 'Post',
