@@ -1,8 +1,10 @@
 import { supabase, trackUsage } from '../config/supabase';
 import { API_TIMEOUTS } from '../config/apiConfig';
-import { normalizeNiche, buildCacheKey } from '../utils/normalizeNiche';
+import { normalizeNiche, buildCacheKey, buildDashboardForYouCacheKey } from '../utils/normalizeNiche';
 import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+
+// Ops: if Trending Now gets stuck on samples, run scripts/clean-poisoned-cache.sql
 
 let _cachedTrends = null;
 
@@ -18,6 +20,11 @@ export function getCachedTrends() {
 const DASHBOARD_CACHE_TABLE = 'daily_dashboard_cache';
 const GROK_PROXY_URL = '/api/ai/grok';
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+/** Mirrors api/ai/perplexity.js MODEL_CONFIG (log labels / parity only). */
+const MODEL_CONFIG_REF = {
+  dashboard_trending: 'sonar',
+  quick_scan: 'sonar',
+};
 const DEFAULT_NICHE = 'small business';
 const DEFAULT_PLATFORM = 'instagram';
 const DEFAULT_CITY = 'global';
@@ -362,6 +369,24 @@ function parseTrendingResponse(raw) {
   }
 }
 
+function parseTrendingPayloadToArray(payload) {
+  if (payload == null || payload === '') return null;
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload === 'string') return parseTrendingResponse(payload);
+  if (typeof payload === 'object') {
+    for (const key of ['trends', 'topics', 'trending', 'results', 'data', 'items']) {
+      if (Array.isArray(payload[key])) return payload[key];
+    }
+  }
+  return null;
+}
+
+function isValidDashboardTrendingWarmPayload(payload) {
+  const arr = parseTrendingPayloadToArray(payload);
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  return arr.some((item) => String(item?.title || item?.topic || item?.name || '').trim().length > 0);
+}
+
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -425,28 +450,55 @@ function buildPerPlatformCacheKey(context, platform, type, generatedDate) {
   );
 }
 
-async function getWarmPlatformCache(cacheKey, platform, type) {
+/**
+ * Read shared widget cache rows (Perplexity proxy writes with user_id null for dashboard
+ * trending/hashtags so all accounts in the same niche reuse one payload).
+ */
+async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {}) {
   const session = await getDashboardSession();
   if (!session) {
     console.warn('[Dashboard] No auth session, skipping user data fetch');
     return null;
   }
 
+  const niche = nicheContext.cacheNiche ?? '';
+
   try {
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('payload, hit_count')
+      .select('payload, result_data, hit_count')
       .eq('cache_key', cacheKey)
+      .is('user_id', null)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
 
     if (error) {
       console.warn('[Cache Read Skipped]', error.message, error.code, cacheKey);
+      if (type === 'trending') {
+        console.log('[Trending] Cache check', { platform, niche, feature: type, hit: false });
+      }
       return null;
     }
 
+    const rowPayload = data?.payload ?? data?.result_data;
+
+    if (type === 'trending') {
+      const hit = Boolean(rowPayload) && isValidDashboardTrendingWarmPayload(rowPayload);
+      console.log('[Trending] Cache check', { platform, niche, feature: type, hit });
+      if (!data) return null;
+      if (!hit) {
+        console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+          niche,
+          platform,
+          feature: type,
+        });
+        return null;
+      }
+      return rowPayload;
+    }
+
     if (data) {
-      return data.payload;
+      return rowPayload;
     }
 
     return null;
@@ -468,10 +520,11 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('cache_key, payload, generated_at')
+      .select('cache_key, payload, result_data, generated_at')
       .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
+      .is('user_id', null)
       .like('cache_key', cacheKeyPattern)
       .lt('generated_at', currentDateStart)
       .order('generated_at', { ascending: false })
@@ -482,7 +535,16 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     }
 
     const [previousCache] = data;
-    return previousCache;
+    const prevPayload = previousCache.payload ?? previousCache.result_data;
+    if (type === 'trending' && !isValidDashboardTrendingWarmPayload(prevPayload)) {
+      console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+        niche: context.cacheNiche,
+        platform,
+        feature: type,
+      });
+      return null;
+    }
+    return { ...previousCache, payload: prevPayload };
   } catch {
     return null;
   }
@@ -505,36 +567,43 @@ async function getAuthHeaders() {
   return headers;
 }
 
-function getPlatformWideTrendingPrompt(platform, today) {
+const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.`;
+
+function buildDashboardTrendingUserPrompt(platformLabel, nicheLabel) {
+  return `Find the top 3 trending content topics RIGHT NOW on ${platformLabel} for the ${nicheLabel} niche. Focus on topics with real momentum in the last 7 days based on engagement data, hashtag velocity, and creator activity.
+
+Return a JSON array of exactly 3 objects. Every object must include ALL of these fields — do not omit any:
+[
+  {
+    "title": "Short trend name (5-8 words max)",
+    "description": "Why this is trending and how a ${nicheLabel} creator can use it (2 sentences)",
+    "momentum": "rising" | "peaking" | "steady" | "declining",
+    "format": "reel" | "carousel" | "story" | "post" | "video" | "live",
+    "hook": "One attention-grabbing opening line a ${nicheLabel} creator could post",
+    "niche_angle": "Specific content angle for ${nicheLabel} businesses or creators",
+    "hashtags": ["tag1", "tag2", "tag3"],
+    "confidence": "high" | "medium" | "low"
+  }
+]
+
+Return ONLY the raw JSON array. No markdown. No code blocks. No text before or after. Raw JSON only.`;
+}
+
+/** Niche phrase for Perplexity user prompt + normalizeTrendItem fallbacks (display copy, not cache key). */
+function getTrendingNicheForSlice(context, variant) {
+  if (variant === 'global') {
+    return 'creators and small businesses';
+  }
+  return context.niche || DEFAULT_NICHE;
+}
+
+function buildDashboardTrendingMessages(platform, context, variant) {
   const platformLabel = formatPlatformLabel(platform);
-  return {
-    role: 'system',
-    content: `You are a real-time social media trend analyst who tracks viral content formats and engagement patterns. Today is ${today}.
-
-Search for what is ACTUALLY trending on ${platformLabel} RIGHT NOW — content from the last 7 days only. Focus on:
-
-1. VIRAL CONTENT FORMATS — the specific production style (lip-sync + text overlay, talking head with B-roll, before/after transition, POV skit, GRWM, carousel with text, duet reaction, tutorial with hook, photo dump aesthetic, day-in-the-life montage)
-2. TRENDING AUDIO/SOUNDS — specific sounds being widely adopted by creators
-3. ENGAGEMENT PATTERNS — what the algorithm is currently rewarding (comment-bait, save-worthy educational content, share-triggering hot takes, watch-time hooks)
-
-For EACH trend, return:
-- "title": catchy name, 5 words max
-- "description": what the trend IS and what makes it distinctive, 2-3 sentences
-- "format_type": the specific content FORMAT (e.g., "lip-sync + text overlay", "talking head with B-roll cuts", "before/after transition reel", "POV skit")
-- "momentum": "rising" (early adoption, under ~20K uses) | "peaking" (mass adoption) | "steady" (established but still performing)
-- "why_its_working": ONE sentence explaining the algorithmic or psychological reason this format gets reach right now. Be specific — reference the platform mechanic (e.g., "Reels algorithm is boosting lip-sync content under 40K audio uses" or "Comment-bait format drives 3x engagement which triggers Explore placement")
-- "confidence": "high" if you found multiple recent creator examples | "medium" if based on limited signals
-- "category": "viral_moment" | "format_trend" | "audio_trend" | "engagement_pattern" | "platform_shift"
-
-STRICT RULES:
-- Return ONLY trends you found evidence of in the last 7 days
-- Return exactly 6 high-quality trends — do not return fewer unless you cannot find 6 verified trends
-- If a trend is older than 7 days, do NOT include it
-- Every description must reference what makes this trend DISTINCTIVE, not generic
-- NEVER fabricate trend names or post counts
-
-Return ONLY a JSON array. No other text, no markdown, no explanation.`,
-  };
+  const nicheLabel = getTrendingNicheForSlice(context, variant);
+  return [
+    { role: 'system', content: DASHBOARD_TRENDING_SYSTEM_PROMPT },
+    { role: 'user', content: buildDashboardTrendingUserPrompt(platformLabel, nicheLabel) },
+  ];
 }
 
 function brandDataFromTrendingContext(context) {
@@ -551,79 +620,12 @@ function brandDataFromTrendingContext(context) {
   };
 }
 
-function buildNicheSpecificTrendingMessages(platform, brandData, today) {
-  const {
-    niche,
-    subNiche,
-    targetAudience,
-    city,
-    tone,
-    creatorType,
-    industry,
-    growth_stage,
-  } = brandData;
-
-  const platformLabel = formatPlatformLabel(platform);
-  const nicheLabel = niche || 'your niche';
-  const medSpaExample = niche === 'Med Spa' || niche === 'Beauty'
-    || nicheLabel === 'Med Spa'
-    || nicheLabel === 'Beauty';
-
-  return [
-    {
-      role: 'system',
-      content: `You are a social media content strategist who specializes in the "${nicheLabel}" niche. Today is ${today}.
-
-You research what creators and brands in "${nicheLabel}" are posting on ${platformLabel} RIGHT NOW that is getting unusually high engagement. You understand this niche deeply — you know the audience, the pain points, the content styles that resonate, and the formats that convert.
-
-User profile:
-- Creator type: ${creatorType || 'content creator'}
-- Niche: ${nicheLabel}${subNiche ? ` (sub-niche: ${subNiche})` : ''}
-- Target audience: ${targetAudience || 'not specified'}
-- Brand voice/tone: ${tone || 'professional and approachable'}
-- Growth stage: ${growth_stage || 'building momentum'}
-${city ? `- Location: ${city}` : ''}
-${industry ? `- Industry: ${industry}` : ''}`,
-    },
-    {
-      role: 'user',
-      content: `Find 6 content trends specifically relevant to a ${creatorType || 'content creator'} in the "${nicheLabel}" niche on ${platformLabel} right now.
-
-For EACH trend, return:
-- "title": catchy name, 5 words max
-- "description": what it is and why it's resonating specifically in ${nicheLabel}, 2-3 sentences. Reference specific creator behaviors or audience reactions you found.
-- "format_type": the content FORMAT being used (e.g., "client transformation reel", "day-in-the-life", "myth-busting talking head", "satisfying process video", "testimonial compilation")
-- "niche_angle": ONE specific sentence explaining how a ${creatorType || 'creator'} in "${nicheLabel}" should adapt this. Be HYPER-SPECIFIC to "${nicheLabel}" — mention actual content scenarios, not generic advice. ${medSpaExample ? 'Example: "Med spas are filming satisfying extraction close-ups with ASMR audio, driving 4x saves vs standard posts."' : `Example for ${nicheLabel}: describe an actual content scenario a ${nicheLabel} creator would film.`}
-- "hook_starter": A scroll-stopping opening line (max 15 words) written in a ${tone || 'conversational'} tone for ${targetAudience || 'their target audience'}. This must be COPY-PASTE READY as the first line of a caption or text overlay on a Reel. Do NOT make it generic — it must clearly relate to "${nicheLabel}".
-- "why_its_working": ONE sentence explaining why this specific angle is performing well in ${nicheLabel} right now. Reference the audience behavior or platform mechanic.
-- "momentum": "rising" | "peaking" | "steady"
-- "confidence": "high" | "medium"
-
-STRICT RULES:
-- Every trend MUST be specific to "${nicheLabel}" — not general social media advice
-- hook_starter must be ready to copy and paste, not a template with brackets
-- Return exactly 6 high-quality niche trends — return fewer only if you cannot find 6 verified niche trends
-- If you cannot find real niche-specific trends, return fewer items rather than fabricating
-
-Return ONLY a JSON array. No other text.`,
-    },
-  ];
-}
-
-function buildPlatformWideTrendingMessages(platform, today) {
-  return [
-    getPlatformWideTrendingPrompt(platform, today),
-    {
-      role: 'user',
-      content: 'Return ONLY the JSON array. No markdown or commentary.',
-    },
-  ];
-}
-
-function mergeAndRankTrends(globalTrends, nicheTrends, platform) {
+function mergeAndRankTrends(globalTrends, nicheTrends, platform, context) {
+  const nicheGlobal = getTrendingNicheForSlice(context, 'global');
+  const nicheNiche = getTrendingNicheForSlice(context, 'niche');
   const tagged = [
-    ...ensureArray(globalTrends).map((t) => normalizeTrendItem(t, 'global', platform)),
-    ...ensureArray(nicheTrends).map((t) => normalizeTrendItem(t, 'niche', platform)),
+    ...ensureArray(globalTrends).map((t) => normalizeTrendItem(t, 'global', platform, false, null, nicheGlobal)),
+    ...ensureArray(nicheTrends).map((t) => normalizeTrendItem(t, 'niche', platform, false, null, nicheNiche)),
   ].filter(Boolean);
 
   const seen = new Set();
@@ -822,21 +824,35 @@ Exclude any tag you cannot verify exists with real active volume.`,
   ];
 }
 
+/**
+ * Dashboard widget calls must not send personalized, targetAudience, brandContext, etc.,
+ * so the proxy keeps user_id null on niche_content_cache and trends are shared per niche key.
+ */
 async function requestPerplexityWidgetData(type, platform, context, headers, options = {}, cacheKey, messages) {
   const MAX_RETRIES = 2;
+  const modelForLog = type === 'trending' ? MODEL_CONFIG_REF.dashboard_trending : MODEL_CONFIG_REF.quick_scan;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
+      if (type === 'trending') {
+        console.log('[Trending] Perplexity call firing', {
+          platform,
+          niche: context.cacheNiche,
+          model: modelForLog,
+        });
+      }
+
       const response = await retryFetch(
         PERPLEXITY_PROXY_URL,
         {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            model: 'sonar',
             temperature: 0.2,
             messages,
-            ...(options?.searchContextSize ? { search_context_size: options.searchContextSize } : {}),
+            ...(type !== 'trending' && options?.searchContextSize
+              ? { search_context_size: options.searchContextSize }
+              : {}),
             cache: {
               key: cacheKey,
               niche: context.cacheNiche,
@@ -903,19 +919,37 @@ function buildHashtagFallbackItems(platform) {
   }));
 }
 
-function normalizeTrendItem(item, trendType = 'global', platform = 'instagram', fromCache = false, generatedAt = null) {
+function normalizeTrendItem(
+  item,
+  trendType = 'global',
+  platform = 'instagram',
+  fromCache = false,
+  generatedAt = null,
+  nicheForFallback = 'your niche',
+) {
   const title = normalizeTextValue(item?.title || item?.topic || item?.name || 'Untitled Trend');
-  const description = normalizeTextValue(item?.summary || item?.description);
+  if (!title) return null;
+
+  const niche = nicheForFallback || 'your niche';
+  let description = normalizeTextValue(item?.summary || item?.description);
   const whyLine = normalizeTextValue(
-    item?.why_its_working || item?.why_it_matters || item?.why_trending || item?.algorithm_reason || ''
+    item?.why_its_working || item?.why_it_matters || item?.why_trending || item?.algorithm_reason || '',
   );
   const contentIdea = normalizeTextValue(item?.content_idea);
-  const hookStarter = normalizeTextValue(
-    item?.hook_starter || item?.hook || item?.content_idea || (Array.isArray(item?.content_ideas) ? item.content_ideas[0] : '') || (Array.isArray(item?.how_to_use) ? item.how_to_use[0] : '')
+  let hookStarter = normalizeTextValue(
+    item?.hook_starter
+      || item?.hook
+      || item?.content_idea
+      || (Array.isArray(item?.content_ideas) ? item.content_ideas[0] : '')
+      || (Array.isArray(item?.how_to_use) ? item.how_to_use[0] : ''),
   );
 
-  if (!title) return null;
-  if (!description && !whyLine && !hookStarter) return null;
+  if (!description) {
+    description = `${title} is gaining traction in the ${niche} space — this content angle could drive strong engagement for your audience right now.`;
+  }
+  if (!hookStarter) {
+    hookStarter = `Here's what ${niche} creators are posting about ${title}...`;
+  }
 
   const descFinal = description || whyLine || hookStarter;
   const platformLabel = formatPlatformLabel(item?.platform || platform);
@@ -923,6 +957,16 @@ function normalizeTrendItem(item, trendType = 'global', platform = 'instagram', 
   const angles = [];
   if (hookStarter) angles.push(hookStarter);
   if (contentIdea && contentIdea !== hookStarter) angles.push(contentIdea);
+
+  const confRaw = normalizeTextValue(item?.confidence).toLowerCase();
+  const confidence = confRaw === 'high' ? 'high' : confRaw === 'low' ? 'low' : 'medium';
+
+  const trendHashtags = ensureArray(item?.hashtags)
+    .map((h) => {
+      if (typeof h === 'string') return normalizeTextValue(h);
+      return normalizeTextValue(h?.tag || h?.hashtag || h?.term || h?.name || '');
+    })
+    .filter(Boolean);
 
   return {
     topic: title,
@@ -933,11 +977,12 @@ function normalizeTrendItem(item, trendType = 'global', platform = 'instagram', 
     relevant_platform: platformLabel,
     platform: normalizePlatformValue(platform),
     content_angles: angles.length ? angles : [],
+    hashtags: trendHashtags,
     format_type: item?.format_type || item?.format || item?.content_format || null,
     niche_angle: item?.niche_angle || item?.relevance_to_niche || item?.niche_relevance || null,
     hook_starter: hookStarter || null,
     why_its_working: whyLine || null,
-    confidence: normalizeTextValue(item?.confidence).toLowerCase() === 'high' ? 'high' : 'medium',
+    confidence,
     trend_type: item?.trend_type || trendType,
     category: item?.category || item?.type || 'viral_moment',
     from_cache: fromCache,
@@ -1050,10 +1095,11 @@ function buildFallbackAIInsights(context) {
 }
 
 async function fetchSingleTrendingSlice(variant, platform, context, headers, options, generatedDate) {
-  const today = generatedDate || getDashboardGeneratedDate();
-  const messages = variant === 'global'
-    ? buildPlatformWideTrendingMessages(platform, today)
-    : buildNicheSpecificTrendingMessages(platform, brandDataFromTrendingContext(context), today);
+  const messages = buildDashboardTrendingMessages(
+    platform,
+    context,
+    variant === 'global' ? 'global' : 'niche',
+  );
   const cacheKey = buildPerPlatformCacheKey(
     context,
     platform,
@@ -1063,14 +1109,18 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
   const forceRefresh = Boolean(options.forceRefreshTrending);
 
   if (!forceRefresh) {
-    const cachedResult = await getWarmPlatformCache(cacheKey, platform, 'trending');
-    if (cachedResult) {
+    const cachedResult = await getWarmPlatformCache(cacheKey, platform, 'trending', {
+      cacheNiche: context.cacheNiche,
+    });
+    if (cachedResult != null && cachedResult !== '') {
       const parsed = parseTrendingResponse(cachedResult);
-      return {
-        items: Array.isArray(parsed) ? parsed : [],
-        fromCache: true,
-        generatedAt: new Date().toISOString(),
-      };
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return {
+          items: parsed,
+          fromCache: true,
+          generatedAt: new Date().toISOString(),
+        };
+      }
     }
   }
 
@@ -1079,7 +1129,7 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
     platform,
     context,
     headers,
-    { ...options, searchContextSize: 'medium' },
+    options,
     cacheKey,
     messages,
   );
@@ -1092,6 +1142,11 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
   const perplexityResponse = payload?.structuredData ?? payload?.content ?? null;
   const parsedResult = parseTrendingResponse(perplexityResponse);
   const items = parsedResult?.length > 0 ? parsedResult : TRENDING_FALLBACK;
+  const itemCount = Array.isArray(items) ? items.length : 0;
+  const firstTitle = itemCount
+    ? String(items[0]?.title || items[0]?.topic || items[0]?.name || '').slice(0, 80)
+    : '';
+  console.log('[Trending] Perplexity response received', { platform, itemCount, firstTitle });
 
   return {
     items,
@@ -1102,6 +1157,7 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
 
 async function fetchMergedTrendingForPlatform(platform, context, headers, options, generatedDate) {
   const includeNiche = context.trendingMode === 'niche_specific';
+  const nicheGlobal = getTrendingNicheForSlice(context, 'global');
 
   try {
     const globalRes = await fetchSingleTrendingSlice('global', platform, context, headers, options, generatedDate);
@@ -1112,12 +1168,26 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
     }
 
     let mergedRaw = includeNiche
-      ? mergeAndRankTrends(globalRes.items, nicheRes.items, platform)
+      ? mergeAndRankTrends(globalRes.items, nicheRes.items, platform, context)
       : ensureArray(globalRes.items)
-        .map((item) => normalizeTrendItem(item, 'global', platform, globalRes.fromCache, globalRes.generatedAt))
+        .map((item) => normalizeTrendItem(
+          item,
+          'global',
+          platform,
+          globalRes.fromCache,
+          globalRes.generatedAt,
+          nicheGlobal,
+        ))
         .filter(Boolean);
 
     mergedRaw = await enrichTrendsWithGrokAdaptation(mergedRaw, context);
+
+    const realPre = mergedRaw.filter((x) => !x._isSampleTrend).length;
+    console.log('[Trending] Merge result', {
+      platform,
+      realCount: realPre,
+      sampleCount: mergedRaw.length - realPre,
+    });
 
     const fromCache = globalRes.fromCache && (!includeNiche || nicheRes.fromCache);
     const generatedAt = nicheRes.generatedAt || globalRes.generatedAt || new Date().toISOString();
@@ -1130,7 +1200,14 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
 
     if (items.length === 0) {
       const sample = TRENDING_SAMPLE_FALLBACK.map((raw) =>
-        normalizeTrendItem(raw, raw.trend_type || 'global', platform, false, generatedAt)
+        normalizeTrendItem(
+          raw,
+          raw.trend_type || 'global',
+          platform,
+          false,
+          generatedAt,
+          nicheGlobal,
+        ),
       ).filter(Boolean);
       return {
         items: sample,
@@ -1154,7 +1231,14 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
     if (previousDayCache?.payload) {
       const parsed = parseTrendingResponse(previousDayCache.payload);
       const merged = ensureArray(parsed)
-        .map((item) => normalizeTrendItem(item, 'global', platform, false, previousDayCache.generated_at))
+        .map((item) => normalizeTrendItem(
+          item,
+          'global',
+          platform,
+          false,
+          previousDayCache.generated_at,
+          nicheGlobal,
+        ))
         .filter(Boolean);
       if (merged.length) {
         return {
@@ -1167,7 +1251,14 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
       }
     }
     const sample = TRENDING_SAMPLE_FALLBACK.map((raw) =>
-      normalizeTrendItem(raw, raw.trend_type || 'global', platform, false, null)
+      normalizeTrendItem(
+        raw,
+        raw.trend_type || 'global',
+        platform,
+        false,
+        null,
+        context.niche || DEFAULT_NICHE,
+      ),
     ).filter(Boolean);
     return {
       items: sample,
@@ -1192,7 +1283,9 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
 
   try {
     if (!forceRefresh) {
-      const cachedResult = await getWarmPlatformCache(cacheKey, platform, type);
+      const cachedResult = await getWarmPlatformCache(cacheKey, platform, type, {
+        cacheNiche: context.cacheNiche,
+      });
       if (cachedResult) {
         const cachedItems = ensureArray(cachedResult);
         return {
@@ -1493,7 +1586,9 @@ export async function fetchDashboardTrendingHashtags({
 
   try {
     if (!forceRefresh) {
-      const cachedPayload = await getWarmPlatformCache(cacheKey, platform, 'trending_hashtags_widget');
+      const cachedPayload = await getWarmPlatformCache(cacheKey, platform, 'trending_hashtags_widget', {
+        cacheNiche: cacheContext.cacheNiche,
+      });
       if (cachedPayload) {
         const arr = Array.isArray(cachedPayload) ? cachedPayload : ensureArray(cachedPayload);
         const generatedAt = new Date().toISOString();
@@ -1578,7 +1673,7 @@ export async function fetchDashboardForYouHashtags({
   const headers = await getAuthHeaders();
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const nicheKey = normalizeNiche(personalization.niche) || 'general';
-  const cacheKey = `dashboard_for_you__${userId}__${generatedDate}__${nicheKey}__${platform}__foryou_v2`;
+  const cacheKey = buildDashboardForYouCacheKey(userId, generatedDate, personalization.niche, platform);
 
   try {
     const response = await retryFetch(
@@ -1771,7 +1866,21 @@ async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: ca
   return data || null; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
+function hasPersistableTrendingTopics(trendingTopics) {
+  const topics = ensureArray(trendingTopics);
+  if (!topics.length) return false;
+  const sampleCount = topics.filter((t) => t?._isSampleTrend).length;
+  if (sampleCount === topics.length) return false;
+  if (sampleCount > topics.length / 2) return false;
+  return topics.some((t) => t && !t._isSampleTrend);
+}
+
 async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { // HUTTLE AI: cache fix
+  if (!hasPersistableTrendingTopics(dashboardData.trending_topics)) {
+    console.warn('[DashCache] Skipped daily cache write — all samples', { userId, date: generatedDate });
+    return false;
+  }
+
   const dashboardMetadata = { // HUTTLE AI: cache fix
     selected_platforms: dashboardData.selected_platforms, // HUTTLE AI: cache fix
     trending_fallback_message: dashboardData.trending_fallback_message, // HUTTLE AI: cache fix
@@ -2011,7 +2120,18 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
       hashtagsFromPreviousDay, // HUTTLE AI: cache fix
     }); // HUTTLE AI: cache fix
 
-    await writeDailyDashboardCache(userId, generatedDate, dashboardData); // HUTTLE AI: cache fix
+    const sampleItems = ensureArray(dashboardData.trending_topics).filter((t) => t._isSampleTrend).length;
+    console.log('[Trending] Final payload', {
+      totalItems: dashboardData.trending_topics.length,
+      sampleItems,
+      willWrite: hasPersistableTrendingTopics(dashboardData.trending_topics),
+    });
+
+    if (hasPersistableTrendingTopics(dashboardData.trending_topics)) {
+      await writeDailyDashboardCache(userId, generatedDate, dashboardData); // HUTTLE AI: cache fix
+    } else {
+      console.warn('[Dashboard] Skipping daily_dashboard_cache write — no non-sample trending topics (will retry on next load).');
+    }
 
     return { // HUTTLE AI: cache fix
       success: true, // HUTTLE AI: cache fix

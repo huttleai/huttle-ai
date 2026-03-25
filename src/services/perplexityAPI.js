@@ -60,7 +60,8 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     body: JSON.stringify({
       messages,
       temperature,
-      model: options.model || 'sonar',
+      ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
+      ...(options.model ? { model: options.model } : {}),
       cache: options.cache,
       requireRealtime: options.requireRealtime,
       personalized: options.personalized,
@@ -1191,7 +1192,7 @@ Requirements:
 - Return JSON only with no markdown, no commentary, and no extra keys`
       }
     ], 0.2, {
-      model: 'sonar-pro',
+      perplexityFeature: 'deep_dive',
       cache: {
         key: cacheKey,
         niche: normalizeNiche(niche),
@@ -1257,8 +1258,6 @@ export async function getTrendContextForPrediction(platform, brandData = null) {
     return { success: false, error: error.message };
   }
 }
-
-const FULL_POST_ONLINE_HASHTAG_MODEL = 'llama-3.1-sonar-small-128k-online';
 
 function dedupeHashtagRows(rows) {
   const seen = new Set();
@@ -1337,7 +1336,7 @@ Output rules:
 
 ${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively different set than any generic default list.` : ''}`;
 
-  const callModel = async (modelId) =>
+  const callModel = async (perplexityFeature) =>
     callPerplexityAPI(
       [
         { role: 'system', content: system.trim() },
@@ -1345,7 +1344,7 @@ ${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively differe
       ],
       0.25,
       {
-        model: modelId,
+        perplexityFeature,
         requireRealtime: true,
         webSearchOptions: { search_context_size: 'high' },
         personalized: Boolean(brandData?.targetAudience || brandContext),
@@ -1357,12 +1356,12 @@ ${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively differe
   try {
     let data;
     try {
-      data = await callModel(FULL_POST_ONLINE_HASHTAG_MODEL);
+      data = await callModel('audience_insights');
     } catch (e) {
       if (import.meta.env.DEV) {
         console.warn('[generateFullPostHashtagsGrounded] online model failed, falling back to sonar', e?.message);
       }
-      data = await callModel('sonar');
+      data = await callModel('quick_scan');
     }
 
     const parsed = Array.isArray(data.structuredData)

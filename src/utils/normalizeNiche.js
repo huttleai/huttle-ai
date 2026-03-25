@@ -1,10 +1,164 @@
-const NICHE_VARIANTS = {
-  med_spa: ['med spa', 'medspa', 'medical spa'],
-  fitness_coach: ['fitness coach', 'fitness coaching', 'personal trainer'],
-  small_business: ['small business'],
-  content_creator: ['solo content creator', 'content creator', 'solopreneur'],
+const ALIASES = {
+  // Med Spa
+  med_spa: [
+    'medspa', 'medical_spa', 'medical spa', 'aesthetics_spa',
+    'aesthetics', 'med spa', 'medi_spa', 'medi spa',
+    'aesthetic clinic', 'aesthetic_clinic',
+  ],
+  // Fitness
+  fitness: [
+    'fitness_coach', 'fitness coach', 'personal_trainer',
+    'personal trainer', 'personal_training', 'gym',
+    'fitness_coaching', 'health_coach', 'health coach',
+    'crossfit', 'yoga', 'pilates', 'bootcamp',
+  ],
+  // Real Estate
+  real_estate: [
+    'realtor', 'real estate', 'real_estate_agent',
+    'real estate agent', 'property', 'realty',
+    'real_estate_investor', 'real estate investor', 'mortgage',
+  ],
+  // Restaurant / Food
+  restaurant: [
+    'food', 'cafe', 'bakery', 'coffee_shop', 'coffee shop',
+    'eatery', 'bar', 'bistro', 'food_blogger', 'food blogger',
+    'catering', 'food truck', 'food_truck',
+  ],
+  // Ecommerce
+  ecommerce: [
+    'online_store', 'online store', 'online_shop', 'online shop',
+    'dropshipping', 'etsy', 'shopify', 'product_business',
+    'product business', 'amazon seller', 'amazon_seller',
+  ],
+  // Photography / Videography
+  photography: [
+    'photographer', 'photo', 'videographer', 'videography',
+    'content_photography', 'brand_photography', 'wedding photographer',
+    'wedding_photographer', 'portrait photographer',
+  ],
+  // Coaching / Consulting
+  coaching: [
+    'life_coach', 'life coach', 'business_coach', 'business coach',
+    'coach', 'consultant', 'consulting', 'executive_coach',
+    'executive coach', 'mindset coach', 'mindset_coach',
+  ],
+  // Fashion
+  fashion: [
+    'style', 'clothing', 'boutique', 'streetwear', 'apparel',
+    'fashion_blogger', 'fashion blogger', 'stylist',
+    'personal stylist', 'personal_stylist',
+  ],
+  // Beauty
+  beauty: [
+    'makeup', 'skincare', 'hair', 'nail', 'lash', 'brow',
+    'beauty_salon', 'beauty salon', 'hair_salon', 'hair salon',
+    'esthetician', 'cosmetologist', 'nail tech', 'nail_tech',
+    'lash tech', 'lash_tech', 'microblading',
+  ],
+  // Health / Wellness
+  health: [
+    'wellness', 'nutrition', 'nutritionist', 'dietitian',
+    'holistic', 'naturopath', 'mental_health', 'therapist',
+    'chiropractor', 'acupuncture', 'functional medicine',
+  ],
+  // Solo Creator / Personal Brand
+  // IMPORTANT: Many Huttle users are creators without a
+  // specific business niche — they just want to grow on social.
+  creator: [
+    'content_creator', 'content creator', 'influencer',
+    'ugc', 'ugc_creator', 'ugc creator', 'social_media',
+    'social media', 'social_media_creator', 'social media creator',
+    'viral', 'grow_my_following', 'grow my following',
+    'personal_brand', 'personal brand', 'brand',
+    'lifestyle', 'lifestyle_blogger', 'lifestyle blogger',
+    'blogger', 'vlogger', 'tiktoker', 'instagrammer',
+    'youtube', 'youtuber', 'podcaster', 'podcast',
+  ],
 };
+
 const CACHE_KEY_DELIMITER = '__';
+
+export function normalizeNiche(rawInput) {
+  if (!rawInput || typeof rawInput !== 'string') {
+    console.log('[NicheCache] Key lookup', {
+      rawNiche: rawInput,
+      normalizedKey: 'general',
+      aliasMatch: false,
+    });
+    return 'general';
+  }
+
+  // Step 1: clean the raw input
+  const cleaned = rawInput
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s_]/g, '') // strip special chars except underscore
+    .replace(/\s+/g, '_') // spaces → underscores
+    .replace(/_+/g, '_') // collapse multiple underscores
+    .replace(/^_|_$/g, '') // strip leading/trailing underscores
+    .slice(0, 40); // cap length for DB safety
+
+  if (!cleaned) {
+    console.log('[NicheCache] Key lookup', {
+      rawNiche: rawInput,
+      normalizedKey: 'general',
+      aliasMatch: false,
+    });
+    return 'general';
+  }
+
+  // Step 2: check ALIASES (Layer 1)
+  for (const [canonical, aliases] of Object.entries(ALIASES)) {
+    const normalizedAliases = aliases.map((a) => a
+      .toLowerCase()
+      .replace(/[^a-z0-9\s_]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_'));
+    if (cleaned === canonical || normalizedAliases.includes(cleaned)) {
+      console.log('[NicheCache] Key lookup', {
+        rawNiche: rawInput,
+        normalizedKey: canonical,
+        aliasMatch: true,
+      });
+      return canonical;
+    }
+  }
+
+  // Step 3: algorithmic fallback (Layer 2)
+  // Works for ANY niche — "axe throwing venue" → "axe_throwing_venue"
+  console.log('[NicheCache] Key lookup', {
+    rawNiche: rawInput,
+    normalizedKey: cleaned,
+    aliasMatch: false,
+  });
+  return cleaned;
+}
+
+// Reverse lookup for display in UI
+export function normalizeNicheForDisplay(key) {
+  if (!key) return '';
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/*
+NORMALIZATION CONTRACT — edge case reference:
+normalizeNiche('Med Spa')                  → 'med_spa'
+normalizeNiche('MedSpa')                   → 'med_spa'
+normalizeNiche('medical spa')              → 'med_spa'
+normalizeNiche('UGC Creator')              → 'creator'
+normalizeNiche('content creator')          → 'creator'
+normalizeNiche('grow my following')        → 'creator'
+normalizeNiche('influencer')               → 'creator'
+normalizeNiche('vintage motorcycle shop')  → 'vintage_motorcycle_shop'
+normalizeNiche('axe throwing venue')       → 'axe_throwing_venue'
+normalizeNiche('Tattoo Artist')            → 'tattoo_artist'
+normalizeNiche('Wedding Planner')          → 'wedding_planner'
+normalizeNiche('Law Firm')                 → 'law_firm'
+normalizeNiche(null)                       → 'general'
+normalizeNiche('')                         → 'general'
+*/
 
 function resolveCacheKeyInput(input) {
   return input.length === 1 && Array.isArray(input[0]) ? input[0] : input;
@@ -105,22 +259,23 @@ function runCacheKeyFormatAssertions() {
   console.assert(
     testKey === 'med_spa__instagram__atlanta__2026-03-11__trending',
     'Cache key format is wrong:',
-    testKey
+    testKey,
   );
   console.assert(
     !testKey.includes(':'),
     'Cache key still contains colons!',
-    testKey
+    testKey,
   );
 }
 
-export function normalizeNiche(raw) {
-  if (!raw || typeof raw !== 'string') return '';
-  const cleaned = raw.toLowerCase().trim();
-  for (const [normalized, variants] of Object.entries(NICHE_VARIANTS)) {
-    if (variants.includes(cleaned)) return normalized;
-  }
-  return cleaned.replace(/\s+/g, '_');
+/**
+ * Shared niche_content_cache key segments for dashboard "For you" hashtags (user-scoped).
+ * Niche segment always passes through {@link normalizeNiche}.
+ */
+export function buildDashboardForYouCacheKey(userId, generatedDate, rawNiche, platform) {
+  const nicheKey = normalizeNiche(rawNiche) || 'general';
+  const platformKey = String(platform || 'instagram').toLowerCase();
+  return `dashboard_for_you__${userId}__${generatedDate}__${nicheKey}__${platformKey}__foryou_v2`;
 }
 
 export function buildCacheKey(...input) {

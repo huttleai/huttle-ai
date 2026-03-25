@@ -8,9 +8,10 @@
  * - PERPLEXITY_API_KEY: Your Perplexity API key (NOT prefixed with VITE_)
  *
  * DEV NOTE — common failures:
- * - 401 from Perplexity: invalid PERPLEXITY_API_KEY → set in .env (server loads via dotenv in local-api-server).
+ * - 401 from Perplexity: invalid PERPLEXITY_API_KEY → set in .env (see .env.example; server loads via dotenv in local-api-server).
  * - 401 from this proxy: Supabase Bearer token required from the logged-in app.
  * - 400 invalid model: body.model must be one of ALLOWED_MODELS (sonar, sonar-pro, llama-3.1-sonar-small-128k-online).
+ * - Dashboard trending with cache.key: empty JSON arrays are not written to niche_content_cache (use dashboard fallback instead).
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -23,14 +24,114 @@ const PERPLEXITY_API_KEY =
   process.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
-const DEFAULT_MODEL = 'sonar';
-const ALLOWED_MODELS = new Set([
-  'sonar',
-  'sonar-pro',
-  /** Online / search-grounded small model — Full Post Builder hashtags */
-  'llama-3.1-sonar-small-128k-online',
-]);
+/** Perplexity chat models — resolve only via {@link resolveModelFromRequest}; do not hardcode elsewhere in this file. */
+const MODEL_CONFIG = {
+  dashboard_trending: 'sonar',
+  quick_scan: 'sonar',
+  deep_dive: 'sonar-pro',
+  audience_insights: 'llama-3.1-sonar-small-128k-online',
+  cta_suggester: 'llama-3.1-sonar-small-128k-online',
+};
+
+const ALLOWED_MODELS = new Set(Object.values(MODEL_CONFIG));
 const ALLOWED_SEARCH_CONTEXT_SIZES = new Set(['low', 'medium', 'high']);
+
+function isDashboardTrendingWidgetCache(body = {}) {
+  const key = body.cache?.key;
+  return body.cache?.type === 'trending'
+    && typeof key === 'string'
+    && key.includes('trending_v2');
+}
+
+function resolvePerplexityFeatureKey(body = {}) {
+  if (isDashboardTrendingWidgetCache(body)) return 'dashboard_trending';
+
+  const cacheType = body.cache?.type;
+  if (cacheType === 'niche_intel') return 'deep_dive';
+  if (cacheType === 'hashtags' || cacheType === 'trending_hashtags_widget') return 'quick_scan';
+  if (cacheType === 'audience_insights') return 'audience_insights';
+  if (cacheType === 'cta_suggester') return 'cta_suggester';
+
+  const pf = body.perplexityFeature;
+  if (pf && MODEL_CONFIG[pf]) return pf;
+
+  if (cacheType === 'trending') return 'quick_scan';
+  if (typeof cacheType === 'string' && cacheType.length > 0) return 'quick_scan';
+
+  return 'quick_scan';
+}
+
+function resolveModelFromRequest(body = {}) {
+  const feature = resolvePerplexityFeatureKey(body);
+  return MODEL_CONFIG[feature] || MODEL_CONFIG.quick_scan;
+}
+
+/**
+ * @param {object} rawResponse - Parsed Perplexity chat/completions JSON
+ * @returns {object[]}
+ */
+function extractTrendsFromPerplexityResponse(rawResponse) {
+  const content = rawResponse?.choices?.[0]?.message?.content;
+  if (!content) return [];
+
+  const tryExtractFromParsed = (parsed) => {
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (parsed && typeof parsed === 'object') {
+      for (const key of ['trends', 'topics', 'trending', 'results', 'items', 'data']) {
+        if (Array.isArray(parsed[key]) && parsed[key].length > 0) return parsed[key];
+      }
+    }
+    return null;
+  };
+
+  try {
+    const parsed = JSON.parse(content);
+    const fromDirect = tryExtractFromParsed(parsed);
+    if (fromDirect) return fromDirect;
+  } catch {
+    // continue to fenced / bracket extraction
+  }
+
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    try {
+      const inner = JSON.parse(jsonMatch[1].trim());
+      const fromFence = tryExtractFromParsed(inner);
+      if (fromFence) return fromFence;
+    } catch {
+      // continue
+    }
+  }
+
+  const arrayMatch = content.match(/\[[\s\S]*?\]/);
+  if (arrayMatch) {
+    try {
+      const arr = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(arr) && arr.length > 0) return arr;
+    } catch {
+      // continue
+    }
+  }
+
+  console.error('[Perplexity] Could not extract trends from response', {
+    contentSnippet: content?.slice(0, 200),
+  });
+  return [];
+}
+
+function trendingPayloadHasValidTitles(items) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.some((item) => {
+    const t = String(item?.title || item?.topic || item?.name || '').trim();
+    return Boolean(t);
+  });
+}
+
+function validateTrendingCacheWritePayload(cachePayload) {
+  return Array.isArray(cachePayload)
+    && cachePayload.length > 0
+    && trendingPayloadHasValidTitles(cachePayload);
+}
 
 // Initialize Supabase for auth verification
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -181,6 +282,21 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
   if (!cacheConfig?.key || cachePayload == null) return;
   if (!supabase) {
     console.error('[Cache Write FAILED] Missing service-role Supabase client', cacheConfig.key);
+    return;
+  }
+
+  const feature = cacheConfig.type || 'trending';
+  const isDashTrending = cacheConfig.type === 'trending'
+    && typeof cacheConfig.key === 'string'
+    && cacheConfig.key.includes('trending_v2');
+  if (isDashTrending && !validateTrendingCacheWritePayload(cachePayload)) {
+    const len = Array.isArray(cachePayload) ? cachePayload.length : 0;
+    console.warn('[TrendCache] Cache write skipped — invalid payload', {
+      niche: cacheConfig.niche,
+      platform: cacheConfig.platform,
+      feature,
+      itemCount: len,
+    });
     return;
   }
 
@@ -541,7 +657,7 @@ export default async function handler(req, res) {
     }
 
     // Extract request parameters
-    const { messages, temperature = 0.2, cache, model, web_search_options: webSearchOptions } = req.body;
+    const { messages, temperature = 0.2, cache, web_search_options: webSearchOptions } = req.body;
     const cacheAccess = buildCacheAccessContext(req.body, userId);
 
     if (!messages || !Array.isArray(messages)) {
@@ -565,15 +681,22 @@ export default async function handler(req, res) {
       }
     }
 
-    const safeModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
+    const featureKey = resolvePerplexityFeatureKey(req.body);
+    const safeModel = resolveModelFromRequest(req.body);
+
     const bodySearchSize = req.body?.search_context_size;
     const requestedSearchContext = ALLOWED_SEARCH_CONTEXT_SIZES.has(bodySearchSize)
       ? bodySearchSize
       : (ALLOWED_SEARCH_CONTEXT_SIZES.has(webSearchOptions?.search_context_size)
         ? webSearchOptions.search_context_size
         : null);
-    const safeSearchContextSize = requestedSearchContext
+
+    let safeSearchContextSize = requestedSearchContext
       || (cache?.type === 'niche_intel' ? 'high' : 'low');
+
+    if (featureKey === 'dashboard_trending') {
+      safeSearchContextSize = 'high';
+    }
 
     // Validate temperature range
     const safeTemperature = Math.min(Math.max(Number(temperature) || 0.2, 0), 2);
@@ -594,20 +717,35 @@ export default async function handler(req, res) {
     // Forward request to Perplexity API
     const normalizedMessages = normalizeMessagesForUpstream(messages);
     devAiProxyLog('perplexity → Perplexity request', { model: safeModel, messageCount: normalizedMessages.length });
+
+    console.log('[Perplexity] Request', {
+      feature: featureKey,
+      model: safeModel,
+      niche: cache?.niche,
+      platform: cache?.platform,
+    });
+
+    const perplexityPayload = {
+      model: safeModel,
+      messages: normalizedMessages,
+      temperature: safeTemperature,
+      web_search_options: {
+        search_context_size: safeSearchContextSize,
+      },
+    };
+
+    if (featureKey === 'dashboard_trending') {
+      perplexityPayload.search_recency_filter = 'week';
+      perplexityPayload.return_citations = false;
+    }
+
     const response = await fetch(PERPLEXITY_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
       },
-      body: JSON.stringify({
-        model: safeModel,
-        messages: normalizedMessages,
-        temperature: safeTemperature,
-        web_search_options: {
-          search_context_size: safeSearchContextSize
-        }
-      })
+      body: JSON.stringify(perplexityPayload),
     });
 
     devAiProxyLog('perplexity ← Perplexity response', { status: response.status, ok: response.ok });
@@ -640,16 +778,52 @@ export default async function handler(req, res) {
     }
 
     const content = data.choices?.[0]?.message?.content || '';
-    let structuredData = cache?.key ? parseStructuredJson(content) : null;
+    console.log('[Perplexity] Response status', {
+      status: response.status,
+      contentLength: content.length,
+    });
+
+    let structuredData = null;
+    if (cache?.key && isDashboardTrendingWidgetCache(req.body)) {
+      structuredData = extractTrendsFromPerplexityResponse(data);
+      if (!Array.isArray(structuredData) || structuredData.length === 0) {
+        const fallbackParsed = parseStructuredJson(content);
+        if (Array.isArray(fallbackParsed) && fallbackParsed.length > 0) {
+          structuredData = fallbackParsed;
+        } else if (fallbackParsed && typeof fallbackParsed === 'object') {
+          const keys = ['trends', 'topics', 'trending', 'results', 'data', 'items'];
+          for (const key of keys) {
+            if (Array.isArray(fallbackParsed[key]) && fallbackParsed[key].length > 0) {
+              structuredData = fallbackParsed[key];
+              break;
+            }
+          }
+        }
+        if (!Array.isArray(structuredData) || structuredData.length === 0) {
+          console.error('[Perplexity] Parse failed', {
+            error: 'empty_or_invalid_trending_array',
+            rawSnippet: content?.slice(0, 100),
+          });
+          structuredData = null;
+        }
+      }
+    } else if (cache?.key) {
+      structuredData = parseStructuredJson(content);
+    }
 
     if ((cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget') && Array.isArray(structuredData)) {
       structuredData = normalizeDashboardHashtagPayload(structuredData, cache);
     }
 
+    const dashboardArrayPayloadRequired =
+      cache?.type === 'hashtags'
+      || cache?.type === 'trending_hashtags_widget'
+      || (cache?.type === 'trending' && isDashboardTrendingWidgetCache(req.body));
+
     if (
       cache?.key
       && !requireRealtime
-      && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')
+      && dashboardArrayPayloadRequired
       && !Array.isArray(structuredData)
     ) {
       logError('perplexity.unparseable_dashboard_payload', { cacheKey: cache.key });
@@ -661,9 +835,37 @@ export default async function handler(req, res) {
       return respondWithDashboardFallback(res, cache, 200);
     }
 
+    if (
+      !requireRealtime
+      && isDashboardTrendingWidgetCache(req.body)
+      && Array.isArray(structuredData)
+      && structuredData.length === 0
+    ) {
+      logError('perplexity.empty_dashboard_trending_payload', { cacheKey: cache.key });
+      return respondWithDashboardFallback(res, cache, 200);
+    }
+
     const cachePayload = structuredData ?? content;
 
-    if (cache?.key && cachePayload) {
+    let shouldPersistCache =
+      cache?.key
+      && cachePayload != null
+      && cachePayload !== ''
+      && (!Array.isArray(cachePayload) || cachePayload.length > 0);
+
+    if (isDashboardTrendingWidgetCache(req.body) && Array.isArray(cachePayload)) {
+      shouldPersistCache = validateTrendingCacheWritePayload(cachePayload);
+      if (!shouldPersistCache) {
+        console.warn('[TrendCache] Cache write skipped — invalid payload', {
+          niche: cache.niche,
+          platform: cache.platform,
+          feature: cache.type || 'trending',
+          itemCount: cachePayload.length,
+        });
+      }
+    }
+
+    if (shouldPersistCache) {
       await setCachedPerplexityResult(cache, cachePayload, cacheAccess);
     }
     

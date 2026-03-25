@@ -54,6 +54,22 @@ import {
 import { formatRelativeTime } from '../utils/formatRelativeTime';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
+const TRENDING_FRESH_MS = 4 * 60 * 60 * 1000;
+
+/** 'loading' | 'live' | 'stale' | 'fallback' | 'retrying' — derived from payload, not padded display list. */
+function computeTrendingStatusFromData(data) {
+  if (!data) return 'fallback';
+  const topics = Array.isArray(data.trending_topics) ? data.trending_topics : [];
+  if (topics.length === 0) return 'fallback';
+  const hasReal = topics.some((t) => t && !t._isSampleTrend);
+  if (!hasReal) return 'fallback';
+  const ts = data.created_at;
+  if (!ts) return 'stale';
+  const t = new Date(ts).getTime();
+  if (Number.isNaN(t)) return 'stale';
+  return Date.now() - t <= TRENDING_FRESH_MS ? 'live' : 'stale';
+}
+
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
   visible: (i) => ({
@@ -353,6 +369,7 @@ export default function Dashboard() {
   const forYouRequestKeyRef = useRef('');
   const [trendingTabHashtags, setTrendingTabHashtags] = useState(null);
   const [trendingTabLoading, setTrendingTabLoading] = useState(false);
+  const [trendingStatus, setTrendingStatus] = useState('loading');
   const trendingRequestKeyRef = useRef('');
   const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
@@ -400,6 +417,7 @@ export default function Dashboard() {
     setDashboardData(nextDashboardData); // HUTTLE AI: cache fix
     setDashboardAlerts(Array.isArray(nextDashboardData.daily_alerts) ? nextDashboardData.daily_alerts : []); // HUTTLE AI: cache fix
     setDashboardError(''); // HUTTLE AI: cache fix
+    setTrendingStatus(computeTrendingStatusFromData(nextDashboardData));
     setDashboardSnapshot(user.id, { generatedDate, data: nextDashboardData }); // HUTTLE AI: cache fix
     if (Array.isArray(nextDashboardData.trending_topics)) {
       setCachedTrends(nextDashboardData.trending_topics);
@@ -414,10 +432,15 @@ export default function Dashboard() {
     activeDashboardRequestRef.current = requestId; // HUTTLE AI: cache fix
 
     if (forceRefresh) { // HUTTLE AI: cache fix
+      setTrendingStatus('retrying');
       clearDashboardSnapshot(user.id); // HUTTLE AI: cache fix
       const deleteResult = await deleteDashboardCache(user.id); // HUTTLE AI: cache fix
       if (!deleteResult.success) { // HUTTLE AI: cache fix
-        console.warn('[Dashboard] Could not clear daily dashboard cache before refresh:', deleteResult.errorMessage); // HUTTLE AI: cache fix
+        console.error('[Dashboard] Daily dashboard cache delete failed before refresh:', deleteResult.errorMessage);
+        setTrendingStatus('fallback');
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        return { success: false, errorType: deleteResult.errorType, errorMessage: deleteResult.errorMessage };
       } // HUTTLE AI: cache fix
     } else { // HUTTLE AI: cache fix
       const memorySnapshot = getDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
@@ -450,6 +473,7 @@ export default function Dashboard() {
 
       if (!cachedResult.success && cachedResult.errorType === 'auth_error') { // HUTTLE AI: cache fix
         setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+        setTrendingStatus('fallback');
         return cachedResult; // HUTTLE AI: cache fix
       } // HUTTLE AI: cache fix
     } // HUTTLE AI: cache fix
@@ -457,6 +481,9 @@ export default function Dashboard() {
     setDashboardError(''); // HUTTLE AI: cache fix
     setIsDashboardLoading(true); // HUTTLE AI: cache fix
     setIsAlertsLoading(true); // HUTTLE AI: cache fix
+    if (!forceRefresh) {
+      setTrendingStatus('loading');
+    }
 
     try { // HUTTLE AI: cache fix
       const result = await generateDashboardData(user.id, brandProfileRef.current, { forceRefresh, generatedDate, skipCacheLookup: true }); // HUTTLE AI: cache fix
@@ -471,10 +498,12 @@ export default function Dashboard() {
       } // HUTTLE AI: cache fix
 
       setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+      setTrendingStatus('fallback');
       return result; // HUTTLE AI: cache fix
     } catch (error) { // HUTTLE AI: cache fix
       console.error('[Dashboard] Failed to load daily dashboard:', error); // HUTTLE AI: cache fix
       setDashboardError('Unable to load your daily briefing right now. Please try again.'); // HUTTLE AI: cache fix
+      setTrendingStatus('fallback');
       return { success: false, error }; // HUTTLE AI: cache fix
     } finally { // HUTTLE AI: cache fix
       if (activeDashboardRequestRef.current === requestId) { // HUTTLE AI: cache fix
@@ -562,11 +591,27 @@ export default function Dashboard() {
   }, [dashboardData]);
 
   const trendWidgetTimestamp = useMemo(() => {
+    if (trendingStatus !== 'live' && trendingStatus !== 'stale') return '';
     const ts = dashboardData?.created_at;
-    if (isDashboardLoading) return 'Generating fresh data...';
     if (!ts) return '';
+    if (trendingStatus === 'stale') {
+      const diffSec = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+      const hours = Math.floor(diffSec / 3600);
+      if (hours < 1) return `Last updated ${formatRelativeTime(ts)}`;
+      return hours === 1 ? 'Last updated 1 hour ago' : `Last updated ${hours} hours ago`;
+    }
     return `Updated ${formatRelativeTime(ts)}`;
-  }, [dashboardData?.created_at, isDashboardLoading]);
+  }, [dashboardData?.created_at, trendingStatus]);
+
+  const trendingBannerText = useMemo(() => {
+    if (trendingStatus === 'fallback') {
+      return 'Live trend data is temporarily unavailable. Showing sample content ideas while we retry.';
+    }
+    if (trendingStatus === 'loading' || trendingStatus === 'retrying') {
+      return 'Trends are refreshing — check back in a few minutes.';
+    }
+    return '';
+  }, [trendingStatus]);
   const hasNicheConfigured = Boolean(normalizedNiche || normalizedIndustry);
   const hashtagPersonalization = useMemo(
     () => getHashtagPersonalizationContext(brandProfile),
@@ -646,6 +691,7 @@ export default function Dashboard() {
     setDashboardError(''); // HUTTLE AI: cache fix
     setIsDashboardLoading(false); // HUTTLE AI: cache fix
     setIsAlertsLoading(false); // HUTTLE AI: cache fix
+    setTrendingStatus('loading');
     setDashboardDayKey(getDashboardGeneratedDate());
   }, [user?.id]); // HUTTLE AI: cache fix
 
@@ -1140,6 +1186,11 @@ export default function Dashboard() {
                           ? `Hot topics in ${normalizedNiche || normalizedIndustry}`
                           : 'General trends across platforms'}
                     </p>
+                    {Boolean(trendingBannerText) && (
+                      <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                        {trendingBannerText}
+                      </p>
+                    )}
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500">
                       <span>{trendWidgetTimestamp}</span>
                       <span
