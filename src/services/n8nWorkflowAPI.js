@@ -499,7 +499,7 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
  * @param {string} params.topic - Content topic
  * @param {string} params.voiceContext - Voice context (Personal Brand / Business Authority)
  * @param {Object} [params.brandProfile] - Full brand profile
- * @returns {Promise<Object>} Viral blueprint or fallback indicator
+ * @returns {Promise<Object>} Ignite Engine brief payload or fallback indicator
  */
 export async function generateIgniteEngine({ platform, postType, topic, voiceContext, brandProfile }) { // HUTTLE AI: updated 3
   // Check if workflow is configured

@@ -32,8 +32,8 @@ export const CONTENT_TYPE_CONFIG = {
     accentClass: 'border-emerald-400',
   },
   blueprint: {
-    label: 'Blueprints',
-    singular: 'Blueprint',
+    label: 'Ignite Engine',
+    singular: 'Ignite Engine',
     badgeClass: 'bg-rose-50 text-rose-700 border border-rose-100',
     accentClass: 'border-rose-400',
   },
@@ -71,9 +71,21 @@ export const CONTENT_TYPE_FILTERS = [
   { id: 'hashtag', label: 'Hashtags' },
   { id: 'cta', label: 'CTAs' },
   { id: 'full_post', label: 'Full Posts' },
-  { id: 'blueprint', label: 'Blueprints' },
+  { id: 'blueprint', label: 'Ignite Engine' },
   { id: 'remix', label: 'Remixes' },
 ];
+
+/** Dev-only collection names hidden from the Content Vault UI (trimmed, case-insensitive). */
+const HIDDEN_VAULT_COLLECTION_NAMES_LOWER = new Set(['smoke test collection']);
+
+/**
+ * @param {string} [name]
+ * @returns {boolean}
+ */
+export function isHiddenVaultCollectionName(name) {
+  const normalized = String(name || '').trim().toLowerCase();
+  return HIDDEN_VAULT_COLLECTION_NAMES_LOWER.has(normalized);
+}
 
 export const PLATFORM_OPTIONS = [
   { id: 'all', label: 'All Platforms' },
@@ -136,8 +148,15 @@ export function inferContentType(row) {
 }
 
 export function isVaultRow(row) {
+  if (!row) return false;
   const metadata = row?.metadata || {};
-  return row?.type === 'text' || Boolean(metadata.content_type || metadata.contentType || row?.content);
+  const t = row.type;
+  return (
+    t === 'text' ||
+    t === 'image' ||
+    t === 'video' ||
+    Boolean(metadata.content_type || metadata.contentType || row.content)
+  );
 }
 
 export function mapContentRowToVaultItem(row, collectionIds = []) {

@@ -82,7 +82,7 @@ export const IGNITE = {
     'Locking timing and frequency hints…',
   ],
   resultsReady: 'Brief ready',
-  resultsSubtitle: 'Execution-ready blueprint tuned to your platform and post type',
+  resultsSubtitle: 'Execution-ready Ignite Engine brief tuned to your platform and post type',
   successToast: 'Brief generated — review scores, then save or edit in Post Builder',
   errorCalm: 'We couldn’t complete this brief. Check connection and try again — nothing was saved.',
 };

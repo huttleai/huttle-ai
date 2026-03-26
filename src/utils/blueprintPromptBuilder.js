@@ -1,7 +1,7 @@
 import { getPlatformPromptRule, getHashtagConstraint } from '../data/platformContentRules.js';
 
 /**
- * Platform-specific hashtag limits for Ignite Engine / Viral Blueprint (n8n + dev prompt panel).
+ * Platform-specific hashtag limits for Ignite Engine (n8n + dev prompt panel).
  * @param {string} platform
  * @returns {string}
  */

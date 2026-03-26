@@ -58,7 +58,7 @@ VITE_N8N_PLAN_BUILDER_WEBHOOK=https://your-n8n-instance.com/webhook/plan-builder
 
 **Webhook Endpoint**: `/webhook/ignite-engine`
 
-**Input Payload** (from `ViralBlueprint.jsx`):
+**Input Payload** (from `IgniteEngine.jsx`):
 ```json
 {
   "topic": "How to 10x your productivity",
@@ -415,7 +415,7 @@ curl -X POST https://your-n8n.com/webhook/ignite-engine \
   }'
 ```
 3. **Verify response format** matches expected structure
-4. **Add webhook URL** to Vercel env vars (e.g., `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK`)
+4. **Add webhook URL** to Vercel env vars (e.g., `VITE_N8N_IGNITE_ENGINE_WEBHOOK` or server-only `N8N_IGNITE_ENGINE_WEBHOOK` for the API proxy)
 5. **Redeploy** Vercel app
 6. **Test in app** by using the feature
 
@@ -461,7 +461,7 @@ The app automatically checks using `isWorkflowConfigured()` from `workflowConsta
 ```javascript
 import { isWorkflowConfigured, WORKFLOW_NAMES } from '../utils/workflowConstants';
 
-if (isWorkflowConfigured(WORKFLOW_NAMES.VIRAL_BLUEPRINT)) {
+if (isWorkflowConfigured(WORKFLOW_NAMES.IGNITE_ENGINE)) {
   // Use n8n workflow
 } else {
   // Use fallback

@@ -231,7 +231,7 @@ Workflow features are prepared with:
 
 ### To Activate Workflows
 1. Build the n8n workflow
-2. Set the environment variable (e.g., `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK`)
+2. Set the environment variable (e.g., `VITE_N8N_IGNITE_ENGINE_WEBHOOK` or `N8N_IGNITE_ENGINE_WEBHOOK` for the server proxy)
 3. The frontend will automatically detect and use the workflow
 4. Fallback logic handles workflow failures gracefully
 

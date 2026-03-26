@@ -36,7 +36,7 @@ import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
-import { getPersonalizedGreeting, hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
+import { hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
 import { supabase, getContentLibraryItems } from '../config/supabase';
@@ -881,7 +881,7 @@ export default function Dashboard() {
     if (lower.includes('hook')) return 'Hook';
     if (lower.includes('cta')) return 'CTA';
     if (lower.includes('visual')) return 'Visual';
-    if (lower.includes('blueprint')) return 'Blueprint';
+    if (lower.includes('blueprint')) return 'Ignite Engine';
     if (lower.includes('remix')) return 'Remix';
     return 'Content';
   };

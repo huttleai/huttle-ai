@@ -65,9 +65,9 @@ If not set, features will use fallback data:
 | `N8N_WEBHOOK_URL_GENERATOR` | Content generator webhook |
 | `N8N_PLAN_BUILDER_WEBHOOK` | Plan builder webhook |
 | `N8N_PLAN_BUILDER_WEBHOOK_URL` | Alternative plan builder URL |
-| `N8N_VIRAL_BLUEPRINT_WEBHOOK` | Viral blueprint webhook |
+| `N8N_IGNITE_ENGINE_WEBHOOK` | Ignite Engine (server) webhook |
 | `VITE_N8N_PLAN_BUILDER_WEBHOOK` | Client-side plan builder URL |
-| `VITE_N8N_VIRAL_BLUEPRINT_WEBHOOK` | Client-side viral blueprint URL |
+| `VITE_N8N_IGNITE_ENGINE_WEBHOOK` | Client-side Ignite Engine webhook |
 | `VITE_N8N_DASHBOARD_WEBHOOK` | Dashboard data webhook |
 | `VITE_N8N_TREND_FORECASTER_WEBHOOK` | Trend forecaster webhook |
 | `VITE_N8N_SOCIAL_UPDATES_WEBHOOK` | Social updates webhook |

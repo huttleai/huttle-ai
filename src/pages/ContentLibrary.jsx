@@ -48,6 +48,7 @@ import {
   countCopiesThisWeek,
   getPlatformOption,
   humanizeToolSource,
+  isHiddenVaultCollectionName,
   isVaultRow,
   mapContentRowToVaultItem,
   PLATFORM_OPTIONS,
@@ -66,7 +67,7 @@ const DISPLAY_NAMES = {
   'visual-prompt': 'Visual Ideas',
   score: 'Quality Score',
   plan: 'Content Plan',
-  blueprint: 'Blueprint',
+  blueprint: 'Ignite Engine',
   remix: 'Remix',
 };
 
@@ -438,7 +439,7 @@ export default function ContentLibrary() {
   });
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isCreatePostSaving, setIsCreatePostSaving] = useState(false);
-  const [vaultMainTab, setVaultMainTab] = useState('kits');
+  const [vaultMainTab, setVaultMainTab] = useState('library');
   const [kits, setKits] = useState([]);
   const [kitsLoading, setKitsLoading] = useState(false);
   const [selectedKitId, setSelectedKitId] = useState(null);
@@ -474,7 +475,9 @@ export default function ContentLibrary() {
       return;
     }
 
-    const collectionRows = collectionsResult.data || [];
+    const collectionRows = (collectionsResult.data || []).filter(
+      (collection) => !isHiddenVaultCollectionName(collection.name),
+    );
     const collectionIds = collectionRows.map((collection) => collection.id);
     const linksResult = await getContentCollectionItems(collectionIds);
 
@@ -510,13 +513,15 @@ export default function ContentLibrary() {
       const itemsResult = await getContentLibraryItems(user.id, { limit: 500 });
 
       if (!itemsResult.success) {
+        console.error('[ContentVault] fetch error:', itemsResult.error);
         throw new Error(itemsResult.error || 'Failed to load content');
       }
 
-      setItems(itemsResult.data || []);
+      const rows = itemsResult.data ?? [];
+      setItems(rows);
       await loadCollections(user.id);
     } catch (error) {
-      console.error('Error loading content vault:', error);
+      console.error('[ContentVault] load failed:', error);
       addToast('Failed to load Content Vault', 'error');
       setItems([]);
       setCollections([]);
@@ -529,6 +534,13 @@ export default function ContentLibrary() {
   useEffect(() => {
     loadVault();
   }, [loadVault]);
+
+  useEffect(() => {
+    if (activeCollectionId === 'all') return;
+    if (!collections.some((collection) => collection.id === activeCollectionId)) {
+      setActiveCollectionId('all');
+    }
+  }, [activeCollectionId, collections]);
 
   useEffect(() => {
     const onVaultUpdated = () => {
@@ -1067,14 +1079,8 @@ export default function ContentLibrary() {
         {vaultMainTab === 'library' && (
           <>
         <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-3xl font-semibold tracking-tight text-gray-900">All saved content</h2>
-              <p className="mt-1 text-sm text-gray-500">Captions, hooks, and items you saved from AI tools</p>
-            </div>
-
-            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-              <div className="relative w-full sm:min-w-[300px]">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+              <div className="relative w-full sm:min-w-[300px] sm:flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchInput}
@@ -1084,83 +1090,84 @@ export default function ContentLibrary() {
                 />
               </div>
 
-              <div className="relative" ref={createMenuRef}>
+              <div className="flex min-w-0 flex-1 flex-row items-stretch gap-2 sm:flex-none sm:shrink-0 sm:gap-3">
+                <div className="relative min-w-0 flex-1 sm:flex-none" ref={createMenuRef}>
+                  <button
+                    type="button"
+                    data-testid="vault-create-post-button"
+                    onClick={() => setCreateMenuOpen((open) => !open)}
+                    className="inline-flex min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-3 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:opacity-95 sm:w-auto sm:px-4 sm:py-3"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${createMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {createMenuOpen && (
+                    <div
+                      className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl"
+                      role="menu"
+                      aria-label="Create content options"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="vault-write-post-manually"
+                        onClick={() => {
+                          setIsCreatePostOpen(true);
+                          setCreateMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
+                      >
+                        <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                        <span>Write post manually</span>
+                      </button>
+                      <div className="mx-2 border-t border-gray-100" aria-hidden />
+                      <Link
+                        to="/dashboard/ai-tools?tab=captions"
+                        onClick={() => setCreateMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                      >
+                        <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                        <span>New Caption</span>
+                      </Link>
+                      <Link
+                        to="/dashboard/ai-tools?tab=hashtags"
+                        onClick={() => setCreateMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                      >
+                        <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                        <span>New Hashtags</span>
+                      </Link>
+                      <Link
+                        to="/dashboard/ai-tools?tab=hooks"
+                        onClick={() => setCreateMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                      >
+                        <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                        <span>New Hook</span>
+                      </Link>
+                      <Link
+                        to="/dashboard/full-post-builder"
+                        onClick={() => setCreateMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                      >
+                        <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                        <span>Build Full Post</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
-                  data-testid="vault-create-post-button"
-                  onClick={() => setCreateMenuOpen((open) => !open)}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-4 py-3 text-sm font-medium text-white transition-all hover:opacity-95 shadow-sm"
+                  onClick={handleCopySelected}
+                  disabled={selectedItems.length === 0}
+                  className="inline-flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-3 py-2.5 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4 sm:py-3"
                 >
-                  <Plus className="h-4 w-4" />
-                  Create
-                  <ChevronDown className={`h-4 w-4 transition-transform ${createMenuOpen ? 'rotate-180' : ''}`} />
+                  <Copy className="h-4 w-4" />
+                  Copy All
                 </button>
-                {createMenuOpen && (
-                  <div
-                    className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl"
-                    role="menu"
-                    aria-label="Create content options"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="vault-write-post-manually"
-                      onClick={() => {
-                        setIsCreatePostOpen(true);
-                        setCreateMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
-                    >
-                      <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>Write post manually</span>
-                    </button>
-                    <div className="mx-2 border-t border-gray-100" aria-hidden />
-                    <Link
-                      to="/dashboard/ai-tools?tab=captions"
-                      onClick={() => setCreateMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                    >
-                      <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>New Caption</span>
-                    </Link>
-                    <Link
-                      to="/dashboard/ai-tools?tab=hashtags"
-                      onClick={() => setCreateMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                    >
-                      <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>New Hashtags</span>
-                    </Link>
-                    <Link
-                      to="/dashboard/ai-tools?tab=hooks"
-                      onClick={() => setCreateMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                    >
-                      <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>New Hook</span>
-                    </Link>
-                    <Link
-                      to="/dashboard/full-post-builder"
-                      onClick={() => setCreateMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                    >
-                      <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>Build Full Post</span>
-                    </Link>
-                  </div>
-                )}
               </div>
-
-              <button
-                type="button"
-                onClick={handleCopySelected}
-                disabled={selectedItems.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Copy className="h-4 w-4" />
-                Copy All
-              </button>
-            </div>
           </div>
         </div>
 
