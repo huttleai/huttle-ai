@@ -1013,14 +1013,16 @@ function normalizeTrendItem(
   };
 }
 
-function normalizeHashtagItem(item, platform, fromCache = false, generatedAt = null, fromYesterday = false) {
+function normalizeHashtagItem(item, platform, fromCache = false, generatedAt = null, fromYesterday = false, options = {}) {
+  const { alwaysHashtagPrefix = false } = options || {};
   const isStringItem = typeof item === 'string';
   const rawType = normalizeTextValue(
     isStringItem
       ? ''
       : (item?.type || item?.result_type || item?.kind)
   ).toLowerCase();
-  const isSearchKeyword = rawType === 'search_keyword' || normalizePlatformValue(platform) === 'youtube';
+  const isSearchKeyword =
+    !alwaysHashtagPrefix && (rawType === 'search_keyword' || normalizePlatformValue(platform) === 'youtube');
   const rawTag = normalizeTextValue(
     isStringItem
       ? item
@@ -1525,7 +1527,19 @@ const TRENDING_WIDGET_HASHTAG_CAP = 10;
 
 function buildDashboardTrendingHashtagUserPrompt(platform) {
   const platformLabel = formatPlatformLabel(normalizePlatformValue(platform));
+  const today = new Date();
+  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateString = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+
   return `You are a social media hashtag researcher. Return the top 8 universally popular hashtags that any content creator uses on ${platformLabel} to maximize reach and discoverability. These must be generic growth hashtags — NOT specific to any niche or industry.
+
+Today is ${dayOfWeek}, ${dateString}. Only include day-specific hashtags (e.g. #MondayMotivation, #FridayFeeling) that match today's actual weekday (${dayOfWeek}). Omit tags that name or imply a different weekday.
+
+Always prefix every hashtag with #, including YouTube search terms and discovery keywords. Never return bare keywords without #.
 
 Focus on: broad trending hashtags, platform-specific discovery hashtags (like #fyp for TikTok, #explorepage for Instagram), general small business and creator growth hashtags.
 
@@ -1564,6 +1578,12 @@ These must be hashtags that someone in this SPECIFIC niche would use — not gen
 - Industry-specific hashtags (3-4)
 - Treatment/service/topic-specific hashtags (2-3)
 ${city ? '- Local/city-specific hashtags (1-2) combining the city with the niche' : ''}
+
+Output rules (required):
+- Every item must use the property key "hashtag" only for the tag string. Do not also output parallel fields like "tag", "keyword", "name", or "search_term" for the same idea.
+- Every "hashtag" value MUST start with # on ALL platforms (including YouTube). Never return bare keywords without # for this widget.
+- Do not duplicate the same tag: never include both "#Example" and "Example", or two entries that differ only by the # prefix.
+- Do not mix "hashtag style" and "plain keyword style" entries for one platform — one unified hashtag list only.
 
 Return as a JSON array of objects:
 [{ "hashtag": "#medspa", "volume": "high", "description": "Primary industry hashtag for medical spas" }]
@@ -1619,7 +1639,8 @@ export async function fetchDashboardTrendingHashtags({
             platform,
             true,
             generatedAt,
-            false
+            false,
+            { alwaysHashtagPrefix: true },
           ))
           .filter(Boolean)
           .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
@@ -1657,7 +1678,8 @@ export async function fetchDashboardTrendingHashtags({
         platform,
         Boolean(payload?.cached),
         generatedAt,
-        false
+        false,
+        { alwaysHashtagPrefix: true },
       ))
       .filter(Boolean)
       .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
@@ -1669,7 +1691,14 @@ export async function fetchDashboardTrendingHashtags({
   } catch (error) {
     console.warn('[Dashboard] Trending widget hashtags failed:', error?.message || error);
     const fallback = buildHashtagFallbackItems(platform)
-      .map((raw) => normalizeHashtagItem({ ...raw, category: 'growth' }, platform, false, new Date().toISOString(), false))
+      .map((raw) => normalizeHashtagItem(
+        { ...raw, category: 'growth' },
+        platform,
+        false,
+        new Date().toISOString(),
+        false,
+        { alwaysHashtagPrefix: true },
+      ))
       .filter(Boolean)
       .slice(0, TRENDING_WIDGET_HASHTAG_CAP);
     return { items: fallback, fromCache: false };
@@ -1767,17 +1796,24 @@ export async function fetchDashboardForYouHashtags({
     const generatedAt = payload?.generatedAt || new Date().toISOString();
 
     const items = arr
-      .map((item) => normalizeHashtagItem(
-        {
-          ...item,
-          tag: item.tag || item.hashtag,
-          category: 'niche',
-        },
-        platform,
-        Boolean(payload?.cached),
-        generatedAt,
-        false
-      ))
+      .map((item) => {
+        const primary = normalizeTextValue(
+          item?.hashtag || item?.tag || item?.keyword || item?.term || item?.name || item?.label
+        );
+        return normalizeHashtagItem(
+          {
+            ...item,
+            hashtag: primary,
+            tag: primary,
+            category: 'niche',
+          },
+          platform,
+          Boolean(payload?.cached),
+          generatedAt,
+          false,
+          { alwaysHashtagPrefix: true }
+        );
+      })
       .filter(Boolean)
       .slice(0, FOR_YOU_HASHTAG_CAP);
 
@@ -1876,6 +1912,22 @@ async function fetchDailyAlerts() { // HUTTLE AI: cache fix
     return []; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
+
+/**
+ * Invalidate daily cache when the row's calendar date falls on a different weekday than "today" in local time.
+ * Avoids serving AI payloads with stale day-of-week tags (e.g. #MondayMotivation) after the week rolls.
+ * @param {{ generated_date?: string }|null|undefined} cachedRow
+ * @returns {boolean}
+ */
+function isDailyDashboardCacheStaleByLocalWeekday(cachedRow) {
+  const dateStr = cachedRow?.generated_date;
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  const cachedAnchor = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(cachedAnchor.getTime())) return false;
+  const cachedDay = cachedAnchor.toLocaleDateString('en-US', { weekday: 'long' });
+  const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  return cachedDay !== todayDay;
+}
 
 async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: cache fix
   const { data, error } = await supabase // HUTTLE AI: cache fix
@@ -2038,6 +2090,11 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
   if (!cachedRow) { // HUTTLE AI: cache fix
     return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
+
+  if (isDailyDashboardCacheStaleByLocalWeekday(cachedRow)) {
+    console.warn('[Dashboard] daily_dashboard_cache ignored — weekday mismatch vs today (will regenerate)');
+    return { success: true, cacheHit: false, generatedDate, data: null };
+  }
 
   // Invalidate the cache when the user's brand-profile platforms have changed since it was generated.
   // The cached metadata stores display labels ("Instagram", "TikTok"); context has normalized keys ("instagram", "tiktok").

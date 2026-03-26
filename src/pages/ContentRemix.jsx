@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from 'react';
-import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink, Loader2, Hash } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -419,7 +419,9 @@ export default function ContentRemix() {
         console.warn('[ContentRemix] Claude remix failed, falling back to Grok API:', result.error);
       }
 
-      const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
+      const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms, {
+        goal: remixGoal,
+      });
 
       if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
         const rawContent = grokResult.remixed || grokResult.ideas;
@@ -441,7 +443,9 @@ export default function ContentRemix() {
     } catch (error) {
       console.error('Error remixing content:', error);
       try {
-        const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms);
+        const grokResult = await remixContentWithMode(remixInput, brandData, remixGoal, selectedPlatforms, {
+          goal: remixGoal,
+        });
         if (grokResult.success && (grokResult.remixed || grokResult.ideas)) {
           const content = grokResult.remixed || grokResult.ideas;
           const safeContent = ensureString(content);
@@ -516,7 +520,10 @@ export default function ContentRemix() {
     setCurrentStep(1);
     setRemixInput('');
     setRemixGoal('viral');
-    setSelectedPlatforms(brandVoicePlatforms.length > 0 ? [...brandVoicePlatforms] : []);
+    const namesFromBrand = brandVoicePlatforms.map((p) =>
+      (typeof p === 'object' && p !== null ? p.name : String(p))
+    );
+    setSelectedPlatforms(brandVoicePlatforms.length > 0 ? namesFromBrand : []);
     setRemixResults(null);
     setRemixError(null);
     setUsedAiFallback(false);
@@ -532,6 +539,12 @@ export default function ContentRemix() {
   const canProceedToStep2 = remixInput.trim().length > 10;
   const canProceedToStep3 = canProceedToStep2 && remixGoal;
   const canRemix = canProceedToStep3 && selectedPlatforms.length > 0;
+
+  const remixTopicForHashtags =
+    remixInput.trim().slice(0, 500) || String(getNiche(brandData) || '').trim().slice(0, 200);
+  const hashtagToolsHref = remixTopicForHashtags
+    ? `/dashboard/ai-tools?tab=hashtags&topic=${encodeURIComponent(remixTopicForHashtags)}`
+    : '/dashboard/ai-tools?tab=hashtags';
 
   // Step indicator data
   const steps = [
@@ -930,6 +943,33 @@ export default function ContentRemix() {
                 </div>
               );
             })}
+
+            {/* Hashtag Generator nudge — after successful results only */}
+            {!isLoading && !remixError && (remixResults.sections || []).length > 0 && (
+              <div className="rounded-xl border border-huttle-primary/10 bg-[#0C1220]/[0.04] p-4 md:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex gap-3 min-w-0">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-huttle-primary/10">
+                      <Hash className="h-4 w-4 text-huttle-primary" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">
+                        Want trending hashtags for these posts?
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
+                        Run them through the Hashtag Generator for real-time ranked results.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to={hashtagToolsHref}
+                    className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg bg-huttle-primary/10 px-3.5 py-2 text-xs font-semibold text-huttle-primary transition-colors hover:bg-huttle-primary/15"
+                  >
+                    Generate Hashtags →
+                  </Link>
+                </div>
+              </div>
+            )}
 
             {/* Copy All */}
             <div className="flex items-center justify-center gap-3 pt-2">

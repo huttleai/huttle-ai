@@ -239,6 +239,8 @@ export function SubscriptionProvider({ children }) {
       });
       scheduleRetry();
       setLoading(false);
+      // Unblock ProtectedRoute immediately — do not wait for in-flight fetch to settle
+      setSubscriptionReady(true);
     }, SUBSCRIPTION_TIMEOUT_MS);
 
     try {

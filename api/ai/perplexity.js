@@ -28,6 +28,8 @@ const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 const MODEL_CONFIG = {
   dashboard_trending: 'sonar',
   quick_scan: 'sonar',
+  /** Full Post Builder hashtag step — base Sonar (not sonar-pro / larger online models). */
+  full_post_hashtags: 'sonar',
   deep_dive: 'sonar-pro',
   audience_insights: 'llama-3.1-sonar-small-128k-online',
   cta_suggester: 'llama-3.1-sonar-small-128k-online',

@@ -290,8 +290,12 @@ export default function AITools() {
     }
 
     if (topicParam) {
-      setActiveTool('caption');
-      setCaptionInput(topicParam);
+      if (resolvedTool === 'hashtags') {
+        setHashtagInput(topicParam);
+      } else {
+        setActiveTool('caption');
+        setCaptionInput(topicParam);
+      }
       didPrefill = true;
     }
 

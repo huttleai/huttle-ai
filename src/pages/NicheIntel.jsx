@@ -20,6 +20,7 @@ import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { supabase } from '../config/supabase';
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -157,7 +158,19 @@ export default function NicheIntel() {
     setAnalysis(null);
 
     try {
-      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData);
+      let { data: { session } } = await supabase.auth.getSession();
+      let accessToken = session?.access_token ?? null;
+      if (!accessToken) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        session = refreshed?.session ?? null;
+        accessToken = session?.access_token ?? null;
+      }
+      if (!accessToken) {
+        addToast('Please log in to run Niche Intel.', 'error');
+        return;
+      }
+
+      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData, { accessToken });
       if (!researchRes.success) {
         addToast('Research failed. Try again.', 'error');
         return;

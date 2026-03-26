@@ -55,7 +55,7 @@ const FPB_DEV_SMOKE_UI_ENABLED = false;
 /**
  * --- FPB QA notes (smoke + fixes, Mar 2026) ---
  * Smoke stages that were brittle before fixes: (1) hooks — smoke only called Claude; now mirrors UI (Claude → Grok). (2) enhance — smoke only called Claude; now Claude → Grok fallback like the wizard. (3) quality — scorer sometimes returned JSON with `overall` instead of `overallScore`; normalizeContentScoreV2 now accepts both. (4) human — Grok occasionally returned JSON embedded in prose; scoreHumanness uses a loose `overall` extractor before marking unavailable.
- * Unchanged routing summary: Hooks Claude→Grok→Hook Builder; Caption Grok; Enhance Claude→Grok; Hashtags Perplexity online→sonar→Grok; CTA Grok; Quality Claude→Grok; Human Claude→Grok; Algorithm local checklist (AlgorithmChecker).
+ * Unchanged routing summary: Hooks Claude→Grok→Hook Builder; Caption Grok; Enhance Claude→Grok; Hashtags Perplexity sonar→quick_scan→Grok; CTA Grok; Quality Claude→Grok; Human Claude→Grok; Algorithm local checklist (AlgorithmChecker).
  * Limitations: Smoke requires a logged-in session (proxies return 401 without Bearer). Algorithm score is heuristic (weighted checklist), not an API. Humanizer on the final panel scores caption-only by design.
  */
 
@@ -332,7 +332,11 @@ export default function FullPostBuilder() {
   const prefillTopic = searchParams.get('topic')?.trim() || '';
   const prefillPlatform = searchParams.get('platform')?.trim() || '';
   const prefillGoal = searchParams.get('goal')?.trim() || '';
-  const hasExplicitPrefill = Boolean(prefillTopic || prefillPlatform || prefillGoal);
+  const prefillHook = searchParams.get('hook')?.trim() || '';
+  const prefillCaption = searchParams.get('caption')?.trim() || '';
+  const hasExplicitPrefill = Boolean(
+    prefillTopic || prefillPlatform || prefillGoal || prefillHook || prefillCaption
+  );
 
   // Hydrate from URL params, trending navigation state, and local draft (once per hydration signature).
   useEffect(() => {
@@ -375,7 +379,7 @@ export default function FullPostBuilder() {
         return;
       }
 
-      const draftSig = `draft:${storageKey}:${hasExplicitPrefill}:${prefillTopic}:${prefillPlatform}:${prefillGoal}`;
+      const draftSig = `draft:${storageKey}:${hasExplicitPrefill}:${prefillTopic}:${prefillPlatform}:${prefillGoal}:${prefillHook}:${prefillCaption}`;
       if (hydrationSigRef.current === draftSig) {
         hasHydratedRef.current = true;
         return;
@@ -391,13 +395,24 @@ export default function FullPostBuilder() {
       setSelectedHookType(draft?.selectedHookType || HOOK_TYPES[0]);
 
       if (shouldStartFresh) {
-        setHooks([]);
-        setSelectedHook(null);
-        setCaption('');
+        if (prefillHook) {
+          setHooks([prefillHook]);
+          setSelectedHook(prefillHook);
+        } else {
+          setHooks([]);
+          setSelectedHook(null);
+        }
+        setCaption(prefillCaption || '');
         setHashtags([]);
         setCtas([]);
         setSelectedCTA(null);
-        setCurrentStep(0);
+        if (prefillCaption && prefillHook) {
+          setCurrentStep(2);
+        } else if (prefillHook) {
+          setCurrentStep(1);
+        } else {
+          setCurrentStep(0);
+        }
         setShowFinalPanel(false);
         setQualityScore(null);
         setHumanScore(null);
@@ -417,7 +432,18 @@ export default function FullPostBuilder() {
     } finally {
       hasHydratedRef.current = true;
     }
-  }, [storageKey, hasExplicitPrefill, prefillGoal, prefillPlatform, prefillTopic, location.pathname, location.search, navigate]);
+  }, [
+    storageKey,
+    hasExplicitPrefill,
+    prefillGoal,
+    prefillPlatform,
+    prefillTopic,
+    prefillHook,
+    prefillCaption,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
 
   // HUTTLE AI: brand context injected — pre-fill topic from niche and platform from brand profile (default only)
   useEffect(() => {

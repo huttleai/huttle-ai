@@ -35,21 +35,31 @@ const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
  * Get auth headers for API requests
+ * @param {string | null | undefined} accessTokenOverride - When set (e.g. from the caller after getSession), always sent as Bearer
  */
-async function getAuthHeaders() {
+async function getAuthHeaders(accessTokenOverride = null) {
   const headers = {
     'Content-Type': 'application/json',
   };
-  
+
+  if (accessTokenOverride) {
+    headers.Authorization = `Bearer ${accessTokenOverride}`;
+    return headers;
+  }
+
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      session = refreshed?.session ?? null;
+    }
     if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
+      headers.Authorization = `Bearer ${session.access_token}`;
     }
   } catch (e) {
     console.warn('Could not get auth session:', e);
   }
-  
+
   return headers;
 }
 
@@ -57,7 +67,7 @@ async function getAuthHeaders() {
  * Make a request to the Perplexity API via the secure proxy
  */
 async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
-  const headers = await getAuthHeaders();
+  const headers = await getAuthHeaders(options.accessToken);
   
   const response = await fetch(PERPLEXITY_PROXY_URL, {
     method: 'POST',
@@ -1099,9 +1109,10 @@ export async function getSocialMediaUpdates(months = 12) {
  * @param {string} nicheQuery - Niche keywords or competitor handles
  * @param {string} platform - Target platform
  * @param {Object} brandData - Brand data from BrandContext
+ * @param {{ accessToken?: string }} [requestOptions] - Optional Supabase access token from the page (same pattern as explicit session + Bearer elsewhere)
  * @returns {Promise<Object>} Raw research text for Grok to analyze
  */
-export async function researchNicheContent(nicheQuery, platform = 'instagram', brandData = null) {
+export async function researchNicheContent(nicheQuery, platform = 'instagram', brandData = null, requestOptions = {}) {
   try {
     const niche = brandData ? getNiche(brandData) : nicheQuery;
     const audience = brandData ? getTargetAudience(brandData) : 'general audience';
@@ -1197,6 +1208,7 @@ Requirements:
 - Return JSON only with no markdown, no commentary, and no extra keys`
       }
     ], 0.2, {
+      accessToken: requestOptions.accessToken,
       perplexityFeature: 'deep_dive',
       cache: {
         key: cacheKey,
@@ -1374,10 +1386,10 @@ ${regenNonce ? `Fresh batch id: ${regenNonce} — output a substantively differe
   try {
     let data;
     try {
-      data = await callModel('audience_insights');
+      data = await callModel('full_post_hashtags');
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn('[generateFullPostHashtagsGrounded] online model failed, falling back to sonar', e?.message);
+        console.warn('[generateFullPostHashtagsGrounded] full_post_hashtags failed, falling back to quick_scan', e?.message);
       }
       data = await callModel('quick_scan');
     }

@@ -73,7 +73,7 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
             {loading ? 'Loading...' : 'Checking your profile...'}
           </p>
           <p className="text-xs text-gray-400 mt-2">
-            If this takes too long, check console for errors
+            This is taking a little longer than usual — please hang tight.
           </p>
         </div>
       </div>

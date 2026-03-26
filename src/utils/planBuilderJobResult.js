@@ -37,6 +37,9 @@ export function coercePlanJobResult(raw) {
   return v;
 }
 
+/**
+ * Legacy validator (schedule + platforms) — used by offline QA and older callers.
+ */
 export function normalizePlanResultShape(result) {
   const r = coercePlanJobResult(result);
   if (!r || typeof r !== 'object') {
@@ -99,4 +102,114 @@ export function normalizePlanResultShape(result) {
       totalPosts: r.totalPosts || r.total_posts || totalPosts,
     },
   };
+}
+
+function unwrapPlanPayload(raw) {
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return { error: 'string_parse' };
+    }
+  }
+  if (v == null) return { error: 'null' };
+  if (typeof v !== 'object') return { error: 'not_object' };
+
+  const nestedKeys = ['plan', 'output', 'result', 'data', 'body', 'payload', 'response'];
+  if (v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.days) && v.overview) {
+    return { value: v };
+  }
+
+  let depth = 0;
+  while (depth < 6) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const innerPlan = v.plan;
+      if (innerPlan && typeof innerPlan === 'object' && Array.isArray(innerPlan.days)) {
+        return { value: innerPlan };
+      }
+    }
+    const inner = nestedKeys.map((k) => (v && typeof v === 'object' ? v[k] : undefined)).find((x) => x != null);
+    if (inner == null) break;
+    if (typeof inner === 'string') {
+      try {
+        v = JSON.parse(inner);
+      } catch {
+        return { error: 'nested_parse', raw: inner };
+      }
+    } else {
+      v = inner;
+    }
+    if (Array.isArray(v) && v.length) v = v[0];
+    depth += 1;
+  }
+
+  return { value: v };
+}
+
+function isNewPlanShape(planObj) {
+  if (!planObj || typeof planObj !== 'object') return false;
+  if (!planObj.overview || typeof planObj.overview !== 'object') return false;
+  if (!Array.isArray(planObj.days) || planObj.days.length === 0) return false;
+  return true;
+}
+
+function fallbackTextFromAnything(raw, coerced) {
+  if (typeof raw === 'string') return raw;
+  if (coerced && typeof coerced === 'object') {
+    if (typeof coerced.rawPlan === 'string') return coerced.rawPlan;
+    try {
+      return JSON.stringify(coerced, null, 2);
+    } catch {
+      return String(coerced);
+    }
+  }
+  try {
+    return JSON.stringify(raw, null, 2);
+  } catch {
+    return String(raw);
+  }
+}
+
+/**
+ * Parser for Plan Builder results: v2 structured plan, or legacy/malformed → fallback body text.
+ * @returns {{ kind: 'v2', plan: object } | { kind: 'fallback', rawText: string }}
+ */
+export function parsePlanBuilderDisplayResult(result) {
+  const unwrapped = unwrapPlanPayload(result);
+
+  if (unwrapped.error) {
+    const rawText = typeof result === 'string'
+      ? result
+      : typeof unwrapped.raw === 'string'
+        ? unwrapped.raw
+        : fallbackTextFromAnything(result, null);
+    console.warn('[PlanBuilder] Malformed plan payload:', unwrapped.error);
+    return { kind: 'fallback', rawText: rawText.trim() || 'No plan content returned.' };
+  }
+
+  const v = unwrapped.value;
+  if (v && typeof v === 'object' && isNewPlanShape(v)) {
+    return { kind: 'v2', plan: v };
+  }
+
+  const coerced = coercePlanJobResult(result);
+  if (coerced && typeof coerced === 'object' && typeof coerced.rawPlan === 'string' && coerced.rawPlan.trim()) {
+    return { kind: 'fallback', rawText: coerced.rawPlan.trim() };
+  }
+
+  const legacy = normalizePlanResultShape(result);
+  if (legacy.isValid && legacy.plan) {
+    const rawText = fallbackTextFromAnything(result, legacy.plan);
+    console.warn('[PlanBuilder] Legacy plan format — showing fallback viewer');
+    return { kind: 'fallback', rawText };
+  }
+
+  const rawText = fallbackTextFromAnything(result, coerced);
+  if (!rawText || !String(rawText).trim()) {
+    console.warn('[PlanBuilder] Empty plan result');
+    return { kind: 'fallback', rawText: 'No plan content returned.' };
+  }
+  console.warn('[PlanBuilder] Unrecognized plan shape — fallback viewer');
+  return { kind: 'fallback', rawText: String(rawText).trim() };
 }

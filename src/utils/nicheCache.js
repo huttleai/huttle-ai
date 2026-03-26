@@ -12,18 +12,17 @@ export async function getCachedResult(cacheKey) {
     const nowIso = new Date().toISOString();
     const userId = session.user?.id;
 
-    const readScopedCache = async (userScope) => supabase
-      .from('niche_content_cache')
-      .select('*')
-      .eq('cache_key', safeKey)
-      .gt('expires_at', nowIso)
-      .match(userScope)
-      .maybeSingle();
-
     let result = null;
 
     if (userId) {
-      const { data, error } = await readScopedCache({ user_id: userId });
+      const { data, error } = await supabase
+        .from('niche_content_cache')
+        .select('*')
+        .eq('cache_key', safeKey)
+        .eq('user_id', userId)
+        .gt('expires_at', nowIso)
+        .maybeSingle();
+
       if (!error && data) {
         result = data;
       }
@@ -34,8 +33,8 @@ export async function getCachedResult(cacheKey) {
         .from('niche_content_cache')
         .select('*')
         .eq('cache_key', safeKey)
-        .gt('expires_at', nowIso)
         .is('user_id', null)
+        .gt('expires_at', nowIso)
         .maybeSingle();
 
       if (!error && data) {

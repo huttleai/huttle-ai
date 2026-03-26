@@ -44,14 +44,12 @@ import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
-import ViralScoreGauge from '../components/ViralScoreGauge';
 import {
   getSectionsForType,
   getBlueprintLabel,
   getViralScoreWeights,
   getSectionMeta,
 } from '../data/blueprintSchema';
-import { buildN8nSystemPrompt } from '../utils/blueprintPromptBuilder';
 import {
   getPlatformPromptRule,
   getHashtagConstraint,
@@ -134,14 +132,6 @@ const GOALS = [
   { id: 'Build Authority', label: 'Build Authority', emoji: '🤝' },
 ];
 
-function getVerdict(score) {
-  if (score >= 90) return { label: 'Exceptional', className: 'bg-green-100 text-green-700 border-green-200' };
-  if (score >= 80) return { label: 'Great', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
-  if (score >= 66) return { label: 'Good', className: 'bg-blue-100 text-blue-700 border-blue-200' };
-  if (score >= 50) return { label: 'Average — refine before posting', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
-  return { label: 'Needs work', className: 'bg-red-100 text-red-700 border-red-200' };
-}
-
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i) => ({
@@ -150,13 +140,6 @@ const cardVariants = {
     transition: { delay: i * 0.1, duration: 0.4, ease: 'easeOut' },
   }),
 };
-
-const BREAKDOWN_ITEMS = [
-  { label: 'Hook Strength', key: 'hookStrength' },
-  { label: 'Trend Alignment', key: 'trendAlignment' },
-  { label: 'Audience Fit', key: 'audienceFit' },
-  { label: 'Platform Fit', key: 'platformOptimization' },
-];
 
 export default function IgniteEngine() {
   const { brandProfile, isCreator } = useBrand();
@@ -427,15 +410,6 @@ export default function IgniteEngine() {
         throw new Error('INVALID_BRIEF_STRUCTURE');
       }
 
-      if (normalized.performanceScore == null || Number.isNaN(Number(normalized.performanceScore)) || Number(normalized.performanceScore) <= 0) {
-        normalized.performanceScore = Math.min(95, Math.max(70,
-          (normalized.scoreBreakdown?.hookStrength || 0)
-          + (normalized.scoreBreakdown?.trendAlignment || 0)
-          + (normalized.scoreBreakdown?.audienceFit || 0)
-          + (normalized.scoreBreakdown?.platformOptimization || 0)
-          || 78));
-      }
-
       setGeneratedBrief(normalized);
       setGeneratedForPlatform(selectedPlatform);
       setGeneratedForPostType(selectedPostType);
@@ -522,7 +496,6 @@ export default function IgniteEngine() {
           target_audience: targetAudience,
           post_type: selectedPostType,
           platform_display: selectedPlatform,
-          performance_score: bp.performanceScore,
         },
       }));
 
@@ -563,7 +536,6 @@ export default function IgniteEngine() {
   /* ─── Render ────────────────────────────────────────────────── */
 
   const bp = generatedBrief;
-  const performanceScore = bp?.performanceScore ?? 0;
   const briefLabel = bp ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
 
   return (
@@ -991,58 +963,6 @@ export default function IgniteEngine() {
                     )}
                   </>
                 )}
-
-                {/* ── Performance Score Card ── */}
-                {performanceScore > 0 && (
-                  <Motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
-                    <div className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-8 md:p-12">
-                      <div className="flex items-center justify-center">
-                        <ViralScoreGauge score={performanceScore} />
-                      </div>
-
-                      {bp.scoreBreakdown && (
-                        <div className="mt-8 space-y-3 max-w-md mx-auto">
-                          {BREAKDOWN_ITEMS.map((item, i) => {
-                            const value = bp.scoreBreakdown[item.key] ?? 0;
-                            return (
-                              <div key={item.key}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-medium text-gray-600">{item.label}</span>
-                                  <span className="text-xs font-bold text-gray-900">{value}/25</span>
-                                </div>
-                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <Motion.div
-                                    className={`h-full rounded-full ${value >= 20 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : value >= 15 ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : value >= 10 ? 'bg-gradient-to-r from-amber-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${(value / 25) * 100}%` }}
-                                    transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {bp.scoreReason && (
-                        <p className="text-center text-sm text-gray-400 italic mt-6 max-w-lg mx-auto">
-                          {sanitizeAIOutput(bp.scoreReason)}
-                        </p>
-                      )}
-
-                      {performanceScore > 0 && (() => {
-                        const verdict = getVerdict(performanceScore);
-                        return (
-                          <div className="flex justify-center mt-5">
-                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold border ${verdict.className}`}>
-                              {verdict.label}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </Motion.div>
-                )}
               </div>
             )}
 
@@ -1082,11 +1002,6 @@ export default function IgniteEngine() {
                 </div>
               </div>
             </div>
-
-            {/* Dev Panel */}
-            {import.meta.env.DEV && bp && (
-              <N8nPromptPanel platform={selectedPlatform} contentType={selectedPostType} />
-            )}
           </div>
         )}
       </div>
@@ -1279,20 +1194,6 @@ function normalizeN8nResponse(data) {
 
   const isVideoContent = Boolean(inner.isVideoContent ?? inner.is_video_content ?? false);
 
-  const rawScore = inner.performanceScore ?? inner.performance_score ?? inner.viralScore ?? inner.viral_score;
-  const performanceScore = typeof rawScore === 'object'
-    ? (rawScore?.score ?? 0)
-    : (Number(rawScore) || 0);
-
-  const rawBreakdown = inner.scoreBreakdown ?? inner.score_breakdown ?? {};
-  const scoreBreakdown = {
-    hookStrength: Number(rawBreakdown.hookStrength ?? rawBreakdown.hook_strength ?? 0),
-    trendAlignment: Number(rawBreakdown.trendAlignment ?? rawBreakdown.trend_alignment ?? 0),
-    audienceFit: Number(rawBreakdown.audienceFit ?? rawBreakdown.audience_fit ?? 0),
-    platformOptimization: Number(rawBreakdown.platformOptimization ?? rawBreakdown.platform_optimization ?? 0),
-  };
-
-  const scoreReason = String(inner.scoreReason ?? inner.score_reason ?? '').trim();
   const caption = String(inner.caption ?? '').trim();
   const captionReason = String(inner.captionReason ?? inner.caption_reason ?? '').trim();
 
@@ -1335,9 +1236,6 @@ function normalizeN8nResponse(data) {
 
   return {
     isVideoContent,
-    performanceScore,
-    scoreBreakdown,
-    scoreReason,
     caption,
     captionReason,
     hashtags,
@@ -1373,14 +1271,6 @@ Brand Voice: ${brandProfile?.brandVoice || 'authentic'}
 Return ONLY valid JSON with this exact structure:
 {
   "isVideoContent": ${isVideo},
-  "performanceScore": <number 70-95>,
-  "scoreBreakdown": {
-    "hookStrength": <0-25>,
-    "trendAlignment": <0-25>,
-    "audienceFit": <0-25>,
-    "platformOptimization": <0-25>
-  },
-  "scoreReason": "<brief explanation of the score>",
   ${isVideo ? `"hook": "<compelling opening hook line>",
   "hookReason": "<why this hook works>",
   "script": "<full script with ... pause markers>",` : ''}
@@ -1456,41 +1346,4 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
     console.error('Grok fallback failed:', e?.message || e);
     return null;
   }
-}
-
-/* ─── Dev-only Component ─────────────────────────────────────── */
-
-function N8nPromptPanel({ platform, contentType }) {
-  const [expanded, setExpanded] = useState(false);
-  const { required, optional, excluded } = getSectionsForType(platform, contentType);
-  const weights = getViralScoreWeights(platform, contentType);
-  const label = getBlueprintLabel(platform, contentType);
-
-  const prompt = buildN8nSystemPrompt({
-    platform,
-    content_type: contentType,
-    required_sections: required,
-    optional_sections: optional,
-    excluded_sections: excluded,
-    viral_score_weights: weights,
-    blueprint_label: label,
-  });
-
-  return (
-    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded(prev => !prev)}
-        className="w-full flex items-center justify-between p-4 text-left text-xs font-mono text-gray-500"
-      >
-        <span>[DEV] n8n System Prompt for {label}</span>
-        <span>{expanded ? '▼' : '▶'}</span>
-      </button>
-      {expanded && (
-        <pre className="p-4 pt-0 text-[10px] leading-relaxed text-gray-600 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-          {prompt}
-        </pre>
-      )}
-    </div>
-  );
 }

@@ -16,10 +16,31 @@ import {
   getHashtagConstraint,
   normalizePlatformRulesKey,
 } from '../../src/data/platformContentRules.js';
+import {
+  buildContentRemixClaudeSystemCore,
+  resolveRemixPromptGoal,
+} from '../../src/data/contentRemixSystemPrompt.js';
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_API_KEY =
+  typeof _rawAnthropicKey === 'string' && _rawAnthropicKey.trim() ? _rawAnthropicKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-6-20250514';
+
+/** Match api/ai/claude.js — snapshot ids may 404 upstream; alias resolves to current Sonnet. */
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL_ALIASES = {
+  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
+  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
+};
+
+function resolveUpstreamClaudeModel(requested) {
+  const r = typeof requested === 'string' ? requested.trim() : '';
+  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
+  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
+  return DEFAULT_CLAUDE_MODEL;
+}
+
+const MODEL = resolveUpstreamClaudeModel('claude-sonnet-4-6-20250514');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -29,10 +50,6 @@ const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
 const REQUEST_TIMEOUT_MS = 44000;
 const EXPECTED_VARIATION_COUNT = 3;
-
-const BASE_SYSTEM_PROMPT = 'You are a professional content strategist and copywriter specializing in viral social media content. Your goal is to deliver the most accurate, platform-specific, and conversion-optimized content remixes possible. Deeply understand the user\'s original content, their selected mode (Viral Reach or Sales Conversion), and the target platforms, then generate variations that feel native to each platform.';
-const NO_FABRICATED_STATS_GUARDRAIL = 'Do not invent specific statistics, percentages, testimonials, or performance claims. If the source content does not include proof, keep the language persuasive without fabricating evidence.';
-const READY_TO_USE_GUARDRAIL = 'Every variation must be copy-paste ready with no placeholders like [insert link] or [brand name here].';
 
 function normalizePlatformList(platforms) {
   if (!Array.isArray(platforms)) return [];
@@ -196,6 +213,30 @@ OUTPUT REQUIREMENTS:
 
 PLATFORM FORMAT EXAMPLE:
 ${formatExample}`;
+}
+
+/**
+ * Anthropic Messages API returns `content` as an array of blocks with `text`.
+ * Some responses omit `type` or use alternate block shapes; strict `type === 'text'`
+ * filtering yields an empty string and forces Grok fallback despite HTTP 200.
+ */
+function extractTextFromAnthropicMessage(data) {
+  if (!data || typeof data !== 'object') return '';
+
+  const { content } = data;
+  if (typeof content === 'string' && content.trim()) {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) return '';
+
+  const pieces = [];
+  for (const item of content) {
+    if (!item || typeof item !== 'object') continue;
+    if (typeof item.text === 'string' && item.text.length > 0) {
+      pieces.push(item.text);
+    }
+  }
+  return pieces.join('\n\n');
 }
 
 function parseJsonFromResponse(text) {
@@ -420,6 +461,7 @@ export default async function handler(req, res) {
     const {
       originalContent,
       mode,
+      goal: goalFromBody,
       platforms,
       brandVoice,
       userId,
@@ -440,12 +482,10 @@ export default async function handler(req, res) {
     }
 
     const { requestedMode, normalizedMode } = normalizeMode(mode);
+    const remixPromptGoal = resolveRemixPromptGoal(goalFromBody, normalizedMode);
     const brandBlock = buildCreatorBrandBlock({ ...additionalContext, brandVoice }, { ...additionalContext }); // HUTTLE AI: brand context injected
     const systemPrompt = `${brandBlock}${buildSystemPrompt(
-      `${BASE_SYSTEM_PROMPT}
-
-${NO_FABRICATED_STATS_GUARDRAIL}
-${READY_TO_USE_GUARDRAIL}`,
+      buildContentRemixClaudeSystemCore(remixPromptGoal),
       {
         ...additionalContext,
         brandVoice,
@@ -491,6 +531,7 @@ ${READY_TO_USE_GUARDRAIL}`,
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[ContentRemix] Claude call failed:', `HTTP ${response.status}`, errorText.slice(0, 800));
         logError('content_remix.upstream_error', { status: response.status, errorText });
         return res.status(response.status).json({
           error: 'Content remix service error. Please try again.',
@@ -498,12 +539,7 @@ ${READY_TO_USE_GUARDRAIL}`,
       }
 
       const data = await response.json();
-      const responseText = Array.isArray(data.content)
-        ? data.content
-          .filter((item) => item?.type === 'text' && typeof item?.text === 'string')
-          .map((item) => item.text)
-          .join('\n\n')
-        : '';
+      const responseText = extractTextFromAnthropicMessage(data);
 
       const parsed = parseJsonFromResponse(responseText);
       let sections = normalizeSections(parsed?.sections || parsed?.platforms || parsed, normalizedPlatforms);
@@ -545,6 +581,7 @@ ${READY_TO_USE_GUARDRAIL}`,
       clearTimeout(timeoutId);
 
       if (fetchError.name === 'AbortError') {
+        console.error('[ContentRemix] Claude call failed:', fetchError.message, fetchError.status || '');
         logError('content_remix.timeout', { userId: authenticatedUserId });
         return res.status(504).json({
           error: 'Content remix generation timed out. Please try again.',
@@ -552,6 +589,7 @@ ${READY_TO_USE_GUARDRAIL}`,
         });
       }
 
+      console.error('[ContentRemix] Claude call failed:', fetchError.message, fetchError.status || '');
       logError('content_remix.proxy_error', { error: fetchError.message, userId: authenticatedUserId });
       return res.status(502).json({
         error: 'Content remix service is temporarily unavailable. Please try again.',

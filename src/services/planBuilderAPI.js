@@ -39,16 +39,35 @@ function safeJsonParse(value) {
  * Create a job directly in Supabase (client-side)
  * This bypasses the serverless function for faster job creation.
  * 
- * @param {Object} params - Job parameters
- * @param {string} params.goal - Content goal (e.g., 'Grow followers')
- * @param {number} params.duration - Time period in days (7 or 14)
- * @param {string[]} params.platforms - Selected platforms
- * @param {string} params.niche - User's niche/industry
- * @param {string} params.brandVoice - Brand voice description
- * @param {string} [params.trendContext] - Optional trending topics context for the plan prompt
+ * @param {Object} params - Job parameters (stored on `jobs.input` JSON)
+ * @param {string} params.contentGoal - Content goal
+ * @param {number} params.timePeriod - 7 or 14
+ * @param {number} params.postingFrequency - Posts per week
+ * @param {string[]} params.platformFocus - Platform names
+ * @param {string} params.niche
+ * @param {string} params.targetAudience
+ * @param {string} params.brandVoiceTone
+ * @param {string[]} params.contentPillars
+ * @param {string} params.followerRange - e.g. "0-500"
+ * @param {string|null} [params.extraContext]
+ * @param {string} [params.trendContext]
+ * @param {string} [params.platform_rules_block]
  * @returns {Promise<{jobId?: string, error?: Error}>}
  */
-export async function createJobDirectly({ goal, duration, platforms, niche, brandVoice, trendContext }) {
+export async function createJobDirectly({
+  contentGoal,
+  timePeriod,
+  postingFrequency,
+  platformFocus,
+  niche,
+  targetAudience,
+  brandVoiceTone,
+  contentPillars,
+  followerRange,
+  extraContext = null,
+  trendContext = '',
+  platform_rules_block = '',
+}) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -61,15 +80,25 @@ export async function createJobDirectly({ goal, duration, platforms, niche, bran
       .insert({
         user_id: session.user.id,
         type: 'plan_builder',
-        status: 'queued', // Must match DB lifecycle: queued → running → completed/failed
+        status: 'queued', // DB lifecycle: queued → running → completed/failed
         input: {
-          goal,
-          duration,
-          platforms,
-          niche: niche || 'general',
-          brandVoice: brandVoice || '',
+          contentGoal,
+          timePeriod,
+          postingFrequency,
+          platformFocus,
+          niche,
+          targetAudience,
+          brandVoiceTone,
+          contentPillars,
+          followerRange,
+          extraContext,
           trendContext: trendContext || '',
-          requestedAt: new Date().toISOString()
+          platform_rules_block: typeof platform_rules_block === 'string' ? platform_rules_block : '',
+          requestedAt: new Date().toISOString(),
+          goal: contentGoal,
+          duration: timePeriod,
+          platforms: platformFocus,
+          brandVoice: brandVoiceTone,
         },
         created_at: new Date().toISOString()
       })
@@ -129,19 +158,27 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
   }
 
   // Build the complete payload
+  const platformFocus = formData.platformFocus || formData.platforms || [];
   const payload = {
     job_id: jobId,
     contentGoal: formData.contentGoal || formData.goal || 'Grow followers',
     timePeriod: String(formData.timePeriod || formData.duration || '7'),
-    platformFocus: formData.platformFocus || formData.platforms || [],
-    brandVoice: formData.brandVoice || '',
+    postingFrequency: formData.postingFrequency != null ? Number(formData.postingFrequency) : null,
+    platformFocus,
+    niche: formData.niche ?? '',
+    targetAudience: formData.targetAudience ?? '',
+    brandVoiceTone: formData.brandVoiceTone ?? formData.brandVoice ?? '',
+    contentPillars: Array.isArray(formData.contentPillars) ? formData.contentPillars : [],
+    followerRange: formData.followerRange ?? '',
+    extraContext: formData.extraContext ?? null,
+    brandVoice: formData.brandVoice || formData.brandVoiceTone || '',
     trendContext: formData.trendContext || '',
     platform_rules_block: typeof formData.platform_rules_block === 'string' ? formData.platform_rules_block : '',
     platforms_list:
       typeof formData.platforms_list === 'string'
         ? formData.platforms_list
-        : Array.isArray(formData.platformFocus || formData.platforms)
-          ? (formData.platformFocus || formData.platforms).join(', ')
+        : Array.isArray(platformFocus)
+          ? platformFocus.join(', ')
           : '',
   };
 

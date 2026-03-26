@@ -61,6 +61,14 @@ function mapHttpErrorType(status, errorType) {
   return 'UNKNOWN';
 }
 
+function resolveContentRemixGoal(payload) {
+  const g = payload?.goal;
+  if (g === 'salesConversion' || g === 'viralReach') return g;
+  const m = typeof payload?.mode === 'string' ? payload.mode.trim().toLowerCase() : '';
+  if (m === 'sales' || m === 'sales_conversion') return 'salesConversion';
+  return 'viralReach';
+}
+
 export async function generateContentRemix(payload) {
   if (!payload?.userId) {
     throw new Error('User ID is required');
@@ -71,6 +79,8 @@ export async function generateContentRemix(payload) {
   if (!Array.isArray(payload?.platforms) || payload.platforms.length === 0) {
     throw new Error('At least one platform is required');
   }
+
+  const goal = resolveContentRemixGoal(payload);
 
   try {
     const headers = await getAuthHeaders();
@@ -83,6 +93,7 @@ export async function generateContentRemix(payload) {
           userId: payload.userId,
           originalContent: payload.originalContent,
           mode: payload.mode,
+          goal,
           platforms: payload.platforms,
           brandVoice: payload.brandVoice || 'engaging',
           additionalContext: payload.additionalContext || {},

@@ -327,6 +327,46 @@ function mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, hashtag) {
   return true;
 }
 
+/** Brand Voice tab: ensure # prefix and collapse #foo vs foo duplicates before render/copy. */
+function normalizeBrandVoiceHashtagList(tags) {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set();
+  return tags
+    .map((tag) => {
+      const raw = tag?.hashtag ?? tag?.name ?? '';
+      const str = String(raw || '').trim();
+      const withHash = str.startsWith('#') ? str : `#${str.replace(/^#+/, '')}`;
+      return { ...tag, hashtag: withHash };
+    })
+    .filter((tag) => {
+      if (!tag.hashtag || tag.hashtag === '#') return false;
+      const key = tag.hashtag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+/** General Trending tab only: enforce # prefix (incl. YouTube) and de-dupe by tag text before render. */
+function normalizeGeneralTrendingHashtagList(tags) {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set();
+  return tags
+    .map((tag) => {
+      const raw = tag?.hashtag ?? tag?.name ?? '';
+      const str = String(raw || '').trim();
+      const withHash = str.startsWith('#') ? str : `#${str.replace(/^#+/, '')}`;
+      return { ...tag, hashtag: withHash };
+    })
+    .filter((tag) => {
+      if (!tag.hashtag || tag.hashtag === '#') return false;
+      const key = tag.hashtag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 const QUICK_CREATE_TOOLS = [
   { id: 'caption', name: 'Caption Generator', icon: MessageSquare, description: 'Create engaging social captions', color: 'from-blue-500 to-cyan-500' },
   { id: 'hashtags', name: 'Hashtag Generator', icon: Hash, description: 'Find trending hashtags', color: 'from-emerald-500 to-teal-500' },
@@ -369,8 +409,10 @@ export default function Dashboard() {
   const [forYouLoading, setForYouLoading] = useState(false);
   const [forYouRetryCount, setForYouRetryCount] = useState(0);
   const forYouRequestKeyRef = useRef('');
-  const [trendingTabHashtags, setTrendingTabHashtags] = useState(null);
-  const [trendingTabLoading, setTrendingTabLoading] = useState(false);
+  /** General Trending tab only — never fall back to dashboard `hashtags_of_day` (niche/slug mix). */
+  const [generalTrendingHashtags, setGeneralTrendingHashtags] = useState([]);
+  const [generalTrendingLoading, setGeneralTrendingLoading] = useState(false);
+  const [generalTrendingReady, setGeneralTrendingReady] = useState(false);
   const [trendingStatus, setTrendingStatus] = useState('loading');
   const trendingRequestKeyRef = useRef('');
   const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
@@ -647,7 +689,8 @@ export default function Dashboard() {
     forYouRequestKeyRef.current = '';
     setForYouHashtags(null);
     trendingRequestKeyRef.current = '';
-    setTrendingTabHashtags(null);
+    setGeneralTrendingHashtags([]);
+    setGeneralTrendingReady(false);
   }, [user?.id]);
 
   const tourSteps = [
@@ -993,9 +1036,8 @@ export default function Dashboard() {
 
   const widgetHashtagList = useMemo(() => {
     if (hashtagMode === 'trending') {
-      if (trendingTabHashtags?.length) return trendingTabHashtags;
-      if (trendingTabLoading && !displayedDashboardHashtags.length) return [];
-      return displayedDashboardHashtags;
+      if (!generalTrendingReady || generalTrendingLoading) return [];
+      return normalizeGeneralTrendingHashtagList(generalTrendingHashtags);
     }
     if (useForYouHashtags) {
       if (forYouLoading && !forYouHashtags?.length) return [];
@@ -1004,13 +1046,19 @@ export default function Dashboard() {
     return displayedDashboardHashtags;
   }, [
     hashtagMode,
-    trendingTabLoading,
-    trendingTabHashtags,
+    generalTrendingLoading,
+    generalTrendingReady,
+    generalTrendingHashtags,
     useForYouHashtags,
     forYouLoading,
     forYouHashtags,
     displayedDashboardHashtags,
   ]);
+
+  const hashtagListForWidget = useMemo(() => {
+    if (!useForYouHashtags || !widgetHashtagList?.length) return widgetHashtagList;
+    return normalizeBrandVoiceHashtagList(widgetHashtagList);
+  }, [useForYouHashtags, widgetHashtagList]);
 
   useEffect(() => {
     if (!user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
@@ -1064,7 +1112,8 @@ export default function Dashboard() {
 
     let cancelled = false;
     (async () => {
-      setTrendingTabLoading(true);
+      setGeneralTrendingLoading(true);
+      setGeneralTrendingReady(false);
       try {
         const results = await fetchDashboardTrendingHashtagsForPlatforms(
           resolvedDashboardPlatformLabels,
@@ -1078,14 +1127,18 @@ export default function Dashboard() {
         const itemsPerPlatform = results.map((r) => r.items || []);
         const merged = mergeFetchedHashtagsByPlatformRoundRobin(resolvedDashboardPlatformLabels, itemsPerPlatform);
         trendingRequestKeyRef.current = requestKey;
-        setTrendingTabHashtags(merged.length > 0 ? merged : null);
+        setGeneralTrendingHashtags(Array.isArray(merged) ? merged : []);
       } finally {
-        if (!cancelled) setTrendingTabLoading(false);
+        if (!cancelled) {
+          setGeneralTrendingLoading(false);
+          setGeneralTrendingReady(true);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      setGeneralTrendingLoading(false);
     };
   }, [user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
 
@@ -1099,7 +1152,9 @@ export default function Dashboard() {
   const hashtagsFromPreviousDay = Boolean(dashboardData?.hashtags_from_previous_day);
   const hashtagWidgetListLoading = isDashboardLoading
     || (useForYouHashtags && forYouLoading && !forYouHashtags?.length)
-    || (hashtagMode === 'trending' && trendingTabLoading && !trendingTabHashtags?.length && !displayedDashboardHashtags.length);
+    || (hashtagMode === 'trending' && (!generalTrendingReady || generalTrendingLoading));
+
+  const hashtagWidgetHasRows = hashtagListForWidget.length > 0;
   const showHashtagsPreviousDayBanner = hashtagsFromPreviousDay
     && !(useForYouHashtags && forYouHashtags?.length > 0);
 
@@ -1515,7 +1570,7 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              ) : widgetHashtagList.length > 0 ? (
+              ) : hashtagWidgetHasRows ? (
                 <div className="space-y-1.5">
                   {showHashtagsPreviousDayBanner && (
                     <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
@@ -1523,7 +1578,7 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {widgetHashtagList.map((tag, index) => {
+                  {hashtagListForWidget.map((tag, index) => {
                     const reachColor = tag.estimated_reach === 'high'
                       ? 'bg-emerald-100 text-emerald-700'
                       : tag.estimated_reach === 'medium'
@@ -1592,10 +1647,10 @@ export default function Dashboard() {
                   })}
                   <button
                     onClick={() => {
-                      const allTags = widgetHashtagList.map(t => t.hashtag).join(' ');
+                      const allTags = hashtagListForWidget.map(t => t.hashtag).join(' ');
                       navigator.clipboard.writeText(allTags).then(() => showToast('All hashtags copied!', 'success'));
                     }}
-                    disabled={widgetHashtagList.length === 0}
+                    disabled={!hashtagWidgetHasRows}
                     className="mt-3 w-full py-2 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all text-xs"
                   >
                     <Copy className="w-3.5 h-3.5" /> Copy All Hashtags

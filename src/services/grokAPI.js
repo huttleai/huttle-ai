@@ -44,6 +44,11 @@ import {
   getPlatformPromptRule,
   normalizePlatformRulesKey,
 } from '../data/platformContentRules';
+import {
+  buildContentRemixClaudeSystemCore,
+  normalizeRemixModeForGoal,
+  resolveRemixPromptGoal,
+} from '../data/contentRemixSystemPrompt';
 import { supabase } from '../config/supabase';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { 
@@ -2450,20 +2455,18 @@ etc.`
  * @param {Object} brandData - Brand data from BrandContext
  * @param {string} mode - 'viral', 'sales', 'educational', or 'community'
  * @param {Array<string>} platforms - Target platforms for the remix output
+ * @param {{ goal?: string }} [options] - Explicit `goal` from the remix payload (same as Claude `resolveRemixPromptGoal`).
  * @returns {Promise<Object>} Remixed content with { success, remixed, mode, usage }
  */
-export async function remixContentWithMode(content, brandData, mode = 'viral', platforms = []) {
+export async function remixContentWithMode(content, brandData, mode = 'viral', platforms = [], options = {}) {
   try {
-    const systemPrompts = {
-      viral: "You are a Social Media Virality Expert. Your goal is maximum reach. Take the user's input and rewrite it to be punchy, relatable, and shareable. Use short sentences, trending formats, and emojis. Optimize for engagement, shares, and saves.",
-      sales: "You are a Conversion Critic and Direct Response Copywriter. Your goal is revenue, not just views. Rewrite the user's input using the PAS (Problem-Agitation-Solution) framework. 1) Hook: Call out a specific customer pain point. 2) Body: Agitate the pain and present the offer as the solution. 3) CTA: Write an imperative Call to Action that requires a comment (e.g., 'Comment GUIDE'). 4) Objection: Add a P.S. handling a price or time objection.",
-      educational: "You are an Educational Content Strategist. Your goal is to teach and provide value. Rewrite the user's input to be informative, clear, and actionable. Use numbered tips, bite-sized insights, and practical takeaways. Make the audience feel like they learned something valuable.",
-      community: "You are a Community Building Expert. Your goal is to spark conversations and foster connection. Rewrite the user's input to invite discussion, share relatable experiences, and encourage audience participation. Use open-ended questions, polls, and 'this or that' formats."
-    };
+    const normalizedMode = normalizeRemixModeForGoal(mode);
+    const goalFromPayload = typeof options.goal === 'string' ? options.goal : '';
+    const remixPromptGoal = resolveRemixPromptGoal(goalFromPayload, normalizedMode);
 
     const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
-    const baseSystemPrompt = systemPrompts[mode] || systemPrompts.viral;
+    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal);
     const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
 
     const modeLabels = {
@@ -2479,55 +2482,50 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
 
 Create exactly 3 variations for each of these platforms: ${platformList}.
 
-For each variation:
-- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
-- Start with a pain-point hook that stops the scroll
-- Agitate the problem to create urgency
-- Present the solution naturally
-- End with a comment-based CTA (e.g., "Comment READY to get started")
-- Add a P.S. that handles a common objection
-- Optimize for the specific platform's format and audience
+For each platform section:
+- Use "### Platform Name" headers (e.g., "### Instagram", "### TikTok")
+- Clearly label Variation 1, Variation 2, and Variation 3
+- Sales angle: concrete pain → clarity → offer framed honestly; CTA only if specific and non-hollow (system rules override)
+- Each variation must open with a different sentence type per system instructions (result / situation / process fact)
+- Obey emoji, hashtag, length, and voice rules for each platform from the system prompt
 
-Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
+Format: Plain text with ### platform headers and Variation 1–3 labels — not JSON.`,
       educational: `Remix this content for ${modeGoal}: "${content}"
 
 Create exactly 3 variations for each of these platforms: ${platformList}.
 
-For each variation:
-- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
-- Start with a curiosity-driven hook
-- Break down the information into clear, numbered tips or steps
-- Use simple language and practical examples
-- End with a takeaway or actionable next step
-- Optimize for the specific platform's format and audience
+For each platform section:
+- Use "### Platform Name" headers
+- Clearly label Variation 1, Variation 2, and Variation 3
+- Teach something useful with clear structure; stay native to each platform's format and length
+- Each variation opens with a different sentence type per system instructions
+- Obey emoji, hashtag, and voice caps from the system prompt
 
-Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
+Format: Plain text with ### platform headers and Variation 1–3 labels — not JSON.`,
       community: `Remix this content for ${modeGoal}: "${content}"
 
 Create exactly 3 variations for each of these platforms: ${platformList}.
 
-For each variation:
-- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
-- Start with a relatable statement or shared experience
-- Include open-ended questions to spark discussion
-- Use "this or that" or poll-style formats where appropriate
-- End with an invitation to share their own experience
-- Optimize for the specific platform's format and audience
+For each platform section:
+- Use "### Platform Name" headers
+- Clearly label Variation 1, Variation 2, and Variation 3
+- Spark real discussion without engagement bait; platform-native tone only
+- Each variation opens with a different sentence type per system instructions
+- Obey emoji, hashtag, and voice rules from the system prompt
 
-Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`,
-      viral: `Remix this trending content for ${modeGoal}: "${content}"
+Format: Plain text with ### platform headers and Variation 1–3 labels — not JSON.`,
+      viral: `Remix this content for ${modeGoal}: "${content}"
 
 Create exactly 3 variations for each of these platforms: ${platformList}.
 
-For each variation:
-- Label it with the target platform name (e.g., "### Instagram", "### TikTok")
-- Make it punchy and scroll-stopping
-- Highly shareable and relatable
-- Optimized for engagement and comments
-- Include relevant emojis and trending formats
-- Optimize for the specific platform's format and audience
+For each platform section:
+- Use "### Platform Name" headers
+- Clearly label Variation 1, Variation 2, and Variation 3
+- Specific and scroll-stopping; shareable because it is concrete, not because of hype or emoji spam
+- Each variation opens with a different sentence type per system instructions
+- Obey all ABSOLUTE RULES and per-platform constraints (emojis 0–1, hashtags strategic)
 
-Format: Use "### Platform Name" as headers for each platform section, and clearly label Variation 1, Variation 2, and Variation 3 for every platform.`
+Format: Plain text with ### platform headers and Variation 1–3 labels — not JSON.`,
     };
 
     const effectivePlatforms = platforms.length > 0 ? platforms : ['Instagram', 'TikTok', 'X'];
@@ -2558,7 +2556,7 @@ ${platformRemixRulesBlock}`;
         role: 'user',
         content: userPrompt
       }
-    ], mode === 'sales' ? 0.7 : 0.8, { mode: GROK_MODE_QUALITY });
+    ], normalizedMode === 'sales_conversion' ? 0.7 : 0.8, { mode: GROK_MODE_QUALITY });
 
     return {
       success: true,
