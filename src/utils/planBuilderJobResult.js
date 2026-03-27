@@ -2,6 +2,17 @@
  * Normalizes n8n / Supabase `jobs.result` payloads for AI Plan Builder.
  */
 
+/** Strip ``` / ```json (etc.) fences so JSON.parse succeeds; no-op if not fenced. */
+function stripCodeFencesFromPlanString(str) {
+  if (typeof str !== 'string') return str;
+  const s = str.trim();
+  if (!s.startsWith('```')) return s;
+  return s
+    .replace(/^```[a-zA-Z]*\r?\n?/, '')
+    .replace(/\r?\n?```\s*$/, '')
+    .trim();
+}
+
 export function coercePlanJobResult(raw) {
   let v = raw;
   if (typeof v === 'string') {
@@ -131,7 +142,7 @@ function unwrapPlanPayload(raw) {
     if (inner == null) break;
     if (typeof inner === 'string') {
       try {
-        v = JSON.parse(inner);
+        v = JSON.parse(stripCodeFencesFromPlanString(inner));
       } catch {
         return { error: 'nested_parse', raw: inner };
       }
@@ -180,10 +191,11 @@ function flattenHashtags(h) {
 }
 
 function sanitizePlanJSON(raw) {
-  if (typeof raw === 'object') return raw;
-  return JSON.parse(
-    raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim()
-  );
+  if (typeof raw === 'object' && raw !== null) return raw;
+  if (typeof raw === 'string') {
+    return JSON.parse(stripCodeFencesFromPlanString(raw));
+  }
+  return JSON.parse(raw);
 }
 
 /**
@@ -291,14 +303,7 @@ function fallbackTextFromAnything(raw, coerced) {
  * @returns {{ kind: 'v2', plan: object } | { kind: 'fallback', rawText: string }}
  */
 export function parsePlanBuilderDisplayResult(result) {
-  let raw = result;
-  // Strip markdown code fences if present
-  if (typeof raw === 'string') {
-    raw = raw.trim();
-    if (raw.startsWith('```')) {
-      raw = raw.replace(/^```[a-zA-Z]*\n?/, '').replace(/```\s*$/, '').trim();
-    }
-  }
+  const raw = typeof result === 'string' ? stripCodeFencesFromPlanString(result) : result;
   const unwrapped = unwrapPlanPayload(raw);
 
   if (unwrapped.error) {
