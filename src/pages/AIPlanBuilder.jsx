@@ -41,7 +41,6 @@ import {
   normalizePlatformLabelForIcon,
 } from '../components/SocialIcons';
 import useAIUsage from '../hooks/useAIUsage';
-import AIUsageMeter from '../components/AIUsageMeter';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
@@ -768,7 +767,7 @@ export default function AIPlanBuilder() {
 
   return (
     <div className="flex-1 min-h-screen bg-[#F4F7FB] font-plan-body text-[#0C1220] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12 max-w-full overflow-x-hidden">
-      <div className="mb-4 max-w-4xl mx-auto lg:mx-0">
+      <div className="mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-4xl mx-auto lg:mx-0">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm">
             <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
@@ -784,24 +783,17 @@ export default function AIPlanBuilder() {
         </div>
       </div>
 
-      <div className="mt-1 mb-4 max-w-4xl mx-auto lg:mx-0">
-        <AIUsageMeter
-          used={planUsage.featureUsed}
-          limit={planUsage.featureLimit}
-          label="Plans this month"
-          compact
-          polished
-        />
-        {atLimit && (
-          <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+      {atLimit && (
+        <div className="mt-1 mb-4 max-w-4xl mx-auto lg:mx-0">
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             You&apos;ve reached your plan limit.{' '}
             <Link to="/dashboard/subscription" className="font-semibold text-[#01BAD2] underline underline-offset-2">
               Upgrade to Pro
             </Link>{' '}
             for more plans each month.
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {generationError && !isGenerating && (
         <div className="max-w-4xl mx-auto mb-4 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-800">
