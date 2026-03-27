@@ -308,23 +308,28 @@ export function getCharacterLimit(platformId) {
  * @param {string} contentType - Type of content (caption, hashtag, hook, cta)
  * @returns {string} Platform context for prompts
  */
-export function buildPlatformContext(platformId, contentType = 'general') {
+export function buildPlatformContext(platformId, contentType = 'general', options = {}) {
   const platform = getPlatform(platformId);
-  
+  const omitHashtagGuidelines = Boolean(options.omitHashtagGuidelines);
+
   if (!platform) {
     return 'Platform: General social media';
   }
-  
+
   let context = `PLATFORM: ${platform.name}
 Character Limit: ${platform.charLimit} characters
 Audience Style: ${platform.audienceStyle}
 Content Formats: ${platform.contentFormats.join(', ')}`;
 
-  if (contentType === 'hashtag' || contentType === 'caption') {
+  if ((contentType === 'hashtag' || contentType === 'caption') && !omitHashtagGuidelines) {
     context += `
 Hashtag Guidelines: Use ${platform.hashtags.count} hashtags
 Hashtag Style: ${platform.hashtags.style}
 Hashtag Tip: ${platform.hashtags.tip}`;
+  }
+  if (contentType === 'caption' && omitHashtagGuidelines) {
+    context += `
+Hashtags: Omit entirely from this caption — the product has a separate Hashtag Generator tool.`;
   }
   
   if (contentType === 'hook' || contentType === 'caption') {
@@ -367,6 +372,14 @@ export function getPlatformTips(platformId, contentType) {
       tips.items = [
         `Character limit: ${platform.charLimit.toLocaleString()}`,
         `Use ${platform.hashtags.count} hashtags`,
+        platform.hooks.tip,
+        platform.ctas.tip
+      ];
+      break;
+    case 'caption_power_tools':
+      tips.items = [
+        `Character limit: ${platform.charLimit.toLocaleString()}`,
+        'Hashtags: use the Hashtag Generator in AI Power Tools (captions here are tag-free).',
         platform.hooks.tip,
         platform.ctas.tip
       ];

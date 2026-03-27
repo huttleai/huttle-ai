@@ -39,6 +39,7 @@ import humanizeContent, {
   mapBrandVoiceToHumanizeType,
   normalizeHumanizePlatform,
 } from '../services/humanizeContent';
+import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 
 const _platformRulesImportAnchor =
   Object.keys(PLATFORM_CONTENT_RULES).length +
@@ -77,6 +78,31 @@ function hasConfiguredNiche(brandData) {
 function renderAIText(value) { // HUTTLE: sanitized
   return sanitizeAIOutput(value); // HUTTLE: sanitized
 } // HUTTLE: sanitized
+
+/**
+ * When JSON variants are missing, split joined caption text only on variant boundaries
+ * (numbered blocks like "1. …" / "2. …"), not on every blank line — so one multi-paragraph caption stays one card.
+ */
+function parseCaptionFallbackBlocks(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  const t = raw.trim();
+  if (!t) return [];
+  const hasNumberedVariants = /^\d+\.\s/m.test(t);
+  if (!hasNumberedVariants) {
+    return uniqueNonEmpty([t]);
+  }
+  const blocks = t
+    .split(/(?=^\d+\.\s)/m)
+    .map((part) =>
+      part
+        .replace(/^\d+\.\s*/, '')
+        .replace(/^[-*]\s*/, '')
+        .replace(/^["']|["']$/g, '')
+        .trim()
+    )
+    .filter(Boolean);
+  return uniqueNonEmpty(blocks);
+}
 
 function buildCaptionFallbacks(topic, platformLabel, tone) {
   const normalizedTopic = topic?.trim() || 'this idea';
@@ -376,14 +402,20 @@ export default function AITools() {
         brandVoice: applyBrandVoice && brandData?.brandVoice ? brandData.brandVoice : captionTone,
       });
 
-      if (result.success && result.caption) {
-        const parsedCaptions = uniqueNonEmpty(
-          result.caption
-            .split(/\n{2,}|\d+\.\s+/)
-            .map((part) => part.replace(/^[-*]\s*/, '').replace(/^["']|["']$/g, '').trim())
-        );
+      if (result.success && (result.caption || result.captionVariants?.length)) {
+        let parsedCaptions = [];
+        if (Array.isArray(result.captionVariants) && result.captionVariants.length > 0) {
+          parsedCaptions = uniqueNonEmpty(
+            result.captionVariants.map((v) => (typeof v?.caption === 'string' ? v.caption : '').trim()).filter(Boolean)
+          );
+        }
+        if (parsedCaptions.length === 0 && result.caption) {
+          parsedCaptions = parseCaptionFallbackBlocks(result.caption);
+        }
         const fallbackCaptions = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
-        const finalCaptions = uniqueNonEmpty([...parsedCaptions, ...fallbackCaptions]).slice(0, 4);
+        const finalCaptions = uniqueNonEmpty([...parsedCaptions, ...fallbackCaptions])
+          .map((c) => normalizeAIPowerToolsCaptionText(c))
+          .slice(0, 4);
 
         if (finalCaptions.length > 0) {
           setGeneratedCaptions(finalCaptions);
@@ -1018,7 +1050,7 @@ export default function AITools() {
                 <PlatformSelector
                   value={captionPlatform}
                   onChange={setCaptionPlatform}
-                  contentType="caption"
+                  contentType="caption_power_tools"
                   showTips={true}
                 />
               </div>

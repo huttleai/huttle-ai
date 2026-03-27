@@ -61,6 +61,7 @@ import {
   getContentScoreMock,
   getVisualIdeaMocks 
 } from '../data/demo/demoMockData';
+import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -110,7 +111,8 @@ You deeply understand:
 
 You generate outputs that are specific, non-generic, and performance-oriented.
 You always follow the exact output format and JSON schemas specified in the
-user message. You prefer concrete, testable ideas over vague advice.`;
+user message. You prefer concrete, testable ideas over vague advice.
+Avoid generic AI tells, repetitive template cadence, and filler that could apply to any niche—write like a sharp human strategist.`;
 
 const AI_POWER_TOOL_SPECIALIZATIONS = {
   captions:
@@ -827,10 +829,20 @@ export async function generateCaption(contentData, brandData, options = {}) {
   if (isDemoMode() && !contentData.topic?.trim()) {
     await simulateDelay(1000, 2000);
     const length = contentData.length || 'medium';
-    const mockCaptions = getCaptionMocks(length, 4);
+    const mockCaptions = getCaptionMocks(length, 4).map((c) => normalizeAIPowerToolsCaptionText(c));
+    const captionVariants = mockCaptions.map((caption, i) => ({
+      variantId: i + 1,
+      length,
+      toneSummary: '',
+      caption,
+      primaryAngle: '',
+      recommendedCTAType: 'engagement',
+      notes: '',
+    }));
     return {
       success: true,
       caption: mockCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n\n'),
+      captionVariants,
       usage: { demo: true }
     };
   }
@@ -844,7 +856,9 @@ export async function generateCaption(contentData, brandData, options = {}) {
     const isSingleCaptionMode = Boolean(contentData.selectedHook || contentData.singleCaption);
     const platform = contentData.platform || 'instagram';
     const platformRule = getPlatformPromptRule(platform) || getPlatformPromptRule('instagram');
-    const platformContext = buildPlatformContext(platform, 'caption');
+    const platformContext = buildPlatformContext(platform, 'caption', {
+      omitHashtagGuidelines: !fullPostBuilder,
+    });
     const platformData = getPlatform(platform);
     const hashtagGuidelines = getHashtagGuidelines(platform);
     const hookGuidelines = getHookGuidelines(platform);
@@ -876,6 +890,12 @@ export async function generateCaption(contentData, brandData, options = {}) {
           : 'Drive engagement (saves, comments, shares)';
 
     const variantTarget = isSingleCaptionMode ? 1 : 4;
+    const hashtagRequirementLine = fullPostBuilder
+      ? `- Include ${hashtagGuidelines.count} hashtags (${hashtagGuidelines.style}), only after a final blank line`
+      : `- Do NOT include hashtags, #keywords, or markdown bold (no **). Plain text only — users add tags in the separate Hashtag Generator tool.`;
+    const captionObjectContractNote = fullPostBuilder
+      ? `Do not split hook, body, CTA, or hashtags across separate array objects — use exactly ${variantTarget} top-level objects.`
+      : `Do not split hook, body, or CTA across separate array objects — use exactly ${variantTarget} top-level objects. No hashtags in any "caption" field.`;
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'captions',
       brandData,
@@ -909,7 +929,7 @@ Platform requirements:
 ${platformContext}
 - Character limit: ${platformData?.charLimit || 2200}
 - Hook style hint: ${hookGuidelines.style}
-- Include ${hashtagGuidelines.count} hashtags (${hashtagGuidelines.style}), only after a final blank line
+- ${hashtagRequirementLine}
 - CTA style hint: ${ctaGuidelines.style} (examples: ${ctaGuidelines.examples.slice(0, 3).join(', ')})
 - ${getCaptionPlatformInstructions(platform)}
 ${contentData.selectedHook ? `- Use this exact opening line for every variant: ${JSON.stringify(contentData.selectedHook)}` : ''}
@@ -931,7 +951,19 @@ JSON contract — return ONLY a JSON array with exactly ${variantTarget} objects
   "primaryAngle": string,
   "recommendedCTAType": "engagement" | "sales" | "dms" | "traffic",
   "notes": string
-}`;
+}
+
+Each "caption" string must be ONE complete paste-ready post (line breaks inside that string are fine). ${captionObjectContractNote}`;
+
+    if (!fullPostBuilder) {
+      userMessage += `
+
+AI POWER TOOLS — caption quality (non–Full Post Builder):
+- Each variant's "caption" is ONE cohesive post: hook, 1–3 concrete value beats in flowing prose (avoid cramming "• item • item" on one line); then one clear CTA. No hashtags anywhere.
+- Use proper punctuation: end sentences with periods; if you use short bullet-style beats, put each on its own line or end the block with a period before the next sentence — never jam a new sentence directly against bullets without a line break or closing punctuation.
+- Sound like a strong human creator in this niche — avoid vague AI phrases ("unlock", "game-changer", "in today's world", "whether you're a beginner or pro") and generic filler that could apply to any business.
+- Stay specific to "${contentData.topic}"; plain text only (no **, no #).`;
+    }
 
     if (fullPostBuilder) {
       const igTik = ['instagram', 'tiktok'].includes(String(platform).toLowerCase());
@@ -966,29 +998,56 @@ ${captionHints}`;
       userMessage += `\n\n— Regeneration request (${captionRegenNonce}) — Produce a meaningfully different caption body while honoring every constraint above (including the exact opening hook line when provided). Vary structure, examples, and phrasing.`;
     }
 
-    const grokCaptionOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast' };
+    const captionMessages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+
+    let data;
     if (fullPostBuilder) {
-      grokCaptionOpts.max_tokens = 8192;
+      const grokCaptionOpts = { mode: GROK_MODE_QUALITY, max_tokens: 8192 };
       grokCaptionOpts.grok_debug_fullpost = true;
       grokCaptionOpts.grok_debug_fullpost_step = 'caption';
+      if (captionRegenNonce) grokCaptionOpts.forceCacheRefresh = true;
+      data = await callGrokAPI(captionMessages, 0.7, grokCaptionOpts);
+    } else {
+      const baseOpts = captionRegenNonce ? { forceCacheRefresh: true } : {};
+      try {
+        data = await callGrokAPI(captionMessages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096, ...baseOpts });
+      } catch (firstErr) {
+        const retryable =
+          firstErr?.code === 'GROK_UPSTREAM_INVALID'
+          || firstErr?.code === 'GROK_UPSTREAM_ERROR'
+          || firstErr?.status === 502;
+        if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+        if (import.meta.env.DEV) {
+          console.warn('[generateCaption] Quality model failed; retrying with fast model', {
+            code: firstErr?.code,
+            status: firstErr?.status,
+            fastModel: getGrokModel('fast'),
+          });
+        }
+        data = await callGrokAPI(captionMessages, 0.7, { mode: 'fast', max_tokens: 4096, ...baseOpts });
+      }
     }
-    if (captionRegenNonce) {
-      grokCaptionOpts.forceCacheRefresh = true;
-    }
-
-    const data = await callGrokAPI(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      0.7,
-      grokCaptionOpts,
-    );
 
     const parsed = parseJsonFromResponse(data.content || '');
-    const shaped = captionsFromVariantArray(parsed, isSingleCaptionMode);
-    const captionOut =
+    let shaped = captionsFromVariantArray(parsed, isSingleCaptionMode);
+    if (!fullPostBuilder && shaped?.captionVariants?.length) {
+      const variants = shaped.captionVariants.map((v) => ({
+        ...v,
+        caption: normalizeAIPowerToolsCaptionText(v.caption),
+      }));
+      shaped = {
+        captionVariants: variants,
+        captionText: variants.map((v, i) => `${i + 1}. ${v.caption}`).join('\n\n'),
+      };
+    }
+    let captionOut =
       shaped?.captionText || (typeof data.content === 'string' ? data.content : '') || '';
+    if (!fullPostBuilder && captionOut && !shaped) {
+      captionOut = normalizeAIPowerToolsCaptionText(captionOut);
+    }
 
     return {
       success: true,
