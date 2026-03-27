@@ -119,11 +119,13 @@ const PILLAR_QUICK_ADD = ['Educational tips', 'Behind the scenes', 'Client resul
 const PLAN_BUILDER_JOB_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const PROGRESS_STEP_LABELS = [
+/** Rotating button label while a plan job is running — signals progress, not a freeze. */
+const PLAN_BUILDER_LOADING_PHRASES = [
   'Analyzing your niche...',
   'Mapping content pillars...',
   'Scheduling optimal times...',
   'Writing your plan...',
+  'Building your strategy...',
 ];
 
 function isTwitterLikePlatform(name) {
@@ -301,13 +303,13 @@ export default function AIPlanBuilder() {
   const [editingInputs, setEditingInputs] = useState(true);
   const [calendarViewMode, setCalendarViewMode] = useState('calendar');
   const [expandedPostKey, setExpandedPostKey] = useState(null);
-  const [progressStepIndex, setProgressStepIndex] = useState(0);
   const [isMobileViewport, setIsMobileViewport] = useState(
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
   );
 
   const [currentJobId, setCurrentJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null);
+  const [loadingPhraseIndex, setLoadingPhraseIndex] = useState(0);
 
   const resolvedPostingFrequency = useMemo(() => {
     if (postingFreqMode === 'custom') {
@@ -376,11 +378,11 @@ export default function AIPlanBuilder() {
 
   useEffect(() => {
     if (!isGenerating) {
-      setProgressStepIndex(0);
+      setLoadingPhraseIndex(0);
       return;
     }
     const id = window.setInterval(() => {
-      setProgressStepIndex((i) => (i + 1) % PROGRESS_STEP_LABELS.length);
+      setLoadingPhraseIndex((i) => (i + 1) % PLAN_BUILDER_LOADING_PHRASES.length);
     }, 2800);
     return () => window.clearInterval(id);
   }, [isGenerating]);
@@ -764,8 +766,6 @@ export default function AIPlanBuilder() {
     }
   };
 
-  const getStatusMessage = () => PROGRESS_STEP_LABELS[progressStepIndex] || 'Building your strategy...';
-
   const generateButtonSummary = useMemo(() => {
     const n = selectedPeriod;
     const w = resolvedPostingFrequency;
@@ -1115,37 +1115,18 @@ export default function AIPlanBuilder() {
 
             <div className="border-t border-gray-200 pt-6 space-y-3">
               <p className="text-center text-sm text-gray-600 font-plan-body">{generateButtonSummary}</p>
-              {isGenerating && (
-                <div className="space-y-3 max-w-md mx-auto">
-                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#01BAD2] shrink-0" />
-                    <span>{getStatusMessage()}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-2 text-center">
-                    {
-                      "This typically takes 60–90 seconds — we're building your full strategy from scratch."
-                    }
-                  </p>
-                  <p className="text-center text-xs text-gray-500">
-                    {PROGRESS_STEP_LABELS.map((label, i) => (
-                      <span key={label} className={i === progressStepIndex ? 'font-semibold text-[#01BAD2]' : ''}>
-                        {i > 0 ? ' · ' : ''}
-                        {label}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              )}
               <button
                 type="button"
                 onClick={handleGeneratePlan}
                 disabled={isGenerating || atLimit || !planUsage.canGenerate}
-                className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#01BAD2] font-plan-display text-base font-semibold text-white shadow-md transition-all hover:bg-[#0199b0] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#01BAD2] px-3 py-2.5 font-plan-display text-base font-semibold text-white shadow-md transition-all hover:bg-[#0199b0] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isGenerating ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Building your strategy...
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                    <span className="text-center leading-snug">
+                      {PLAN_BUILDER_LOADING_PHRASES[loadingPhraseIndex]}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -1154,6 +1135,11 @@ export default function AIPlanBuilder() {
                   </>
                 )}
               </button>
+              {isGenerating ? (
+                <p className="text-center text-sm text-gray-400">
+                  This takes 60–90 seconds. Grab a coffee ☕
+                </p>
+              ) : null}
             </div>
           </div>
         );

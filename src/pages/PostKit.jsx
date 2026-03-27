@@ -9,7 +9,6 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Calendar,
   Check,
   Copy,
   FolderPlus,
@@ -155,16 +154,6 @@ function getVisualBrainstormOutputTypes(platformId) {
     { id: 'shoot-guide', title: 'Manual Shoot Guide', Icon: Camera },
     { id: 'shot-list', title: 'Shot List', Icon: Clapperboard },
   ];
-}
-
-function kitPlatformToCalendarPlatforms(platform) {
-  const p = String(platform || '').toLowerCase();
-  if (p === 'instagram') return ['Instagram'];
-  if (p === 'tiktok') return ['TikTok'];
-  if (p === 'youtube') return ['YouTube'];
-  if (p === 'twitter') return ['X'];
-  if (p === 'facebook') return ['Facebook'];
-  return ['Instagram'];
 }
 
 function renderAi(value) {
@@ -324,7 +313,6 @@ export function PostKitNew() {
  */
 export default function PostKitPage() {
   const { kitId } = useParams();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
@@ -338,6 +326,7 @@ export default function PostKitPage() {
   const [titleSaving, setTitleSaving] = useState(false);
   const [replaceConfirm, setReplaceConfirm] = useState(null);
   const [pendingMerge, setPendingMerge] = useState(null);
+  const [savingKitToVault, setSavingKitToVault] = useState(false);
 
   const [slots, setSlots] = useState({});
 
@@ -411,13 +400,13 @@ export default function PostKitPage() {
     setSlots(normalizeKitCanonicalSlots(row));
   };
 
-  const scheduleEnabled = useMemo(() => {
+  const canSaveKitToVault = useMemo(() => {
     const c = slots.caption?.content?.trim();
     const h = slots.hashtags?.content?.trim();
     return Boolean(c && h);
   }, [slots]);
 
-  const assembledForCalendar = useMemo(() => {
+  const assembledKitText = useMemo(() => {
     const parts = [];
     if (slots.hook?.content?.trim()) parts.push(slots.hook.content.trim());
     if (slots.caption?.content?.trim()) parts.push(slots.caption.content.trim());
@@ -427,19 +416,25 @@ export default function PostKitPage() {
     return parts.join('\n\n');
   }, [slots]);
 
-  const handleSchedule = () => {
-    if (!scheduleEnabled) return;
-    navigate('/dashboard/calendar', {
-      replace: false,
-      state: {
-        prefillContent: {
-          title: titleDraft || kit?.title || 'Post Kit',
-          caption: assembledForCalendar,
-          platforms: kitPlatformToCalendarPlatforms(platform),
-          media: [],
-        },
-      },
+  const handleSaveKitToVault = async () => {
+    if (!canSaveKitToVault || !user?.id) return;
+    setSavingKitToVault(true);
+    const topic = titleDraft || kit?.title || '';
+    const itemData = buildContentVaultPayload({
+      name: `Post Kit — ${topic.slice(0, 48) || 'Post'}`,
+      contentText: assembledKitText,
+      contentType: 'full_post',
+      toolSource: 'post_kit',
+      toolLabel: 'Post Kit',
+      topic,
+      platform,
+      description: 'Full post kit (hook, caption, hashtags, CTA, visuals)',
+      metadata: { kit_id: kitId },
     });
+    const result = await saveToVault(user.id, itemData);
+    setSavingKitToVault(false);
+    if (result.success) showToast('Saved to Content Vault ✓', 'success');
+    else showToast(result.error || 'Could not save to vault', 'error');
   };
 
   const saveTitle = async () => {
@@ -641,16 +636,20 @@ export default function PostKitPage() {
 
             <button
               type="button"
-              disabled={!scheduleEnabled}
-              onClick={handleSchedule}
+              disabled={!canSaveKitToVault || savingKitToVault}
+              onClick={() => void handleSaveKitToVault()}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-huttle-primary py-3 text-sm font-semibold text-white hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Calendar className="h-4 w-4" />
-              Schedule this post
+              {savingKitToVault ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FolderPlus className="h-4 w-4" />
+              )}
+              {savingKitToVault ? 'Saving…' : 'Save kit to Content Vault'}
             </button>
-            {!scheduleEnabled && (
+            {!canSaveKitToVault && (
               <p className="mt-2 text-center text-xs text-gray-500">
-                Add caption and hashtags to enable scheduling.
+                Add caption and hashtags to save the full kit to your vault.
               </p>
             )}
           </div>
