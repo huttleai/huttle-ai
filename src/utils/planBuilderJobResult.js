@@ -2,6 +2,23 @@
  * Normalizes n8n / Supabase `jobs.result` payloads for AI Plan Builder.
  */
 
+function safeParse(value) {
+  if (typeof value === 'object' && value !== null) return value;
+
+  if (typeof value === 'string') {
+    let s = value.trim();
+    if (s.startsWith('```')) {
+      s = s
+        .replace(/^```[a-zA-Z]*\r?\n?/, '')
+        .replace(/\n?```\s*$/, '')
+        .trim();
+    }
+    return JSON.parse(s);
+  }
+
+  throw new Error('string_parse');
+}
+
 /** Strip ``` / ```json (etc.) fences so JSON.parse succeeds; no-op if not fenced. */
 function stripCodeFencesFromPlanString(str) {
   if (typeof str !== 'string') return str;
@@ -17,7 +34,7 @@ export function coercePlanJobResult(raw) {
   let v = raw;
   if (typeof v === 'string') {
     try {
-      v = JSON.parse(v);
+      v = safeParse(v);
     } catch {
       return null;
     }
@@ -35,7 +52,7 @@ export function coercePlanJobResult(raw) {
     if (!inner) return v;
     if (typeof inner === 'string') {
       try {
-        v = JSON.parse(inner);
+        v = safeParse(inner);
       } catch {
         v = inner;
       }
@@ -142,7 +159,7 @@ function unwrapPlanPayload(raw) {
     if (inner == null) break;
     if (typeof inner === 'string') {
       try {
-        v = JSON.parse(stripCodeFencesFromPlanString(inner));
+        v = safeParse(inner);
       } catch {
         return { error: 'nested_parse', raw: inner };
       }
@@ -193,9 +210,9 @@ function flattenHashtags(h) {
 function sanitizePlanJSON(raw) {
   if (typeof raw === 'object' && raw !== null) return raw;
   if (typeof raw === 'string') {
-    return JSON.parse(stripCodeFencesFromPlanString(raw));
+    return safeParse(raw);
   }
-  return JSON.parse(raw);
+  return safeParse(String(raw));
 }
 
 /**

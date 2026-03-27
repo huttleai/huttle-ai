@@ -92,11 +92,11 @@ export default async function handler(req, res) {
     }
 
     if (currentUsage >= limit) {
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: 'AI usage limit reached',
-        message: `You've reached your monthly limit of ${limit} AI Plan generations. Upgrade to generate more!`,
+        message: `You've reached your monthly limit of ${limit} AI Plan generations. This allowance resets on the 1st of each month.`,
         currentUsage,
-        limit
+        limit,
       });
     }
 

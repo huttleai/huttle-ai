@@ -398,7 +398,14 @@ export default function AIPlanBuilder() {
 
   const handleJobComplete = useCallback(
     (job) => {
-      const planData = job?.result;
+      let planData = job?.result;
+      if (typeof planData === 'string') {
+        try {
+          planData = JSON.parse(planData);
+        } catch (_) {
+          /* leave as string — safeParse in planBuilderJobResult will handle it */
+        }
+      }
 
       if (!planData) {
         handleJobFailed('Plan generation completed but no result was returned');
@@ -408,7 +415,15 @@ export default function AIPlanBuilder() {
       console.log('[PlanBuilder] Raw result from Supabase:', planData);
 
       const preNormalized = normalizeN8nAlternatePlanToV2(planData) ?? planData;
-      const parsed = parsePlanBuilderDisplayResult(preNormalized);
+      let payload = preNormalized;
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch (_) {
+          /* leave as string — safeParse in planBuilderJobResult will handle it */
+        }
+      }
+      const parsed = parsePlanBuilderDisplayResult(payload);
       if (parsed.kind === 'fallback' && (!parsed.rawText || parsed.rawText === 'No plan content returned.')) {
         console.warn('[PlanBuilder] Empty fallback body');
       }
@@ -786,11 +801,11 @@ export default function AIPlanBuilder() {
       {atLimit && (
         <div className="mt-1 mb-4 max-w-4xl mx-auto lg:mx-0">
           <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            You&apos;ve reached your plan limit.{' '}
+            You&apos;ve used all {planUsage.featureLimit} AI Plan generations for this month on your{' '}
+            {userTier ? getTierDisplayName(userTier) : 'current'} plan. Your allowance resets on the 1st.{' '}
             <Link to="/dashboard/subscription" className="font-semibold text-[#01BAD2] underline underline-offset-2">
-              Upgrade to Pro
-            </Link>{' '}
-            for more plans each month.
+              Manage subscription
+            </Link>
           </p>
         </div>
       )}
