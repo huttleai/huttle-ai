@@ -10,6 +10,8 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        'plan-display': ['Bricolage Grotesque', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        'plan-body': ['Figtree', 'Inter', 'system-ui', 'sans-serif'],
       },
       // Logo-Derived Color Palette
       colors: {

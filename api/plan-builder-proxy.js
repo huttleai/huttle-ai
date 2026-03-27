@@ -84,17 +84,26 @@ export default async function handler(req, res) {
     });
   }
 
-  // Validate request body
+  // Validate request body — forward all plan-builder fields n8n expects (see src/services/planBuilderAPI.js)
+  const body = req.body || {};
   const {
     job_id,
     contentGoal,
     timePeriod,
+    postingFrequency,
     platformFocus,
+    niche,
+    targetAudience,
+    brandVoiceTone,
+    contentPillars,
+    followerRange,
+    extraContext,
     brandVoice,
+    brandContext,
     trendContext,
     platform_rules_block,
     platforms_list,
-  } = req.body || {};
+  } = body;
 
   if (!job_id) {
     console.error('[plan-builder-proxy] Missing job_id in request body', { requestId });
@@ -123,13 +132,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Build the complete payload for n8n
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
       timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
+      postingFrequency:
+        postingFrequency != null && postingFrequency !== ''
+          ? Number(postingFrequency)
+          : null,
       platformFocus,
-      brandVoice: brandVoice || '',
+      niche: typeof niche === 'string' ? niche : '',
+      targetAudience: typeof targetAudience === 'string' ? targetAudience : '',
+      brandVoiceTone: typeof brandVoiceTone === 'string' ? brandVoiceTone : '',
+      contentPillars: Array.isArray(contentPillars) ? contentPillars : [],
+      followerRange: typeof followerRange === 'string' ? followerRange : '',
+      extraContext: extraContext ?? null,
+      brandVoice: typeof brandVoice === 'string' ? brandVoice : (typeof brandVoiceTone === 'string' ? brandVoiceTone : ''),
+      brandContext: typeof brandContext === 'string' ? brandContext : '',
       trendContext: typeof trendContext === 'string' ? trendContext : '',
       platform_rules_block:
         typeof platform_rules_block === 'string' ? platform_rules_block : '',

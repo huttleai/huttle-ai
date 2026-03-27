@@ -172,6 +172,7 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     followerRange: formData.followerRange ?? '',
     extraContext: formData.extraContext ?? null,
     brandVoice: formData.brandVoice || formData.brandVoiceTone || '',
+    brandContext: typeof formData.brandContext === 'string' ? formData.brandContext : '',
     trendContext: formData.trendContext || '',
     platform_rules_block: typeof formData.platform_rules_block === 'string' ? formData.platform_rules_block : '',
     platforms_list:
@@ -181,6 +182,16 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
           ? platformFocus.join(', ')
           : '',
   };
+
+  if (import.meta.env.DEV) {
+    console.log('[PlanBuilder] n8n webhook payload (keys + sizes):', {
+      ...payload,
+      brandContext: payload.brandContext ? `${payload.brandContext.slice(0, 120)}…` : '',
+      platform_rules_block: payload.platform_rules_block
+        ? `${payload.platform_rules_block.slice(0, 160)}…`
+        : '',
+    });
+  }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {

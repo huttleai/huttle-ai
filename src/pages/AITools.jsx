@@ -1823,6 +1823,7 @@ export default function AITools() {
               {scorerSubTab === 'algorithm' && (
                 <AlgorithmChecker
                   content={contentToScore}
+                  platform={scorerPlatform}
                   hideInput
                 />
               )}

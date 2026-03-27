@@ -106,7 +106,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { messages, temperature = 0.7, model } = req.body;
+    const { messages, temperature = 0.7, model, max_tokens: maxTokensBody } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
@@ -130,10 +130,15 @@ export default async function handler(req, res) {
       return true;
     });
 
+    const requestedMax =
+      maxTokensBody != null && maxTokensBody !== ''
+        ? Math.min(8192, Math.max(64, Number(maxTokensBody) || 4096))
+        : 4096;
+
     const requestBody = {
       model: safeModel,
       messages: filteredMessages,
-      max_tokens: 4096,
+      max_tokens: requestedMax,
       temperature: safeTemperature,
     };
 

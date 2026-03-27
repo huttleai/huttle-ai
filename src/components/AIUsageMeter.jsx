@@ -9,8 +9,9 @@ import { Zap } from 'lucide-react';
  * @param {number|null} props.limit - Monthly limit (null = unlimited)
  * @param {string} props.label - Human-readable feature name (e.g. "Deep Dives")
  * @param {boolean} [props.compact] - Compact display for inline use
+ * @param {boolean} [props.polished] - Full-width thin bar + "X of Y … used" copy (Plan Builder)
  */
-export default function AIUsageMeter({ used = 0, limit = null, label = 'Generations', compact = false }) {
+export default function AIUsageMeter({ used = 0, limit = null, label = 'Generations', compact = false, polished = false }) {
   if (limit === null || limit === Infinity) return null;
 
   const percentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
@@ -21,7 +22,31 @@ export default function AIUsageMeter({ used = 0, limit = null, label = 'Generati
     ? 'bg-red-500'
     : isAmber
       ? 'bg-amber-500'
-      : 'bg-huttle-primary';
+      : 'bg-[#01BAD2]';
+
+  if (compact && polished) {
+    const usagePhrase = `${used} of ${limit} ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+    return (
+      <div className="w-full max-w-xl">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span
+            className={`text-xs ${isRed ? 'text-red-600 font-medium' : isAmber ? 'text-amber-600' : 'text-gray-500'}`}
+          >
+            {usagePhrase}
+          </span>
+          <span className={`text-xs tabular-nums ${isRed ? 'text-red-600' : isAmber ? 'text-amber-600' : 'text-gray-400'}`}>
+            {Math.min(percentage, 100)}%
+          </span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (compact) {
     return (

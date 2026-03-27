@@ -105,13 +105,11 @@ export function normalizePlanResultShape(result) {
 }
 
 function unwrapPlanPayload(raw) {
-  let v = raw;
-  if (typeof v === 'string') {
-    try {
-      v = JSON.parse(v);
-    } catch {
-      return { error: 'string_parse' };
-    }
+  let v;
+  try {
+    v = sanitizePlanJSON(raw);
+  } catch {
+    return { error: 'string_parse' };
   }
   if (v == null) return { error: 'null' };
   if (typeof v !== 'object') return { error: 'not_object' };
@@ -154,6 +152,123 @@ function isNewPlanShape(planObj) {
   return true;
 }
 
+function normalizeContentMixFromSummary(mix) {
+  if (!mix || typeof mix !== 'object') return {};
+  const out = {};
+  for (const [k, val] of Object.entries(mix)) {
+    const key = String(k).toLowerCase();
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < 0) continue;
+    if (key.includes('educat')) out.educational = n;
+    else if (key.includes('entertain')) out.entertaining = n;
+    else if (key.includes('author')) out.authority = n;
+    else if (key.includes('promo')) out.promotional = n;
+    else if (key.includes('personal') || key.includes('bts')) out.personal = n;
+  }
+  return out;
+}
+
+function flattenHashtags(h) {
+  if (!h) return [];
+  if (Array.isArray(h)) return h.filter(Boolean);
+  if (typeof h === 'object') {
+    const primary = Array.isArray(h.primary) ? h.primary : [];
+    const secondary = Array.isArray(h.secondary) ? h.secondary : [];
+    return [...primary, ...secondary].filter(Boolean);
+  }
+  return [];
+}
+
+function sanitizePlanJSON(raw) {
+  if (typeof raw === 'object') return raw;
+  return JSON.parse(
+    raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim()
+  );
+}
+
+/**
+ * Normalizes n8n "planTitle + summary + days[].dayNumber" shape into the v2 overview + days format.
+ */
+export function normalizeN8nAlternatePlanToV2(raw) {
+  let sanitized;
+  try {
+    sanitized = sanitizePlanJSON(raw);
+  } catch {
+    return null;
+  }
+  if (!sanitized || typeof sanitized !== 'object' || Array.isArray(sanitized)) return null;
+  if (sanitized.overview && typeof sanitized.overview === 'object') return null;
+  if (!Array.isArray(sanitized.days) || sanitized.days.length === 0) return null;
+
+  const summary = sanitized.summary && typeof sanitized.summary === 'object' ? sanitized.summary : {};
+
+  const days = sanitized.days.map((d, idx) => {
+    const posts = Array.isArray(d.posts) ? d.posts : [];
+    const mappedPosts = posts.map((p) => {
+      const hashtags = flattenHashtags(p.hashtags);
+      const captionAngle = p.captionAngle ?? p.caption_angle ?? '';
+      return {
+        platform: p.platform,
+        contentType: p.contentType ?? p.content_type,
+        format: p.format,
+        postTime: p.bestTime ?? p.postTime ?? p.best_time ?? '',
+        hook: p.hook ?? '',
+        topic: p.topic ?? '',
+        caption: typeof captionAngle === 'string' && captionAngle.trim() ? captionAngle : (p.caption ?? ''),
+        hashtags,
+        pillar: p.pillar,
+        why_this_works: p.why_this_works,
+        notes: p.visualDirection ?? p.visual_direction ?? p.notes ?? '',
+        cta: p.cta,
+      };
+    });
+    return {
+      day: Number(d.dayNumber ?? d.day ?? idx + 1) || idx + 1,
+      date: d.date != null ? String(d.date) : (d.dayName != null ? String(d.dayName) : ''),
+      theme: d.theme != null ? String(d.theme) : '',
+      posts: mappedPosts,
+    };
+  });
+
+  const platformsFromPosts = [
+    ...new Set(
+      days.flatMap((dd) => (dd.posts || []).map((pp) => pp.platform).filter(Boolean))
+    ),
+  ];
+
+  const mix = normalizeContentMixFromSummary(summary.contentMix ?? summary.content_mix);
+  const optimalTimes = summary.optimalTimes ?? summary.optimal_times;
+  let strategyNotes = '';
+  if (optimalTimes && typeof optimalTimes === 'object') {
+    strategyNotes = Object.entries(optimalTimes)
+      .map(([plat, times]) => {
+        const t = Array.isArray(times) ? times.join(', ') : String(times ?? '');
+        return `${plat}: ${t}`;
+      })
+      .join('\n');
+  }
+  if (Array.isArray(summary.keyThemes) && summary.keyThemes.length) {
+    const kt = `Key themes: ${summary.keyThemes.join(', ')}`;
+    strategyNotes = strategyNotes ? `${strategyNotes}\n${kt}` : kt;
+  }
+
+  const overview = {
+    goal: sanitized.goal || '',
+    duration: `${days.length} days`,
+    strategy: typeof sanitized.planTitle === 'string' ? sanitized.planTitle : '',
+    strategy_notes: strategyNotes,
+    platforms: platformsFromPosts.length ? platformsFromPosts : [],
+    postFrequency: summary.postFrequency != null ? String(summary.postFrequency) : '',
+    contentMix: Object.keys(mix).length ? mix : {},
+  };
+
+  return {
+    overview,
+    days,
+    weeklyTips: Array.isArray(sanitized.weeklyTips) ? sanitized.weeklyTips : [],
+  };
+}
+
 function fallbackTextFromAnything(raw, coerced) {
   if (typeof raw === 'string') return raw;
   if (coerced && typeof coerced === 'object') {
@@ -189,6 +304,12 @@ export function parsePlanBuilderDisplayResult(result) {
   }
 
   const v = unwrapped.value;
+  if (v && typeof v === 'object') {
+    const alternate = normalizeN8nAlternatePlanToV2(v);
+    if (alternate && isNewPlanShape(alternate)) {
+      return { kind: 'v2', plan: alternate };
+    }
+  }
   if (v && typeof v === 'object' && isNewPlanShape(v)) {
     return { kind: 'v2', plan: v };
   }

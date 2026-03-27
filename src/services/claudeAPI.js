@@ -20,17 +20,21 @@ async function getAuthHeaders() {
   return headers;
 }
 
-export async function callClaudeAPI(messages, temperature = 0.7) {
+export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
   const headers = await getAuthHeaders();
-  
+  const payload = {
+    messages,
+    temperature,
+    model: CLAUDE_MODEL,
+  };
+  if (options && Number.isFinite(Number(options.max_tokens))) {
+    payload.max_tokens = Number(options.max_tokens);
+  }
+
   const response = await fetch(CLAUDE_PROXY_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-      model: CLAUDE_MODEL
-    })
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
