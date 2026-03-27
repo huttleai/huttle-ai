@@ -863,7 +863,7 @@ Exclude any tag you cannot verify exists with real active volume.`,
  * so the proxy keeps user_id null on niche_content_cache and trends are shared per niche key.
  */
 async function requestPerplexityWidgetData(type, platform, context, headers, options = {}, cacheKey, messages) {
-  const MAX_RETRIES = 2;
+  const MAX_RETRIES = 1;
   const modelForLog = type === 'trending' ? MODEL_CONFIG_REF.dashboard_trending : MODEL_CONFIG_REF.quick_scan;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -920,8 +920,13 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
           return null;
         }
 
-        const delayMs = attempt === 0 ? 1000 : 3000;
-        console.warn(`[Perplexity] Rate limited, retrying in ${delayMs / 1000}s...`, platform);
+        const baseDelayMs = 8000;
+        const jitterMs = Math.random() * 2000;
+        const delayMs = baseDelayMs + jitterMs;
+        console.warn(
+          `[Perplexity] Rate limited, retrying in ~${(delayMs / 1000).toFixed(1)}s...`,
+          platform,
+        );
         await sleep(delayMs);
         continue;
       }
