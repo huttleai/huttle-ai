@@ -33,6 +33,9 @@ const Help = lazy(() => import('../pages/Help'));
 const SocialUpdates = lazy(() => import('../pages/SocialUpdates'));
 const AITools = lazy(() => import('../pages/AITools'));
 const FullPostBuilder = lazy(() => import('../pages/FullPostBuilder'));
+const PostKitPage = lazy(() => import('../pages/PostKit'));
+const PostKitNew = lazy(() => import('../pages/PostKit').then((m) => ({ default: m.PostKitNew })));
+const SmartCalendar = lazy(() => import('../pages/SmartCalendar'));
 const NicheIntel = lazy(() => import('../pages/NicheIntel'));
 const IPhoneMockupDemo = lazy(() => import('../components/IPhoneMockupDemo'));
 const MockupShowcase = lazy(() => import('../pages/MockupShowcase'));
@@ -118,7 +121,7 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
           <Suspense fallback={<DashboardRouteFallback />}>
           <Routes>
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/calendar" element={<ProtectedRoute><SmartCalendar /></ProtectedRoute>} />
             <Route path="/library" element={<ProtectedRoute><ContentLibrary /></ProtectedRoute>} />
             <Route path="/plan-builder" element={<ProtectedRoute><AIPlanBuilder /></ProtectedRoute>} />
             <Route path="/trend-lab" element={<ProtectedRoute><TrendLab /></ProtectedRoute>} />
@@ -126,6 +129,8 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
             <Route path="/content-remix" element={<ProtectedRoute><ContentRemix /></ProtectedRoute>} />
             <Route path="/ai-tools" element={<ProtectedRoute><AITools /></ProtectedRoute>} />
             <Route path="/full-post-builder" element={<ProtectedRoute><FullPostBuilder /></ProtectedRoute>} />
+            <Route path="/post-kit/new" element={<ProtectedRoute><PostKitNew /></ProtectedRoute>} />
+            <Route path="/post-kit/:kitId" element={<ProtectedRoute><PostKitPage /></ProtectedRoute>} />
             <Route path="/niche-intel" element={<ProtectedRoute><NicheIntel /></ProtectedRoute>} />
             <Route path="/profile" element={<Navigate to="/dashboard/brand-voice" replace />} />
             <Route path="/brand-voice" element={<ProtectedRoute><BrandVoice /></ProtectedRoute>} />

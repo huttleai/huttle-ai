@@ -22,7 +22,6 @@ const PLATFORM_MAP = {
   youtube: 'YouTube',
   twitter: 'X',
   x: 'X',
-  linkedin: 'LinkedIn',
   email: 'Email',
 };
 
@@ -54,7 +53,7 @@ export function normalizeHumanizePlatform(platform) {
   const key = raw.toLowerCase();
   if (PLATFORM_MAP[key]) return PLATFORM_MAP[key];
   const titled = raw.charAt(0).toUpperCase() + raw.slice(1);
-  const allowed = new Set(['Instagram', 'TikTok', 'Facebook', 'YouTube', 'X', 'LinkedIn', 'Email']);
+  const allowed = new Set(['Instagram', 'TikTok', 'Facebook', 'YouTube', 'X', 'Email']);
   if (allowed.has(titled)) return titled;
   if (titled === 'Twitter') return 'X';
   return 'Instagram';

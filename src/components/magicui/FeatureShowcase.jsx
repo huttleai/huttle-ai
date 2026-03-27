@@ -124,7 +124,7 @@ const ContentRemixPreview = () => (
         { name: 'TikTok', color: 'bg-black' },
         { name: 'Instagram', color: 'bg-gradient-to-br from-purple-500 to-pink-500' },
         { name: 'YouTube', color: 'bg-red-500' },
-        { name: 'LinkedIn', color: 'bg-blue-600' },
+        { name: 'Facebook', color: 'bg-blue-600' },
       ].map((platform) => (
         <div
           key={platform.name}
@@ -211,7 +211,7 @@ const AIPlanBuilderPreview = () => (
       {[
         { day: 'Mon', type: 'Reel', platform: 'Instagram', color: 'from-pink-500 to-purple-500', width: '60%' },
         { day: 'Tue', type: 'Story', platform: 'TikTok', color: 'from-slate-700 to-slate-900', width: '68%' },
-        { day: 'Wed', type: 'Post', platform: 'LinkedIn', color: 'from-blue-500 to-blue-600', width: '76%' },
+        { day: 'Wed', type: 'Post', platform: 'Facebook', color: 'from-blue-500 to-blue-600', width: '76%' },
         { day: 'Thu', type: 'Video', platform: 'YouTube', color: 'from-red-500 to-red-600', width: '84%' },
         { day: 'Fri', type: 'Thread', platform: 'X', color: 'from-slate-800 to-slate-900', width: '92%' },
       ].map((item) => (

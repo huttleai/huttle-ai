@@ -354,7 +354,6 @@ export function getImprovementColor(improvement) {
 export const BEST_TIMES = {
   tiktok: [13, 16, 20],      // 1 PM (Lunch), 4 PM (Exit), 8 PM (Prime)
   instagram: [7, 12, 17],    // 7 AM (Wake), 12 PM (Break), 5 PM (Home)
-  linkedin: [9, 12, 17],     // 9 AM (Start), 12 PM (Lunch), 5 PM (Finish)
   twitter: [9, 13, 20],      // 9 AM (News), 1 PM (Lunch), 8 PM (TV)
   youtube: [10, 15, 19],     // 10 AM (Weekend), 3 PM (School out), 7 PM (Prime)
   facebook: [8, 13, 19],     // 8 AM (Check), 1 PM (Break), 7 PM (Relax)
@@ -377,7 +376,6 @@ function normalizePlatformName(platform) {
   if (normalized.includes('tiktok')) return 'tiktok';
   if (normalized.includes('youtube')) return 'youtube';
   if (normalized.includes('facebook')) return 'facebook';
-  if (normalized.includes('linkedin')) return 'linkedin';
   
   return 'default';
 }

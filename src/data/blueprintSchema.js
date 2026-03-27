@@ -60,18 +60,6 @@ const BLUEPRINT_SCHEMA = {
       excluded: ['directors_cut', 'script', 'audio_vibe', 'carousel_structure', 'story_arc', 'visual_composition'],
     },
   },
-  LinkedIn: {
-    Post: {
-      required: ['hook_text', 'caption_framework', 'hashtag_strategy', 'cta', 'posting_time'],
-      optional: ['pro_tips'],
-      excluded: ['directors_cut', 'script', 'audio_vibe', 'carousel_structure', 'story_arc', 'interactive_elements'],
-    },
-    Article: {
-      required: ['hook_text', 'article_structure', 'caption_framework', 'hashtag_strategy', 'cta', 'posting_time'],
-      optional: ['pro_tips'],
-      excluded: ['directors_cut', 'script', 'audio_vibe', 'carousel_structure', 'story_arc', 'interactive_elements'],
-    },
-  },
   Facebook: {
     Post: {
       required: ['hook_text', 'caption_framework', 'cta', 'boost_readiness_score', 'posting_time'],
@@ -118,8 +106,6 @@ const BLUEPRINT_LABELS = {
   'X|Post': '🐦 X/Twitter Post Brief',
   'X/Twitter|Thread': '🧵 X/Twitter Thread Brief',
   'X|Thread': '🧵 X/Twitter Thread Brief',
-  'LinkedIn|Post': '💼 LinkedIn Post Brief',
-  'LinkedIn|Article': '📝 LinkedIn Article Brief',
   'Facebook|Post': '📘 Facebook Post Brief',
   'Facebook|Reel': '🎬 Facebook Reel Brief',
   'Facebook|Story': '📖 Facebook Story Brief',

@@ -37,13 +37,6 @@ export const formatKitForCopy = (platform, slots) => {
       }
       break;
 
-    case 'linkedin':
-      if (slots.opening_line) parts.push(slots.opening_line);
-      if (slots.post_body) parts.push(slots.post_body);
-      if (slots.cta) parts.push(slots.cta);
-      if (slots.hashtags) parts.push(slots.hashtags);
-      break;
-
     case 'facebook':
       if (slots.opening_line) parts.push(slots.opening_line);
       if (slots.caption) parts.push(slots.caption);

@@ -3,8 +3,62 @@ import { supabase } from '../config/supabase';
 const KITS_TABLE = 'post_kits';
 const SLOTS_TABLE = 'post_kit_slots';
 
+/** Pending kit creation from FAB, Vault, or Full Post Builder — `{ platform, topic, prefill?: { caption, hashtags } }` */
+export const POSTKIT_PENDING_STORAGE_KEY = 'huttle_postkit_pending';
+
+export const POSTKIT_CANONICAL_SLOT_KEYS = ['caption', 'hook', 'hashtags', 'cta', 'visuals'];
+
 function isNonEmptyContent(value) {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+function countFilledCanonicalSlots(kitSlots) {
+  if (!kitSlots || typeof kitSlots !== 'object') return 0;
+  return POSTKIT_CANONICAL_SLOT_KEYS.filter((k) => isNonEmptyContent(kitSlots[k]?.content)).length;
+}
+
+/**
+ * Read merged canonical slots from kit row (JSONB) with optional legacy post_kit_slots rows.
+ * @param {object} kit
+ * @returns {Record<string, { content: string, savedAt?: string }>}
+ */
+export function normalizeKitCanonicalSlots(kit) {
+  const out = {};
+  const json = kit?.kit_slots && typeof kit.kit_slots === 'object' ? kit.kit_slots : {};
+  for (const key of POSTKIT_CANONICAL_SLOT_KEYS) {
+    const entry = json[key];
+    if (entry && typeof entry.content === 'string' && entry.content.trim()) {
+      out[key] = {
+        content: entry.content,
+        savedAt: typeof entry.savedAt === 'string' ? entry.savedAt : undefined,
+      };
+    }
+  }
+  if (Object.keys(out).length > 0) return out;
+
+  const rows = kit?.post_kit_slots;
+  if (!Array.isArray(rows)) return out;
+
+  const firstContent = (slotKeys) => {
+    for (const sk of slotKeys) {
+      const row = rows.find((r) => r?.slot_key === sk && isNonEmptyContent(r?.content));
+      if (row) return row.content;
+    }
+    return '';
+  };
+
+  const cap = firstContent(['caption', 'post_text', 'description', 'post_body']);
+  if (cap) out.caption = { content: cap };
+  const hook = firstContent(['opening_line', 'title']);
+  if (hook) out.hook = { content: hook };
+  const tags = firstContent(['hashtags', 'tags']);
+  if (tags) out.hashtags = { content: tags };
+  const cta = firstContent(['cta']);
+  if (cta) out.cta = { content: cta };
+  const vis = firstContent(['image_description']);
+  if (vis) out.visuals = { content: vis };
+
+  return out;
 }
 
 /**
@@ -86,10 +140,14 @@ export async function getUserKits(userId) {
       }
     }
 
-    const data = list.map((kit) => ({
-      ...kit,
-      filled_slot_count: filledCountByKitId[kit.id] || 0,
-    }));
+    const data = list.map((kit) => {
+      const fromJson = countFilledCanonicalSlots(kit.kit_slots);
+      const legacy = filledCountByKitId[kit.id] || 0;
+      return {
+        ...kit,
+        filled_slot_count: fromJson > 0 ? fromJson : legacy,
+      };
+    });
 
     return { success: true, data };
   } catch (error) {
@@ -121,6 +179,101 @@ export async function getKitWithSlots(kitId) {
     return { success: true, data };
   } catch (error) {
     console.error('[postKitService] getKitWithSlots:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Merge one canonical slot into post_kits.kit_slots (JSONB).
+ * @param {'caption'|'hook'|'hashtags'|'cta'|'visuals'} slotKey
+ */
+export async function mergeKitCanonicalSlot({ kitId, userId, slotKey, content }) {
+  try {
+    if (!kitId || !userId || !slotKey) {
+      return { success: false, error: 'kitId, userId, and slotKey are required.' };
+    }
+    if (!POSTKIT_CANONICAL_SLOT_KEYS.includes(slotKey)) {
+      return { success: false, error: 'Invalid slot key.' };
+    }
+
+    const { data: row, error: fetchError } = await supabase
+      .from(KITS_TABLE)
+      .select('kit_slots')
+      .eq('id', kitId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    const prev =
+      row?.kit_slots && typeof row.kit_slots === 'object' && !Array.isArray(row.kit_slots)
+        ? row.kit_slots
+        : {};
+    const next = {
+      ...prev,
+      [slotKey]: {
+        content: typeof content === 'string' ? content : String(content ?? ''),
+        savedAt: new Date().toISOString(),
+      },
+    };
+
+    const { data: updated, error: updateError } = await supabase
+      .from(KITS_TABLE)
+      .update({ kit_slots: next })
+      .eq('id', kitId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('[postKitService] mergeKitCanonicalSlot:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Remove a canonical slot key from kit_slots JSONB.
+ */
+export async function removeKitCanonicalSlot({ kitId, userId, slotKey }) {
+  try {
+    if (!kitId || !userId || !slotKey) {
+      return { success: false, error: 'kitId, userId, and slotKey are required.' };
+    }
+    if (!POSTKIT_CANONICAL_SLOT_KEYS.includes(slotKey)) {
+      return { success: false, error: 'Invalid slot key.' };
+    }
+
+    const { data: row, error: fetchError } = await supabase
+      .from(KITS_TABLE)
+      .select('kit_slots')
+      .eq('id', kitId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    const prev =
+      row?.kit_slots && typeof row.kit_slots === 'object' && !Array.isArray(row.kit_slots)
+        ? { ...row.kit_slots }
+        : {};
+    delete prev[slotKey];
+
+    const { data: updated, error: updateError } = await supabase
+      .from(KITS_TABLE)
+      .update({ kit_slots: prev })
+      .eq('id', kitId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('[postKitService] removeKitCanonicalSlot:', error);
     return { success: false, error: error.message };
   }
 }

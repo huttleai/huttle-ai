@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, ChevronDown, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers, Loader2 } from 'lucide-react';
+import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, Image as ImageIcon, Lightbulb, ChevronRight, ChevronDown, FolderPlus, Camera, Bot, Download, MessageCircle, DollarSign, Mail, User, TrendingUp, Shield, Layers, Loader2, Clapperboard, Instagram, Music, Youtube, Twitter, Facebook } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -14,6 +14,7 @@ import {
   getPlatformPromptRule,
   getHashtagConstraint,
   getHashtagMaxForPlatform,
+  normalizePlatformRulesKey,
 } from '../data/platformContentRules';
 import { 
   generateCaption, 
@@ -24,7 +25,7 @@ import {
   generateVisualIdeas,
   generateVisualBrainstorm 
 } from '../services/grokAPI';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { saveToVault } from '../services/contentService';
@@ -40,11 +41,100 @@ import humanizeContent, {
   normalizeHumanizePlatform,
 } from '../services/humanizeContent';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
+import { fetchVisualBrainstormTrendContext } from '../services/perplexityAPI';
 
 const _platformRulesImportAnchor =
   Object.keys(PLATFORM_CONTENT_RULES).length +
   getPlatformPromptRule('instagram').length +
   getHashtagConstraint('instagram').length;
+
+/** Platform-specific format chips — keys align with {@link VISUAL_PLATFORM_ID_TO_FORMAT_GROUP} display names. */
+const PLATFORM_FORMATS = {
+  Instagram: ['Image', 'Carousel', 'Video', 'Story', 'Reel'],
+  TikTok: ['Short Video', 'Duet', 'Stitch', 'LIVE'],
+  'X/Twitter': ['Image', 'Video', 'Thread'],
+  Facebook: ['Image', 'Video', 'Reel', 'Story'],
+  YouTube: ['Short', 'Long-Form Video', 'Community Post'],
+};
+
+const VISUAL_PLATFORM_ID_TO_FORMAT_GROUP = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  twitter: 'X/Twitter',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+};
+
+function getFormatsForVisualPlatformId(platformId) {
+  const key = VISUAL_PLATFORM_ID_TO_FORMAT_GROUP[String(platformId || '').toLowerCase()];
+  if (key && PLATFORM_FORMATS[key]) return PLATFORM_FORMATS[key];
+  return PLATFORM_FORMATS.Instagram;
+}
+
+function getVisualPlatformTrendLabel(platformId) {
+  const key = normalizePlatformRulesKey(platformId);
+  const row = PLATFORM_CONTENT_RULES[key];
+  return row?.displayName || PLATFORM_CONTENT_RULES.instagram.displayName;
+}
+
+function getVisualBrainstormOutputTypes(platformId) {
+  const p = String(platformId || '').toLowerCase();
+  if (p === 'tiktok' || p === 'youtube') {
+    return [
+      {
+        id: 'shot-list',
+        title: 'Shot List',
+        description: 'A scene-by-scene filming plan: shots, angles, transitions, and on-screen text cues',
+        Icon: Camera,
+      },
+      {
+        id: 'video-script-brief',
+        title: 'Video Script Brief',
+        description: 'Hook, narration flow, B-roll cues, and CTA — ready to film',
+        Icon: Clapperboard,
+      },
+    ];
+  }
+  if (p === 'instagram' || p === 'facebook') {
+    return [
+      {
+        id: 'ai-prompt',
+        title: 'AI Image Prompt',
+        description: 'Detailed prompt for Midjourney, DALL-E, or any AI image generator',
+        Icon: Bot,
+      },
+      {
+        id: 'shoot-guide',
+        title: 'Manual Shoot Guide',
+        description: 'Creative brief for shooting it yourself: angles, lighting, composition, props, mood',
+        Icon: Camera,
+      },
+      {
+        id: 'shot-list',
+        title: 'Shot List',
+        description: 'A scene-by-scene filming plan: shots, angles, transitions, and on-screen text cues',
+        Icon: Clapperboard,
+      },
+    ];
+  }
+  if (p === 'twitter') {
+    return [
+      {
+        id: 'ai-prompt',
+        title: 'AI Image Prompt',
+        description: 'Detailed prompt for Midjourney, DALL-E, or any AI image generator',
+        Icon: Bot,
+      },
+      {
+        id: 'shoot-guide',
+        title: 'Manual Shoot Guide',
+        description: 'Creative brief for shooting it yourself: angles, lighting, composition, props, mood',
+        Icon: Camera,
+      },
+    ];
+  }
+  return getVisualBrainstormOutputTypes('instagram');
+}
 
 function pickCachedTrendTopicChips() {
   const raw = getCachedTrends();
@@ -54,13 +144,13 @@ function pickCachedTrendTopicChips() {
   return [...niche, ...rest].slice(0, 3);
 }
 
+/**
+ * Hook Builder “trending hooks” UI was removed. This shim stays so a partial Vite HMR
+ * update (old render still calling this name) cannot throw ReferenceError.
+ */
+// eslint-disable-next-line no-unused-vars -- referenced only by stale HMR bundles / kept for symbol stability
 function pickCachedTrendHookStarters() {
-  const raw = getCachedTrends();
-  if (!Array.isArray(raw) || !raw.length) return [];
-  return raw
-    .filter((t) => t.hook_starter)
-    .slice(0, 4)
-    .map((t) => ({ hook: t.hook_starter, title: t.topic || t.title }));
+  return [];
 }
 
 function uniqueNonEmpty(items) {
@@ -207,6 +297,9 @@ export default function AITools() {
   const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
   const [visualBrainstormResult, setVisualBrainstormResult] = useState(null);
+  const [visualBrainstormPhase, setVisualBrainstormPhase] = useState(null);
+  /** Perplexity trend copy for the last Visual Brainstormer run (empty if skipped or failed). */
+  const [visualBrainstormTrendContext, setVisualBrainstormTrendContext] = useState(null);
 
   /** Per-hashtag "Why this tag?" open state */
   const [hashtagWhyOpen, setHashtagWhyOpen] = useState({});
@@ -341,7 +434,13 @@ export default function AITools() {
       if (toolForInputs === 'hashtags') setHashtagPlatform(platformParam);
       if (toolForInputs === 'hooks') setHookPlatform(platformParam);
       if (toolForInputs === 'cta') setCtaPlatform(platformParam);
-      if (toolForInputs === 'visual-brainstorm') setVisualPlatform(platformParam);
+      if (toolForInputs === 'visual-brainstorm') {
+        setVisualPlatform(platformParam);
+        const formats = getFormatsForVisualPlatformId(platformParam);
+        setVisualContentFormat(formats[0]);
+        const outTypes = getVisualBrainstormOutputTypes(platformParam);
+        setVisualOutputType(outTypes[0]?.id ?? '');
+      }
       if (toolForInputs === 'scorer') setScorerPlatform(platformParam);
       didPrefill = true;
     }
@@ -794,12 +893,42 @@ export default function AITools() {
 
     setIsLoadingVisualIdeas(true);
     setVisualBrainstormResult(null);
+    setVisualBrainstormTrendContext(null);
+    setVisualBrainstormPhase('trends');
+
+    let trendContext = null;
+    try {
+      const trendRes = await Promise.race([
+        fetchVisualBrainstormTrendContext({
+          topic: visualPrompt.trim(),
+          platformLabel: getVisualPlatformTrendLabel(visualPlatform),
+        }),
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ success: false, text: '' }), 8000);
+        }),
+      ]);
+      if (trendRes?.success && String(trendRes.text || '').trim()) {
+        trendContext = String(trendRes.text).trim();
+      }
+    } catch {
+      trendContext = null;
+    }
+
+    setVisualBrainstormPhase('grok');
+    setVisualBrainstormTrendContext(trendContext);
+
     try {
       const result = await generateVisualBrainstorm(
-        { topic: visualPrompt, platform: visualPlatform, contentFormat: visualContentFormat, outputType: visualOutputType },
+        {
+          topic: visualPrompt,
+          platform: visualPlatform,
+          contentFormat: visualContentFormat,
+          outputType: visualOutputType,
+          trendContext,
+        },
         brandData
       );
-      
+
       if (result.success) {
         setVisualBrainstormResult(result);
         incrementAIUsage();
@@ -811,6 +940,7 @@ export default function AITools() {
       console.error('Visual brainstorm error:', error);
       showToast('Error generating visual brainstorm', 'error');
     } finally {
+      setVisualBrainstormPhase(null);
       setIsLoadingVisualIdeas(false);
     }
   };
@@ -1247,7 +1377,13 @@ export default function AITools() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openAddToKitModal(generatedHashtags.map((h) => h.tag).join(' '), 'hashtags', 'Hashtag Generator')}
+                        onClick={() =>
+                          openAddToKitModal(
+                            generatedHashtags.map((h) => h.tag).join(' '),
+                            'hashtags',
+                            'Hashtag Generator'
+                          )
+                        }
                         className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-all hover:border-huttle-primary/50"
                       >
                         <Layers className="w-3 h-3" />
@@ -1351,26 +1487,6 @@ export default function AITools() {
             </div>
 
             <div className="p-4 md:p-5 space-y-3 md:space-y-4">
-              {isBrandVoiceComplete && pickCachedTrendHookStarters().length > 0 && (
-                <div data-testid="hooks-trending-strip" className="rounded-xl border border-violet-200/80 bg-violet-50/50 dark:bg-violet-950/20 px-3 py-3 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5" aria-hidden />
-                    Trending hooks in your niche
-                  </p>
-                  {pickCachedTrendHookStarters().map((row, i) => (
-                    <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg bg-white dark:bg-gray-900 border border-violet-100 px-2.5 py-2">
-                      <p className="text-xs text-gray-800 dark:text-gray-100 flex-1 min-w-0">&quot;{sanitizeAIOutput(row.hook)}&quot;</p>
-                      <button
-                        type="button"
-                        onClick={() => setHookInput(sanitizeAIOutput(row.hook) || '')}
-                        className="text-[11px] font-semibold px-2 py-1 rounded-md bg-violet-600 text-white hover:bg-violet-700 shrink-0"
-                      >
-                        Use this
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brief Idea</label>
                 <input type="text" value={hookInput} onChange={(e) => setHookInput(e.target.value)} placeholder="e.g., why consistency matters in fitness" className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-huttle-primary/20 focus:border-huttle-primary outline-none text-sm" />
@@ -1809,14 +1925,33 @@ export default function AITools() {
                         <div className="bg-white rounded-lg p-4 border border-gray-200">
                           <h4 className="font-semibold text-gray-900 mb-2 text-sm">Rewrite Example</h4>
                           <p className="text-sm text-gray-700">{renderAIText(contentScore.rewriteExample)}</p>
-                          <button
-                            type="button"
-                            onClick={() => handleAddToLibrary(contentScore.rewriteExample, 'caption', { input: contentToScore.slice(0, 200), platform: 'multi', scorer_rewrite: true }, 'scorer-rewrite')}
-                            className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all"
-                            data-testid="scorer-save-rewrite-vault"
-                          >
-                            {savedIndex === 'scorer-rewrite' ? <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Saved ✓</span></> : <><FolderPlus className="w-3.5 h-3.5" /><span>Save rewrite to Vault</span></>}
-                          </button>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAddToLibrary(
+                                  contentScore.rewriteExample,
+                                  'caption',
+                                  { input: contentToScore.slice(0, 200), platform: 'multi', scorer_rewrite: true },
+                                  'scorer-rewrite'
+                                )
+                              }
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded text-xs font-medium transition-all"
+                              data-testid="scorer-save-rewrite-vault"
+                            >
+                              {savedIndex === 'scorer-rewrite' ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                  <span className="text-green-600">Saved ✓</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FolderPlus className="w-3.5 h-3.5" />
+                                  <span>Save rewrite to Vault</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1895,7 +2030,14 @@ export default function AITools() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Platform</label>
                 <PlatformSelector
                   value={visualPlatform}
-                  onChange={setVisualPlatform}
+                  onChange={(nextId) => {
+                    setVisualPlatform(nextId);
+                    const formats = getFormatsForVisualPlatformId(nextId);
+                    setVisualContentFormat(formats[0]);
+                    const outs = getVisualBrainstormOutputTypes(nextId);
+                    const allowed = outs.map((o) => o.id);
+                    setVisualOutputType((prev) => (allowed.includes(prev) ? prev : outs[0]?.id ?? ''));
+                  }}
                   contentType="visual"
                   showTips={true}
                 />
@@ -1905,9 +2047,10 @@ export default function AITools() {
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Content Format</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Image', 'Carousel', 'Video', 'Story', 'Reel'].map((format) => (
+                  {getFormatsForVisualPlatformId(visualPlatform).map((format) => (
                     <button
                       key={format}
+                      type="button"
                       onClick={() => setVisualContentFormat(format)}
                       className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
                         visualContentFormat === format
@@ -1924,35 +2067,31 @@ export default function AITools() {
               {/* Step 2: Output Type */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Choose Output Type</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setVisualOutputType('ai-prompt')}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      visualOutputType === 'ai-prompt'
-                        ? 'border-huttle-primary bg-cyan-50 shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Bot className="w-5 h-5 text-huttle-primary" />
-                      <span className="font-semibold text-gray-900 text-sm">AI Image Prompt</span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">Get detailed prompts for Midjourney, DALL-E, or any AI image generator</p>
-                  </button>
-                  <button
-                    onClick={() => setVisualOutputType('shoot-guide')}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      visualOutputType === 'shoot-guide'
-                        ? 'border-huttle-primary bg-cyan-50 shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Camera className="w-5 h-5 text-huttle-primary" />
-                      <span className="font-semibold text-gray-900 text-sm">Manual Shoot Guide</span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">Get a creative brief for shooting it yourself: angles, lighting, composition, props, mood</p>
-                  </button>
+                <div
+                  className={`grid grid-cols-1 gap-3 ${
+                    getVisualBrainstormOutputTypes(visualPlatform).length >= 3
+                      ? 'sm:grid-cols-3'
+                      : 'sm:grid-cols-2'
+                  }`}
+                >
+                  {getVisualBrainstormOutputTypes(visualPlatform).map(({ id, title, description, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setVisualOutputType(id)}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        visualOutputType === id
+                          ? 'border-huttle-primary bg-cyan-50 shadow-sm'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Icon className="w-5 h-5 text-huttle-primary shrink-0" />
+                        <span className="font-semibold text-gray-900 text-sm">{title}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1981,8 +2120,21 @@ export default function AITools() {
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoadingVisualIdeas ? <LoadingSpinner size="sm" /> : <Lightbulb className="w-4 h-4" />}
-                <span>{isLoadingVisualIdeas ? 'Generating (10-15 sec)...' : 'Generate Visuals'}</span>
+                <span>
+                  {isLoadingVisualIdeas && visualBrainstormPhase === 'trends'
+                    ? `Scanning ${getVisualPlatformTrendLabel(visualPlatform)} visual trends…`
+                    : isLoadingVisualIdeas && visualBrainstormPhase === 'grok'
+                      ? 'Building your visual concepts…'
+                      : isLoadingVisualIdeas
+                        ? 'Generating…'
+                        : 'Generate Visuals'}
+                </span>
               </button>
+              {visualBrainstormResult && visualBrainstormTrendContext && (
+                <p className="sr-only">
+                  A live platform trend scan was used as context for this generation.
+                </p>
+              )}
               {/* Results — AI Image Prompts */}
               {visualBrainstormResult?.type === 'ai-prompt' && visualBrainstormResult.prompts && (
                 <div className="pt-4 border-t border-gray-100">
@@ -2014,6 +2166,11 @@ export default function AITools() {
                               {concept?.conceptTitle ? renderAIText(concept.conceptTitle) : `Prompt ${i + 1}`}
                             </span>
                           </div>
+                          {concept?.trendSignal && String(concept.trendSignal).trim() && (
+                            <p className="text-[11px] font-medium text-teal-800 border border-teal-500/50 bg-teal-50/80 rounded-md px-2 py-1 mb-2">
+                              📈 Trending signal: {renderAIText(String(concept.trendSignal).trim())}
+                            </p>
+                          )}
                           <p className="text-sm text-gray-800 leading-relaxed mb-3">{renderAIText(prompt)}</p>
                           {hasDetails && (
                             <>
@@ -2098,6 +2255,159 @@ export default function AITools() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Results — Shot list only */}
+              {visualBrainstormResult?.type === 'shot-list' && visualBrainstormResult.guide && (
+                <div className="pt-4 border-t border-gray-100">
+                  <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                  <p className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg mb-3 flex items-center gap-1.5">
+                    <Clapperboard className="w-3.5 h-3.5 text-huttle-primary flex-shrink-0" />
+                    Scene-by-scene plan for &quot;{visualPrompt}&quot;
+                  </p>
+                  <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                    <h5 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded bg-huttle-primary/10 flex items-center justify-center text-huttle-primary text-xs font-bold">1</span>
+                      Shot List
+                    </h5>
+                    <ul className="space-y-1.5">
+                      {(visualBrainstormResult.guide.shotList || []).map((shot, i) => (
+                        <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-huttle-primary mt-1.5 flex-shrink-0" />
+                          {renderAIText(shot)}
+                        </li>
+                      ))}
+                    </ul>
+                    {visualBrainstormResult.guide.platformTips && (
+                      <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-gray-200">
+                        {renderAIText(visualBrainstormResult.guide.platformTips)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const g = visualBrainstormResult.guide;
+                        const text = `SHOT LIST: ${visualPrompt}\n\n${(g.shotList || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n${g.platformTips || ''}`;
+                        handleCopy(text, 'vb-shot-list');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded-lg text-xs font-medium transition-all"
+                    >
+                      {copiedIndex === 'vb-shot-list' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-600">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-gray-600" />
+                          <span>Copy shot list</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const g = visualBrainstormResult.guide;
+                        const text = `SHOT LIST: ${visualPrompt}\n\n${(g.shotList || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n${g.platformTips || ''}`;
+                        handleAddToLibrary(text, 'shoot-guide', { input: visualPrompt }, 'vb-shot-list-save');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded-lg text-xs font-medium transition-all"
+                    >
+                      {savedIndex === 'vb-shot-list-save' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-600">Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <FolderPlus className="w-3.5 h-3.5" />
+                          <span>Save to Vault</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Results — Video script brief */}
+              {visualBrainstormResult?.type === 'video-script-brief' && visualBrainstormResult.brief && (
+                <div className="pt-4 border-t border-gray-100">
+                  <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
+                  <div className="p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-100 space-y-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-huttle-primary bg-huttle-primary/10 px-2 py-0.5 rounded w-fit">
+                        Video Script Brief
+                      </span>
+                      {visualBrainstormResult.brief.trendSignal && String(visualBrainstormResult.brief.trendSignal).trim() && (
+                        <p className="text-[11px] font-medium text-teal-800 border border-teal-500/50 bg-teal-50/80 rounded-md px-2 py-1 w-fit">
+                          📈 Trending signal: {renderAIText(String(visualBrainstormResult.brief.trendSignal).trim())}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800 mb-1">Hook</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.brief.hook)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800 mb-1">Narration flow</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.brief.narrationFlow)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800 mb-1">B-roll cues</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.brief.bRollCues)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800 mb-1">CTA</p>
+                      <p className="text-sm text-gray-700">{renderAIText(visualBrainstormResult.brief.cta)}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const b = visualBrainstormResult.brief;
+                        const text = `VIDEO SCRIPT BRIEF: ${visualPrompt}\n\nHOOK:\n${b.hook}\n\nNARRATION:\n${b.narrationFlow}\n\nB-ROLL:\n${b.bRollCues}\n\nCTA:\n${b.cta}`;
+                        handleCopy(text, 'vb-vid-brief');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:border-huttle-primary/50 rounded-lg text-xs font-medium transition-all"
+                    >
+                      {copiedIndex === 'vb-vid-brief' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-600">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-gray-600" />
+                          <span>Copy brief</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const b = visualBrainstormResult.brief;
+                        const text = `VIDEO SCRIPT BRIEF: ${visualPrompt}\n\nHOOK:\n${b.hook}\n\nNARRATION:\n${b.narrationFlow}\n\nB-ROLL:\n${b.bRollCues}\n\nCTA:\n${b.cta}`;
+                        handleAddToLibrary(text, 'shoot-guide', { input: visualPrompt }, 'vb-vid-brief-save');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-huttle-primary/10 text-huttle-primary hover:bg-huttle-primary/20 rounded-lg text-xs font-medium transition-all"
+                    >
+                      {savedIndex === 'vb-vid-brief-save' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-600">Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <FolderPlus className="w-3.5 h-3.5" />
+                          <span>Save to Vault</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
@@ -2209,7 +2519,6 @@ export default function AITools() {
         content={kitContent}
         slotKey={kitSlotKey}
         sourceTool={kitSourceTool}
-        userId={user?.id}
       />
 
       {/* How We Predict Modal */}

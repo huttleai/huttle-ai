@@ -86,7 +86,6 @@ const PLATFORM_CARD_BORDER = {
   YouTube: '#FF0000',
   X: '#14171A',
   Facebook: '#1877F2',
-  LinkedIn: '#0A66C2',
 };
 
 /** Short hints for summary UI; keys match normalized platform labels */
@@ -96,7 +95,6 @@ const BEST_TIMES_BY_PLATFORM = {
   YouTube: 'Afternoons 2–4pm weekdays; weekends mid-morning for longer watches.',
   X: 'Weekday mornings 8–10am and lunch; breaking news windows anytime.',
   Facebook: 'Weekday mornings 9am–12pm; early evenings 7–9pm.',
-  LinkedIn: 'Tue–Thu 8–10am and lunch; avoid weekends for B2B.',
 };
 
 const CONTENT_TYPE_BADGE = {
@@ -391,6 +389,15 @@ export default function AIPlanBuilder() {
     return () => window.clearInterval(id);
   }, [isGenerating]);
 
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current != null) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   const handleJobFailed = useCallback(
     (errorMessage) => {
       if (progressIntervalRef.current) {
@@ -505,8 +512,9 @@ export default function AIPlanBuilder() {
             return;
           }
 
-          if (job.progress && job.progress > 0) {
-            setProgress(job.progress);
+          const serverProgress = Number(job.progress);
+          if (Number.isFinite(serverProgress) && serverProgress > 0) {
+            setProgress((p) => Math.max(p, Math.min(serverProgress, 99)));
           }
 
           if (isComplete(job)) {
@@ -555,8 +563,9 @@ export default function AIPlanBuilder() {
             return;
           }
 
-          if (job.progress && job.progress > 0) {
-            setProgress(job.progress);
+          const serverProgressPoll = Number(job.progress);
+          if (Number.isFinite(serverProgressPoll) && serverProgressPoll > 0) {
+            setProgress((p) => Math.max(p, Math.min(serverProgressPoll, 99)));
           }
 
           if (isComplete(job)) {
@@ -655,6 +664,10 @@ export default function AIPlanBuilder() {
     setJobStatus('pending');
 
     try {
+      progressIntervalRef.current = window.setInterval(() => {
+        setProgress((p) => Math.min(85, p + 1));
+      }, 1500);
+
       const cachedTrends = getCachedTrends();
       const trendContext =
         Array.isArray(cachedTrends) && cachedTrends.length > 0
@@ -698,6 +711,10 @@ export default function AIPlanBuilder() {
       });
 
       if (createError || !createdJobId) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         throw new Error(createError?.message || 'Failed to create job');
       }
 
@@ -710,6 +727,10 @@ export default function AIPlanBuilder() {
           '[PlanBuilder] createJobDirectly returned invalid job id (expected UUID from jobs.id):',
           createdJobId
         );
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         throw new Error('Failed to create job: invalid job id');
       }
 
@@ -778,6 +799,10 @@ export default function AIPlanBuilder() {
       showToast('Your AI plan is being generated...', 'info');
     } catch (error) {
       console.error('handleGeneratePlan error:', error);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setIsGenerating(false);
       setProgress(0);
       const msg = formatJobError(error?.message || error);

@@ -1,16 +1,28 @@
 import { useMemo } from 'react';
-import { getSlotsForPlatform, getKitStatus } from '../data/postKitSlots';
+import { getSlotsForPlatform, getKitStatus, POSTKIT_PAGE_SLOTS } from '../data/postKitSlots';
 
 const PLATFORM_BADGE = {
   instagram: { abbr: 'IG', className: 'bg-gradient-to-br from-[#F77737] to-[#E1306C] text-white' },
   tiktok: { abbr: 'TT', className: 'bg-black text-white' },
   youtube: { abbr: 'YT', className: 'bg-[#FF0000] text-white' },
   twitter: { abbr: 'X', className: 'bg-[#1DA1F2] text-white' },
-  linkedin: { abbr: 'LI', className: 'bg-[#0A66C2] text-white' },
   facebook: { abbr: 'FB', className: 'bg-[#1877F2] text-white' },
 };
 
 function buildSlotContentsMap(kit) {
+  const j = kit?.kit_slots;
+  if (j && typeof j === 'object' && !Array.isArray(j)) {
+    const map = {};
+    let any = false;
+    for (const key of POSTKIT_PAGE_SLOTS.map((s) => s.key)) {
+      const c = j[key]?.content;
+      if (typeof c === 'string' && c.trim()) {
+        map[key] = c;
+        any = true;
+      }
+    }
+    if (any) return map;
+  }
   const rows = kit?.post_kit_slots;
   if (!Array.isArray(rows)) return null;
   const map = {};
@@ -67,7 +79,10 @@ export function PostKitCard({ kit, onSelect, onClick }) {
     [kit, platformSlots, slotContentsMap]
   );
 
-  const totalSlots = platformSlots.length;
+  const totalSlots =
+    kit?.kit_slots && typeof kit.kit_slots === 'object'
+      ? POSTKIT_PAGE_SLOTS.length
+      : platformSlots.length;
   const filledCount = Number(kit?.filled_slot_count) || 0;
 
   const filledKeys = useMemo(() => {
@@ -83,18 +98,24 @@ export function PostKitCard({ kit, onSelect, onClick }) {
 
   const pipFilled = useMemo(() => {
     if (!totalSlots) return [];
+    if (kit?.kit_slots && typeof kit.kit_slots === 'object') {
+      return POSTKIT_PAGE_SLOTS.map((s) => filledKeys?.has(s.key) ?? false);
+    }
     if (filledKeys) {
       return platformSlots.map((s) => filledKeys.has(s.key));
     }
     return platformSlots.map((_, i) => i < filledCount);
-  }, [totalSlots, platformSlots, filledKeys, filledCount]);
+  }, [totalSlots, platformSlots, filledKeys, filledCount, kit?.kit_slots]);
 
   const tagFilled = useMemo(() => {
+    if (kit?.kit_slots && typeof kit.kit_slots === 'object') {
+      return POSTKIT_PAGE_SLOTS.map((s) => filledKeys?.has(s.key) ?? false);
+    }
     if (filledKeys) {
       return platformSlots.map((s) => filledKeys.has(s.key));
     }
     return platformSlots.map((_, i) => i < filledCount);
-  }, [platformSlots, filledKeys, filledCount]);
+  }, [platformSlots, filledKeys, filledCount, kit?.kit_slots]);
 
   const badge = PLATFORM_BADGE[kit?.platform] || {
     abbr: '?',
@@ -161,16 +182,19 @@ export function PostKitCard({ kit, onSelect, onClick }) {
           )}
 
           <div className="flex flex-wrap gap-1.5">
-            {platformSlots.map((slot, i) => (
+            {(kit?.kit_slots && typeof kit.kit_slots === 'object'
+              ? POSTKIT_PAGE_SLOTS.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
+              : platformSlots.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
+            ).map(({ key, label, i }) => (
               <span
-                key={slot.key}
+                key={key}
                 className={`inline-flex max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                   tagFilled[i]
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
                     : 'border-gray-200 bg-white text-gray-600'
                 }`}
               >
-                {slot.label}
+                {label}
               </span>
             ))}
           </div>

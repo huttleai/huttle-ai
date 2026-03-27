@@ -28,8 +28,6 @@ import { useToast } from '../context/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import PostKitCard from '../components/PostKitCard';
-import PostKitCreateModal from '../components/PostKitCreateModal';
-import PostKitDetail from '../components/PostKitDetail';
 import {
   addItemsToCollection,
   createContentCollection,
@@ -75,7 +73,7 @@ function getContentTypeDisplayLabel(contentType) {
   const key = String(contentType || '').toLowerCase();
   return DISPLAY_NAMES[key] || CONTENT_TYPE_CONFIG[key]?.singular || (key ? key : 'Saved');
 }
-import { getUserKits } from '../services/postKitService';
+import { getUserKits, POSTKIT_PENDING_STORAGE_KEY } from '../services/postKitService';
 
 function formatDate(value) {
   if (!value) return '';
@@ -210,7 +208,6 @@ const CREATE_POST_PLATFORMS = [
   { id: 'tiktok', label: 'TikTok' },
   { id: 'youtube', label: 'YouTube' },
   { id: 'x', label: 'X' },
-  { id: 'linkedin', label: 'LinkedIn' },
   { id: 'facebook', label: 'Facebook' },
 ];
 
@@ -219,7 +216,6 @@ const KIT_PLATFORM_FILTER_TABS = [
   { id: 'instagram', label: 'Instagram' },
   { id: 'tiktok', label: 'TikTok' },
   { id: 'twitter', label: 'X / Twitter' },
-  { id: 'linkedin', label: 'LinkedIn' },
   { id: 'youtube', label: 'YouTube' },
   { id: 'facebook', label: 'Facebook' },
 ];
@@ -442,9 +438,7 @@ export default function ContentLibrary() {
   const [vaultMainTab, setVaultMainTab] = useState('library');
   const [kits, setKits] = useState([]);
   const [kitsLoading, setKitsLoading] = useState(false);
-  const [selectedKitId, setSelectedKitId] = useState(null);
   const [kitPlatformFilter, setKitPlatformFilter] = useState('all');
-  const [showPostKitCreate, setShowPostKitCreate] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useRef(null);
 
@@ -580,12 +574,6 @@ export default function ContentLibrary() {
     if (vaultMainTab !== 'kits') return;
     loadKits();
   }, [user?.id, vaultMainTab, loadKits]);
-
-  useEffect(() => {
-    if (vaultMainTab !== 'kits') {
-      setSelectedKitId(null);
-    }
-  }, [vaultMainTab]);
 
   useEffect(() => {
     if (vaultMainTab !== 'library') {
@@ -961,8 +949,7 @@ export default function ContentLibrary() {
             <div className="min-w-0 flex-1">
               <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Content Vault</h1>
               <p className="mt-1 text-sm text-gray-500">
-                {vaultMainTab === 'kits' && !selectedKitId && 'Organize multi-part posts by platform.'}
-                {vaultMainTab === 'kits' && selectedKitId && 'Edit slots and copy when you are ready to post.'}
+                {vaultMainTab === 'kits' && 'Organize multi-part posts by platform.'}
                 {vaultMainTab === 'library' && 'Your saved AI content'}
               </p>
             </div>
@@ -989,7 +976,7 @@ export default function ContentLibrary() {
           </div>
         </div>
 
-        {vaultMainTab === 'kits' && !selectedKitId && (
+        {vaultMainTab === 'kits' && (
           <div className="mb-6 space-y-4">
             <div className="overflow-x-auto pb-1">
               <div className="flex min-w-max gap-2">
@@ -1031,7 +1018,14 @@ export default function ContentLibrary() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowPostKitCreate(true)}
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(POSTKIT_PENDING_STORAGE_KEY, JSON.stringify({ platform: null, topic: null }));
+                    } catch {
+                      /* ignore */
+                    }
+                    navigate('/dashboard/post-kit/new');
+                  }}
                   className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
                 >
                   <Plus className="h-4 w-4" />
@@ -1046,12 +1040,19 @@ export default function ContentLibrary() {
                   <PostKitCard
                     key={kit.id}
                     kit={kit}
-                    onClick={() => setSelectedKitId(kit.id)}
+                    onSelect={() => navigate(`/dashboard/post-kit/${kit.id}`)}
                   />
                 ))}
                 <button
                   type="button"
-                  onClick={() => setShowPostKitCreate(true)}
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(POSTKIT_PENDING_STORAGE_KEY, JSON.stringify({ platform: null, topic: null }));
+                    } catch {
+                      /* ignore */
+                    }
+                    navigate('/dashboard/post-kit/new');
+                  }}
                   className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-[24px] border-2 border-dashed border-gray-300 bg-white/60 px-5 py-8 text-center text-sm font-semibold text-gray-600 transition-all hover:border-huttle-primary/50 hover:text-huttle-primary"
                 >
                   <Plus className="h-6 w-6" />
@@ -1062,23 +1063,13 @@ export default function ContentLibrary() {
           </div>
         )}
 
-        {vaultMainTab === 'kits' && selectedKitId && (
-          <div className="mb-6">
-            <PostKitDetail
-              kitId={selectedKitId}
-              userId={user?.id}
-              onBack={() => {
-                setSelectedKitId(null);
-                loadKits();
-              }}
-              onUpdated={loadKits}
-            />
-          </div>
-        )}
-
         {vaultMainTab === 'library' && (
           <>
-        <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
+        <div
+          className={`mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6 ${
+            createMenuOpen ? 'relative z-30' : ''
+          }`}
+        >
           <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
               <div className="relative w-full sm:min-w-[300px] sm:flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -1655,13 +1646,6 @@ export default function ContentLibrary() {
           </div>
         </div>
       )}
-
-      <PostKitCreateModal
-        isOpen={showPostKitCreate}
-        onClose={() => setShowPostKitCreate(false)}
-        userId={user?.id}
-        onCreated={() => loadKits()}
-      />
 
       <CreatePostModal
         isOpen={isCreatePostOpen}

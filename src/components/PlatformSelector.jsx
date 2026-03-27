@@ -5,7 +5,6 @@ import {
   Twitter, 
   Facebook, 
   Youtube, 
-  Linkedin, 
   Image, 
   AtSign,
   ChevronDown,
@@ -23,7 +22,6 @@ const PLATFORM_ICONS = {
   Twitter: Twitter,
   Facebook: Facebook,
   Youtube: Youtube,
-  Linkedin: Linkedin,
   Image: Image, // Pinterest
   AtSign: AtSign // Threads
 };

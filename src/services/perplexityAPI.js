@@ -559,6 +559,40 @@ Output: plain text bullets only. No JSON.`,
 }
 
 /**
+ * Live visual trend scan for Visual Brainstormer (Sonar via quick scan — no cache; caller may timeout).
+ * @param {{ topic: string, platformLabel: string }} params
+ * @param {{ accessToken?: string }} [options]
+ * @returns {Promise<{ success: boolean, text: string }>}
+ */
+export async function fetchVisualBrainstormTrendContext(
+  { topic = '', platformLabel = 'Instagram' } = {},
+  options = {},
+) {
+  const nicheTopic = String(topic || 'general content').trim() || 'general content';
+  const platform = String(platformLabel || 'Instagram').trim() || 'Instagram';
+  const userPrompt = `What visual content styles, formats, and aesthetics are performing best on ${platform} right now for content about ${nicheTopic}? Focus on: color palettes, lighting styles, composition trends, text overlay styles, and content pacing. Be specific and current. Max 200 words.`;
+
+  try {
+    const data = await callPerplexityAPI(
+      [
+        { role: 'system', content: PERPLEXITY_RESEARCH_ENGINE_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ],
+      0.2,
+      {
+        perplexityFeature: 'quick_scan',
+        webSearchOptions: { search_context_size: 'medium' },
+        accessToken: options.accessToken,
+      },
+    );
+    const text = String(data.content || '').trim();
+    return { success: true, text };
+  } catch {
+    return { success: false, text: '' };
+  }
+}
+
+/**
  * Scan trending topics in a niche
  * @param {Object} brandData - Brand data from BrandContext
  * @param {string} platform - Platform to scan (default: 'all')

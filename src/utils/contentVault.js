@@ -1,4 +1,4 @@
-import { Facebook, FileText, Hash, Instagram, Linkedin, MessageSquare, Sparkles, Target, Twitter, Video, Wand2, Youtube } from 'lucide-react';
+import { Facebook, FileText, Hash, Instagram, MessageSquare, Sparkles, Target, Twitter, Video, Wand2, Youtube } from 'lucide-react';
 
 export const CONTENT_TYPE_CONFIG = {
   caption: {
@@ -93,7 +93,6 @@ export const PLATFORM_OPTIONS = [
   { id: 'tiktok', label: 'TikTok', icon: Video },
   { id: 'facebook', label: 'Facebook', icon: Facebook },
   { id: 'youtube', label: 'YouTube', icon: Youtube },
-  { id: 'linkedin', label: 'LinkedIn', icon: Linkedin },
   { id: 'x', label: 'X', icon: Twitter },
 ];
 
@@ -105,7 +104,6 @@ export function normalizePlatform(platform) {
   if (value.includes('tiktok')) return 'tiktok';
   if (value.includes('facebook')) return 'facebook';
   if (value.includes('youtube')) return 'youtube';
-  if (value.includes('linkedin')) return 'linkedin';
   if (value === 'twitter' || value.includes('x')) return 'x';
 
   return value;
@@ -283,7 +281,6 @@ export function buildUseAgainTarget(item) {
     || (item.platform === 'tiktok' ? 'TikTok' : '')
     || (item.platform === 'facebook' ? 'Facebook' : '')
     || (item.platform === 'youtube' ? 'YouTube' : '')
-    || (item.platform === 'linkedin' ? 'LinkedIn' : '')
     || (item.platform === 'x' ? 'X' : '')
   );
 

@@ -21,7 +21,6 @@ import {
   getRealtimeCaptionPatterns,
   getRealtimeHookPatterns,
   getRealtimeCTAPatterns,
-  getRealtimeVisualPatterns,
 } from './perplexityAPI';
 import { algorithmSignals } from '../data/algorithmSignals';
 import {
@@ -313,6 +312,14 @@ function shootGuideFromVisualConcepts(concepts, topic, platformLabel, contentFor
 
 function normalizeVisualFormatLabel(fmt) {
   const f = String(fmt || 'image').toLowerCase();
+  if (f.includes('document') && f.includes('carousel')) return 'carousel';
+  if (f.includes('long-form') || f.includes('long form')) return 'video';
+  if (f === 'short' || f.includes('short video') || /\bshorts\b/.test(f)) return 'reel';
+  if (f.includes('community')) return 'image';
+  if (f.includes('thread')) return 'carousel';
+  if (f.includes('text post')) return 'image';
+  if (f.includes('live')) return 'video';
+  if (f.includes('duet') || f.includes('stitch')) return 'video';
   if (f.includes('carousel')) return 'carousel';
   if (f.includes('reel')) return 'reel';
   if (f.includes('story')) return 'story';
@@ -2821,13 +2828,21 @@ Number them 1-4.`
 }
 
 /**
- * Generate visual brainstorm results — AI Image Prompts or Manual Shoot Guide
- * @param {Object} params - { topic, platform, contentFormat, outputType }
+ * Generate visual brainstorm results — prompts, shoot guide, shot list, or video script brief
+ * @param {Object} params - { topic, platform, contentFormat, outputType, trendContext? }
  * @param {Object} brandData - Brand data from BrandContext
  * @returns {Promise<Object>} Generated prompts or shoot guide
  */
 export async function generateVisualBrainstorm(params, brandData) {
-  const { topic, platform, contentFormat, outputType } = params;
+  const { topic, platform, contentFormat, outputType, trendContext: trendContextParam } = params;
+  const trendContextRaw =
+    trendContextParam != null && String(trendContextParam).trim()
+      ? String(trendContextParam).trim()
+      : '';
+  const trendIntelBlock =
+    trendContextRaw.length > 0
+      ? `\n\nCURRENT PLATFORM TREND INTELLIGENCE:\n${trendContextRaw}\n\nUse the above trend data to inform every visual concept you generate. Each concept must reference at least one specific trend element from the data above (e.g., "trending warm-tone overexposed lighting", "text overlay with bold sans-serif trending on TikTok"). Do not generate generic concepts that ignore this data.\n`
+      : '';
 
   // Demo mode fallback
   if (isDemoMode()) {
@@ -2839,8 +2854,36 @@ export async function generateVisualBrainstorm(params, brandData) {
         prompts: [
           `Silhouette of a person doing ${topic}, golden hour lighting, warm orange and purple sky, gentle atmosphere, shot from low angle, cinematic composition, 4:5 aspect ratio for ${platform}`,
           `Flat lay arrangement themed around ${topic}, minimalist aesthetic, soft natural light, pastel color palette, overhead shot, clean composition, square format`,
-          `Dynamic action shot capturing the essence of ${topic}, vibrant colors, motion blur effect, shallow depth of field, editorial style photography, vertical format for mobile`
-        ]
+          `Dynamic action shot capturing the essence of ${topic}, vibrant colors, motion blur effect, shallow depth of field, editorial style photography, vertical format for mobile`,
+        ],
+      };
+    }
+    if (outputType === 'video-script-brief') {
+      return {
+        success: true,
+        type: 'video-script-brief',
+        brief: {
+          hook: `Open on a bold pattern interrupt about ${topic} in the first 1–2 seconds.`,
+          narrationFlow: `Quick setup → proof or demo → relatable aside → payoff.`,
+          bRollCues: `Tight hands, environment B-roll, reaction cutaways, speed ramp transition.`,
+          cta: `Ask viewers to comment their biggest struggle with ${topic}.`,
+          trendSignal: 'quick-cut vertical hooks trending on short video',
+        },
+      };
+    }
+    if (outputType === 'shot-list') {
+      return {
+        success: true,
+        type: 'shot-list',
+        guide: {
+          shotList: [
+            `0:00–0:02 Hook: text-on-screen + face to camera re: ${topic}`,
+            `0:02–0:08 Wide environmental establish, handheld micro-movement`,
+            `0:08–0:15 Detail inserts + jump cut rhythm`,
+            `0:15–0:22 CTA card with bold on-screen caption`,
+          ],
+          platformTips: `Format: ${contentFormat} — use platform-native aspect ratio and safe margins for UI chrome.`,
+        },
       };
     }
     return {
@@ -2851,14 +2894,14 @@ export async function generateVisualBrainstorm(params, brandData) {
           `Wide establishing shot capturing the full scene of ${topic}`,
           `Close-up detail shot highlighting textures and key elements`,
           `Over-the-shoulder or POV perspective for viewer immersion`,
-          `Behind-the-scenes candid moment showing authenticity`
+          `Behind-the-scenes candid moment showing authenticity`,
         ],
         lighting: `Natural golden hour lighting recommended for ${topic}. Shoot during the first/last hour of sunlight for warm, flattering tones. If shooting indoors, position near large windows for soft diffused light.`,
         composition: `Use the rule of thirds to place your subject off-center. Try shooting from a low angle to add drama and presence. Include leading lines to draw the viewer's eye to the focal point.`,
         propsAndStyling: `Keep it minimal and authentic. Include items that relate directly to ${topic}. Use complementary colors that align with your brand palette. Ensure the background is clean and uncluttered.`,
         moodAndPalette: `Aim for an aspirational yet approachable mood. Color palette: warm earth tones mixed with your brand colors. The overall vibe should feel authentic, not overly staged.`,
-        platformTips: `For ${platform} ${contentFormat}: Use ${contentFormat === 'Reel' || contentFormat === 'Video' || contentFormat === 'Story' ? '9:16 vertical' : contentFormat === 'Image' ? '4:5 portrait or 1:1 square' : '4:5 portrait'} aspect ratio. ${contentFormat === 'Carousel' ? 'Plan 5-8 slides with a strong cover image and clear visual progression.' : contentFormat === 'Reel' || contentFormat === 'Video' ? 'Keep it under 60 seconds. Hook in the first 2 seconds.' : 'Make the first image scroll-stopping — bold colors or intriguing composition.'}`
-      }
+        platformTips: `For ${platform} ${contentFormat}: Use ${contentFormat === 'Reel' || contentFormat === 'Video' || contentFormat === 'Story' ? '9:16 vertical' : contentFormat === 'Image' ? '4:5 portrait or 1:1 square' : '4:5 portrait'} aspect ratio. ${contentFormat === 'Carousel' ? 'Plan 5-8 slides with a strong cover image and clear visual progression.' : contentFormat === 'Reel' || contentFormat === 'Video' ? 'Keep it under 60 seconds. Hook in the first 2 seconds.' : 'Make the first image scroll-stopping — bold colors or intriguing composition.'}`,
+      },
     };
   }
 
@@ -2868,23 +2911,111 @@ export async function generateVisualBrainstorm(params, brandData) {
     const niche = getNiche(brandData, topic || 'creator content');
     const audience = getTargetAudience(brandData, 'general audience');
     const modelFormat = normalizeVisualFormatLabel(contentFormat);
-    const targetOutputKey = outputType === 'ai-prompt' ? 'ai_image_prompt' : 'manual_shoot_guide';
 
-    const visualResearch = await getRealtimeVisualPatterns(
-      { topic, platform, contentFormat },
-      brandData
-    );
-    const researchText = visualResearch.success ? (visualResearch.research || '').trim() : '';
-    const researchBlock = researchText
-      ? `Research context (live web signals):\n${researchText}\n`
-      : 'Research context: Live visual trend scan unavailable — rely on platform-native visual strategy.\n';
+    if (outputType === 'video-script-brief') {
+      const videoScriptTrendBlock =
+        trendContextRaw.length > 0
+          ? `\n\nCURRENT PLATFORM TREND INTELLIGENCE:\n${trendContextRaw}\n\nUse the above trend data to inform hook, pacing, B-roll choices, and on-screen text style. The brief must reference at least one specific trend element from the data above. Do not output generic guidance that ignores this data.\n`
+          : '';
+
+      const systemPrompt = buildAIPowerBrainSystemPrompt(
+        'visuals',
+        brandData,
+        `${buildPromptGuardrails({ readyToUse: true })}
+
+Return ONLY valid JSON (no markdown): one object exactly as specified in the user message.`,
+      );
+
+      const videoUserMessage = `${buildPromptBrandSection(brandData, {
+        niche,
+        targetAudience: audience,
+        platforms: [platform],
+      })}
+${videoScriptTrendBlock}
+Video script brief request:
+- Topic: ${topic}
+- Platform: ${platformData?.name || platform}
+- Content format (UI): ${contentFormat}
+- Normalized format enum: ${modelFormat}
+${platformContext}
+
+Return ONLY a JSON object with this exact shape:
+{
+  "hook": string,
+  "narrationFlow": string,
+  "bRollCues": string,
+  "cta": string,
+  "trendSignal": string
+}
+
+Rules:
+- "hook": Hook, first-frame, and opening beat — ready to film.
+- "narrationFlow": Narration or voiceover flow through the piece.
+- "bRollCues": B-roll cues and visual inserts.
+- "cta": Closing CTA — one clear action.
+- "trendSignal": optional; include only if you can name one 5–8 word phrase tied to CURRENT PLATFORM TREND INTELLIGENCE when it was provided; otherwise use an empty string.`;
+
+      const data = await callGrokAPI(
+        [{ role: 'system', content: systemPrompt }, { role: 'user', content: videoUserMessage }],
+        0.7,
+        { mode: GROK_MODE_QUALITY },
+      );
+
+      const parsed = parseJsonFromResponse(data.content || '');
+      let brief = null;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        brief = {
+          hook: String(parsed.hook || '').trim(),
+          narrationFlow: String(parsed.narrationFlow || parsed.narration || '').trim(),
+          bRollCues: String(parsed.bRollCues || parsed.b_roll_cues || '').trim(),
+          cta: String(parsed.cta || '').trim(),
+          trendSignal: String(parsed.trendSignal || parsed.trend_signal || '').trim(),
+        };
+      }
+      if (!brief || (!brief.hook && !brief.narrationFlow && !brief.bRollCues && !brief.cta)) {
+        return { success: false, error: 'Could not parse video script brief. Try again.' };
+      }
+      return {
+        success: true,
+        type: 'video-script-brief',
+        brief,
+        usage: data.usage,
+        trendContext: trendContextRaw || undefined,
+      };
+    }
+
+    const targetOutputKey =
+      outputType === 'ai-prompt'
+        ? 'ai_image_prompt'
+        : outputType === 'shot-list'
+          ? 'shot_list'
+          : 'manual_shoot_guide';
+
+    const outputModeLabel =
+      outputType === 'ai-prompt'
+        ? 'AI image prompts'
+        : outputType === 'shot-list'
+          ? 'shot list (scene-by-scene filming plan)'
+          : 'manual shoot guide';
+
+    let rulesExtra = '';
+    if (outputType === 'shot-list') {
+      rulesExtra = `- If output mode is shot_list: each concept's "sceneBeats" must be 4–8 ordered lines covering shots, angles, transitions, and on-screen text cues; "promptOrGuide" summarizes the overall arc in one short paragraph.
+`;
+    } else if (outputType === 'ai-prompt') {
+      rulesExtra = `- If output mode is ai_image_prompt: each concept's "promptOrGuide" must be one copy-paste AI image prompt (camera, lighting, composition, aspect ratio, style). 40–120 words.
+`;
+    } else {
+      rulesExtra = `- If output mode is manual_shoot_guide: each concept's "promptOrGuide" is a practical shoot brief; "sceneBeats" must list 3–7 ordered shots or moments.
+`;
+    }
 
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'visuals',
       brandData,
       `${buildPromptGuardrails({ readyToUse: true })}
 
-Return ONLY valid JSON (no markdown): a JSON array of 3–6 VisualConcept objects exactly as specified in the user message.`
+Return ONLY valid JSON (no markdown): a JSON array of 3–6 VisualConcept objects exactly as specified in the user message.`,
     );
 
     const userMessage = `${buildPromptBrandSection(brandData, {
@@ -2892,32 +3023,31 @@ Return ONLY valid JSON (no markdown): a JSON array of 3–6 VisualConcept object
       targetAudience: audience,
       platforms: [platform],
     })}
-
-${researchBlock}
+${trendIntelBlock}
 Visual brainstorm request:
 - Topic: ${topic}
 - Platform: ${platformData?.name || platform}
 - Content format (UI): ${contentFormat}
 - Normalized format enum: ${modelFormat}
-- Output mode: ${targetOutputKey} (${outputType === 'ai-prompt' ? 'AI image prompts' : 'manual shoot guide'})
+- Output mode: ${targetOutputKey} (${outputModeLabel})
 ${platformContext}
 
 Rules:
-- If output mode is ai_image_prompt: each concept's "promptOrGuide" must be one copy-paste AI image prompt (camera, lighting, composition, aspect ratio, style). 40–120 words.
-- If output mode is manual_shoot_guide: each concept's "promptOrGuide" is a practical shoot brief; "sceneBeats" must list 3–7 ordered shots or moments.
-- Every object must set "outputType" to "${targetOutputKey}" and "format" to "${modelFormat}".
+${rulesExtra}- Every object must set "outputType" to "${targetOutputKey}" and "format" to "${modelFormat}".
+- Include "trendSignal" on every object: a 5–8 word phrase naming one concrete trend element from CURRENT PLATFORM TREND INTELLIGENCE when that block was provided (otherwise set "trendSignal" to "").
 - Vary conceptTitle, visualMotifs, hookAlignment, and difficulty across concepts.
 
 Return ONLY a JSON array of 3–6 objects:
 {
   "conceptTitle": string,
   "format": "image" | "carousel" | "video" | "story" | "reel",
-  "outputType": "ai_image_prompt" | "manual_shoot_guide",
+  "outputType": "ai_image_prompt" | "manual_shoot_guide" | "shot_list",
   "promptOrGuide": string,
   "sceneBeats": string[],
   "visualMotifs": string[],
   "hookAlignment": string,
-  "difficulty": "easy" | "medium" | "advanced"
+  "difficulty": "easy" | "medium" | "advanced",
+  "trendSignal": string
 }`;
 
     const data = await callGrokAPI(
@@ -2960,21 +3090,54 @@ Return ONLY a JSON array of 3–6 objects:
         prompts: prompts.slice(0, 6),
         usage: data.usage,
         visualConcepts: Array.isArray(parsed) ? parsed : undefined,
-        research: researchText,
-        realtime: Boolean(researchText),
+        trendContext: trendContextRaw || undefined,
+      };
+    }
+
+    if (outputType === 'shot-list') {
+      let guide = null;
+      if (Array.isArray(parsed) && parsed.length) {
+        const shotConcepts = parsed.filter((c) => c && (c.outputType === 'shot_list' || !c.outputType));
+        guide = shootGuideFromVisualConcepts(
+          shotConcepts.length ? shotConcepts : parsed,
+          topic,
+          platformData?.name || platform,
+          contentFormat,
+        );
+      } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.shotList)) {
+        guide = parsed;
+      }
+      if (!guide) {
+        guide = {
+          shotList: [
+            `Wide shot of ${topic}`,
+            `Close-up detail shot`,
+            `Action/movement capture`,
+            `Behind-the-scenes candid`,
+          ],
+          platformTips: `Optimize for ${platformData?.name || platform} ${contentFormat} format and aspect ratio.`,
+        };
+      }
+      return {
+        success: true,
+        type: 'shot-list',
+        guide,
+        usage: data.usage,
+        visualConcepts: Array.isArray(parsed) ? parsed : undefined,
+        trendContext: trendContextRaw || undefined,
       };
     }
 
     let guide = null;
     if (Array.isArray(parsed) && parsed.length) {
       const manual = parsed.filter(
-        (c) => c && (c.outputType === 'manual_shoot_guide' || !c.outputType)
+        (c) => c && (c.outputType === 'manual_shoot_guide' || !c.outputType),
       );
       guide = shootGuideFromVisualConcepts(
         manual.length ? manual : parsed,
         topic,
         platformData?.name || platform,
-        contentFormat
+        contentFormat,
       );
     } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.shotList)) {
       guide = parsed;
@@ -2997,8 +3160,7 @@ Return ONLY a JSON array of 3–6 objects:
       guide,
       usage: data.usage,
       visualConcepts: Array.isArray(parsed) ? parsed : undefined,
-      research: researchText,
-      realtime: Boolean(researchText),
+      trendContext: trendContextRaw || undefined,
     };
   } catch (error) {
     console.error('Visual brainstorm error:', error);

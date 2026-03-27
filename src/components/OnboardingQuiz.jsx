@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Facebook,
   Instagram,
-  Linkedin,
   Loader2,
   MapPin,
   Sparkles,
@@ -67,7 +66,6 @@ const PLATFORM_OPTIONS = [
   { value: 'tiktok', label: 'TikTok', icon: Video },
   { value: 'facebook', label: 'Facebook', icon: Facebook },
   { value: 'youtube', label: 'YouTube', icon: Youtube },
-  { value: 'linkedin', label: 'LinkedIn', icon: Linkedin },
   { value: 'x', label: 'X', icon: Twitter },
 ];
 

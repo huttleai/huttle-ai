@@ -4,7 +4,6 @@ import {
   Music,
   Youtube,
   Twitter,
-  Linkedin,
   Facebook,
   X,
   Loader2,
@@ -22,7 +21,6 @@ const PLATFORM_BADGE = {
   tiktok: { abbr: 'TT', className: 'bg-black text-white' },
   youtube: { abbr: 'YT', className: 'bg-[#FF0000] text-white' },
   twitter: { abbr: 'X', className: 'bg-[#1DA1F2] text-white' },
-  linkedin: { abbr: 'LI', className: 'bg-[#0A66C2] text-white' },
   facebook: { abbr: 'FB', className: 'bg-[#1877F2] text-white' },
 };
 
@@ -31,7 +29,6 @@ const PLATFORMS = [
   { id: 'tiktok', name: 'TikTok', icon: Music },
   { id: 'youtube', name: 'YouTube', icon: Youtube },
   { id: 'twitter', name: 'X (Twitter)', icon: Twitter },
-  { id: 'linkedin', name: 'LinkedIn', icon: Linkedin },
   { id: 'facebook', name: 'Facebook', icon: Facebook },
 ];
 

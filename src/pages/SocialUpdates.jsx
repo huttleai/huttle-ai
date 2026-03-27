@@ -43,7 +43,6 @@ function normalizePlatformName(platform) {
   if (lower.includes('tiktok')) return 'TikTok';
   if (lower.includes('youtube')) return 'YouTube';
   if (lower.includes('facebook')) return 'Facebook';
-  if (lower.includes('linkedin')) return 'LinkedIn';
   if (lower.includes('pinterest')) return 'Pinterest';
   if (lower.includes('threads')) return 'Threads';
 

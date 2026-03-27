@@ -107,7 +107,7 @@ export function validateVisualConcepts(arr, { label = 'visualConcepts', min = 3,
   assert(Array.isArray(arr), `${label}: array`);
   assert(arr.length >= min && arr.length <= max, `${label}: length`);
   const formats = new Set(['image', 'carousel', 'video', 'story', 'reel']);
-  const outTypes = new Set(['ai_image_prompt', 'manual_shoot_guide']);
+  const outTypes = new Set(['ai_image_prompt', 'manual_shoot_guide', 'shot_list']);
   arr.forEach((c, i) => {
     assert(typeof c.conceptTitle === 'string', `${label}[${i}].conceptTitle`);
     assert(formats.has(c.format), `${label}[${i}].format`);
@@ -115,6 +115,9 @@ export function validateVisualConcepts(arr, { label = 'visualConcepts', min = 3,
     assert(typeof c.promptOrGuide === 'string' && c.promptOrGuide.length > 10, `${label}[${i}].promptOrGuide`);
     assert(Array.isArray(c.sceneBeats), `${label}[${i}].sceneBeats`);
     assert(Array.isArray(c.visualMotifs), `${label}[${i}].visualMotifs`);
+    if (c.trendSignal != null) {
+      assert(typeof c.trendSignal === 'string', `${label}[${i}].trendSignal`);
+    }
   });
   return true;
 }

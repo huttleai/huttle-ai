@@ -36,7 +36,6 @@ import {
   TwitterXIcon,
   YouTubeIcon,
   FacebookIcon,
-  LinkedInIcon,
 } from '../components/SocialIcons';
 import UpgradeModal from '../components/UpgradeModal';
 import { supabase } from '../config/supabase';
@@ -112,15 +111,6 @@ const PLATFORMS = [
     ring: 'ring-red-600',
     glow: 'group-hover:shadow-[0_0_20px_rgba(220,38,38,0.3)]',
     postTypes: ['Short', 'Long-Form']
-  },
-  {
-    id: 'LinkedIn',
-    name: 'LinkedIn',
-    icon: LinkedInIcon,
-    gradient: 'from-blue-700 to-blue-600',
-    ring: 'ring-blue-700',
-    glow: 'group-hover:shadow-[0_0_20px_rgba(29,78,216,0.3)]',
-    postTypes: ['Post', 'Article']
   }
 ];
 

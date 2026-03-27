@@ -291,7 +291,15 @@ function fallbackTextFromAnything(raw, coerced) {
  * @returns {{ kind: 'v2', plan: object } | { kind: 'fallback', rawText: string }}
  */
 export function parsePlanBuilderDisplayResult(result) {
-  const unwrapped = unwrapPlanPayload(result);
+  let raw = result;
+  // Strip markdown code fences if present
+  if (typeof raw === 'string') {
+    raw = raw.trim();
+    if (raw.startsWith('```')) {
+      raw = raw.replace(/^```[a-zA-Z]*\n?/, '').replace(/```\s*$/, '').trim();
+    }
+  }
+  const unwrapped = unwrapPlanPayload(raw);
 
   if (unwrapped.error) {
     const rawText = typeof result === 'string'

@@ -27,7 +27,6 @@ import {
   TikTokIconMono,
   TwitterXIconMono,
   YouTubeIconMono,
-  LinkedInIconMono,
 } from '../components/SocialIcons';
 
 const SECTION_ORDER = ['aboutYou', 'yourNiche', 'yourAudience', 'yourVoice', 'yourPlatforms', 'yourGoals'];
@@ -45,7 +44,6 @@ const PLATFORMS = [
   { id: 'tiktok', label: 'TikTok', Icon: TikTokIconMono },
   { id: 'youtube', label: 'YouTube', Icon: YouTubeIconMono },
   { id: 'facebook', label: 'Facebook', Icon: FacebookIconMono },
-  { id: 'linkedin', label: 'LinkedIn', Icon: LinkedInIconMono },
   { id: 'x', label: 'X (Twitter)', Icon: TwitterXIconMono },
 ];
 

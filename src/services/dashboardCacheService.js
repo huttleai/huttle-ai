@@ -30,7 +30,7 @@ const DEFAULT_PLATFORM = 'instagram';
 const DEFAULT_CITY = 'global';
 const DEFAULT_AUDIENCE = '';
 const BRAND_VOICE_NUDGE_COPY = 'Set your Brand Voice for niche-specific trends →';
-const SUPPORTED_DASHBOARD_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'youtube', 'linkedin', 'twitter'];
+const SUPPORTED_DASHBOARD_PLATFORMS = ['instagram', 'facebook', 'tiktok', 'youtube', 'twitter'];
 const GENERIC_TRENDING_NICHES = new Set([
   '',
   'lifestyle',
@@ -194,7 +194,6 @@ function formatPlatformLabel(platform) {
   if (value === 'facebook') return 'Facebook';
   if (value === 'tiktok') return 'TikTok';
   if (value === 'youtube') return 'YouTube';
-  if (value === 'linkedin') return 'LinkedIn';
   if (value === 'twitter') return 'X';
   return platform || 'Instagram';
 }
@@ -792,9 +791,7 @@ function buildPlatformWideHashtagPromptByPlatform(platform) {
         ? 'Include tags that increase post distribution and shareability'
         : platformKey === 'youtube'
           ? 'Include search keywords and tags that boost video discovery'
-          : platformKey === 'linkedin'
-            ? 'Include tags that boost impressions on the LinkedIn feed'
-            : 'Include discovery hashtags and formats that amplify reach on X right now';
+          : 'Include discovery hashtags and formats that amplify reach on X right now';
 
   return `You are a social media hashtag analyst with real-time knowledge of viral content.
 
@@ -1429,9 +1426,6 @@ function buildAIInsightsMessages(context) {
   const tiktokInstruction = context.selectedPlatforms.includes('tiktok')
     ? '- If TikTok is selected, focus on hook speed, retention, repeatable short-form series, and testing volume.'
     : '';
-  const linkedinInstruction = context.selectedPlatforms.includes('linkedin')
-    ? '- If LinkedIn is selected, focus on professional cadence, point-of-view expertise, and conversation quality.'
-    : '';
 
   return [
     {
@@ -1465,9 +1459,7 @@ Rules:
 - The third card should be "Content Type", "Audience", or "Strategy" based on what is most useful for this niche.
 ${instagramInstruction}
 ${tiktokInstruction}
-${linkedinInstruction}
-- If the user only selected TikTok, do not mention Instagram tactics.
-- If the user only selected LinkedIn, do not mention creator-first consumer tactics.`,
+- If the user only selected TikTok, do not mention Instagram tactics.`,
     },
   ];
 }

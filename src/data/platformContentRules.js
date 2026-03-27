@@ -42,27 +42,11 @@ export const PLATFORM_CONTENT_RULES = {
     promptRule: 'Generate exactly 3–5 hashtags. NEVER exceed 5. Instagram enforced this limit Dec 2025.',
   },
 
-  linkedin: {
-    displayName: 'LinkedIn',
-    hashtags: {
-      max: 5,
-      optimal: '3',
-      strategy: '3 hashtags is the LinkedIn algorithmic sweet spot per their own guidelines. Industry-focused, professional tone — not mass appeal tags.',
-    },
-    caption: {
-      maxChars: 3000,
-      visibleBeforeTruncation: 210,
-      optimalChars: '1000–1500',
-      tip: 'Hook in first 210 chars. Use line breaks and white space — LinkedIn rewards scannable posts.',
-    },
-    video: {
-      optimalSeconds: 'Under 60s for feed reach; 60–180s for thought leadership',
-      maxSeconds: 600,
-      aspectRatio: '16:9 landscape or 1:1 square',
-      hook: 'Front-load value — 80% of LinkedIn users watch muted',
-    },
-    promptRule: 'Generate exactly 3 hashtags. LinkedIn algorithm penalizes over-tagging. Keep tone professional and industry-specific.',
-  },
+  // LinkedIn not yet supported — rules hidden from productized platform selectors
+  // linkedin: {
+  //   displayName: 'LinkedIn',
+  //   ...
+  // },
 
   youtube: {
     displayName: 'YouTube',
@@ -198,9 +182,6 @@ export function getAlgorithmHashtagBounds(platformKey) {
   }
   if (k === 'facebook') {
     return { min: 0, max: rawMax, label: `${optimal} hashtags (optional on Facebook)`, optimal };
-  }
-  if (k === 'linkedin') {
-    return { min: 2, max: Math.min(5, rawMax), label: `${optimal} professional hashtags`, optimal };
   }
   const max = Math.min(5, rawMax);
   return { min: 3, max, label: `${optimal} relevant hashtags`, optimal };

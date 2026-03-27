@@ -109,32 +109,6 @@ export const PLATFORM_SLOTS = {
       required: false
     }
   ],
-  linkedin: [
-    {
-      key: 'opening_line',
-      label: 'Opening line',
-      helper: 'The first 1-2 lines people see before they click "see more." Make it compelling enough to expand.',
-      required: false
-    },
-    {
-      key: 'post_body',
-      label: 'Post body',
-      helper: 'The main text of your LinkedIn post. This is where your story, insight, or lesson goes.',
-      required: true
-    },
-    {
-      key: 'hashtags',
-      label: 'Hashtags',
-      helper: 'Add 3-5 hashtags at the end. LinkedIn uses these to categorize and distribute your post.',
-      required: false
-    },
-    {
-      key: 'cta',
-      label: 'Call to action',
-      helper: 'End with a question or ask. LinkedIn rewards posts that start conversations in the comments.',
-      required: false
-    }
-  ],
   facebook: [
     {
       key: 'opening_line',
@@ -168,9 +142,17 @@ export const PLATFORM_CONTENT_TYPES = {
   tiktok: ['Video', 'Story', 'Photo'],
   youtube: ['Video', 'Short'],
   twitter: ['Post', 'Thread'],
-  linkedin: ['Post', 'Article'],
   facebook: ['Post', 'Reel', 'Story']
 };
+
+/** Canonical five-slot editor on the Post Kit page (stored in post_kits.kit_slots). */
+export const POSTKIT_PAGE_SLOTS = [
+  { key: 'caption', label: 'Caption', chipEmpty: 'No caption yet' },
+  { key: 'hook', label: 'Hook', chipEmpty: 'No hook yet' },
+  { key: 'hashtags', label: 'Hashtags', chipEmpty: 'No hashtags yet' },
+  { key: 'cta', label: 'CTA', chipEmpty: 'No CTA yet' },
+  { key: 'visuals', label: 'Visuals', chipEmpty: 'No visuals yet' },
+];
 
 export const getSlotsForPlatform = (platform) => {
   return PLATFORM_SLOTS[platform] || [];

@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'r
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Lightbulb, PenTool, PenLine, Hash, MessageSquare, Check, ChevronLeft,
-  ChevronRight, Copy, FolderPlus, RotateCcw, RefreshCw, X, Sparkles, TrendingUp, HelpCircle,
+  ChevronRight, Copy, FolderPlus, Package, RotateCcw, RefreshCw, X, Sparkles, TrendingUp, HelpCircle,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
@@ -29,6 +29,7 @@ import {
 } from '../services/grokAPI';
 import { extractHooksFromHookBuilderResult } from '../utils/fullPostHooksParser';
 import { FULL_POST_BUILDER_CREDITS_PER_RUN } from '../config/supabase';
+import { POSTKIT_PENDING_STORAGE_KEY } from '../services/postKitService';
 import { saveToVault } from '../services/contentService';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
@@ -1367,6 +1368,29 @@ export default function FullPostBuilder() {
     }
   };
 
+  const handleSaveAsPostKit = () => {
+    const hashtagStr = hashtags.map((h) => h.tag).filter(Boolean).join(' ').trim();
+    const cap = String(caption || '').trim();
+    const prefill = {};
+    if (cap) prefill.caption = cap;
+    if (hashtagStr) prefill.hashtags = hashtagStr;
+    try {
+      localStorage.setItem(
+        POSTKIT_PENDING_STORAGE_KEY,
+        JSON.stringify({
+          platform,
+          topic: topic.trim() || 'Untitled Kit',
+          ...(Object.keys(prefill).length ? { prefill } : {}),
+        }),
+      );
+    } catch (e) {
+      console.error('[FullPostBuilder] post kit pending:', e);
+      addToast('Could not open Post Kit', 'error');
+      return;
+    }
+    navigate('/dashboard/post-kit/new');
+  };
+
   const saveWizardPartToVault = async (key, contentText, contentType, label) => {
     if (!user?.id || !String(contentText || '').trim()) return;
     try {
@@ -2148,6 +2172,14 @@ export default function FullPostBuilder() {
               >
                 {saved ? <Check className="h-5 w-5 sm:h-4 sm:w-4" /> : <FolderPlus className="h-5 w-5 sm:h-4 sm:w-4" />}
                 {saved ? 'Saved ✓' : 'Save to Vault'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAsPostKit}
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-huttle-primary/40 bg-white px-4 py-3 text-base font-medium text-huttle-primary transition-colors hover:bg-huttle-primary/5 sm:w-auto sm:min-h-0 sm:py-2.5 sm:text-sm"
+              >
+                <Package className="h-5 w-5 sm:h-4 sm:w-4" />
+                Save as Post Kit
               </button>
               <button
                 type="button"

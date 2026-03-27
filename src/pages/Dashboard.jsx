@@ -36,6 +36,7 @@ import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
+import FloatingActionButton from '../components/FloatingActionButton';
 import { hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
@@ -92,7 +93,6 @@ function toDashboardPlatformLabel(raw) {
   if (v.includes('facebook')) return 'Facebook';
   if (v.includes('tiktok')) return 'TikTok';
   if (v.includes('youtube')) return 'YouTube';
-  if (v.includes('linkedin')) return 'LinkedIn';
   if (v === 'x' || v.includes('twitter')) return 'X';
   return 'Instagram';
 }
@@ -101,7 +101,7 @@ function platformIdFromTrend(trend) {
   const raw = trend?.platform;
   if (typeof raw === 'string' && raw.length && !String(raw).includes(' ')) {
     const v = raw.toLowerCase();
-    if (['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin', 'twitter', 'x'].includes(v)) {
+    if (['instagram', 'tiktok', 'facebook', 'youtube', 'twitter', 'x'].includes(v)) {
       return v === 'x' ? 'twitter' : v;
     }
   }
@@ -109,7 +109,6 @@ function platformIdFromTrend(trend) {
   if (label.includes('tiktok')) return 'tiktok';
   if (label.includes('facebook')) return 'facebook';
   if (label.includes('youtube')) return 'youtube';
-  if (label.includes('linkedin')) return 'linkedin';
   if (label.includes('x') || label.includes('twitter')) return 'twitter';
   return 'instagram';
 }
@@ -1892,6 +1891,8 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      <FloatingActionButton />
 
       {showTrialWelcomeModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

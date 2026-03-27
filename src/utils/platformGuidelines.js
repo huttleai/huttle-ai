@@ -140,32 +140,8 @@ export const PLATFORMS = {
     audienceStyle: 'Educational, entertainment, in-depth, searchable'
   },
   
-  linkedin: {
-    id: 'linkedin',
-    name: 'LinkedIn',
-    icon: 'Linkedin',
-    charLimit: 3000,
-    hashtags: {
-      count: '4-6',
-      min: 4,
-      max: 6,
-      style: 'Professional, industry-specific hashtags',
-      tip: 'Use industry hashtags and follow trending professional topics.'
-    },
-    hooks: {
-      style: 'Professional insight, contrarian take, personal story with business lesson',
-      examples: ['I made a mistake that cost me...', 'Unpopular opinion in [industry]:', 'After 10 years in [field], here\'s what I learned:', '3 things I wish I knew when...'],
-      tip: 'LinkedIn rewards vulnerability and professional insights. Lead with a hook that promises value.'
-    },
-    ctas: {
-      style: 'Professional engagement',
-      examples: ['Agree? ♻️ Repost to share', 'Follow for more insights', 'Drop your thoughts below', 'Connect with me', 'Link in comments'],
-      tip: 'Reposts and comments boost reach. Ask thought-provoking questions.'
-    },
-    contentFormats: ['Post', 'Article', 'Document/Carousel', 'Video', 'Newsletter'],
-    audienceStyle: 'Professional, career-focused, B2B, thought leadership'
-  },
-  
+  // LinkedIn not yet supported in platform pickers / guidance surface area
+
   pinterest: {
     id: 'pinterest',
     name: 'Pinterest',
