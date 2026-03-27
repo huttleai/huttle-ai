@@ -309,9 +309,6 @@ export default function AIPlanBuilder() {
 
   const [currentJobId, setCurrentJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null);
-  const [progress, setProgress] = useState(0);
-
-  const progressIntervalRef = useRef(null);
 
   const resolvedPostingFrequency = useMemo(() => {
     if (postingFreqMode === 'custom') {
@@ -389,22 +386,8 @@ export default function AIPlanBuilder() {
     return () => window.clearInterval(id);
   }, [isGenerating]);
 
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current != null) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-    };
-  }, []);
-
   const handleJobFailed = useCallback(
     (errorMessage) => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-      setProgress(0);
       setIsGenerating(false);
       setCurrentJobId(null);
       const msg = formatJobError(errorMessage);
@@ -425,18 +408,12 @@ export default function AIPlanBuilder() {
 
       console.log('[PlanBuilder] Raw result from Supabase:', planData);
 
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-
       const preNormalized = normalizeN8nAlternatePlanToV2(planData) ?? planData;
       const parsed = parsePlanBuilderDisplayResult(preNormalized);
       if (parsed.kind === 'fallback' && (!parsed.rawText || parsed.rawText === 'No plan content returned.')) {
         console.warn('[PlanBuilder] Empty fallback body');
       }
 
-      setProgress(100);
       setGeneratedPlan(parsed);
       setIsGenerating(false);
       setCurrentJobId(null);
@@ -512,11 +489,6 @@ export default function AIPlanBuilder() {
             return;
           }
 
-          const serverProgress = Number(job.progress);
-          if (Number.isFinite(serverProgress) && serverProgress > 0) {
-            setProgress((p) => Math.max(p, Math.min(serverProgress, 99)));
-          }
-
           if (isComplete(job)) {
             resolveJob(job);
           }
@@ -561,11 +533,6 @@ export default function AIPlanBuilder() {
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
             return;
-          }
-
-          const serverProgressPoll = Number(job.progress);
-          if (Number.isFinite(serverProgressPoll) && serverProgressPoll > 0) {
-            setProgress((p) => Math.max(p, Math.min(serverProgressPoll, 99)));
           }
 
           if (isComplete(job)) {
@@ -631,7 +598,6 @@ export default function AIPlanBuilder() {
 
   const resetToForm = () => {
     setGeneratedPlan(null);
-    setProgress(0);
     setEditingInputs(true);
     setGenerationError(null);
   };
@@ -653,21 +619,12 @@ export default function AIPlanBuilder() {
 
     await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
     setGenerationError(null);
     setIsGenerating(true);
-    setProgress(0);
     setGeneratedPlan(null);
     setJobStatus('pending');
 
     try {
-      progressIntervalRef.current = window.setInterval(() => {
-        setProgress((p) => Math.min(85, p + 1));
-      }, 1500);
-
       const cachedTrends = getCachedTrends();
       const trendContext =
         Array.isArray(cachedTrends) && cachedTrends.length > 0
@@ -711,10 +668,6 @@ export default function AIPlanBuilder() {
       });
 
       if (createError || !createdJobId) {
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
         throw new Error(createError?.message || 'Failed to create job');
       }
 
@@ -722,17 +675,13 @@ export default function AIPlanBuilder() {
         typeof createdJobId === 'string' && PLAN_BUILDER_JOB_UUID_RE.test(createdJobId)
           ? createdJobId
           : null;
-      if (!jobId) {
-        console.error(
-          '[PlanBuilder] createJobDirectly returned invalid job id (expected UUID from jobs.id):',
-          createdJobId
-        );
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
+        if (!jobId) {
+          console.error(
+            '[PlanBuilder] createJobDirectly returned invalid job id (expected UUID from jobs.id):',
+            createdJobId
+          );
+          throw new Error('Failed to create job: invalid job id');
         }
-        throw new Error('Failed to create job: invalid job id');
-      }
 
       flushSync(() => {
         setCurrentJobId(jobId);
@@ -786,12 +735,7 @@ export default function AIPlanBuilder() {
         const failMsg = 'Plan generation service unavailable. Please try again later.';
         setGenerationError(failMsg);
         showToast(failMsg, 'error');
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
         setIsGenerating(false);
-        setProgress(0);
         setCurrentJobId(null);
         return;
       }
@@ -799,12 +743,7 @@ export default function AIPlanBuilder() {
       showToast('Your AI plan is being generated...', 'info');
     } catch (error) {
       console.error('handleGeneratePlan error:', error);
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
       setIsGenerating(false);
-      setProgress(0);
       const msg = formatJobError(error?.message || error);
       setGenerationError(msg);
       showToast(msg, 'error');
@@ -1171,19 +1110,15 @@ export default function AIPlanBuilder() {
               <p className="text-center text-sm text-gray-600 font-plan-body">{generateButtonSummary}</p>
               {isGenerating && (
                 <div className="space-y-3 max-w-md mx-auto">
-                  <div className="flex items-center justify-between text-sm text-gray-600">
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-[#01BAD2]" />
-                      {getStatusMessage()}
-                    </span>
-                    <span className="tabular-nums font-semibold text-[#0C1220]">{Math.round(progress)}%</span>
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#01BAD2] shrink-0" />
+                    <span>{getStatusMessage()}</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                    <div
-                      className="h-full rounded-full bg-[#01BAD2] transition-all duration-300 ease-out animate-pulse"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
+                  <p className="text-sm text-gray-500 mt-2 text-center">
+                    {
+                      "This typically takes 60–90 seconds — we're building your full strategy from scratch."
+                    }
+                  </p>
                   <p className="text-center text-xs text-gray-500">
                     {PROGRESS_STEP_LABELS.map((label, i) => (
                       <span key={label} className={i === progressStepIndex ? 'font-semibold text-[#01BAD2]' : ''}>

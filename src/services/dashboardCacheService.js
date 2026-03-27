@@ -18,6 +18,22 @@ export function getCachedTrends() {
 }
 
 const DASHBOARD_CACHE_TABLE = 'daily_dashboard_cache';
+/** `daily_dashboard_cache.generated_date` must be a strict YYYY-MM-DD string or PostgREST can emit broken filters. */
+const DASHBOARD_CACHE_DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isDashboardCacheDateKey(value) {
+  return typeof value === 'string' && DASHBOARD_CACHE_DATE_KEY_RE.test(value.trim());
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function coerceDashboardCacheDateKey(value) {
+  if (isDashboardCacheDateKey(value)) return String(value).trim();
+  return null;
+}
+
 const GROK_PROXY_URL = '/api/ai/grok';
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
 /** Mirrors api/ai/perplexity.js MODEL_CONFIG (log labels / parity only). */
@@ -527,6 +543,10 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
   const session = await getDashboardSession();
   if (!session) {
     console.warn('[Dashboard] No auth session, skipping user data fetch');
+    return null;
+  }
+
+  if (!isDashboardCacheDateKey(generatedDate)) {
     return null;
   }
 
@@ -1922,11 +1942,16 @@ function isDailyDashboardCacheStaleByLocalWeekday(cachedRow) {
 }
 
 async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: cache fix
+  const dateKey = coerceDashboardCacheDateKey(generatedDate);
+  if (!userId || !dateKey) {
+    return null;
+  }
+
   const { data, error } = await supabase // HUTTLE AI: cache fix
     .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
     .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at') // HUTTLE AI: cache fix
     .eq('user_id', userId) // HUTTLE AI: cache fix
-    .eq('generated_date', generatedDate) // HUTTLE AI: cache fix
+    .eq('generated_date', dateKey) // HUTTLE AI: cache fix
     .maybeSingle(); // HUTTLE AI: cache fix
 
   if (error && isMissingDashboardCacheColumnError(error)) { // HUTTLE AI: cache fix
@@ -1934,7 +1959,7 @@ async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: ca
       .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
       .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, created_at') // HUTTLE AI: cache fix
       .eq('user_id', userId) // HUTTLE AI: cache fix
-      .eq('generated_date', generatedDate) // HUTTLE AI: cache fix
+      .eq('generated_date', dateKey) // HUTTLE AI: cache fix
       .maybeSingle(); // HUTTLE AI: cache fix
 
     if (fallbackResult.error) { // HUTTLE AI: cache fix
@@ -1963,8 +1988,14 @@ export function hasPersistableTrendingTopics(trendingTopics) {
 }
 
 async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { // HUTTLE AI: cache fix
+  const dateKey = coerceDashboardCacheDateKey(generatedDate);
+  if (!userId || !dateKey) {
+    console.warn('[DashCache] Skipped daily cache write — invalid user or date key', { userId, generatedDate });
+    return false;
+  }
+
   if (!hasPersistableTrendingTopics(dashboardData.trending_topics)) {
-    console.warn('[DashCache] Skipped daily cache write — all samples', { userId, date: generatedDate });
+    console.warn('[DashCache] Skipped daily cache write — all samples', { userId, date: dateKey });
     return false;
   }
 
@@ -1985,7 +2016,7 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
       .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
       .upsert({ // HUTTLE AI: cache fix
         user_id: userId, // HUTTLE AI: cache fix
-        generated_date: generatedDate, // HUTTLE AI: cache fix
+        generated_date: dateKey, // HUTTLE AI: cache fix
         trending_topics: dashboardData.trending_topics, // HUTTLE AI: cache fix
         hashtags_of_day: dashboardData.hashtags_of_day, // HUTTLE AI: cache fix
         ai_insights: dashboardData.ai_insights, // HUTTLE AI: cache fix
@@ -2002,7 +2033,7 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
         .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
         .upsert({ // HUTTLE AI: cache fix
           user_id: userId, // HUTTLE AI: cache fix
-          generated_date: generatedDate, // HUTTLE AI: cache fix
+          generated_date: dateKey, // HUTTLE AI: cache fix
           trending_topics: dashboardData.trending_topics, // HUTTLE AI: cache fix
           hashtags_of_day: dashboardData.hashtags_of_day, // HUTTLE AI: cache fix
           ai_insights: dashboardData.ai_insights, // HUTTLE AI: cache fix
@@ -2075,7 +2106,10 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
     }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
-  const generatedDate = options.generatedDate || getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+  let generatedDate = coerceDashboardCacheDateKey(options.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+  if (!isDashboardCacheDateKey(generatedDate)) {
+    generatedDate = new Date().toISOString().slice(0, 10);
+  }
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
 
@@ -2153,7 +2187,10 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
     }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
-  const generatedDate = normalizedOptions.generatedDate || getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+  let generatedDate = coerceDashboardCacheDateKey(normalizedOptions.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+  if (!isDashboardCacheDateKey(generatedDate)) {
+    generatedDate = new Date().toISOString().slice(0, 10);
+  }
   const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const optionsWithGeneratedDate = { ...normalizedOptions, generatedDate }; // HUTTLE AI: cache fix
@@ -2269,14 +2306,17 @@ export async function deleteDashboardCache(userId) {
     return { success: false, errorType: 'auth_error', errorMessage: 'User is not authenticated.' };
   }
 
-  const generatedDate = getDashboardGeneratedDate();
+  let dateKey = coerceDashboardCacheDateKey(getDashboardGeneratedDate());
+  if (!dateKey) {
+    dateKey = new Date().toISOString().slice(0, 10);
+  }
 
   try {
     const { error } = await supabase
       .from(DASHBOARD_CACHE_TABLE)
       .delete()
       .eq('user_id', userId)
-      .eq('generated_date', generatedDate);
+      .eq('generated_date', dateKey);
 
     if (error) {
       console.error('Error deleting dashboard cache:', error);
