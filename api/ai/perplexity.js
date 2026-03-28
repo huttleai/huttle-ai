@@ -579,8 +579,45 @@ export default async function handler(req, res) {
   }
 
   try {
-    const requestedCache = req.body?.cache;
-    const requireRealtime = Boolean(req.body?.requireRealtime);
+    const requestBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const requestedCache = requestBody.cache;
+    const requireRealtime = Boolean(requestBody.requireRealtime);
+
+    // Authenticate user before any upstream fallback to avoid unauthenticated AI credit abuse.
+    let userId = null;
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && supabase) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+
+      if (!error && user) {
+        userId = user.id;
+      }
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Authentication required to use AI features. Please log in.'
+      });
+    }
+
+    const rateLimit = await checkPersistentRateLimit({
+      userKey: userId,
+      route: 'perplexity',
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowSeconds: RATE_LIMIT_WINDOW / 1000,
+    });
+    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
+    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
+
+    if (!rateLimit.allowed) {
+      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
+      return res.status(429).json({
+        error: 'Rate limit exceeded. Please wait before making more requests.',
+        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
+      });
+    }
 
     // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
     if (!PERPLEXITY_API_KEY) {
@@ -594,7 +631,7 @@ export default async function handler(req, res) {
       if (!grokKey) {
         return res.status(500).json({ error: 'AI service not configured' });
       }
-      const { messages: fallbackMessages, temperature: fallbackTemp = 0.2 } = req.body;
+      const { messages: fallbackMessages, temperature: fallbackTemp = 0.2 } = requestBody;
       if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
         return res.status(400).json({ error: 'Messages array is required' });
       }
@@ -618,48 +655,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
     }
 
-    // Authenticate user
-    let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
-      if (!error && user) {
-        userId = user.id;
-      }
-    }
-
-    // SECURITY: Require authentication for AI API access
-    // This prevents unauthorized usage of expensive AI API credits
-    if (!userId) {
-      return res.status(401).json({ 
-        error: 'Authentication required to use AI features. Please log in.' 
-      });
-    }
-
-    // Check rate limit
-    const rateLimit = await checkPersistentRateLimit({
-      userKey: userId,
-      route: 'perplexity',
-      maxRequests: RATE_LIMIT_MAX_REQUESTS,
-      windowSeconds: RATE_LIMIT_WINDOW / 1000,
-    });
-    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
-    
-    if (!rateLimit.allowed) {
-      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
-      return res.status(429).json({ 
-        error: 'Rate limit exceeded. Please wait before making more requests.',
-        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
-      });
-    }
-
     // Extract request parameters
-    const { messages, temperature = 0.2, cache, web_search_options: webSearchOptions } = req.body;
-    const cacheAccess = buildCacheAccessContext(req.body, userId);
+    const { messages, temperature = 0.2, cache, web_search_options: webSearchOptions } = requestBody;
+    const cacheAccess = buildCacheAccessContext(requestBody, userId);
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
@@ -682,10 +680,10 @@ export default async function handler(req, res) {
       }
     }
 
-    const featureKey = resolvePerplexityFeatureKey(req.body);
-    const safeModel = resolveModelFromRequest(req.body);
+    const featureKey = resolvePerplexityFeatureKey(requestBody);
+    const safeModel = resolveModelFromRequest(requestBody);
 
-    const bodySearchSize = req.body?.search_context_size;
+    const bodySearchSize = requestBody?.search_context_size;
     const requestedSearchContext = ALLOWED_SEARCH_CONTEXT_SIZES.has(bodySearchSize)
       ? bodySearchSize
       : (ALLOWED_SEARCH_CONTEXT_SIZES.has(webSearchOptions?.search_context_size)
@@ -785,7 +783,7 @@ export default async function handler(req, res) {
     });
 
     let structuredData = null;
-    if (cache?.key && isDashboardTrendingWidgetCache(req.body)) {
+    if (cache?.key && isDashboardTrendingWidgetCache(requestBody)) {
       structuredData = extractTrendsFromPerplexityResponse(data);
       if (!Array.isArray(structuredData) || structuredData.length === 0) {
         const fallbackParsed = parseStructuredJson(content);
@@ -819,7 +817,7 @@ export default async function handler(req, res) {
     const dashboardArrayPayloadRequired =
       cache?.type === 'hashtags'
       || cache?.type === 'trending_hashtags_widget'
-      || (cache?.type === 'trending' && isDashboardTrendingWidgetCache(req.body));
+      || (cache?.type === 'trending' && isDashboardTrendingWidgetCache(requestBody));
 
     if (
       cache?.key
@@ -838,7 +836,7 @@ export default async function handler(req, res) {
 
     if (
       !requireRealtime
-      && isDashboardTrendingWidgetCache(req.body)
+      && isDashboardTrendingWidgetCache(requestBody)
       && Array.isArray(structuredData)
       && structuredData.length === 0
     ) {
@@ -854,7 +852,7 @@ export default async function handler(req, res) {
       && cachePayload !== ''
       && (!Array.isArray(cachePayload) || cachePayload.length > 0);
 
-    if (isDashboardTrendingWidgetCache(req.body) && Array.isArray(cachePayload)) {
+    if (isDashboardTrendingWidgetCache(requestBody) && Array.isArray(cachePayload)) {
       shouldPersistCache = validateTrendingCacheWritePayload(cachePayload);
       if (!shouldPersistCache) {
         console.warn('[TrendCache] Cache write skipped — invalid payload', {
