@@ -267,6 +267,14 @@ const MIX_DOT_EMOJI = {
   Post: '⚪',
 };
 
+const MIX_BAR_COLOR = {
+  Educational: 'bg-blue-400',
+  Entertaining: 'bg-amber-400',
+  Authority: 'bg-purple-400',
+  Promotional: 'bg-rose-400',
+  Personal: 'bg-green-400',
+};
+
 function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [hashtagsExpanded, setHashtagsExpanded] = useState(false);
@@ -339,7 +347,7 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
       className="rounded-2xl border border-gray-200 bg-white border-l-4 shadow-sm overflow-hidden"
       style={{ borderLeftColor: borderC }}
     >
-      <div className="px-4 py-4 sm:px-5">
+      <div className="px-4 py-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="inline-flex items-center gap-1.5 font-semibold text-[#0C1220]">
             {getPlatformIcon(post.platform, 'h-4 w-4')}
@@ -356,9 +364,9 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
           )}
         </div>
 
-        <div className="mt-3">
-          <p className="font-bold text-lg text-[#0C1220] leading-snug font-plan-display">{hook || '—'}</p>
-        </div>
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-[13fr_7fr]">
+          <div className="lg:pr-6">
+            <p className="font-bold text-lg text-[#0C1220] leading-snug font-plan-display">{hook || '—'}</p>
 
         {caption && (
           <div className="mt-3">
@@ -412,12 +420,71 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
           </div>
         )}
 
-        {visualText && !detailsOpen && (
-          <div className="mt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1">📷 Visual</p>
-            <p className="text-sm text-gray-700 line-clamp-1">{visualText}</p>
           </div>
-        )}
+
+          <div className="mt-4 pt-4 border-t border-gray-100 lg:mt-0 lg:pt-0 lg:border-t-0 lg:border-l lg:border-gray-100 lg:pl-6 flex flex-col gap-3">
+            {visualText && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1">📷 Visual direction</p>
+                <p className={`text-sm text-gray-700 mt-1 ${detailsOpen ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{visualText}</p>
+              </div>
+            )}
+
+            {post.pillar && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Content pillar</p>
+                <span className="inline-block mt-1 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                  {sanitizeAIOutput(String(post.pillar))}
+                </span>
+              </div>
+            )}
+
+            {post.why_this_works && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Why this works</p>
+                <p className="text-sm text-gray-500 italic mt-1">{sanitizeAIOutput(post.why_this_works)}</p>
+              </div>
+            )}
+
+            <div className="border-t border-gray-100 pt-3 mt-auto flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleCopyPost}
+                disabled={copiedPost}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-70 transition-colors"
+              >
+                {copiedPost ? 'Copied ✓' : 'Copy post'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveVault}
+                disabled={savingVault || savedVault}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-70 ${
+                  savedVault
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-[#01BAD2] text-white hover:bg-[#0199b0]'
+                }`}
+              >
+                {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((v) => !v)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1 hover:bg-gray-50 transition-colors"
+              >
+                {detailsOpen ? (
+                  <>
+                    Full details <ChevronUp className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  <>
+                    Full details <ChevronDown className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div
           className={`grid transition-all duration-200 ease-in-out ${
@@ -440,64 +507,8 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
                   </p>
                 </div>
               )}
-              {visualText && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Visual direction</p>
-                  <p className="text-gray-700 whitespace-pre-wrap">{visualText}</p>
-                </div>
-              )}
-              {post.why_this_works && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Why this works</p>
-                  <p className="text-gray-700 whitespace-pre-wrap">{sanitizeAIOutput(post.why_this_works)}</p>
-                </div>
-              )}
-              {post.pillar && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Content pillar</p>
-                  <p className="text-gray-700">{sanitizeAIOutput(String(post.pillar))}</p>
-                </div>
-              )}
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleCopyPost}
-            disabled={copiedPost}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-70 transition-colors"
-          >
-            {copiedPost ? 'Copied ✓' : 'Copy post'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveVault}
-            disabled={savingVault || savedVault}
-            className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-70 ${
-              savedVault
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-[#01BAD2] text-white hover:bg-[#0199b0]'
-            }`}
-          >
-            {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((v) => !v)}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1 hover:bg-gray-50 transition-colors"
-          >
-            {detailsOpen ? (
-              <>
-                Full details <ChevronUp className="h-3.5 w-3.5" />
-              </>
-            ) : (
-              <>
-                Full details <ChevronDown className="h-3.5 w-3.5" />
-              </>
-            )}
-          </button>
         </div>
       </div>
     </div>
@@ -1050,7 +1061,7 @@ export default function AIPlanBuilder() {
 
   return (
     <div className="flex-1 min-h-screen bg-[#F4F7FB] font-plan-body text-[#0C1220] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12 max-w-full overflow-x-hidden">
-      <div className="mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-4xl mx-auto lg:mx-0">
+      <div className="mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm">
             <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
@@ -1067,7 +1078,7 @@ export default function AIPlanBuilder() {
       </div>
 
       {atLimit && (
-        <div className="mt-1 mb-4 max-w-4xl mx-auto lg:mx-0">
+        <div className="mt-1 mb-4 max-w-7xl">
           <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             You&apos;ve used all {planUsage.featureLimit} AI Plan generations for this month on your{' '}
             {userTier ? getTierDisplayName(userTier) : 'current'} plan. Your allowance resets on the 1st.{' '}
@@ -1079,7 +1090,7 @@ export default function AIPlanBuilder() {
       )}
 
       {generationError && !isGenerating && (
-        <div className="max-w-4xl mx-auto mb-4 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-800">
+        <div className="max-w-7xl mb-4 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-800">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <span>{generationError}</span>
             <button
@@ -1108,10 +1119,10 @@ export default function AIPlanBuilder() {
 
         return (
           <div
-            className={`max-w-4xl mx-auto pb-6 ${isGenerating ? 'opacity-90 pointer-events-none' : ''}`}
+            className={`max-w-6xl mx-auto pb-6 ${isGenerating ? 'opacity-90 pointer-events-none' : ''}`}
             aria-busy={isGenerating}
           >
-            <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div className="md:grid md:grid-cols-[11fr_9fr] md:gap-8">
               <div className="space-y-5 md:space-y-4">
               <StepSection n={1} title="Your Goal">
                 <div>
@@ -1598,7 +1609,7 @@ export default function AIPlanBuilder() {
 
         return (
           <>
-            <div className="relative mt-8 max-w-4xl mx-auto lg:mx-0 space-y-6 pb-28 md:pb-32 font-plan-body">
+            <div className="relative mt-8 max-w-7xl space-y-6 pb-28 md:pb-32 font-plan-body">
               {/* Plan Header */}
               <Motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -1606,11 +1617,27 @@ export default function AIPlanBuilder() {
                 className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
               >
                 <div className="px-5 py-5 sm:px-6">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <h2 className="font-plan-display text-2xl font-bold text-[#0C1220] leading-tight">
-                      {sanitizeAIOutput(planTitle)}
-                    </h2>
-                    <div className="flex gap-2 shrink-0">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="font-plan-display text-2xl font-bold text-[#0C1220] leading-tight">
+                        {sanitizeAIOutput(planTitle)}
+                      </h2>
+                      <p className="mt-2 text-sm text-gray-500">
+                        {selectedPeriod}-Day {subtitlePlatforms} Strategy{niche ? ` for ${niche}` : ''}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
+                          📅 {selectedPeriod} days
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
+                          📱 {platformCount} platforms
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
+                          ✍️ {totalPosts} posts
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0 flex-wrap lg:flex-nowrap">
                       <button
                         type="button"
                         onClick={handleCopyFullPlan}
@@ -1630,29 +1657,15 @@ export default function AIPlanBuilder() {
                       )}
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">
-                    {selectedPeriod}-Day {subtitlePlatforms} Strategy{niche ? ` for ${niche}` : ''}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
-                      📅 {selectedPeriod} days
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
-                      📱 {platformCount} platforms
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
-                      ✍️ {totalPosts} posts
-                    </span>
-                  </div>
                 </div>
               </Motion.div>
 
               {/* Strategy Strip */}
               {(mixEntries.length > 0 || filteredOptimalEntries.length > 0 || keyThemes.length > 0) && (
-                <div className="rounded-xl bg-gray-100 px-4 py-4">
-                  <div className="flex flex-col divide-y divide-gray-200 lg:flex-row lg:divide-y-0 lg:divide-x">
+                <div className="rounded-xl bg-gray-100 overflow-hidden">
+                  <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                     {mixEntries.length > 0 && (
-                      <div className="flex-1 min-w-0 pb-3 lg:pb-0 lg:pr-4">
+                      <div className="px-6 py-4">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
                           Content mix
                         </p>
@@ -1665,10 +1678,19 @@ export default function AIPlanBuilder() {
                             </p>
                           ))}
                         </div>
+                        <div className="flex rounded-full overflow-hidden h-2 w-full mt-3">
+                          {mixEntries.map(([label, val]) => (
+                            <div
+                              key={label}
+                              style={{ width: `${Math.round((Number(val) / mixTotal) * 100)}%` }}
+                              className={MIX_BAR_COLOR[label] || 'bg-gray-300'}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
                     {filteredOptimalEntries.length > 0 && (
-                      <div className="flex-1 min-w-0 py-3 lg:py-0 lg:px-4">
+                      <div className="px-6 py-4">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
                           Best times
                         </p>
@@ -1683,7 +1705,7 @@ export default function AIPlanBuilder() {
                       </div>
                     )}
                     {keyThemes.length > 0 && (
-                      <div className="flex-1 min-w-0 pt-3 lg:pt-0 lg:pl-4">
+                      <div className="px-6 py-4">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
                           Key themes
                         </p>
@@ -1717,15 +1739,30 @@ export default function AIPlanBuilder() {
 
               {/* Day-by-Day Posts */}
               <div className="space-y-8">
-                {displayDays.map((day, di) => {
+                {displayDays.filter(day => getDayPosts(day).length > 0).map((day, di) => {
                   const dayNum = Number(day?.day) || di + 1;
                   return (
                     <section key={`plan-day-${di}-${dayNum}`}>
-                      <div className="relative flex items-center justify-center py-3">
-                        <div className="absolute inset-x-0 top-1/2 h-px bg-gray-200" aria-hidden />
-                        <span className="relative bg-[#F4F7FB] px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          {getDayDisplayLabel(day, di)}
-                        </span>
+                      <div className="flex items-center gap-4 my-8">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-100 rounded-full border border-gray-200">
+                          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                            Day {dayNum}
+                          </span>
+                          {day.date && (
+                            <>
+                              <span className="text-gray-300">·</span>
+                              <span className="text-xs text-gray-400">{sanitizeAIOutput(day.date)}</span>
+                            </>
+                          )}
+                          {day.theme && (
+                            <>
+                              <span className="text-gray-300">·</span>
+                              <span className="text-xs text-cyan-600 font-medium">{sanitizeAIOutput(day.theme)}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex-1 h-px bg-gray-200" />
                       </div>
                       <div className="mt-4 space-y-4">
                         {getDayPosts(day).map((post, pi) => (
@@ -1753,7 +1790,7 @@ export default function AIPlanBuilder() {
 
             {/* Sticky Bottom Bar */}
             <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur-sm">
-              <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 ml-0 md:ml-12 lg:ml-64 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 ml-0 md:ml-12 lg:ml-64 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-gray-500">
                   {totalPosts} posts across {displayDays.length} days
                 </p>
