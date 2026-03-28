@@ -1215,7 +1215,7 @@ export default function ContentLibrary() {
             {/* Selection bar */}
             {selectedIds.length > 0 && (
               <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-[var(--huttle-cyan)] px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-medium">{selectedIds.length} items selected</p>
+                <p className="text-sm font-medium text-white">{selectedIds.length} items selected</p>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
