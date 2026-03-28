@@ -1,6 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight,
   Calendar,
   Check,
   ChevronDown,
@@ -9,16 +8,15 @@ import {
   FileText,
   FolderPlus,
   Hash,
+  Inbox,
   Layers,
   Loader2,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   Search,
   Sparkles,
-  Star,
   Trash2,
-  TrendingUp,
-  Wand2,
   X,
   Zap,
 } from 'lucide-react';
@@ -43,7 +41,6 @@ import {
   buildUseAgainTarget,
   CONTENT_TYPE_CONFIG,
   CONTENT_TYPE_FILTERS,
-  countCopiesThisWeek,
   getPlatformOption,
   humanizeToolSource,
   isHiddenVaultCollectionName,
@@ -85,10 +82,9 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function getPreviewText(item, isExpanded) {
-  if (!item.contentText) return '';
-  if (item.contentText.length <= 300 || isExpanded) return item.contentText;
-  return `${item.contentText.slice(0, 200).trim()}...`;
+function stripContentLabel(text) {
+  if (!text) return '';
+  return text.replace(/^(Hook|Caption|Script|CTA|Hashtags?|Opening Line|Visual Ideas?|Blueprint|Remix):\s*/i, '');
 }
 
 function getCollectionIdsByItem(links) {
@@ -363,43 +359,6 @@ function CreatePostModal({ isOpen, isSaving, onClose, onSaveToVault, onSaveAndSc
   );
 }
 
-function EmptyState({ hasContent, onClearFilters, onCreate, onCreateManual }) {
-  return (
-    <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
-      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-huttle-primary/10 text-huttle-primary">
-        {hasContent ? <Search className="h-7 w-7" /> : <Wand2 className="h-7 w-7" />}
-      </div>
-      <h3 className="text-2xl font-semibold text-gray-900">
-        {hasContent ? 'No matches found' : 'Your vault is empty'}
-      </h3>
-      <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
-        {hasContent
-          ? 'Try a different search or clear your filters.'
-          : "Save content from any AI tool and it'll appear here, ready to copy and post."}
-      </p>
-      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={hasContent ? onClearFilters : onCreate}
-          className="inline-flex items-center gap-2 rounded-2xl bg-huttle-primary px-5 py-3 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark"
-        >
-          {hasContent ? 'Clear Filters' : 'Open AI Power Tools'}
-        </button>
-        {!hasContent && (
-          <button
-            type="button"
-            onClick={onCreateManual}
-            className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-          >
-            <Plus className="h-4 w-4" />
-            Write a Post Manually
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function ContentLibrary() {
   const { user } = useContext(AuthContext);
   const { addToast } = useToast();
@@ -441,6 +400,8 @@ export default function ContentLibrary() {
   const [kitPlatformFilter, setKitPlatformFilter] = useState('all');
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useRef(null);
+  const [copiedIds, setCopiedIds] = useState(new Set());
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   useEffect(() => {
     if (!createMenuOpen) return;
@@ -452,6 +413,13 @@ export default function ContentLibrary() {
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [createMenuOpen]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openMenuId]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -643,14 +611,6 @@ export default function ContentLibrary() {
 
     return [...nextItems].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [activeCollectionId, searchQuery, selectedPlatform, selectedSort, selectedType, vaultItems]);
-
-  const stats = useMemo(() => {
-    return {
-      savedCount: vaultItems.length,
-      copiedThisWeek: countCopiesThisWeek(vaultItems),
-      inCollections: vaultItems.filter((item) => item.collectionIds.length > 0).length,
-    };
-  }, [vaultItems]);
 
   const updateLocalItem = (itemId, updater) => {
     setItems((currentItems) => currentItems.map((item) => (
@@ -925,57 +885,137 @@ export default function ContentLibrary() {
     }
   };
 
+  const handleCardCopy = async (event, item) => {
+    event.stopPropagation();
+    await handleCopyItem(item);
+    setCopiedIds((prev) => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
+    setTimeout(() => {
+      setCopiedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }, 2000);
+  };
+
   const hasNoVaultItems = !loading && vaultItems.length === 0;
   const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
+  const totalItemCount = vaultMainTab === 'kits' ? filteredKits.length : filteredItems.length;
 
   return (
     <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pt-14 sm:px-6 md:ml-12 lg:ml-64 lg:px-8 lg:pt-20 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto w-full max-w-7xl">
-        <div className="mb-4 rounded-[20px] border border-huttle-primary/20 bg-huttle-50/60 px-4 py-3 flex items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            <Sparkles className="inline w-3.5 h-3.5 text-huttle-primary mr-1.5 -mt-0.5" />
-            Want AI to help write this post?
-          </p>
-          <Link
-            to="/dashboard/ai-tools"
-            className="inline-flex items-center gap-1 text-sm font-semibold text-huttle-primary hover:text-huttle-primary-dark flex-shrink-0"
-          >
-            Try AI Power Tools <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
 
-        <div className="mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Content Vault</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                {vaultMainTab === 'kits' && 'Organize multi-part posts by platform.'}
-                {vaultMainTab === 'library' && 'Your saved AI content'}
-              </p>
+        {/* ── HEADER CARD ── */}
+        <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+          {/* ROW 1 — Title · Search · + New content */}
+          <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h1 className="text-lg font-bold text-gray-900 sm:text-2xl font-display">Content Vault</h1>
+                <span className="text-sm text-gray-400 whitespace-nowrap hidden sm:inline">· {totalItemCount} items</span>
+              </div>
+
+              {/* Desktop search */}
+              {vaultMainTab === 'library' && (
+                <div className="hidden sm:flex flex-1 max-w-lg mx-6 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Search captions, hooks, topics..."
+                    className="w-full h-10 pl-9 pr-4 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100 bg-white"
+                  />
+                </div>
+              )}
+
+              {/* + New content */}
+              <div className="relative shrink-0" ref={createMenuRef}>
+                <button
+                  type="button"
+                  data-testid="vault-create-post-button"
+                  onClick={() => setCreateMenuOpen((open) => !open)}
+                  className="h-10 w-10 sm:w-auto sm:px-4 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New content</span>
+                </button>
+                {createMenuOpen && (
+                  <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl" role="menu" aria-label="Create content options">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="vault-write-post-manually"
+                      onClick={() => { setIsCreatePostOpen(true); setCreateMenuOpen(false); }}
+                      className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
+                    >
+                      <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                      <span>Write post manually</span>
+                    </button>
+                    <div className="mx-2 border-t border-gray-100" aria-hidden />
+                    <Link to="/dashboard/ai-tools?tab=captions" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                      <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Caption</span>
+                    </Link>
+                    <Link to="/dashboard/ai-tools?tab=hashtags" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                      <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hashtags</span>
+                    </Link>
+                    <Link to="/dashboard/ai-tools?tab=hooks" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                      <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hook</span>
+                    </Link>
+                    <Link to="/dashboard/full-post-builder" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                      <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>Build Full Post</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="inline-flex shrink-0 rounded-2xl border border-gray-200 bg-gray-50/80 p-1">
-              <button
-                type="button"
-                onClick={() => setVaultMainTab('kits')}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
-                  vaultMainTab === 'kits' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                Post kits
-              </button>
-              <button
-                type="button"
-                onClick={() => setVaultMainTab('library')}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
-                  vaultMainTab === 'library' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                All saved content
-              </button>
-            </div>
+
+            {/* Mobile search */}
+            {vaultMainTab === 'library' && (
+              <div className="mt-3 sm:hidden relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder="Search captions, hooks, topics..."
+                  className="w-full h-10 pl-9 pr-4 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100 bg-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ROW 2 — View toggle tabs */}
+          <div className="px-4 sm:px-6 flex items-center gap-6">
+            <button
+              type="button"
+              onClick={() => setVaultMainTab('library')}
+              className={`h-10 text-sm relative transition-colors ${
+                vaultMainTab === 'library'
+                  ? 'text-gray-900 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-cyan-400'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              All saved content
+            </button>
+            <button
+              type="button"
+              onClick={() => setVaultMainTab('kits')}
+              className={`h-10 text-sm relative transition-colors ${
+                vaultMainTab === 'kits'
+                  ? 'text-gray-900 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-cyan-400'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Post kits
+            </button>
           </div>
         </div>
 
+        {/* ── POST KITS TAB ── */}
         {vaultMainTab === 'kits' && (
           <div className="mb-6 space-y-4">
             <div className="overflow-x-auto pb-1">
@@ -1063,442 +1103,358 @@ export default function ContentLibrary() {
           </div>
         )}
 
+        {/* ── LIBRARY TAB ── */}
         {vaultMainTab === 'library' && (
           <>
-        <div
-          className={`mb-6 rounded-[28px] border border-white/60 bg-white/70 px-5 py-6 shadow-sm backdrop-blur sm:px-6 ${
-            createMenuOpen ? 'relative z-30' : ''
-          }`}
-        >
-          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-              <div className="relative w-full sm:min-w-[300px] sm:flex-1">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Search captions, hooks, topics, or platforms..."
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-11 py-3 text-sm outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-                />
-              </div>
-
-              <div className="flex min-w-0 flex-1 flex-row items-stretch gap-2 sm:flex-none sm:shrink-0 sm:gap-3">
-                <div className="relative min-w-0 flex-1 sm:flex-none" ref={createMenuRef}>
-                  <button
-                    type="button"
-                    data-testid="vault-create-post-button"
-                    onClick={() => setCreateMenuOpen((open) => !open)}
-                    className="inline-flex min-h-[44px] w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-[#01BAD2] px-3 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:opacity-95 sm:w-auto sm:px-4 sm:py-3"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Create
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${createMenuOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {createMenuOpen && (
-                    <div
-                      className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl"
-                      role="menu"
-                      aria-label="Create content options"
+            {/* Sticky filter bar */}
+            <div className="sticky top-[56px] sm:top-16 lg:top-20 z-20 mb-3 rounded-2xl border border-gray-100 bg-white">
+              {/* Type filter tabs */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-6 py-2">
+                <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  {CONTENT_TYPE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      data-testid={`vault-filter-${filter.id}`}
+                      onClick={() => setSelectedType(filter.id)}
+                      className={`h-10 sm:h-10 min-h-[44px] sm:min-h-0 whitespace-nowrap px-3 text-xs sm:text-sm relative transition-colors ${
+                        selectedType === filter.id
+                          ? 'text-gray-900 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-cyan-400'
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
                     >
-                      <button
-                        type="button"
-                        role="menuitem"
-                        data-testid="vault-write-post-manually"
-                        onClick={() => {
-                          setIsCreatePostOpen(true);
-                          setCreateMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
-                      >
-                        <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                        <span>Write post manually</span>
-                      </button>
-                      <div className="mx-2 border-t border-gray-100" aria-hidden />
-                      <Link
-                        to="/dashboard/ai-tools?tab=captions"
-                        onClick={() => setCreateMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                      >
-                        <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                        <span>New Caption</span>
-                      </Link>
-                      <Link
-                        to="/dashboard/ai-tools?tab=hashtags"
-                        onClick={() => setCreateMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                      >
-                        <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                        <span>New Hashtags</span>
-                      </Link>
-                      <Link
-                        to="/dashboard/ai-tools?tab=hooks"
-                        onClick={() => setCreateMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                      >
-                        <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                        <span>New Hook</span>
-                      </Link>
-                      <Link
-                        to="/dashboard/full-post-builder"
-                        onClick={() => setCreateMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
-                      >
-                        <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                        <span>Build Full Post</span>
-                      </Link>
-                    </div>
-                  )}
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleCopySelected}
-                  disabled={selectedItems.length === 0}
-                  className="inline-flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl bg-huttle-primary px-3 py-2.5 text-sm font-medium text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4 sm:py-3"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy All
-                </button>
+                {/* Platform + Sort dropdowns */}
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:shrink-0">
+                  <select
+                    value={selectedPlatform}
+                    onChange={(event) => setSelectedPlatform(event.target.value)}
+                    className="h-8 sm:h-8 min-h-[44px] sm:min-h-0 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
+                  >
+                    {PLATFORM_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedSort}
+                    onChange={(event) => setSelectedSort(event.target.value)}
+                    className="h-8 sm:h-8 min-h-[44px] sm:min-h-0 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="most_used">Most Used</option>
+                  </select>
+                </div>
               </div>
-          </div>
-        </div>
+            </div>
 
-        <div className="sticky top-[72px] z-20 mb-4 rounded-[28px] border border-gray-200 bg-white/90 px-5 py-4 shadow-sm backdrop-blur sm:top-20 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {CONTENT_TYPE_FILTERS.map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  data-testid={`vault-filter-${filter.id}`}
-                  onClick={() => setSelectedType(filter.id)}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                    selectedType === filter.id
-                      ? 'bg-huttle-primary text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+            {/* Collections strip */}
+            {collections.length > 0 && (
+              <div className="mb-3 py-2">
+                {/* Mobile: + New Collection above pills */}
+                <div className="sm:hidden mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCollectionField((v) => !v)}
+                    className="inline-flex items-center gap-1 text-xs text-cyan-500 font-medium"
+                  >
+                    <Plus className="h-3 w-3" /> New Collection
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCollectionId('all')}
+                    className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-all min-h-[44px] sm:min-h-0 sm:py-1 ${
+                      activeCollectionId === 'all'
+                        ? 'bg-gray-900 text-white'
+                        : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    All
+                  </button>
+
+                  {collections.map((collection) => (
+                    <button
+                      key={collection.id}
+                      type="button"
+                      onClick={() => setActiveCollectionId(collection.id)}
+                      className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-all min-h-[44px] sm:min-h-0 sm:py-1 ${
+                        activeCollectionId === collection.id
+                          ? 'bg-gray-900 text-white'
+                          : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {collection.name}
+                    </button>
+                  ))}
+
+                  {/* Desktop: + New Collection inline */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCollectionField((v) => !v)}
+                    className="hidden sm:inline-flex items-center gap-1 whitespace-nowrap text-xs text-cyan-500 font-medium shrink-0"
+                  >
+                    <Plus className="h-3 w-3" /> New Collection
+                  </button>
+                </div>
+
+                {showCreateCollectionField && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      value={createCollectionName}
+                      onChange={(event) => setCreateCollectionName(event.target.value)}
+                      placeholder="Collection name"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
+                    />
+                    <button type="button" onClick={handleCreateCollectionChip} className="text-sm font-medium text-cyan-600 hover:text-cyan-700">
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setShowCreateCollectionField(false)} className="text-sm text-gray-400 hover:text-gray-600">
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Selection bar */}
+            {selectedIds.length > 0 && (
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-gray-900 px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium">{selectedIds.length} items selected</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopySelected}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-900 transition-all hover:bg-gray-100"
+                  >
+                    Copy All Selected
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCollectionManager(selectedIds, 'bulk')}
+                    className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
+                  >
+                    Add to Collection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget({ id: selectedIds[0], name: `${selectedIds.length} selected items`, bulk: true })}
+                    className="rounded-full border border-red-400/30 px-4 py-2 text-sm font-medium text-red-200 transition-all hover:bg-red-500/10"
+                  >
+                    Delete Selected
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Loading */}
+            {loading && (
+              <div className="flex items-center justify-center rounded-2xl border border-gray-100 bg-white px-6 py-24">
+                <div className="text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-400" />
+                  <p className="mt-4 text-sm text-gray-400">Loading your saved content...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Empty — vault is completely empty */}
+            {hasNoVaultItems && (
+              <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+                <Inbox className="h-12 w-12 text-gray-300 sm:h-14 sm:w-14 lg:h-16 lg:w-16" />
+                <h3 className="mt-4 text-base font-medium text-gray-500">No content here yet</h3>
+                <p className="mt-1 text-sm text-gray-400">Your saved content will appear here.</p>
+                <Link
+                  to="/dashboard/ai-tools"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
                 >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+                  <Sparkles className="h-4 w-4" />
+                  Open AI Tools
+                </Link>
+              </div>
+            )}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={selectedPlatform}
-                onChange={(event) => setSelectedPlatform(event.target.value)}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-              >
-                {PLATFORM_OPTIONS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedSort}
-                onChange={(event) => setSelectedSort(event.target.value)}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="most_used">Most Used</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-5 flex flex-wrap gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
-            <Sparkles className="h-4 w-4 text-huttle-primary" />
-            <span>{stats.savedCount} items saved</span>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
-            <Copy className="h-4 w-4 text-huttle-primary" />
-            <span>{stats.copiedThisWeek} copied this week</span>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
-            <Star className="h-4 w-4 text-huttle-primary" />
-            <span>{stats.inCollections} in collections</span>
-          </div>
-        </div>
-
-        <div className="mb-6 overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowCreateCollectionField((currentValue) => !currentValue)}
-              className="rounded-full border border-dashed border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-huttle-primary hover:text-huttle-primary"
-            >
-              + New Collection
-            </button>
-
-            {showCreateCollectionField && (
-              <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 shadow-sm">
-                <input
-                  value={createCollectionName}
-                  onChange={(event) => setCreateCollectionName(event.target.value)}
-                  placeholder="Collection name"
-                  className="bg-transparent text-sm outline-none"
-                />
-                <button type="button" onClick={handleCreateCollectionChip} className="text-sm font-medium text-huttle-primary">
-                  Save
+            {/* Empty — filters match nothing */}
+            {hasNoResults && (
+              <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+                <Inbox className="h-12 w-12 text-gray-300 sm:h-14 sm:w-14 lg:h-16 lg:w-16" />
+                <h3 className="mt-4 text-base font-medium text-gray-500">No content here yet</h3>
+                <p className="mt-1 text-sm text-gray-400">
+                  {searchQuery
+                    ? `No results for "${searchQuery}"`
+                    : selectedType !== 'all'
+                      ? `No ${(CONTENT_TYPE_CONFIG[selectedType]?.label || '').toLowerCase()} saved yet. Generate some in AI Tools.`
+                      : 'Try a different search or clear your filters.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+                >
+                  Clear Filters
                 </button>
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setActiveCollectionId('all')}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                activeCollectionId === 'all'
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              All Collections
-            </button>
+            {/* ── CARD GRID ── */}
+            {!loading && filteredItems.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 lg:gap-4">
+                {filteredItems.map((item) => {
+                  const contentConfig = CONTENT_TYPE_CONFIG[item.contentType] || CONTENT_TYPE_CONFIG.legacy;
+                  const typeLabel = getContentTypeDisplayLabel(item.contentType);
+                  const platformOption = getPlatformOption(item.platform);
+                  const PlatformIcon = platformOption?.icon;
+                  const isExpanded = expandedIds.includes(item.id);
+                  const isSelected = selectedIds.includes(item.id);
+                  const isCopied = copiedIds.has(item.id);
+                  const cleanContent = stripContentLabel(item.contentText);
 
-            {collections.map((collection) => (
-              <button
-                key={collection.id}
-                type="button"
-                onClick={() => setActiveCollectionId(collection.id)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                  activeCollectionId === collection.id
-                    ? 'bg-huttle-primary text-white'
-                    : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {collection.name} {collection.count}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedIds.length > 0 && (
-          <div className="mb-5 flex flex-col gap-3 rounded-[24px] bg-gray-900 px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium">{selectedIds.length} items selected</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleCopySelected}
-                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-900 transition-all hover:bg-gray-100"
-              >
-                Copy All Selected
-              </button>
-              <button
-                type="button"
-                onClick={() => openCollectionManager(selectedIds, 'bulk')}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
-              >
-                Add to Collection
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget({ id: selectedIds[0], name: `${selectedIds.length} selected items`, bulk: true })}
-                className="rounded-full border border-red-400/30 px-4 py-2 text-sm font-medium text-red-200 transition-all hover:bg-red-500/10"
-              >
-                Delete Selected
-              </button>
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div className="flex items-center justify-center rounded-[28px] border border-gray-200 bg-white px-6 py-24 shadow-sm">
-            <div className="text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-huttle-primary" />
-              <p className="mt-4 text-sm text-gray-500">Loading your saved content...</p>
-            </div>
-          </div>
-        )}
-
-        {hasNoVaultItems && (
-          <div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
-            <h3 className="text-xl font-semibold text-gray-900">Your content starts here</h3>
-            <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
-              Create captions, hooks, hashtags and more with AI Power Tools — everything you make gets saved here.
-            </p>
-            <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:justify-center lg:gap-6">
-              <Link
-                to="/dashboard/ai-tools?tab=captions"
-                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
-              >
-                <MessageSquare className="h-8 w-8 text-[#01BAD2]" />
-                <p className="mt-4 font-semibold text-gray-900">Create a Caption</p>
-                <p className="mt-1 text-sm text-gray-500">Generate engaging captions for any platform</p>
-              </Link>
-              <Link
-                to="/dashboard/full-post-builder"
-                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
-              >
-                <FileText className="h-8 w-8 text-[#01BAD2]" />
-                <p className="mt-4 font-semibold text-gray-900">Build a Full Post</p>
-                <p className="mt-1 text-sm text-gray-500">Step-by-step post builder with hooks, captions & CTAs</p>
-              </Link>
-              <Link
-                to="/dashboard/trend-lab"
-                className="flex flex-1 cursor-pointer flex-col rounded-xl border border-gray-200 p-6 text-left transition-all hover:border-[#01BAD2] hover:shadow-md lg:max-w-none lg:flex-1"
-              >
-                <TrendingUp className="h-8 w-8 text-[#01BAD2]" />
-                <p className="mt-4 font-semibold text-gray-900">Explore Trends</p>
-                <p className="mt-1 text-sm text-gray-500">Discover what&apos;s trending in your niche</p>
-              </Link>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsCreatePostOpen(true)}
-              className="mt-8 inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4" />
-              Write a Post Manually
-            </button>
-          </div>
-        )}
-
-        {hasNoResults && (
-          <EmptyState
-            hasContent
-            onClearFilters={resetFilters}
-            onCreate={() => navigate('/dashboard/ai-tools?tab=captions')}
-            onCreateManual={() => setIsCreatePostOpen(true)}
-          />
-        )}
-
-        {!loading && filteredItems.length > 0 && (
-          <div className="columns-1 gap-5 md:columns-2">
-            {filteredItems.map((item) => {
-              const contentConfig = CONTENT_TYPE_CONFIG[item.contentType] || CONTENT_TYPE_CONFIG.legacy;
-              const typeLabel = getContentTypeDisplayLabel(item.contentType);
-              const platformOption = getPlatformOption(item.platform);
-              const PlatformIcon = platformOption?.icon;
-              const isExpanded = expandedIds.includes(item.id);
-              const isSelected = selectedIds.includes(item.id);
-
-              return (
-                <article
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setActiveItemId(item.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setActiveItemId(item.id);
-                    }
-                  }}
-                  className={`group mb-5 break-inside-avoid rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl ${isSelected ? 'ring-2 ring-huttle-primary/30' : ''}`}
-                >
-                  <div className={`mb-4 flex items-start justify-between gap-3 border-l-4 pl-4 ${contentConfig.accentClass}`}>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleSelected(item.id);
-                        }}
-                        className={`flex h-6 w-6 items-center justify-center rounded border transition-all ${
-                          isSelected
-                            ? 'border-huttle-primary bg-huttle-primary text-white'
-                            : 'border-gray-300 bg-white text-transparent opacity-0 group-hover:opacity-100'
-                        }`}
-                      >
-                        <Check className="h-3 w-3" />
-                      </button>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${contentConfig.badgeClass}`}>
-                        {typeLabel}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      {PlatformIcon && <PlatformIcon className="h-3.5 w-3.5" />}
-                      <span>{platformOption?.label || 'Saved'}</span>
-                      <span>·</span>
-                      <span>{formatDate(item.createdAt)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-800">
-                      {getPreviewText(item, isExpanded)}
-                    </p>
-
-                    {item.contentText.length > 300 && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleExpanded(item.id);
-                        }}
-                        className="text-sm font-medium text-huttle-primary transition-colors hover:text-huttle-primary-dark"
-                      >
-                        {isExpanded ? 'Show less' : 'Show more'}
-                      </button>
-                    )}
-
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-                      {item.topic && <span className="rounded-full bg-gray-100 px-2.5 py-1">{item.topic}</span>}
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Copied {item.copyCount}x</span>
-                      {item.collectionIds.length > 0 && (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-1">{item.collectionIds.length} collections</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2 opacity-100 transition-all md:opacity-0 md:group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleCopyItem(item);
+                  return (
+                    <article
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setActiveItemId(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setActiveItemId(item.id);
+                        }
                       }}
-                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
+                      className={`group flex flex-col bg-white rounded-2xl border border-gray-100 border-l-4 ${contentConfig.accentClass} transition-shadow hover:shadow-sm overflow-hidden ${
+                        isExpanded ? '' : 'md:h-[160px]'
+                      } ${isSelected ? 'ring-2 ring-cyan-300/40' : ''}`}
                     >
-                      Copy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setActiveItemId(item.id);
-                        setIsEditing(true);
-                      }}
-                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openCollectionManager([item.id], 'single');
-                      }}
-                      className="rounded-full border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50"
-                    >
-                      Save to Collection
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteTarget({ id: item.id, name: item.name || typeLabel });
-                      }}
-                      className="rounded-full border border-red-100 px-3 py-2 text-xs font-medium text-red-500 transition-all hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                      {/* Card header */}
+                      <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                          {/* Selection checkbox */}
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); toggleSelected(item.id); }}
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                              isSelected
+                                ? 'border-cyan-500 bg-cyan-500 text-white'
+                                : 'border-gray-300 bg-white text-transparent opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <Check className="h-2.5 w-2.5" />
+                          </button>
+
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${contentConfig.badgeClass}`}>
+                            {typeLabel}
+                          </span>
+                          <span className="text-gray-300 text-[11px]">·</span>
+                          {PlatformIcon && <PlatformIcon className="h-3 w-3 text-gray-400 shrink-0 hidden sm:block" />}
+                          <span className="text-gray-400 text-[11px] truncate hidden sm:inline">{platformOption?.label || 'Saved'}</span>
+                          <span className="text-gray-300 text-[11px] hidden sm:inline">·</span>
+                          <span className="text-gray-400 text-[11px] whitespace-nowrap">{formatDate(item.createdAt)}</span>
+                        </div>
+
+                        {/* ⋯ menu */}
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenMenuId(openMenuId === item.id ? null : item.id);
+                            }}
+                            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 min-w-[28px] min-h-[28px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {openMenuId === item.id && (
+                            <div className="absolute right-0 top-full z-30 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={(event) => { handleCardCopy(event, item); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                <Copy className="h-3.5 w-3.5" /> Copy
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => { event.stopPropagation(); setActiveItemId(item.id); setIsEditing(true); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => { event.stopPropagation(); openCollectionManager([item.id], 'single'); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                <FolderPlus className="h-3.5 w-3.5" /> Add to Collection
+                              </button>
+                              <div className="my-1 border-t border-gray-100" />
+                              <button
+                                type="button"
+                                onClick={(event) => { event.stopPropagation(); setDeleteTarget({ id: item.id, name: item.name || typeLabel }); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card body */}
+                      <div className="flex-1 min-h-0 overflow-hidden px-4">
+                        <p className={`text-sm text-gray-700 leading-relaxed ${
+                          isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-3 md:line-clamp-2'
+                        }`}>
+                          {cleanContent}
+                        </p>
+                        {cleanContent.length > 100 && (
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); toggleExpanded(item.id); }}
+                            className="mt-0.5 text-xs text-cyan-500 hover:text-cyan-600 transition-colors"
+                          >
+                            {isExpanded ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Card footer */}
+                      <div className="flex items-center justify-between gap-2 px-4 pt-1.5 pb-3 shrink-0">
+                        <div className="min-w-0">
+                          {item.topic && (
+                            <span className="inline-block max-w-[120px] sm:max-w-[180px] truncate rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-500">
+                              {item.topic}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => handleCardCopy(event, item)}
+                          className={`shrink-0 h-6 min-h-[40px] sm:min-h-0 sm:h-6 px-3 text-xs font-medium rounded-lg border transition-all ${
+                            isCopied
+                              ? 'border-cyan-400 bg-cyan-50 text-cyan-600'
+                              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {isCopied ? 'Copied ✓' : 'Copy'}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
       </div>
 
+      {/* ── DETAIL DRAWER ── */}
       {vaultMainTab === 'library' && activeItem && (
         <div
           className={`fixed inset-0 z-[60] ${isMobile ? 'bg-[#f7f8fa]' : 'bg-black/30 backdrop-blur-sm'}`}
