@@ -924,9 +924,10 @@ export default function ContentLibrary() {
         </div>
 
         {/* ── ACTION BAR — search + button + view tabs ── */}
-        <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+        {/* overflow-visible: menu not clipped. z-30: whole bar above sticky filters (z-20). Inner z-50/10: menu above vault tabs row. */}
+        <div className="relative z-30 mb-4 overflow-visible rounded-2xl border border-gray-100 bg-white">
           {/* Search + New content */}
-          <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-gray-100">
+          <div className="relative z-50 flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-gray-100">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
@@ -947,7 +948,7 @@ export default function ContentLibrary() {
                 <span className="hidden sm:inline">New content</span>
               </button>
               {createMenuOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl" role="menu" aria-label="Create content options">
+                <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl" role="menu" aria-label="Create content options">
                   <button
                     type="button"
                     role="menuitem"
@@ -976,8 +977,8 @@ export default function ContentLibrary() {
             </div>
           </div>
 
-          {/* View toggle tabs */}
-          <div className="px-4 sm:px-5 flex items-center gap-6">
+          {/* View toggle tabs — below search row in paint order; keep z lower than New content menu */}
+          <div className="relative z-10 px-4 sm:px-5 flex items-center gap-6 bg-white">
             <button
               type="button"
               onClick={() => setVaultMainTab('library')}
