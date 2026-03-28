@@ -905,97 +905,79 @@ export default function ContentLibrary() {
 
   const hasNoVaultItems = !loading && vaultItems.length === 0;
   const hasNoResults = !loading && vaultItems.length > 0 && filteredItems.length === 0;
-  const totalItemCount = vaultMainTab === 'kits' ? filteredKits.length : filteredItems.length;
 
   return (
     <div className="min-h-screen flex-1 overflow-x-hidden bg-[#f7f8fa] px-4 pt-14 sm:px-6 md:ml-12 lg:ml-64 lg:px-8 lg:pt-20 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto w-full max-w-7xl">
 
-        {/* ── HEADER CARD ── */}
-        <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
-          {/* ROW 1 — Title · Search · + New content */}
-          <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 border border-gray-100">
-                  <FolderOpen className="h-4 w-4 sm:h-5 sm:w-5 text-huttle-primary" />
-                </div>
-                <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0">
-                  <h1 className="text-lg font-bold text-gray-900 sm:text-2xl font-display">Content Vault</h1>
-                  <span className="text-sm text-gray-400 whitespace-nowrap hidden sm:inline">· {totalItemCount} items</span>
-                </div>
-              </div>
+        {/* ── PAGE HEADER — matches all other pages ── */}
+        <div className="mb-6 md:mb-8">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+              <FolderOpen className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Content Vault</h1>
+              <p className="text-sm md:text-base text-gray-500">Your saved AI content</p>
+            </div>
+          </div>
+        </div>
 
-              {/* Desktop search */}
-              {vaultMainTab === 'library' && (
-                <div className="hidden sm:flex flex-1 max-w-lg mx-6 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder="Search captions, hooks, topics..."
-                    className="w-full h-10 pl-9 pr-4 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100 bg-white"
-                  />
+        {/* ── ACTION BAR — search + button + view tabs ── */}
+        <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+          {/* Search + New content */}
+          <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-gray-100">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search captions, hooks, topics..."
+                className="w-full h-10 pl-9 pr-4 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100 bg-white"
+              />
+            </div>
+            <div className="relative shrink-0" ref={createMenuRef}>
+              <button
+                type="button"
+                data-testid="vault-create-post-button"
+                onClick={() => setCreateMenuOpen((open) => !open)}
+                className="h-10 w-10 sm:w-auto sm:px-4 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New content</span>
+              </button>
+              {createMenuOpen && (
+                <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl" role="menu" aria-label="Create content options">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="vault-write-post-manually"
+                    onClick={() => { setIsCreatePostOpen(true); setCreateMenuOpen(false); }}
+                    className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
+                  >
+                    <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
+                    <span>Write post manually</span>
+                  </button>
+                  <div className="mx-2 border-t border-gray-100" aria-hidden />
+                  <Link to="/dashboard/ai-tools?tab=captions" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                    <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Caption</span>
+                  </Link>
+                  <Link to="/dashboard/ai-tools?tab=hashtags" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                    <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hashtags</span>
+                  </Link>
+                  <Link to="/dashboard/ai-tools?tab=hooks" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                    <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hook</span>
+                  </Link>
+                  <Link to="/dashboard/full-post-builder" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
+                    <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>Build Full Post</span>
+                  </Link>
                 </div>
               )}
-
-              {/* + New content */}
-              <div className="relative shrink-0" ref={createMenuRef}>
-                <button
-                  type="button"
-                  data-testid="vault-create-post-button"
-                  onClick={() => setCreateMenuOpen((open) => !open)}
-                  className="h-10 w-10 sm:w-auto sm:px-4 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">New content</span>
-                </button>
-                {createMenuOpen && (
-                  <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-xl" role="menu" aria-label="Create content options">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="vault-write-post-manually"
-                      onClick={() => { setIsCreatePostOpen(true); setCreateMenuOpen(false); }}
-                      className="flex w-full items-center gap-3 bg-gradient-to-r from-cyan-50/90 to-white px-4 py-3.5 text-left text-sm font-semibold text-gray-900 transition-colors hover:from-cyan-50 hover:to-cyan-50/60"
-                    >
-                      <Edit3 className="h-4 w-4 shrink-0 text-[#01BAD2]" />
-                      <span>Write post manually</span>
-                    </button>
-                    <div className="mx-2 border-t border-gray-100" aria-hidden />
-                    <Link to="/dashboard/ai-tools?tab=captions" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
-                      <MessageSquare className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Caption</span>
-                    </Link>
-                    <Link to="/dashboard/ai-tools?tab=hashtags" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
-                      <Hash className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hashtags</span>
-                    </Link>
-                    <Link to="/dashboard/ai-tools?tab=hooks" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
-                      <Zap className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>New Hook</span>
-                    </Link>
-                    <Link to="/dashboard/full-post-builder" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
-                      <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>Build Full Post</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
             </div>
-
-            {/* Mobile search */}
-            {vaultMainTab === 'library' && (
-              <div className="mt-3 sm:hidden relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Search captions, hooks, topics..."
-                  className="w-full h-10 pl-9 pr-4 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100 bg-white"
-                />
-              </div>
-            )}
           </div>
 
-          {/* ROW 2 — View toggle tabs */}
-          <div className="px-4 sm:px-6 flex items-center gap-6">
+          {/* View toggle tabs */}
+          <div className="px-4 sm:px-5 flex items-center gap-6">
             <button
               type="button"
               onClick={() => setVaultMainTab('library')}
