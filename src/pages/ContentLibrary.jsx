@@ -6,6 +6,7 @@ import {
   Copy,
   Edit3,
   FileText,
+  FolderOpen,
   FolderPlus,
   Hash,
   Inbox,
@@ -915,9 +916,14 @@ export default function ContentLibrary() {
           {/* ROW 1 — Title · Search · + New content */}
           <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 sm:text-2xl font-display">Content Vault</h1>
-                <span className="text-sm text-gray-400 whitespace-nowrap hidden sm:inline">· {totalItemCount} items</span>
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 border border-gray-100">
+                  <FolderOpen className="h-4 w-4 sm:h-5 sm:w-5 text-huttle-primary" />
+                </div>
+                <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0">
+                  <h1 className="text-lg font-bold text-gray-900 sm:text-2xl font-display">Content Vault</h1>
+                  <span className="text-sm text-gray-400 whitespace-nowrap hidden sm:inline">· {totalItemCount} items</span>
+                </div>
               </div>
 
               {/* Desktop search */}
