@@ -1,7 +1,7 @@
-import { useState, useContext, useEffect, useMemo, useRef } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Award, CalendarCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
-import { cancelSubscription, createCheckoutSession, createPaymentMethodUpdateSession, isDemoMode } from '../services/stripeAPI';
+import { Award, BadgeCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
+import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -26,7 +26,7 @@ const LAUNCH_PLANS = [
       'Founders rate locked forever',
       '14-day money-back guarantee',
     ],
-    gradient: 'from-amber-400 to-amber-600',
+    gradient: 'from-huttle-primary to-cyan-500',
     tier: 'founder',
   },
   {
@@ -74,8 +74,8 @@ const PLAN_DETAILS = {
     subtitle: 'Launch member',
     annualLabel: '$199/year locked in forever',
     summary: 'Founders get full Pro access with the highest launch generation allowance and a permanent early-adopter rate.',
-    iconGradient: 'from-amber-400 to-amber-600',
-    accentClasses: 'border-amber-200 bg-amber-50 text-amber-700',
+    iconGradient: 'from-huttle-primary to-cyan-500',
+    accentClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   },
   builder: {
     title: 'Builders Club',
@@ -143,17 +143,42 @@ export default function Subscription() {
 
   const [loading, setLoading] = useState(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [billingData, setBillingData] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const checkoutResetTimeoutRef = useRef(null);
 
   const demoMode = isDemoMode() || contextDemoMode;
   const showDemoControls = import.meta.env.DEV && demoMode;
   const currentPlanDetails = PLAN_DETAILS[userTier] || null;
 
+  const loadBillingDetails = useCallback(async () => {
+    try {
+      const [summaryResult, invoicesResult] = await Promise.all([
+        getBillingSummary(),
+        getBillingInvoices(),
+      ]);
+      if (summaryResult.success) {
+        setBillingData(summaryResult.summary || null);
+      }
+      if (invoicesResult.success) {
+        setInvoices(invoicesResult.invoices || []);
+      }
+    } catch (err) {
+      console.error('Failed to load billing details:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (user?.id && !subscription && !subscriptionLoading) {
       void refreshSubscription();
     }
   }, [user?.id, refreshSubscription, subscription, subscriptionLoading]);
+
+  useEffect(() => {
+    if (user?.id && hasPaidAccess) {
+      void loadBillingDetails();
+    }
+  }, [user?.id, hasPaidAccess, loadBillingDetails]);
 
   useEffect(() => () => {
     if (checkoutResetTimeoutRef.current) {
@@ -171,14 +196,19 @@ export default function Subscription() {
     if (billingState === 'payment-method-updated') {
       addToast('Your payment method was updated successfully.', 'success');
       void refreshSubscription();
+      void loadBillingDetails();
       nextParams.delete('billing');
       setSearchParams(nextParams, { replace: true });
     }
-  }, [addToast, refreshSubscription, searchParams, setSearchParams]);
+  }, [addToast, refreshSubscription, loadBillingDetails, searchParams, setSearchParams]);
 
   const renewalDate = useMemo(
     () => formatDate(subscription?.currentPeriodEnd),
     [subscription?.currentPeriodEnd]
+  );
+  const startDate = useMemo(
+    () => formatDate(subscription?.currentPeriodStart),
+    [subscription?.currentPeriodStart]
   );
   const isResolvingSubscription = subscriptionLoading && !subscription && !isSubscriptionDegraded;
 
@@ -221,34 +251,6 @@ export default function Subscription() {
     } catch (error) {
       console.error('Checkout error:', error);
       addToast('Something went wrong. Please try again.', 'error');
-      setLoading(null);
-    }
-  };
-
-  const handleManagePayment = async () => {
-    if (!user?.id) {
-      addToast('Please sign in to manage billing.', 'warning');
-      return;
-    }
-
-    setLoading('portal');
-    try {
-      const result = await createPaymentMethodUpdateSession({
-        returnUrl: window.location.href,
-      });
-
-      if (result.demo) {
-        addToast('Billing management is temporarily simulated in demo mode.', 'info');
-        return;
-      }
-
-      if (!result.success) {
-        addToast(result.error || 'Failed to open billing management. Please try again.', 'error');
-      }
-    } catch (error) {
-      console.error('Billing management error:', error);
-      addToast('Something went wrong. Please try again.', 'error');
-    } finally {
       setLoading(null);
     }
   };
@@ -302,6 +304,7 @@ export default function Subscription() {
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8" data-testid="subscription-page">
       <div className="max-w-6xl mx-auto">
+        {/* Past due banner */}
         {isPastDue && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -311,16 +314,10 @@ export default function Subscription() {
                 Your subscription is past due. Update your payment details to keep uninterrupted access.
               </p>
             </div>
-            <button
-              onClick={handleManagePayment}
-              disabled={loading === 'portal'}
-              className="shrink-0 text-sm font-semibold text-amber-900 underline hover:text-amber-700 disabled:opacity-50"
-            >
-              Update card
-            </button>
           </div>
         )}
 
+        {/* Cancellation scheduled banner */}
         {isCancelScheduled && !isAnnualFounder && (
           <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
@@ -332,6 +329,7 @@ export default function Subscription() {
           </div>
         )}
 
+        {/* Dev demo controls */}
         {showDemoControls && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
             <div className="flex-1">
@@ -351,6 +349,7 @@ export default function Subscription() {
           </div>
         )}
 
+        {/* Loading state */}
         {isResolvingSubscription ? (
           <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <div className="flex items-start gap-3">
@@ -364,14 +363,16 @@ export default function Subscription() {
             </div>
           </div>
         ) : hasPaidAccess ? (
+          /* ===== PAID USER VIEW ===== */
           <div className="max-w-4xl mx-auto space-y-8">
+            {/* Degraded banner */}
             {isSubscriptionDegraded && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-semibold text-amber-900">Billing status is temporarily unavailable</p>
+                  <p className="font-semibold text-amber-900">Billing status temporarily unavailable</p>
                   <p className="text-sm text-amber-800">
-                    {subscriptionError || 'We could not fully refresh your Stripe data. Showing your latest available access state.'}
+                    {subscriptionError || 'Could not fully refresh Stripe data. Showing latest available access state.'}
                   </p>
                 </div>
                 <button onClick={() => refreshSubscription()} className="text-sm font-semibold text-amber-900 hover:text-amber-700">
@@ -380,9 +381,14 @@ export default function Subscription() {
               </div>
             )}
 
+            {/* Page header — matches Full Post Builder / Settings icon shell */}
             <div className="flex items-center gap-4">
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${currentPlanDetails?.iconGradient || 'from-huttle-primary to-cyan-400'} flex items-center justify-center shadow-lg`}>
-                {isAnnualFounder ? <Award className="w-7 h-7 text-white" /> : <CreditCard className="w-7 h-7 text-white" />}
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+                {isAnnualFounder ? (
+                  <BadgeCheck className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" aria-hidden />
+                ) : (
+                  <CreditCard className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" aria-hidden />
+                )}
               </div>
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
@@ -394,99 +400,101 @@ export default function Subscription() {
               </div>
             </div>
 
+            {/* Founder/Builder special card */}
             {isAnnualFounder ? (
               <FoundersMembershipCard
                 subscription={subscription}
                 user={user}
                 onCancelled={refreshSubscription}
+                billingData={billingData}
+                invoices={invoices}
+                onBillingRefresh={loadBillingDetails}
               />
             ) : (
-              <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentPlanDetails?.iconGradient || 'from-huttle-primary to-cyan-400'} flex items-center justify-center shadow-lg`}>
-                  {isAnnualFounder ? <Users className="w-6 h-6 text-white" /> : userTier === TIERS.PRO ? <Crown className="w-6 h-6 text-white" /> : <Zap className="w-6 h-6 text-white" />}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-xl font-bold text-gray-900">{currentPlanDetails?.title || getTierDisplayName(userTier)}</h2>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full ${
-                      isTrialing ? 'bg-cyan-100 text-cyan-700' : isPastDue ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPastDue ? 'bg-amber-500' : 'bg-green-500'}`} />
-                      {isTrialing ? 'Trialing' : isPastDue ? 'Past Due' : 'Active'}
-                    </span>
+              /* Non-founder tier card */
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentPlanDetails?.iconGradient || 'from-huttle-primary to-cyan-400'} flex items-center justify-center shadow-lg`}>
+                    {userTier === TIERS.PRO ? <Crown className="w-6 h-6 text-white" /> : <Zap className="w-6 h-6 text-white" />}
                   </div>
-
-                  <p className="text-sm text-gray-600 mb-4">{currentPlanDetails?.summary}</p>
-
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-semibold mb-4 ${currentPlanDetails?.accentClasses || 'border-gray-200 bg-gray-50 text-gray-700'}`}>
-                    <Sparkles className="w-4 h-4" />
-                    {currentPlanDetails?.annualLabel}
-                  </div>
-
-                  {renewalDate && (
-                    <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
-                      <CalendarCheck className="w-4 h-4 text-gray-400" />
-                      <span>
-                        {isTrialing ? 'Trial ends on:' : 'Next billing date:'} <span className="font-semibold text-gray-900">{renewalDate}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-xl font-bold text-gray-900">{currentPlanDetails?.title || getTierDisplayName(userTier)}</h2>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
+                        isTrialing
+                          ? 'bg-cyan-100 text-cyan-700'
+                          : isPastDue
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPastDue ? 'bg-amber-500' : 'bg-green-500'}`} />
+                        {isTrialing ? 'Trialing' : isPastDue ? 'Past Due' : 'Active'}
                       </span>
                     </div>
-                  )}
 
-                  {isTrialing && trialEndsAt && (
-                    <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3">
-                      <p className="text-sm font-semibold text-cyan-900">
-                        {trialDaysRemaining === 0
-                          ? 'Your trial ends today.'
-                          : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
-                      </p>
-                      <p className="text-sm text-cyan-800 mt-1">
-                        Trial end date: {formatDate(trialEndsAt)}.
-                      </p>
+                    <p className="text-sm text-gray-600 mb-4">{currentPlanDetails?.summary}</p>
+
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-semibold mb-4 ${currentPlanDetails?.accentClasses || 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+                      <Sparkles className="w-4 h-4" />
+                      {currentPlanDetails?.annualLabel}
                     </div>
-                  )}
 
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={handleManagePayment}
-                      disabled={loading === 'portal' || loading === 'cancel'}
-                      className="btn-primary"
-                    >
-                      {loading === 'portal' ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Opening...
-                        </>
-                      ) : (
-                        <>
-                          Manage Billing
-                        </>
+                    {/* Date stats */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      {startDate && (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400">Start Date</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-900">{startDate}</p>
+                        </div>
                       )}
-                    </button>
+                      {renewalDate && (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-400">
+                            {isTrialing ? 'Trial Ends' : 'Renewal Date'}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-gray-900">{renewalDate}</p>
+                        </div>
+                      )}
+                    </div>
 
-                    <button
-                      onClick={handleCancelSubscription}
-                      disabled={loading === 'portal' || loading === 'cancel'}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      {loading === 'cancel' ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Opening...
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="w-4 h-4" />
-                          Cancel Subscription
-                        </>
-                      )}
-                    </button>
+                    {isTrialing && trialEndsAt && (
+                      <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3">
+                        <p className="text-sm font-semibold text-cyan-900">
+                          {trialDaysRemaining === 0
+                            ? 'Your trial ends today.'
+                            : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
+                        </p>
+                        <p className="text-sm text-cyan-800 mt-1">
+                          Trial end date: {formatDate(trialEndsAt)}.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={handleCancelSubscription}
+                        disabled={loading === 'portal' || loading === 'cancel'}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      >
+                        {loading === 'cancel' ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4" />
+                            Cancel Subscription
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             )}
 
+            {/* Billing management panel for non-founders */}
             {!isAnnualFounder && (
               <BillingManagementPanel
                 subscription={subscription}
@@ -496,6 +504,7 @@ export default function Subscription() {
               />
             )}
 
+            {/* FAQ Section */}
             <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
               <div className="space-y-6">
@@ -505,7 +514,7 @@ export default function Subscription() {
                 </div>
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
-                  <p className="text-sm text-gray-600">Yes. You can manage billing from this page — update your card, review invoices, and control cancellation timing for your annual membership.</p>
+                  <p className="text-sm text-gray-600">Yes. You can manage billing from this page — update your card, review invoices, and control cancellation timing for your membership.</p>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Do AI generations roll over?</h3>
@@ -515,6 +524,7 @@ export default function Subscription() {
             </div>
           </div>
         ) : (
+          /* ===== FREE/UNPAID USER VIEW (Plan Selection) ===== */
           <div className="space-y-12">
             {isSubscriptionDegraded && (
               <div className="max-w-5xl mx-auto rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
@@ -522,7 +532,7 @@ export default function Subscription() {
                 <div className="flex-1">
                   <p className="font-semibold text-red-900">We couldn&apos;t load your subscription status</p>
                   <p className="text-sm text-red-700">
-                    {subscriptionError || 'Billing is temporarily unavailable, so we are showing the safe free-tier fallback instead of a blank page.'}
+                    {subscriptionError || 'Billing is temporarily unavailable, showing safe free-tier fallback.'}
                   </p>
                 </div>
                 <button onClick={() => refreshSubscription()} className="text-sm font-semibold text-red-900 hover:text-red-700">
@@ -537,7 +547,7 @@ export default function Subscription() {
               </div>
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Choose Your Launch Plan</h1>
-                <p className="text-base text-gray-600">Huttle AI is currently paid-only. Founders Club and Builders Club both include full Pro feature access.</p>
+                <p className="text-base text-gray-600">Huttle AI is currently paid-only. Both clubs include full Pro feature access.</p>
               </div>
             </div>
 
@@ -545,7 +555,11 @@ export default function Subscription() {
               {LAUNCH_PLANS.map((plan) => (
                 <div key={plan.id} className="relative bg-white rounded-2xl border border-gray-200 p-6 lg:p-8 shadow-sm flex flex-col">
                   <div className="flex items-center justify-between mb-5">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${plan.id === 'founder' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-sky-50 text-sky-700 border border-sky-200'}`}>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                      plan.id === 'founder'
+                        ? 'bg-huttle-primary text-white'
+                        : 'bg-sky-50 text-sky-700 border border-sky-200'
+                    }`}>
                       {plan.badge}
                     </span>
                     <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center shadow-lg`}>
@@ -566,7 +580,7 @@ export default function Subscription() {
                   <ul className="space-y-3 mb-6 flex-grow">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <Check className="w-5 h-5 text-huttle-primary flex-shrink-0" />
                         <span className="text-sm text-gray-600">{feature}</span>
                       </li>
                     ))}
@@ -590,6 +604,7 @@ export default function Subscription() {
               ))}
             </div>
 
+            {/* Future plans */}
             <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm max-w-5xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
                 <CreditCard className="w-6 h-6 text-huttle-primary" />
@@ -609,7 +624,7 @@ export default function Subscription() {
                     <ul className="space-y-2">
                       {plan.features.map((feature) => (
                         <li key={feature} className="flex items-start gap-2 text-sm text-gray-600">
-                          <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          <Check className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
                           {feature}
                         </li>
                       ))}

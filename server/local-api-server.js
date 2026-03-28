@@ -193,6 +193,24 @@ async function setupRoutes() {
   }
 
   try {
+    app.all('/api/create-setup-intent', await loadHandler('api/create-setup-intent.js'));
+  } catch (error) {
+    console.warn('⚠️  create-setup-intent route skipped:', error.message);
+    app.all('/api/create-setup-intent', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'create-setup-intent unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/update-default-payment', await loadHandler('api/update-default-payment.js'));
+  } catch (error) {
+    console.warn('⚠️  update-default-payment route skipped:', error.message);
+    app.all('/api/update-default-payment', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'update-default-payment unavailable locally' });
+    });
+  }
+
+  try {
     app.all('/api/change-subscription-plan', await loadHandler('api/change-subscription-plan.js'));
   } catch (error) {
     console.warn('⚠️  Change subscription plan route skipped:', error.message);

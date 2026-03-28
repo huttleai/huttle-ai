@@ -417,6 +417,49 @@ export async function getBillingInvoices() {
   }
 }
 
+/**
+ * Creates a SetupIntent (server only sees customer id; card data stays in Stripe.js).
+ */
+export async function createCardSetupIntent() {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/create-setup-intent', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+
+    const data = await parseJsonResponse(response, 'setup_intent_failed');
+    return { clientSecret: data.clientSecret || null };
+  } catch (error) {
+    console.error('Create Setup Intent Error:', error);
+    return { clientSecret: null };
+  }
+}
+
+/**
+ * Sets the customer's default payment method after Stripe.js confirms the SetupIntent.
+ */
+export async function updateDefaultPaymentMethod(paymentMethodId) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/update-default-payment', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ paymentMethodId }),
+    });
+
+    const data = await parseJsonResponse(response, 'update_default_failed');
+    return {
+      success: true,
+      paymentMethod: data.paymentMethod || null,
+    };
+  } catch (error) {
+    console.error('Update default payment error:', error);
+    return { success: false, paymentMethod: null };
+  }
+}
+
 export async function cancelSubscription() {
   try {
     const headers = await getAuthHeaders();

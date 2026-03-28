@@ -30,6 +30,8 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@stripe/react-stripe-js": "^6.0.0",
+    "@stripe/stripe-js": "^9.0.0",
     "@supabase/supabase-js": "^2.78.0",
     "browser-image-compression": "^2.0.2",
     "canvas-confetti": "^1.9.4",
