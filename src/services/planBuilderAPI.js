@@ -67,6 +67,9 @@ export async function createJobDirectly({
   extraContext = null,
   trendContext = '',
   platform_rules_block = '',
+  businessName = '',
+  brandName = '',
+  website = '',
 }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -100,6 +103,9 @@ export async function createJobDirectly({
           platformFocus,
           trendContext: trendContext || '',
           platform_rules_block: typeof platform_rules_block === 'string' ? platform_rules_block : '',
+          businessName: typeof businessName === 'string' ? businessName : '',
+          brandName: typeof brandName === 'string' ? brandName : '',
+          website: typeof website === 'string' ? website : '',
         },
         created_at: new Date().toISOString()
       })

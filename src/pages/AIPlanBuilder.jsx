@@ -962,6 +962,9 @@ export default function AIPlanBuilder() {
         extraContext: extraContext.trim() || null,
         trendContext,
         platform_rules_block: platformRulesBlock,
+        businessName: brandProfile?.businessName || brandProfile?.brandName || '',
+        brandName: brandProfile?.brandName || '',
+        website: brandProfile?.website || '',
       });
 
       if (createError || !createdJobId) {
