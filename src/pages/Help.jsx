@@ -58,7 +58,7 @@ export default function Help() {
     },
     {
       question: 'How do I save and organize content?',
-      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Free 250 MB, Essentials 5 GB, Pro / Founders / Builders 50 GB. Track your usage in the storage meter on the Content Vault page.'
+      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Essentials 5 GB, Pro / Founders / Builders 25 GB. Track your usage in the storage meter on the Content Vault page.'
     },
     {
       question: 'What is Brand Voice and how do I set it up?',
@@ -102,7 +102,7 @@ export default function Help() {
         'Switch between Grid view (visual thumbnails) and List view (metadata-dense rows)',
         'Use the type filter tabs (All / Images / Videos / Text) and search bar to find content quickly',
         'Click any item to preview, edit text inline, copy to clipboard, download, or move between projects',
-        'Storage limits vary by plan: Free 250 MB, Essentials 5 GB, Pro 25 GB — track usage in the sidebar meter'
+        'Storage limits vary by plan: Essentials 5 GB, Pro / Founders / Builders 25 GB — track usage in the sidebar meter'
       ]
     },
     { 

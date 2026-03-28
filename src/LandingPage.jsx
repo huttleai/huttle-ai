@@ -7,8 +7,9 @@ import {
   Activity, Users, BarChart3, Facebook, Youtube,
   Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
   Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle, LogIn,
-  Shuffle, FolderOpen, BarChart2, CalendarDays
+  Shuffle, FolderOpen, BarChart2, CalendarDays, LockKeyhole, ShieldCheck, Undo2
 } from "lucide-react";
+import { createCheckoutSession, openStripeCheckoutTab } from './services/stripeAPI';
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
 import { OrbitingCircles, SocialIcons } from "./components/OrbitingCircles";
@@ -28,7 +29,81 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const FOUNDING_SPOTS_LEFT = 41;
+const FOUNDING_SPOTS_LEFT = 38;
+const SITE_URL = "https://huttleai.com";
+const LOGO_URL = `${SITE_URL}/logo-512.png`;
+
+const FAQ_ITEMS = [
+  {
+    question: "What do Founding Members get?",
+    answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Ignite Engine, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+  },
+  {
+    question: "What happens when the Founding Member offer ends?",
+    answer: "After the launch window closes, public pricing shifts to Essentials at $15/month (or $153/year) and Pro at $39/month (or $397.80/year). Founders and Builders keep their launch pricing while their subscriptions stay active."
+  },
+  {
+    question: "Can we cancel anytime?",
+    answer: "Absolutely. Cancel from your account settings whenever you want. No hoops to jump through, no hidden fees, no awkward phone calls. Your access continues until the end of your billing period."
+  },
+  {
+    question: "Is there a money-back guarantee?",
+    answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
+  },
+  {
+    question: "What platforms does Huttle AI support?",
+    answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All our AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
+  },
+  {
+    question: "Is our payment secure?",
+    answer: "100%. All payments are processed through Stripe, the same infrastructure trusted by Amazon, Google, and Shopify. We never store your card information on our servers."
+  },
+];
+
+const STRUCTURED_DATA = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Huttle AI",
+    url: SITE_URL,
+    logo: LOGO_URL,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: "hello@huttleai.com",
+      availableLanguage: "English",
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Huttle AI",
+    url: SITE_URL,
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    description:
+      "Huttle AI is an AI-powered content planning and creation platform that tells creators, solopreneurs, and small businesses what to post before they create it.",
+    offers: {
+      "@type": "Offer",
+      price: "199.00",
+      priceCurrency: "USD",
+      availability: "https://schema.org/LimitedAvailability",
+      url: `${SITE_URL}/#pricing`,
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ_ITEMS.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  },
+];
 
 // ============================================
 // HERO BACKGROUND WITH PARTICLE NETWORK
@@ -329,14 +404,50 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 // ============================================
 
 const FoundersClubModal = ({ isOpen, onClose }) => {
-  const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
 
-  const handleProceedToCheckout = (e) => {
+  useEffect(() => {
+    if (!isOpen) {
+      setCheckoutLoading(false);
+      setCheckoutError(null);
+    }
+  }, [isOpen]);
+
+  const handleProceedToCheckout = async (e) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    window.location.href = stripeTestCheckoutUrl;
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+    try {
+      const result = await createCheckoutSession('founder', 'annual', {
+        targetWindow: checkoutTab,
+      });
+      if (result.demo) {
+        checkoutTab?.close();
+        setCheckoutError(
+          'Checkout is not available yet (Stripe founder price not configured). Add VITE_STRIPE_PRICE_FOUNDER_ANNUAL to your environment.'
+        );
+        setCheckoutLoading(false);
+        return;
+      }
+      if (!result.success) {
+        checkoutTab?.close();
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+        setCheckoutLoading(false);
+        return;
+      }
+      if (result.openedInNewTab) {
+        setCheckoutLoading(false);
+      }
+    } catch (err) {
+      checkoutTab?.close();
+      setCheckoutError(err?.message || 'Could not start checkout. Please try again.');
+      setCheckoutLoading(false);
+    }
   };
 
   return (
@@ -375,7 +486,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Founders Club</h3>
-                <p className="text-sm font-medium text-amber-600">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</p>
+                <p className="text-sm font-medium text-amber-600">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</p>
               </div>
             </div>
 
@@ -408,13 +519,30 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            {checkoutError && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-left text-xs text-red-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{checkoutError}</span>
+              </div>
+            )}
             <div className="flex flex-col gap-3">
               <button 
+                type="button"
                 onClick={(e) => handleProceedToCheckout(e)}
-                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow flex items-center justify-center gap-2 text-base"
+                disabled={checkoutLoading}
+                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow flex items-center justify-center gap-2 text-base disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Claim Your $199/yr Founders Spot
-                <ArrowRight size={18} />
+                {checkoutLoading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Redirecting to checkout…
+                  </>
+                ) : (
+                  <>
+                    Claim Your $199/yr Founders Spot
+                    <ArrowRight size={18} />
+                  </>
+                )}
               </button>
             </div>
 
@@ -654,9 +782,8 @@ const NicheSpecificSection = () => {
                   {selectedNiche} · Live Data
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100">
+              <div className="flex items-center px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100">
                 <img src="/huttle-logo.png" alt="Huttle AI" className="h-3.5 md:h-4 w-auto" />
-                <span className="text-[10px] md:text-xs font-bold text-slate-500">Huttle AI</span>
               </div>
             </div>
 
@@ -965,33 +1092,6 @@ const FeatureShowcaseSection = () => {
 // ============================================
 
 const FAQSectionComponent = () => {
-  const faqs = [
-    {
-      question: "What do Founding Members get?",
-      answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Ignite Engine, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
-    },
-    {
-      question: "What happens when the Founding Member offer ends?",
-      answer: "After the launch window closes, public pricing shifts to Essentials at $15/month (or $153/year) and Pro at $39/month (or $397.80/year). Founders and Builders keep their launch pricing while their subscriptions stay active."
-    },
-    {
-      question: "Can we cancel anytime?",
-      answer: "Absolutely. Cancel from your account settings whenever you want. No hoops to jump through, no hidden fees, no awkward phone calls. Your access continues until the end of your billing period."
-    },
-    {
-      question: "Is there a money-back guarantee?",
-      answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
-    },
-    {
-      question: "What platforms does Huttle AI support?",
-      answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All our AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
-    },
-    {
-      question: "Is our payment secure?",
-      answer: "100%. All payments are processed through Stripe, the same infrastructure trusted by Amazon, Google, and Shopify. We never store your card information on our servers."
-    },
-  ];
-
   return (
     <section className="py-16 md:py-32 px-4 bg-slate-50 border-t border-slate-200/60">
       <div className="container mx-auto max-w-4xl">
@@ -1008,14 +1108,14 @@ const FAQSectionComponent = () => {
               FAQ
             </span>
             <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-4 leading-tight">
-              Frequently Asked Questions
+              Everything you want to know before you join.
             </h2>
             <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
-              Everything we need to know about Huttle AI
+              Clear answers on pricing, guarantees, and how Huttle AI works.
             </p>
         </motion.div>
         
-        <FAQAccordion items={faqs} />
+        <FAQAccordion items={FAQ_ITEMS} />
       </div>
     </section>
   );
@@ -1090,7 +1190,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               
               <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
                 <Users size={14} className="text-amber-600 flex-shrink-0" />
-                <span className="text-xs font-bold text-amber-600">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</span>
+                <span className="text-xs font-bold text-amber-600">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</span>
               </div>
 
               <ul className="space-y-2.5 mb-6">
@@ -1118,6 +1218,23 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 Join the Founders Club
                 <ArrowRight size={16} className="ml-2" />
               </BorderBeamButton>
+
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[11px] md:text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <LockKeyhole size={12} className="text-slate-400" />
+                  Secured by Stripe
+                </span>
+                <span className="hidden md:inline text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <ShieldCheck size={12} className="text-slate-400" />
+                  14-day money-back guarantee
+                </span>
+                <span className="hidden md:inline text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Undo2 size={12} className="text-slate-400" />
+                  Cancel anytime
+                </span>
+              </div>
             </div>
           </motion.div>
 
@@ -1218,18 +1335,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           </motion.div>
         </div>
 
-        {/* Shared guarantee line beneath all cards */}
-        <motion.div
-          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-8 text-xs md:text-sm text-slate-500 font-medium"
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-        >
-          <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> 14-day money-back guarantee on launch plans</span>
-          <span className="text-slate-300 hidden md:inline">·</span>
-          <span className="flex items-center gap-1.5"><Check size={14} className="text-green-500" /> Cancel anytime</span>
-        </motion.div>
       </div>
     </section>
   );
@@ -1263,7 +1368,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </p>
           <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
             <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} founding member spots remaining. Builders Club is also live during the launch window.
+              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Builders Club is also live during the launch window.
             </p>
           </div>
           
@@ -1310,22 +1415,11 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen w-full max-w-full bg-white text-slate-900 overflow-x-hidden selection:bg-[#01bad2]/30">
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "SoftwareApplication",
-          "name": "Huttle AI",
-          "applicationCategory": "BusinessApplication",
-          "operatingSystem": "Web Browser",
-          "description": "The ultimate web application for creators who hate the content grind. Huttle AI tells you exactly what to post, writes your scripts, and predicts viral success.",
-          "offers": {
-            "@type": "Offer",
-            "price": "199.00",
-            "priceCurrency": "USD",
-            "availability": "https://schema.org/LimitedAvailability"
-          }
-        })}
-      </script>
+      {STRUCTURED_DATA.map((schema, index) => (
+        <script key={index} type="application/ld+json">
+          {JSON.stringify(schema)}
+        </script>
+      ))}
       <ScrollProgress />
       <WaitlistModal isOpen={isWaitlistModalOpen} onClose={() => setIsWaitlistModalOpen(false)} />
       <FoundersClubModal 
@@ -1385,21 +1479,21 @@ export default function LandingPage() {
               </BlurFade>
 
               {/* HEADLINE */}
-              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-7xl xl:text-8xl 2xl:text-[6rem] font-bold text-slate-900 leading-[1.05] tracking-tighter">
+              <h1 className="text-6xl sm:text-7xl md:text-8xl lg:text-8xl xl:text-9xl 2xl:text-[7.5rem] font-bold text-slate-900 leading-[1.05] tracking-tighter">
                 <BlurFade delay={0.2}>
-                  <span className="block">Know What to Post</span>
+                  <span className="block">The Guesswork</span>
                 </BlurFade>
                 <BlurFade delay={0.4}>
                   <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] pb-2">
-                    Before We Create It.
+                    Ends Here.
                   </span>
                 </BlurFade>
               </h1>
 
               {/* SUBHEAD */}
               <BlurFade delay={0.6}>
-                <p className="mt-5 md:mt-6 text-sm md:text-base lg:text-lg text-slate-500 max-w-md mx-auto md:mx-0 leading-relaxed font-medium">
-                  Stop guessing. Get content strategy, scripts, and viral predictions — before you press record.
+                <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-500 max-w-md mx-auto md:mx-0 leading-relaxed font-medium">
+                  Real-time trends, AI-written scripts, and viral predictions — on demand.
                 </p>
               </BlurFade>
             </div>

@@ -1,10 +1,11 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createCheckoutSession, openStripeCheckoutTab } from '../../services/stripeAPI';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Check, AlertCircle, Crown, ArrowRight } from 'lucide-react';
 
-const FOUNDING_SPOTS_LEFT = 41;
+const FOUNDING_SPOTS_LEFT = 38;
 
 export const WaitlistModal = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '' });
@@ -173,14 +174,50 @@ export const WaitlistModal = ({ isOpen, onClose }) => {
 };
 
 export const FoundersClubModal = ({ isOpen, onClose }) => {
-  const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
 
-  const handleProceedToCheckout = (e) => {
+  useEffect(() => {
+    if (!isOpen) {
+      setCheckoutLoading(false);
+      setCheckoutError(null);
+    }
+  }, [isOpen]);
+
+  const handleProceedToCheckout = async (e) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    window.location.href = stripeTestCheckoutUrl;
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+    try {
+      const result = await createCheckoutSession('founder', 'annual', {
+        targetWindow: checkoutTab,
+      });
+      if (result.demo) {
+        checkoutTab?.close();
+        setCheckoutError(
+          'Checkout is not available yet (Stripe founder price not configured). Add VITE_STRIPE_PRICE_FOUNDER_ANNUAL to your environment.'
+        );
+        setCheckoutLoading(false);
+        return;
+      }
+      if (!result.success) {
+        checkoutTab?.close();
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+        setCheckoutLoading(false);
+        return;
+      }
+      if (result.openedInNewTab) {
+        setCheckoutLoading(false);
+      }
+    } catch (err) {
+      checkoutTab?.close();
+      setCheckoutError(err?.message || 'Could not start checkout. Please try again.');
+      setCheckoutLoading(false);
+    }
   };
 
   return (
@@ -219,7 +256,7 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-zinc-900">Founders Club</h3>
-                <p className="text-sm font-bold text-[#01BAD2]">Only {FOUNDING_SPOTS_LEFT} of 100 spots remaining</p>
+                <p className="text-sm font-bold text-[#01BAD2]">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</p>
               </div>
             </div>
 
@@ -257,13 +294,30 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            {checkoutError && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-left text-xs text-red-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{checkoutError}</span>
+              </div>
+            )}
             <div className="flex flex-col gap-3">
               <button 
+                type="button"
                 onClick={handleProceedToCheckout}
-                className="w-full h-14 rounded-xl bg-[#01BAD2] hover:bg-[#019db3] text-white font-bold text-base shadow-[0_0_24px_#01BAD220] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                disabled={checkoutLoading}
+                className="w-full h-14 rounded-xl bg-[#01BAD2] hover:bg-[#019db3] text-white font-bold text-base shadow-[0_0_24px_#01BAD220] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Claim Your $199/yr Founders Spot
-                <ArrowRight size={18} />
+                {checkoutLoading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Redirecting to checkout…
+                  </>
+                ) : (
+                  <>
+                    Claim Your $199/yr Founders Spot
+                    <ArrowRight size={18} />
+                  </>
+                )}
               </button>
             </div>
 

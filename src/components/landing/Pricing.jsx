@@ -4,6 +4,8 @@ import React, { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Check, Users } from 'lucide-react';
 
+const FOUNDING_SPOTS_LEFT = 38;
+
 export const PricingSection = ({ onOpenFoundersModal }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
@@ -84,7 +86,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
               
               <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-[#01BAD2]/10 border border-[#01BAD2]/20">
                 <Users size={16} className="text-[#01BAD2] flex-shrink-0" />
-                <span className="text-xs font-bold text-[#01BAD2]">Only 41 of 100 spots remaining</span>
+                <span className="text-xs font-bold text-[#01BAD2]">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</span>
               </div>
 
               <ul className="space-y-3 mb-8 flex-1">

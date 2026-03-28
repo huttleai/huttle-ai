@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { createCheckoutSession, openStripeCheckoutTab } from '../services/stripeAPI';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Crown, Check, ArrowRight, Sparkles, Shield, 
   Zap, Users, Lock, X, AlertCircle
 } from 'lucide-react';
+
+const FOUNDING_SPOTS_LEFT = 38;
 
 // ============================================
 // WAITLIST MODAL (Copied from LandingPage)
@@ -181,12 +184,39 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 
 export default function FoundersPage() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
   const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
-  const stripeTestCheckoutUrl = 'https://buy.stripe.com/test_fZueVc3LEaw8dKc9Ri3wQ06';
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutError(null);
     setIsCheckingOut(true);
-    window.location.href = stripeTestCheckoutUrl;
+    try {
+      const result = await createCheckoutSession('founder', 'annual', {
+        targetWindow: checkoutTab,
+      });
+      if (result.demo) {
+        checkoutTab?.close();
+        setCheckoutError(
+          'Checkout is not available yet. Set VITE_STRIPE_PRICE_FOUNDER_ANNUAL and Stripe keys in your environment.'
+        );
+        setIsCheckingOut(false);
+        return;
+      }
+      if (!result.success) {
+        checkoutTab?.close();
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+        setIsCheckingOut(false);
+        return;
+      }
+      if (result.openedInNewTab) {
+        setIsCheckingOut(false);
+      }
+    } catch (err) {
+      checkoutTab?.close();
+      setCheckoutError(err?.message || 'Could not start checkout. Please try again.');
+      setIsCheckingOut(false);
+    }
   };
 
   const benefits = [
@@ -274,7 +304,7 @@ export default function FoundersPage() {
           >
             <Users className="w-4 h-4 text-[#01bad2]" />
             <span className="text-sm font-medium text-slate-600">
-              <span className="text-[#01bad2] font-bold">41 spots</span> remaining
+              <span className="text-[#01bad2] font-bold">{FOUNDING_SPOTS_LEFT} Founding Member spots remaining</span>
             </span>
           </motion.div>
         </div>
@@ -377,7 +407,14 @@ export default function FoundersPage() {
 
               {/* CTA Buttons - Large touch targets for mobile */}
               <div className="space-y-4 mb-8">
+                {checkoutError && (
+                  <div className="flex items-start gap-2 rounded-xl border border-red-400/40 bg-red-950/40 px-3 py-2 text-left text-sm text-red-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <span>{checkoutError}</span>
+                  </div>
+                )}
                 <button
+                  type="button"
                   onClick={handleCheckout}
                   disabled={isCheckingOut}
                   className="w-full min-h-[56px] py-4 px-6 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold text-base sm:text-lg shadow-lg shadow-[#01bad2]/30 hover:shadow-[#01bad2]/50 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"

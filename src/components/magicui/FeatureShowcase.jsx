@@ -97,7 +97,7 @@ const ContentVaultPreview = () => (
     
     <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
       <div className="w-2 h-2 bg-green-400 rounded-full" />
-      <span>5 assets stored · 250 MB available</span>
+      <span>5 assets stored · 25 GB available</span>
     </div>
   </div>
 );

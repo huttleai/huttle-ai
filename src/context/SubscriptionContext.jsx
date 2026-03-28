@@ -553,7 +553,7 @@ export function SubscriptionProvider({ children }) {
 
   const getStorageLimit = useCallback(() => {
     if (skipAuth) {
-      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 50 * 1024 * 1024 * 1024;
+      return TIER_LIMITS[TIERS.PRO]?.storageLimit || 25 * 1024 * 1024 * 1024;
     }
     return TIER_LIMITS[userTier]?.storageLimit ?? 0;
   }, [skipAuth, userTier]);

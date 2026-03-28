@@ -65,7 +65,7 @@ export function buildContentRemixClaudeSystemCore(goal) {
      - Include social proof where natural (results, volume, reputation)
      - End with a single specific CTA that tells the reader exactly what to do next
      - NOT try to go viral — conversion copy and viral copy are different jobs
-     - Urgency must be real and specific, never manufactured ("3 spots left this week"
+     - Urgency must be real and specific, never manufactured ("3 spots remaining this week"
        beats "limited availability")`
     : `REMIX GOAL — VIRAL REACH:
      The purpose of every variation is to earn a share, save, or comment. Content must:

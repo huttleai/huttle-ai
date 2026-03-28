@@ -89,7 +89,7 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
         'Advanced trend forecasting',
         'Content Repurposer',
         'Huttle Agent',
-        '50 GB storage'
+        '25 GB storage'
       ],
       tier: 'Pro'
     }

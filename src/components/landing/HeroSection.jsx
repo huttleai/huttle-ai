@@ -81,14 +81,14 @@ export const HeroSection = () => {
         </div>
         
         <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[6.5rem] font-extrabold text-zinc-900 tracking-tight leading-[1.05] mb-6">
-          Know What to Post <br />
+          The Guesswork{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#01BAD2] to-[#0284c7]">
-            Before We Create It.
+            Ends Here.
           </span>
         </h1>
         
         <p className="text-sm sm:text-base md:text-lg text-slate-500 max-w-xl mb-10 leading-relaxed">
-          Stop guessing. Get content strategy, scripts, and viral predictions — before you press record.
+          Real-time trends, AI-written scripts, and viral predictions — on demand.
         </p>
       </motion.div>
 

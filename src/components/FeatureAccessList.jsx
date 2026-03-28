@@ -72,9 +72,9 @@ const ALL_FEATURES = [
     description: 'Store and organize your content',
     limits: {
       essentials: '5GB',
-      pro: '50GB',
-      founder: '50GB',
-      builder: '50GB'
+      pro: '25GB',
+      founder: '25GB',
+      builder: '25GB'
     }
   },
   {

@@ -4,6 +4,8 @@ import React, { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 
+const FOUNDING_SPOTS_LEFT = 38;
+
 export const FinalCTA = ({ onOpenFoundersModal }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
@@ -45,7 +47,7 @@ export const FinalCTA = ({ onOpenFoundersModal }) => {
           
           <div className="inline-block p-1.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md mb-10">
             <p className="px-5 py-2.5 text-sm font-bold text-white tracking-wide">
-              Only 41 founding member spots remaining. Price increases March 15.
+              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Price increases March 15.
             </p>
           </div>
           

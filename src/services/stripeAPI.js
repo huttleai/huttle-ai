@@ -111,6 +111,31 @@ async function getAuthHeaders() {
   return headers;
 }
 
+/**
+ * Call synchronously from a click/tap handler so the browser treats it as a user gesture.
+ * Do not pass `noopener` in window features — that makes `window.open` return `null`, so the
+ * checkout URL can never be applied and the tab stays blank.
+ * @returns {Window | null} Window to pass as `targetWindow` to {@link createCheckoutSession}, or null if blocked.
+ */
+export function openStripeCheckoutTab() {
+  const w = window.open('about:blank', '_blank');
+  if (!w) return null;
+  try {
+    w.opener = null;
+  } catch {
+    // ignore
+  }
+  try {
+    w.document.write(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Checkout</title></head><body style="font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#64748b">Loading secure checkout…</body></html>'
+    );
+    w.document.close();
+  } catch {
+    // ignore
+  }
+  return w;
+}
+
 export const SUBSCRIPTION_PLANS = {
   ESSENTIALS: {
     id: 'essentials',
@@ -141,11 +166,11 @@ export const SUBSCRIPTION_PLANS = {
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {
       aiGenerations: 600,
-      storageGB: 50,
+      storageGB: 25,
       features: [
         'Everything in Essentials',
         '600 AI generations/month',
-        '50GB storage',
+        '25GB storage',
         'Content Repurposer',
         'Trend Forecaster',
         'Huttle Agent',
@@ -162,11 +187,11 @@ export const SUBSCRIPTION_PLANS = {
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL || '',
     features: {
       aiGenerations: 800,
-      storageGB: 50,
+      storageGB: 25,
       features: [
         'Everything in Pro',
         '800 AI generations/month',
-        '50GB storage',
+        '25GB storage',
         'Locked-in Builders pricing',
         'All future Pro features included',
         'Priority support'
@@ -182,11 +207,11 @@ export const SUBSCRIPTION_PLANS = {
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || '',
     features: {
       aiGenerations: 800,
-      storageGB: 50,
+      storageGB: 25,
       features: [
         'Everything in Pro',
         '800 AI generations/month',
-        '50GB storage',
+        '25GB storage',
         'Locked-in Founders pricing forever',
         'All future features included',
         'Priority support',
@@ -202,10 +227,11 @@ export const SUBSCRIPTION_PLANS = {
  * 
  * @param {string} planId - The plan ID (essentials or pro)
  * @param {string} billingCycle - 'monthly' or 'annual'
+ * @param {{ targetWindow?: Window | null }} [options] - Window from {@link openStripeCheckoutTab} (same click handler); otherwise the current tab navigates to Stripe.
  */
-export async function createCheckoutSession(planId, billingCycle = 'monthly') {
+export async function createCheckoutSession(planId, billingCycle = 'monthly', options = {}) {
+  const { targetWindow } = options;
   try {
-    
     const plan = Object.values(SUBSCRIPTION_PLANS).find(p => p.id === planId);
     
     if (!plan) {
@@ -219,9 +245,13 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     const effectiveBillingCycle = monthlyPriceMissing ? 'annual' : billingCycle;
     const priceId =
       effectiveBillingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
-    
-    // Demo mode: Simulate successful checkout without Stripe
-    if (!priceId || isDemoMode()) {
+
+    // Demo mode: Simulate checkout when this plan has no price ID, or when
+    // Essentials/Pro are unset (app-wide demo). Founder/Builder only need their own annual price.
+    if (!priceId) {
+      return simulateDemoCheckout(planId);
+    }
+    if (planId !== 'founder' && planId !== 'builder' && isDemoMode()) {
       return simulateDemoCheckout(planId);
     }
 
@@ -264,8 +294,15 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     }
     
     if (data.url) {
-      // Redirect to Stripe Checkout
-      window.location.href = data.url;
+      if (targetWindow && !targetWindow.closed) {
+        try {
+          targetWindow.location.replace(data.url);
+        } catch {
+          window.location.href = data.url;
+        }
+      } else {
+        window.location.href = data.url;
+      }
     } else {
       throw new Error('No checkout URL received from server');
     }
@@ -273,7 +310,8 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly') {
     return {
       success: true,
       sessionId: data.sessionId,
-      url: data.url
+      url: data.url,
+      openedInNewTab: Boolean(targetWindow),
     };
   } catch (error) {
     console.error('Stripe Checkout Error:', error.message);

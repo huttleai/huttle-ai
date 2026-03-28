@@ -187,7 +187,7 @@ export const TIER_LIMITS = {
     algorithmChecker: true,
     nicheIntel: 5, // 5 analyses/month
     aiPlanBuilderDays: 14, // 7 or 14 days
-    storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
   // Founders Club: launch pricing with Pro feature access.
@@ -216,7 +216,7 @@ export const TIER_LIMITS = {
     algorithmChecker: true,
     nicheIntel: 10, // 10 analyses/month
     aiPlanBuilderDays: 14,
-    storageLimit: 50 * 1024 * 1024 * 1024, // 50GB in bytes
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
     scheduledPostsLimit: -1, // Unlimited
   },
   // Builders Club: launch pricing with Pro feature access.
@@ -244,7 +244,7 @@ export const TIER_LIMITS = {
     algorithmChecker: true,
     nicheIntel: 10,
     aiPlanBuilderDays: 14,
-    storageLimit: 50 * 1024 * 1024 * 1024,
+    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
     scheduledPostsLimit: -1,
   },
 };

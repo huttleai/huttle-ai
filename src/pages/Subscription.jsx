@@ -21,7 +21,7 @@ const LAUNCH_PLANS = [
     features: [
       'All Pro features',
       '800 AI generations/month',
-      '50GB storage',
+      '25GB storage',
       'Priority support',
       'Founders rate locked forever',
       '14-day money-back guarantee',
@@ -39,7 +39,7 @@ const LAUNCH_PLANS = [
     features: [
       'All Pro features',
       '800 AI generations/month',
-      '50GB storage',
+      '25GB storage',
       'Priority support',
       'Builders rate locked while active',
       '14-day money-back guarantee',
@@ -64,7 +64,7 @@ const FUTURE_PLANS = [
     monthlyPrice: 39,
     annualPrice: 397.8,
     description: 'Available after the launch window closes.',
-    features: ['600 AI generations/month', '50GB storage', 'Full Pro feature set'],
+    features: ['600 AI generations/month', '25GB storage', 'Full Pro feature set'],
   },
 ];
 
@@ -97,7 +97,7 @@ const PLAN_DETAILS = {
     title: 'Pro',
     subtitle: 'Paid plan',
     annualLabel: '$39/month or $397.80/year',
-    summary: '600 AI generations per month, 50GB storage, and the full Pro feature suite.',
+    summary: '600 AI generations per month, 25GB storage, and the full Pro feature suite.',
     iconGradient: 'from-purple-500 to-pink-500',
     accentClasses: 'border-purple-200 bg-purple-50 text-purple-700',
   },
