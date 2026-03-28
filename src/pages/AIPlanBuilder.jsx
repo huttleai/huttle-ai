@@ -4,7 +4,6 @@ import {
   Wand2,
   Loader2,
   AlertTriangle,
-  FolderPlus,
   Pencil,
   Lightbulb,
   ChevronDown,
