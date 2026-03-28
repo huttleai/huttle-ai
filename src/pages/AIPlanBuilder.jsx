@@ -294,9 +294,32 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
   const hook = sanitizeAIOutput(post.hook || '');
   const hashtags = Array.isArray(post.hashtags) ? post.hashtags.map(String).filter(Boolean) : [];
   const hideTags = isTwitterLikePlatform(post.platform);
-  const visibleTags = hashtagsExpanded || detailsOpen ? hashtags : hashtags.slice(0, 3);
-  const moreTagCount = !hashtagsExpanded && !detailsOpen && hashtags.length > 3 ? hashtags.length - 3 : 0;
-  const visualText = sanitizeAIOutput(post.notes || '');
+  const visibleTags = hashtagsExpanded ? hashtags : hashtags.slice(0, 3);
+  const moreTagCount = !hashtagsExpanded && hashtags.length > 3 ? hashtags.length - 3 : 0;
+
+  const explicitVisualRaw = String(post.visualDirection ?? post.visual_direction ?? '').trim();
+  const notesRaw = String(post.notes ?? '').trim();
+  const visualText = sanitizeAIOutput(explicitVisualRaw || notesRaw);
+  const proTipInDetails =
+    notesRaw.length > 0 &&
+    explicitVisualRaw.length > 0 &&
+    sanitizeAIOutput(notesRaw) !== sanitizeAIOutput(explicitVisualRaw);
+
+  const whyThisWorksText = sanitizeAIOutput(String(post.why_this_works ?? post.whyThisWorks ?? '')).trim();
+  const formatText = sanitizeAIOutput(String(post.format ?? '')).trim();
+  const topicRaw = post.topic != null ? String(post.topic).trim() : '';
+  const topicText = sanitizeAIOutput(topicRaw).trim();
+  const captionIsOnlyTopic = !String(post.caption ?? '').trim() && topicRaw.length > 0;
+  const showTopicInDetails = topicText.length > 0 && !captionIsOnlyTopic;
+
+  const hasFullDetailsContent =
+    whyThisWorksText.length > 0 ||
+    proTipInDetails ||
+    formatText.length > 0 ||
+    showTopicInDetails;
+
+  const captionNeedsToggle =
+    caption.length > 100 || (caption.match(/\n/g) || []).length >= 2;
 
   const handleCopyPost = () => {
     navigator.clipboard.writeText(formatPostForClipboard(post)).then(() => {
@@ -373,13 +396,12 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Caption</p>
             <p
               className={`text-sm text-gray-700 whitespace-pre-wrap ${
-                captionExpanded || detailsOpen ? '' : 'line-clamp-3'
+                captionExpanded ? '' : 'line-clamp-3'
               }`}
             >
               {caption}
             </p>
-            {!detailsOpen &&
-            (caption.length > 100 || (caption.match(/\n/g) || []).length >= 2) && (
+            {captionNeedsToggle && (
               <button
                 type="button"
                 onClick={() => setCaptionExpanded((v) => !v)}
@@ -426,7 +448,7 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
             {visualText && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1">📷 Visual direction</p>
-                <p className={`text-sm text-gray-700 mt-1 ${detailsOpen ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{visualText}</p>
+                <p className="text-sm text-gray-700 mt-1 line-clamp-2">{visualText}</p>
               </div>
             )}
 
@@ -436,13 +458,6 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
                 <span className="inline-block mt-1 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700">
                   {sanitizeAIOutput(String(post.pillar))}
                 </span>
-              </div>
-            )}
-
-            {post.why_this_works && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Why this works</p>
-                <p className="text-sm text-gray-500 italic mt-1">{sanitizeAIOutput(post.why_this_works)}</p>
               </div>
             )}
 
@@ -467,49 +482,67 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
               >
                 {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
               </button>
-              <button
-                type="button"
-                onClick={() => setDetailsOpen((v) => !v)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1 hover:bg-gray-50 transition-colors"
-              >
-                {detailsOpen ? (
-                  <>
-                    Full details <ChevronUp className="h-3.5 w-3.5" />
-                  </>
-                ) : (
-                  <>
-                    Full details <ChevronDown className="h-3.5 w-3.5" />
-                  </>
-                )}
-              </button>
+              {hasFullDetailsContent && (
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen((v) => !v)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1 hover:bg-gray-50 transition-colors"
+                >
+                  {detailsOpen ? (
+                    <>
+                      Full details <ChevronUp className="h-3.5 w-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      Full details <ChevronDown className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div
-          className={`grid transition-all duration-200 ease-in-out ${
-            detailsOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'
-          }`}
-        >
-          <div className="overflow-hidden">
-            <div className="space-y-3 border-t border-gray-100 pt-4 text-sm">
-              {caption && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Full caption</p>
-                  <p className="text-gray-700 whitespace-pre-wrap">{caption}</p>
-                </div>
-              )}
-              {!hideTags && hashtags.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">All hashtags</p>
-                  <p className="text-gray-700">
-                    {hashtags.map((h) => (h.startsWith('#') ? h : `#${h.replace(/^#/, '')}`)).join(' ')}
-                  </p>
-                </div>
-              )}
+        {hasFullDetailsContent && (
+          <div
+            className={`grid transition-all duration-200 ease-in-out ${
+              detailsOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-4 border-t border-gray-100 pt-4 text-sm">
+                {whyThisWorksText.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-gray-400">Why this works</p>
+                    <p className="text-sm text-gray-600 italic mt-1">{whyThisWorksText}</p>
+                  </div>
+                )}
+                {proTipInDetails && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-gray-400">Pro tip</p>
+                    <p className="text-sm text-gray-600 mt-1">{sanitizeAIOutput(notesRaw)}</p>
+                  </div>
+                )}
+                {(formatText.length > 0 || showTopicInDetails) && (
+                  <div className="space-y-3">
+                    {formatText.length > 0 && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-gray-400">Format</p>
+                        <p className="text-sm text-gray-700 font-medium mt-1">{formatText}</p>
+                      </div>
+                    )}
+                    {showTopicInDetails && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-gray-400">Topic</p>
+                        <p className="text-sm text-gray-600 mt-1">{topicText}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
