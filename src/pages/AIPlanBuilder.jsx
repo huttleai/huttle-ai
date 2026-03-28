@@ -2,22 +2,19 @@ import { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'r
 import { flushSync } from 'react-dom';
 import {
   Wand2,
-  Calendar,
   Loader2,
-  Mic2,
   AlertTriangle,
-  Copy,
   FolderPlus,
   Pencil,
   Lightbulb,
   ChevronDown,
   ChevronUp,
   Clock,
-  LayoutGrid,
-  List,
   Plus,
   X,
-  ChevronRight,
+  Calendar,
+  PenLine,
+  Smartphone,
 } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -41,7 +38,7 @@ import {
   normalizePlatformLabelForIcon,
 } from '../components/SocialIcons';
 import useAIUsage from '../hooks/useAIUsage';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
 import { sanitizeAIOutput } from '../utils/textHelpers';
@@ -87,15 +84,6 @@ const PLATFORM_CARD_BORDER = {
   Facebook: '#1877F2',
 };
 
-/** Short hints for summary UI; keys match normalized platform labels */
-const BEST_TIMES_BY_PLATFORM = {
-  Instagram: 'Weekdays 9–11am & 7–9pm local; weekends late morning often strong.',
-  TikTok: 'Evenings 6–10pm and lunch 12–2pm — test against your analytics.',
-  YouTube: 'Afternoons 2–4pm weekdays; weekends mid-morning for longer watches.',
-  X: 'Weekday mornings 8–10am and lunch; breaking news windows anytime.',
-  Facebook: 'Weekday mornings 9am–12pm; early evenings 7–9pm.',
-};
-
 const CONTENT_TYPE_BADGE = {
   educational: { label: 'Educational', className: 'bg-blue-100 text-blue-800 border-blue-200' },
   entertaining: { label: 'Entertaining', className: 'bg-amber-100 text-amber-900 border-amber-200' },
@@ -133,77 +121,344 @@ function isTwitterLikePlatform(name) {
   return n === 'X';
 }
 
-function buildV2PlanPlainText(plan) {
-  const o = plan?.overview || {};
-  const lines = [];
-  lines.push('CONTENT PLAN');
-  lines.push('');
-  lines.push(`Goal: ${o.goal || ''}`);
-  lines.push(`Duration: ${o.duration || ''}`);
-  lines.push(`Platforms: ${(o.platforms || []).join(', ')}`);
-  lines.push(`Strategy: ${o.strategy || ''}`);
-  if (o.strategy_notes) {
-    lines.push('');
-    lines.push('Strategy notes:');
-    lines.push(o.strategy_notes);
-  }
-  if (o.postFrequency) lines.push(`Post frequency: ${o.postFrequency}`);
-  if (o.contentMix && typeof o.contentMix === 'object') {
-    lines.push(`Content mix: ${JSON.stringify(o.contentMix)}`);
-  }
-  const tips = plan?.weeklyTips || [];
-  if (tips.length) {
-    lines.push('');
-    lines.push('Weekly tips:');
-    tips.forEach((t, i) => lines.push(`${i + 1}. ${t}`));
-  }
-  const days = plan?.days || [];
-  days.forEach((d) => {
-    lines.push('');
-    lines.push(`— ${d.date || `Day ${d.day}`} —`);
-    lines.push(`Theme: ${d.theme || ''}`);
-    (d.posts || []).forEach((p, idx) => {
-      lines.push(`  Post ${idx + 1} [${p.platform || ''}] ${p.format || ''} @ ${p.postTime || ''}`);
-      lines.push(`  Pillar: ${p.pillar || ''}`);
-      lines.push(`  Topic: ${p.topic || ''}`);
-      lines.push(`  Hook: ${p.hook || ''}`);
-      if (p.caption) {
-        lines.push('  Caption:');
-        lines.push(String(p.caption).split('\n').map((ln) => `    ${ln}`).join('\n'));
-      }
-      if (Array.isArray(p.hashtags) && p.hashtags.length && !isTwitterLikePlatform(p.platform)) {
-        lines.push(`  Hashtags: ${p.hashtags.join(' ')}`);
-      }
-      if (p.why_this_works) lines.push(`  Why this works: ${p.why_this_works}`);
-      if (p.notes) lines.push(`  Notes: ${p.notes}`);
-    });
-  });
-  return lines.join('\n');
+function getDayPosts(day) {
+  if (!day) return [];
+  if (Array.isArray(day.posts)) return day.posts;
+  if (Array.isArray(day.items)) return day.items;
+  return [];
 }
 
-function CollapsibleBlock({
-  title,
-  defaultOpen = true,
-  children,
-  headerRight = null,
-  hide = false,
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (hide) return null;
+/** Prefer the richest `days` array (n8n sometimes duplicates a partial top-level `days`). */
+function getPlanDaysForDisplay(plan) {
+  if (!plan || typeof plan !== 'object') return [];
+  const top = Array.isArray(plan.days) ? plan.days : [];
+  const nested = plan.plan && typeof plan.plan === 'object' && Array.isArray(plan.plan.days) ? plan.plan.days : [];
+  const postCount = (days) => days.reduce((sum, d) => sum + getDayPosts(d).length, 0);
+  const topPosts = postCount(top);
+  const nestedPosts = postCount(nested);
+  if (nested.length > top.length || nestedPosts > topPosts) return nested;
+  if (top.length > 0 || topPosts > 0) return top;
+  if (nested.length > 0) return nested;
+  if (Array.isArray(plan.weeks)) {
+    const flat = plan.weeks.flatMap((w) => {
+      if (!w || typeof w !== 'object') return [];
+      if (Array.isArray(w.days)) return w.days;
+      return [];
+    });
+    if (flat.length) return flat;
+  }
+  return [];
+}
+
+function formatTimesForDisplay(times) {
+  if (Array.isArray(times)) return times.map((t) => String(t).trim()).join(' · ');
+  if (typeof times === 'string') return times.replace(/\s*,\s*/g, ' · ');
+  return String(times ?? '');
+}
+
+function extractOptimalTimesMap(plan) {
+  const s = plan?.summary;
+  if (s?.optimalTimes && typeof s.optimalTimes === 'object' && !Array.isArray(s.optimalTimes)) {
+    return s.optimalTimes;
+  }
+  if (s?.optimal_times && typeof s.optimal_times === 'object' && !Array.isArray(s.optimal_times)) {
+    return s.optimal_times;
+  }
+  const notes = plan?.overview?.strategy_notes;
+  if (typeof notes !== 'string' || !notes.trim()) return null;
+  const out = {};
+  for (const line of notes.split('\n')) {
+    const t = line.trim();
+    if (!t || /^key themes/i.test(t)) continue;
+    const idx = t.indexOf(':');
+    if (idx === -1) continue;
+    const plat = t.slice(0, idx).trim();
+    const rest = t.slice(idx + 1).trim();
+    if (plat && rest) out[plat] = rest;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function extractKeyThemesForDisplay(plan, pillarFallback) {
+  const s = plan?.summary;
+  if (Array.isArray(s?.keyThemes) && s.keyThemes.length) return s.keyThemes.map(String);
+  const notes = plan?.overview?.strategy_notes || '';
+  const line = notes.split('\n').find((l) => /^key themes/i.test(l.trim()));
+  if (line) {
+    const part = line.replace(/^key themes:\s*/i, '').trim();
+    return part.split(',').map((x) => x.trim()).filter(Boolean);
+  }
+  return Array.isArray(pillarFallback) && pillarFallback.length ? pillarFallback.map(String) : [];
+}
+
+function formatPostForClipboard(post) {
+  const lines = [];
+  if (post.hook) lines.push(`Hook: ${post.hook}`);
+  if (post.caption) lines.push(`Caption: ${post.caption}`);
+  const tags = Array.isArray(post.hashtags) ? post.hashtags : [];
+  if (tags.length && !isTwitterLikePlatform(post.platform)) {
+    lines.push(
+      `Hashtags: ${tags.map((h) => (String(h).startsWith('#') ? h : `#${String(h).replace(/^#/, '')}`)).join(' ')}`
+    );
+  }
+  if (post.cta) lines.push(`CTA: ${post.cta}`);
+  return lines.join('\n\n');
+}
+
+function formatPostVaultBody(post) {
+  return formatPostForClipboard(post);
+}
+
+function buildPlanBuilderClipboardDocument(plan, displayDays, mixLine, keyThemeLabels) {
+  const title =
+    plan?.planTitle ||
+    plan?.summary?.title ||
+    plan?.overview?.strategy ||
+    'Content Plan';
+  const lines = [];
+  lines.push(title);
+  lines.push('Generated by Huttle AI');
+  lines.push('');
+  lines.push('STRATEGY OVERVIEW');
+  lines.push(`Content Mix: ${mixLine}`);
+  lines.push(`Key Themes: ${keyThemeLabels.length ? keyThemeLabels.join(', ') : '—'}`);
+  lines.push('');
+  displayDays.forEach((day, di) => {
+    lines.push(`━━━ DAY ${di + 1} ━━━`);
+    getDayPosts(day).forEach((post) => {
+      const plat = String(normalizePlatformLabelForIcon(post.platform) || post.platform || '').toUpperCase();
+      const ct = contentTypeBadgeProps(post.contentType).label;
+      const time = post.postTime || '—';
+      lines.push(`📱 ${plat} — ${ct} — ${time}`);
+      if (post.hook) lines.push(`Hook: ${post.hook}`);
+      if (post.caption) lines.push(`Caption: ${post.caption}`);
+      const tags = Array.isArray(post.hashtags) ? post.hashtags : [];
+      if (tags.length && !isTwitterLikePlatform(post.platform)) {
+        lines.push(
+          `Hashtags: ${tags.map((h) => (String(h).startsWith('#') ? h : `#${String(h).replace(/^#/, '')}`)).join(' ')}`
+        );
+      }
+      if (post.cta) lines.push(`CTA: ${post.cta}`);
+      if (post.notes) lines.push(`Visual: ${post.notes}`);
+      if (post.why_this_works) lines.push(`Why this works: ${post.why_this_works}`);
+      lines.push('');
+    });
+  });
+  const tips = plan?.weeklyTips || [];
+  if (tips.length) {
+    lines.push('WEEKLY TIPS');
+    tips.forEach((t, i) => lines.push(`${i + 1}. ${t}`));
+  }
+  return lines.join('\n').trim();
+}
+
+const MIX_DOT_EMOJI = {
+  Educational: '🔵',
+  Entertaining: '🟡',
+  Authority: '🟣',
+  Promotional: '🔴',
+  Personal: '🟢',
+  Post: '⚪',
+};
+
+function PlanBuilderPostCard({ post, dayNum, userId, showToast }) {
+  const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [savingVault, setSavingVault] = useState(false);
+  const [savedVault, setSavedVault] = useState(false);
+
+  const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || 'Platform';
+  const borderC = PLATFORM_CARD_BORDER[platLabel] || '#64748b';
+  const ct = contentTypeBadgeProps(post.contentType);
+  const caption = sanitizeAIOutput(post.caption || post.topic || '');
+  const hook = sanitizeAIOutput(post.hook || '');
+  const hashtags = Array.isArray(post.hashtags) ? post.hashtags.map(String).filter(Boolean) : [];
+  const hideTags = isTwitterLikePlatform(post.platform);
+  const visibleTags = detailsOpen ? hashtags : hashtags.slice(0, 3);
+  const moreTagCount = !detailsOpen && hashtags.length > 3 ? hashtags.length - 3 : 0;
+  const visualText = sanitizeAIOutput(post.notes || '');
+
+  const handleCopyPost = () => {
+    navigator.clipboard.writeText(formatPostForClipboard(post)).then(() => showToast('Post copied to clipboard', 'success'));
+  };
+
+  const handleSaveVault = async () => {
+    if (!userId) {
+      showToast('Sign in to save to your vault', 'warning');
+      return;
+    }
+    setSavingVault(true);
+    try {
+      const result = await saveToVault(userId, {
+        ...buildContentVaultPayload({
+          name: `${platLabel} — Day ${dayNum}`,
+          contentText: formatPostVaultBody(post),
+          contentType: 'plan',
+          toolSource: 'ai_plan_builder',
+          toolLabel: 'AI Plan Builder',
+          topic: (post.hook || '').slice(0, 80),
+          platform: post.platform,
+          description: 'Saved from AI Plan Builder',
+          metadata: {
+            day: dayNum,
+            contentType: post.contentType ?? '',
+            bestTime: post.postTime ?? '',
+          },
+        }),
+        type: 'plan_builder',
+      });
+      if (result.success) setSavedVault(true);
+      else showToast(result.error || 'Could not save to vault', 'error');
+    } catch (e) {
+      console.error('[AIPlanBuilder] save post vault:', e);
+      showToast('Could not save to vault', 'error');
+    } finally {
+      setSavingVault(false);
+    }
+  };
+
   return (
-    <div className="border border-gray-100 rounded-lg overflow-hidden bg-gray-50/50">
-      <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-800 bg-gray-50/80">
+    <div
+      className="rounded-xl border border-gray-200 bg-white px-4 py-4 border-l-4"
+      style={{ borderLeftColor: borderC }}
+    >
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="inline-flex items-center gap-1.5 font-semibold text-[#0C1220]">
+          {getPlatformIcon(post.platform, 'h-4 w-4')}
+          {platLabel}
+        </span>
+        <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${ct.className}`}>
+          {sanitizeAIOutput(ct.label)}
+        </span>
+        {post.postTime ? (
+          <span className="inline-flex items-center gap-1 text-gray-500 text-xs ml-auto sm:ml-0">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            {sanitizeAIOutput(post.postTime)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Hook</p>
+        <p className="text-lg font-bold text-[#0C1220] leading-snug">{hook || '—'}</p>
+      </div>
+
+      {caption ? (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-gray-500 mb-1">Caption</p>
+          <p
+            className={`text-sm text-gray-700 whitespace-pre-wrap ${
+              captionExpanded || detailsOpen ? '' : 'line-clamp-3'
+            }`}
+          >
+            {caption}
+          </p>
+          {!detailsOpen &&
+          (caption.length > 100 || (caption.match(/\n/g) || []).length >= 2) ? (
+            <button
+              type="button"
+              onClick={() => setCaptionExpanded((v) => !v)}
+              className="mt-1 text-xs font-semibold text-[#01BAD2]"
+            >
+              {captionExpanded ? 'Show less' : 'Show more'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!hideTags && hashtags.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {visibleTags.map((h, i) => (
+            <span
+              key={`${h}-${i}`}
+              className="rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-xs text-gray-800"
+            >
+              {h.startsWith('#') ? h : `#${h.replace(/^#/, '')}`}
+            </span>
+          ))}
+          {moreTagCount > 0 ? (
+            <span className="text-xs text-gray-500">+{moreTagCount} more</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {post.cta ? (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-gray-500">CTA</p>
+          <p className="text-sm text-gray-800">{sanitizeAIOutput(post.cta)}</p>
+        </div>
+      ) : null}
+
+      {visualText && !detailsOpen ? (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-gray-500 flex items-center gap-1">📷 Visual</p>
+          <p className="text-sm text-gray-700 line-clamp-1">{visualText}</p>
+        </div>
+      ) : null}
+
+      {detailsOpen ? (
+        <div className="mt-4 space-y-3 border-t border-gray-100 pt-4 text-sm">
+          {caption ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-500">Full caption</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{caption}</p>
+            </div>
+          ) : null}
+          {!hideTags && hashtags.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-500">All hashtags</p>
+              <p className="text-gray-800">
+                {hashtags.map((h) => (h.startsWith('#') ? h : `#${h.replace(/^#/, '')}`)).join(' ')}
+              </p>
+            </div>
+          ) : null}
+          {visualText ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-500">Visual direction</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{visualText}</p>
+            </div>
+          ) : null}
+          {post.why_this_works ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-500">Why this works</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{sanitizeAIOutput(post.why_this_works)}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setOpen(!open)}
-          className="flex-1 flex items-center justify-between gap-2 text-left min-w-0 hover:text-huttle-primary-dark"
+          onClick={handleCopyPost}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
         >
-          <span>{title}</span>
-          {open ? <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />}
+          Copy post
         </button>
-        {headerRight ? <div className="shrink-0 flex items-center">{headerRight}</div> : null}
+        <button
+          type="button"
+          onClick={handleSaveVault}
+          disabled={savingVault || savedVault}
+          className="rounded-lg bg-[#01BAD2] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0199b0] disabled:opacity-70"
+        >
+          {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((v) => !v)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 inline-flex items-center gap-1"
+        >
+          {detailsOpen ? (
+            <>
+              Full details <ChevronUp className="h-3.5 w-3.5" />
+            </>
+          ) : (
+            <>
+              Full details <ChevronDown className="h-3.5 w-3.5" />
+            </>
+          )}
+        </button>
       </div>
-      {open && <div className="px-3 pb-3 pt-2 text-sm text-gray-700">{children}</div>}
     </div>
   );
 }
@@ -279,7 +534,6 @@ export default function AIPlanBuilder() {
   const { brandProfile, brandFetchComplete } = useBrand();
   const { getTierDisplayName, userTier } = useSubscription();
   const planUsage = useAIUsage('planBuilder');
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
 
@@ -301,11 +555,7 @@ export default function AIPlanBuilder() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [editingInputs, setEditingInputs] = useState(true);
-  const [calendarViewMode, setCalendarViewMode] = useState('calendar');
-  const [expandedPostKey, setExpandedPostKey] = useState(null);
-  const [isMobileViewport, setIsMobileViewport] = useState(
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
-  );
+  const [savingAllVault, setSavingAllVault] = useState(false);
 
   const [currentJobId, setCurrentJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null);
@@ -365,18 +615,6 @@ export default function AIPlanBuilder() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    const fn = () => {
-      const m = mq.matches;
-      setIsMobileViewport(m);
-      if (m) setCalendarViewMode('list');
-    };
-    fn();
-    mq.addEventListener('change', fn);
-    return () => mq.removeEventListener('change', fn);
-  }, []);
-
-  useEffect(() => {
     if (!isGenerating) {
       setLoadingPhraseIndex(0);
       return;
@@ -413,8 +651,6 @@ export default function AIPlanBuilder() {
         handleJobFailed('Plan generation completed but no result was returned');
         return;
       }
-
-      console.log('[PlanBuilder] Raw result from Supabase:', planData);
 
       const preNormalized = normalizeN8nAlternatePlanToV2(planData) ?? planData;
       let payload = preNormalized;
@@ -598,20 +834,6 @@ export default function AIPlanBuilder() {
     setContentPillars((p) => p.filter((_, i) => i !== idx));
   };
 
-  const recommendationsActive =
-    Boolean(selectedGoal) && nicheInput.trim().length > 0 && selectedPlatforms.length > 0;
-
-  const optimalTimesMap =
-    generatedPlan?.plan?.summary?.optimalTimes ??
-    generatedPlan?.plan?.summary?.optimal_times ??
-    generatedPlan?.summary?.optimalTimes;
-  const primaryPlatformForTimes = optimalTimesMap
-    ? Object.keys(optimalTimesMap)[0]
-    : selectedPlatforms[0] ?? null;
-  const primaryPlat =
-    normalizePlatformLabelForIcon(primaryPlatformForTimes) || primaryPlatformForTimes || 'Instagram';
-  const bestTimesLine = BEST_TIMES_BY_PLATFORM[primaryPlat] || BEST_TIMES_BY_PLATFORM.Instagram;
-
   const resetToForm = () => {
     setGeneratedPlan(null);
     setEditingInputs(true);
@@ -775,8 +997,6 @@ export default function AIPlanBuilder() {
         : 'your platforms';
     return `Generating a ${n}-day plan for ${w} post${w === 1 ? '' : 's'}/week across ${pl}.`;
   }, [selectedPeriod, resolvedPostingFrequency, selectedPlatforms]);
-
-  const tierBadgeLabel = userTier ? `${getTierDisplayName(userTier)} Plan` : 'Plan';
 
   const atLimit = planUsage.featureLimit > 0 && planUsage.featureUsed >= planUsage.featureLimit;
 
@@ -1216,6 +1436,12 @@ export default function AIPlanBuilder() {
       {generatedPlan?.kind === 'v2' && (() => {
         const plan = generatedPlan.plan;
         const overview = plan?.overview || {};
+        const displayDays = getPlanDaysForDisplay(plan);
+        const planTitle =
+          plan?.planTitle ||
+          plan?.summary?.title ||
+          overview?.strategy ||
+          'Your content plan';
         const mix = overview.contentMix && typeof overview.contentMix === 'object' ? overview.contentMix : {};
         const mixEntries = [
           ['Educational', mix.educational, 'bg-blue-500'],
@@ -1225,442 +1451,277 @@ export default function AIPlanBuilder() {
           ['Personal', mix.personal, 'bg-teal-500'],
         ].filter(([, val]) => Number(val) > 0);
         const mixTotal = mixEntries.reduce((s, [, n]) => s + Number(n), 0) || 1;
+        const mixLine = mixEntries.length
+          ? mixEntries.map(([label, val]) => `${label} ${Math.round((Number(val) / mixTotal) * 100)}%`).join(' | ')
+          : '—';
+        const keyThemes = extractKeyThemesForDisplay(plan, contentPillars);
+        const optimalMap = extractOptimalTimesMap(plan);
+        const clipboardDoc = buildPlanBuilderClipboardDocument(plan, displayDays, mixLine, keyThemes);
 
-        const exportText = buildV2PlanPlainText(plan);
-        const days = plan.days || [];
-        const totalPosts = days.reduce((sum, d) => sum + (d.posts?.length || 0), 0);
-        const platformSet = new Set(
-          days.flatMap((d) => (d.posts || []).map((p) => normalizePlatformLabelForIcon(p.platform) || p.platform).filter(Boolean))
-        );
-        const contentTypes = new Set(
-          days.flatMap((d) => (d.posts || []).map((p) => p.contentType).filter(Boolean))
-        );
+        const totalPosts = displayDays.reduce((sum, d) => sum + getDayPosts(d).length, 0);
+        const platformList = [
+          ...new Set(
+            displayDays.flatMap((d) =>
+              getDayPosts(d).map((p) => normalizePlatformLabelForIcon(p.platform) || p.platform).filter(Boolean)
+            )
+          ),
+        ];
+        const platformSet = new Set(platformList);
+        const subtitlePlatforms =
+          platformList.length > 0 ? platformList.join(', ') : selectedPlatforms.join(', ') || 'your platforms';
 
-        const weekChunks = [];
-        for (let i = 0; i < days.length; i += 7) {
-          weekChunks.push(days.slice(i, i + 7));
-        }
+        const handleCopyFullPlan = () => {
+          navigator.clipboard
+            .writeText(clipboardDoc)
+            .then(() => showToast('Full plan copied to clipboard', 'success'));
+        };
 
-        const scheduleFirstPost = () => {
-          const first = days[0]?.posts?.[0];
-          if (!first) {
-            showToast('No posts in this plan to schedule.', 'warning');
+        const handleSaveAllVault = async () => {
+          if (!user?.id) {
+            showToast('Sign in to save to your vault', 'warning');
             return;
           }
-          const hookQ = encodeURIComponent(first.hook || '');
-          const topicQ = encodeURIComponent(first.topic || '');
-          const capQ = encodeURIComponent(first.caption || '');
-          const platQ = encodeURIComponent(String(first.platform || '').toLowerCase());
-          navigate(`/dashboard/full-post-builder?hook=${hookQ}&platform=${platQ}&topic=${topicQ}&caption=${capQ}`);
-          showToast('Opened your first planned post — schedule each post from the calendar.', 'info');
+          if (totalPosts === 0) {
+            showToast('No posts to save', 'warning');
+            return;
+          }
+          setSavingAllVault(true);
+          let saved = 0;
+          try {
+            for (let di = 0; di < displayDays.length; di += 1) {
+              const day = displayDays[di];
+              const dayNum = Number(day?.day) || di + 1;
+              const posts = getDayPosts(day);
+              for (let pi = 0; pi < posts.length; pi += 1) {
+                const post = posts[pi];
+                const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || '';
+                const result = await saveToVault(user.id, {
+                  ...buildContentVaultPayload({
+                    name: `${platLabel} — Day ${dayNum} (${pi + 1})`,
+                    contentText: formatPostVaultBody(post),
+                    contentType: 'plan',
+                    toolSource: 'ai_plan_builder',
+                    toolLabel: 'AI Plan Builder',
+                    topic: (post.hook || '').slice(0, 80),
+                    platform: post.platform,
+                    description: 'Saved from AI Plan Builder',
+                    metadata: {
+                      day: dayNum,
+                      contentType: post.contentType ?? '',
+                      bestTime: post.postTime ?? '',
+                    },
+                  }),
+                  type: 'plan_builder',
+                });
+                if (result.success) saved += 1;
+              }
+            }
+            if (saved > 0) {
+              showToast(`${saved} posts saved to your Content Vault`, 'success');
+            } else {
+              showToast('Could not save posts to vault', 'error');
+            }
+          } catch (err) {
+            console.error('[AIPlanBuilder] save all vault:', err);
+            showToast('Could not save posts to vault', 'error');
+          } finally {
+            setSavingAllVault(false);
+          }
         };
-
-        const buildPostBrief = (post) => {
-          const tags = Array.isArray(post.hashtags) ? post.hashtags.join(' ') : '';
-          return [
-            post.hook && `Hook: ${post.hook}`,
-            post.caption && `Brief: ${post.caption}`,
-            tags && `Hashtags: ${tags}`,
-            post.cta && `CTA: ${post.cta}`,
-            post.notes && `Visual: ${post.notes}`,
-          ]
-            .filter(Boolean)
-            .join('\n\n');
-        };
-
-        const renderPostBody = (post) => {
-          const hideTags = isTwitterLikePlatform(post.platform);
-          const hookQ = encodeURIComponent(post.hook || '');
-          const topicQ = encodeURIComponent(post.topic || '');
-          const capQ = encodeURIComponent(post.caption || '');
-          const platQ = encodeURIComponent(String(post.platform || '').toLowerCase());
-
-          return (
-            <div className="space-y-3 pt-2">
-              <div>
-                <p className="text-xs font-semibold text-gray-500">Hook</p>
-                <p className="text-base font-semibold text-[#0C1220]">{sanitizeAIOutput(post.hook || '')}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500">Caption angle / brief</p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{sanitizeAIOutput(post.caption || post.topic || '')}</p>
-              </div>
-              {!hideTags && Array.isArray(post.hashtags) && post.hashtags.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">Hashtags</p>
-                  <p className="text-sm text-gray-800">{post.hashtags.join(' ')}</p>
-                </div>
-              )}
-              {post.cta ? (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">CTA</p>
-                  <p className="text-sm text-gray-700">{sanitizeAIOutput(post.cta)}</p>
-                </div>
-              ) : null}
-              {post.notes ? (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">Visual direction</p>
-                  <p className="text-sm text-gray-700">{sanitizeAIOutput(post.notes)}</p>
-                </div>
-              ) : null}
-              <CollapsibleBlock title="Why this works" defaultOpen={false} hide={!post.why_this_works}>
-                <p className="text-gray-700 whitespace-pre-wrap">{sanitizeAIOutput(post.why_this_works || '')}</p>
-              </CollapsibleBlock>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(
-                      `/dashboard/full-post-builder?hook=${hookQ}&platform=${platQ}&topic=${topicQ}&caption=${capQ}`
-                    )
-                  }
-                  className="rounded-xl bg-[#01BAD2] px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Schedule this post
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigator.clipboard.writeText(buildPostBrief(post)).then(() => showToast('Brief copied', 'success'))
-                  }
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-800"
-                >
-                  Copy brief
-                </button>
-              </div>
-            </div>
-          );
-        };
-
-        const showCal = calendarViewMode === 'calendar' && !isMobileViewport;
-        let cardAnimIndex = 0;
 
         return (
-          <div className="mt-10 max-w-[1200px] mx-auto space-y-8 pb-16 font-plan-body">
-            <Motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between border-b border-gray-200 pb-6"
-            >
-              <div>
-                <h2 className="font-plan-display text-[22px] font-bold text-[#0C1220]">
-                  Your {days.length || selectedPeriod}-Day Content Strategy
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">{sanitizeAIOutput(overview.strategy || '')}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    {totalPosts} posts planned
-                  </span>
-                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    {platformSet.size} platforms
-                  </span>
-                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    {contentTypes.size || '—'} content types
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <span className="inline-flex w-fit items-center rounded-full border border-[#01BAD2]/30 bg-[#01BAD2]/10 px-3 py-1 text-xs font-semibold text-[#0C1220]">
-                  {tierBadgeLabel}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingInputs(true)}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:border-[#01BAD2]/40"
-                >
-                  Edit inputs
-                </button>
-                <button
-                  type="button"
-                  onClick={scheduleFirstPost}
-                  className="rounded-xl bg-[#01BAD2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0199b0]"
-                >
-                  Schedule all posts
-                </button>
-              </div>
-            </Motion.div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Recommended mix</p>
-                {mixEntries.length > 0 ? (
-                  <>
-                    <div className="mt-3 flex h-2.5 overflow-hidden rounded-full">
-                      {mixEntries.map(([label, val, colorClass]) => (
-                        <div
-                          key={label}
-                          className={`${colorClass} h-full`}
-                          style={{ width: `${(Number(val) / mixTotal) * 100}%` }}
-                          title={`${label}: ${val}%`}
-                        />
-                      ))}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-                      {mixEntries.map(([label, val, colorClass]) => (
-                        <span key={label} className="inline-flex items-center gap-1">
-                          <span className={`h-2 w-2 rounded-full ${colorClass}`} />
-                          {label} {val}%
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-500">Mix will appear when included in your plan.</p>
-                )}
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Optimal times</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
-                  {overview.strategy_notes
-                    ? sanitizeAIOutput(overview.strategy_notes)
-                    : 'Times are woven into each post card below.'}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Key themes</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {contentPillars.length > 0 ? (
-                    contentPillars.map((p) => (
-                      <span
-                        key={p}
-                        className="rounded-full border border-[#01BAD2]/20 bg-[#01BAD2]/8 px-3 py-1 text-xs font-medium text-[#0C1220]"
-                      >
-                        {p}
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500">Themes from your content pillars appear here.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {Array.isArray(plan.weeklyTips) && plan.weeklyTips.length > 0 && (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                {plan.weeklyTips.map((tip, idx) => (
-                  <div key={idx} className="flex gap-3 rounded-xl border border-amber-100 bg-amber-50/40 p-4">
-                    <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-                    <p className="text-sm text-gray-800">{sanitizeAIOutput(tip)}</p>
+          <>
+            <div className="relative mt-10 max-w-[1200px] mx-auto space-y-8 pb-28 md:pb-32 font-plan-body">
+              <Motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between border-b border-gray-200 pb-6"
+              >
+                <div className="min-w-0">
+                  <h2 className="font-plan-display text-[22px] font-bold text-[#0C1220] leading-tight">
+                    {sanitizeAIOutput(planTitle)}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {displayDays.length}-Day {subtitlePlatforms} Strategy
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700">
+                      <Calendar className="h-3.5 w-3.5 text-gray-500" />
+                      {displayDays.length} days
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700">
+                      <Smartphone className="h-3.5 w-3.5 text-gray-500" />
+                      {platformSet.size} platforms
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700">
+                      <PenLine className="h-3.5 w-3.5 text-gray-500" />
+                      {totalPosts} posts total
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyFullPlan}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                  >
+                    Copy full plan
+                  </button>
+                  {user?.id ? (
+                    <button
+                      type="button"
+                      onClick={handleSaveAllVault}
+                      disabled={savingAllVault || totalPosts === 0}
+                      className="rounded-xl bg-[#01BAD2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0199b0] disabled:opacity-60"
+                    >
+                      {savingAllVault ? 'Saving…' : 'Save all to vault'}
+                    </button>
+                  ) : null}
+                </div>
+              </Motion.div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="font-plan-display text-lg font-semibold text-[#0C1220]">Content calendar</h3>
-              <div className="flex w-fit rounded-xl border border-gray-200 bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => setCalendarViewMode('calendar')}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    calendarViewMode === 'calendar' ? 'bg-[#01BAD2] text-white' : 'text-gray-600'
-                  }`}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                  Calendar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCalendarViewMode('list')}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    calendarViewMode === 'list' ? 'bg-[#01BAD2] text-white' : 'text-gray-600'
-                  }`}
-                >
-                  <List className="h-4 w-4" />
-                  List
-                </button>
-              </div>
-            </div>
-
-            {showCal ? (
-              <div className="space-y-8 overflow-x-auto">
-                {weekChunks.map((chunk, wi) => (
-                  <div key={wi}>
-                    {weekChunks.length > 1 ? (
-                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        Week {wi + 1}
-                      </p>
-                    ) : null}
-                    <div className="grid min-w-[720px] grid-cols-7 gap-2">
-                      {chunk.map((day, di) => {
-                        const colDelay = di * 0.05;
-                        return (
-                          <div key={day.day} className="flex flex-col gap-2">
-                            <div className="text-center">
-                              <p className="text-[10px] font-semibold uppercase text-gray-400">
-                                {String(day.date || '').split(' ')[0] || `Day ${day.day}`}
-                              </p>
-                              <p className="font-plan-display text-sm font-bold text-[#0C1220]">
-                                {sanitizeAIOutput(day.date || `Day ${day.day}`)}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              {(day.posts || []).map((post, pi) => {
-                                const pk = `d${day.day}-p${pi}`;
-                                const platLabel =
-                                  normalizePlatformLabelForIcon(post.platform) || post.platform || '';
-                                const borderC = PLATFORM_CARD_BORDER[platLabel] || '#64748b';
-                                const ct = contentTypeBadgeProps(post.contentType);
-                                const hookPreview =
-                                  (post.hook || '').length > 48
-                                    ? `${String(post.hook).slice(0, 48)}…`
-                                    : (post.hook || '');
-                                const anim = cardAnimIndex * 0.05;
-                                cardAnimIndex += 1;
-                                const expanded = expandedPostKey === pk;
-                                return (
-                                  <Motion.div
-                                    key={pk}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: colDelay + anim }}
-                                    className="cursor-pointer rounded-xl border border-gray-200 bg-white p-2.5 text-left shadow-sm transition hover:border-[#01BAD2]/50"
-                                    style={{ borderTopWidth: 3, borderTopColor: borderC }}
-                                    onClick={() => setExpandedPostKey(expanded ? null : pk)}
-                                    role="button"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        setExpandedPostKey(expanded ? null : pk);
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0C1220]">
-                                      {getPlatformIcon(post.platform, 'h-3.5 w-3.5')}
-                                      <span className="truncate">{platLabel}</span>
-                                    </div>
-                                    <span
-                                      className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase ${ct.className}`}
-                                    >
-                                      {sanitizeAIOutput(ct.label)}
-                                    </span>
-                                    {post.postTime ? (
-                                      <p className="mt-1 text-[10px] text-gray-500">{sanitizeAIOutput(post.postTime)}</p>
-                                    ) : null}
-                                    <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-gray-700">
-                                      {sanitizeAIOutput(hookPreview)}
-                                    </p>
-                                    <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-medium text-[#01BAD2]">
-                                      {expanded ? 'Show less' : 'Details'}
-                                      <ChevronRight className={`h-3 w-3 transition ${expanded ? 'rotate-90' : ''}`} />
-                                    </span>
-                                    {expanded ? (
-                                      <div className="mt-2 border-t border-gray-100 pt-2" onClick={(e) => e.stopPropagation()}>
-                                        {renderPostBody(post)}
-                                      </div>
-                                    ) : null}
-                                  </Motion.div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/90 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-0">
+                  <div className="flex-1 min-w-0 lg:pr-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      Content mix
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-gray-800">
+                      {mixEntries.length > 0 ? (
+                        mixEntries.map(([label, val]) => (
+                          <span key={label} className="inline-flex items-center gap-1 whitespace-nowrap">
+                            <span>{MIX_DOT_EMOJI[label] || '⚪'}</span>
+                            <span className="font-medium">{label}</span>
+                            <span className="text-gray-500">{Math.round((Number(val) / mixTotal) * 100)}%</span>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500">—</span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {days.map((day) => (
-                  <div key={day.day}>
-                    <div className="mb-3 flex items-center gap-2 border-b border-gray-100 pb-2">
-                      <Calendar className="h-4 w-4 text-[#01BAD2]" />
-                      <span className="font-plan-display font-semibold text-[#0C1220]">
-                        {sanitizeAIOutput(day.date || `Day ${day.day}`)}
-                      </span>
+                  <div className="hidden lg:block w-px shrink-0 bg-gray-200 self-stretch min-h-[3rem]" aria-hidden />
+                  <div className="flex-1 min-w-0 lg:px-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      Best times
+                    </p>
+                    <div className="space-y-1 text-xs text-gray-800">
+                      {optimalMap && Object.keys(optimalMap).length > 0 ? (
+                        Object.entries(optimalMap).map(([plat, times]) => (
+                          <p key={plat}>
+                            <span className="font-semibold text-gray-900">{plat}:</span>{' '}
+                            {formatTimesForDisplay(times)}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="text-gray-500">See each post for suggested posting times.</p>
+                      )}
                     </div>
-                    <div className="space-y-4">
-                      {(day.posts || []).map((post, pi) => {
-                        const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || '';
-                        const borderC = PLATFORM_CARD_BORDER[platLabel] || '#64748b';
-                        const ct = contentTypeBadgeProps(post.contentType);
-                        return (
-                          <Motion.div
-                            key={`${day.day}-${pi}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: pi * 0.05 }}
-                            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-                            style={{ borderLeftWidth: 4, borderLeftColor: borderC }}
+                  </div>
+                  <div className="hidden lg:block w-px shrink-0 bg-gray-200 self-stretch min-h-[3rem]" aria-hidden />
+                  <div className="flex-1 min-w-0 lg:pl-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      Key themes
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {keyThemes.length > 0 ? (
+                        keyThemes.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs font-medium text-gray-800"
                           >
-                            <div className="mb-4 flex flex-wrap items-center gap-2">
-                              {getPlatformIcon(post.platform, 'h-5 w-5')}
-                              <span className="font-plan-display font-semibold text-[#0C1220]">{platLabel}</span>
-                              <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${ct.className}`}>
-                                {sanitizeAIOutput(ct.label)}
-                              </span>
-                              {post.postTime ? (
-                                <span className="inline-flex items-center gap-1 text-sm text-gray-500">
-                                  <Clock className="h-4 w-4" />
-                                  {sanitizeAIOutput(post.postTime)}
-                                </span>
-                              ) : null}
-                            </div>
-                            {renderPostBody(post)}
-                          </Motion.div>
-                        );
-                      })}
+                            {sanitizeAIOutput(t)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-gray-500">—</span>
+                      )}
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
 
-            <div className="flex flex-wrap gap-3 border-t border-gray-100 pt-6">
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(exportText).then(() => showToast('Plan copied', 'success'))}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0C1220] px-4 py-2.5 text-sm font-semibold text-white"
-              >
-                <Copy className="h-4 w-4" />
-                Copy full plan
-              </button>
-              {user?.id ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const result = await saveToVault(
-                        user.id,
-                        buildContentVaultPayload({
-                          name: `Content Plan - ${overview.goal || selectedGoal}`,
-                          contentText: JSON.stringify(plan, null, 2),
-                          contentType: 'plan',
-                          toolSource: 'ai_plan_builder',
-                          toolLabel: 'AI Plan Builder',
-                          topic: overview.goal || selectedGoal,
-                          platform: (overview.platforms && overview.platforms[0]) || '',
-                          description: 'Content Plan from AI Plan Builder',
-                          metadata: {
-                            goal: overview.goal,
-                            platforms: overview.platforms || [],
-                          },
-                        })
-                      );
-                      if (result.success) showToast('Saved to vault ✓', 'success');
-                      else showToast('Failed to save plan', 'error');
-                    } catch (err) {
-                      console.error('[AIPlanBuilder] save full plan exception:', err);
-                      showToast('Failed to save plan', 'error');
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                >
-                  <FolderPlus className="h-4 w-4" />
-                  Save to vault
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={resetToForm}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600"
-              >
-                Start over
-              </button>
+              {Array.isArray(plan.weeklyTips) && plan.weeklyTips.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {plan.weeklyTips.map((tip, idx) => (
+                    <div key={idx} className="flex gap-3 rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+                      <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                      <p className="text-sm text-gray-800">{sanitizeAIOutput(tip)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-10">
+                {displayDays.map((day, di) => {
+                  const dayNum = Number(day?.day) || di + 1;
+                  const dayLabel = sanitizeAIOutput(day.date || day.theme || `Day ${dayNum}`);
+                  return (
+                    <section key={`plan-day-${di}-${dayNum}`}>
+                      <div className="relative flex items-center justify-center py-2">
+                        <div className="absolute inset-x-0 top-1/2 h-px bg-gray-200" aria-hidden />
+                        <span className="relative bg-[#F4F7FB] px-3 text-sm font-semibold text-gray-600">
+                          Day {di + 1} · {dayLabel}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-4">
+                        {getDayPosts(day).map((post, pi) => (
+                          <Motion.div
+                            key={`post-${di}-${pi}-${dayNum}`}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: Math.min(pi, 8) * 0.04 }}
+                          >
+                            <PlanBuilderPostCard
+                              post={post}
+                              dayNum={dayNum}
+                              userId={user?.id}
+                              showToast={showToast}
+                            />
+                          </Motion.div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur-sm">
+              <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 ml-0 md:ml-12 lg:ml-64 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-[#0C1220]">{totalPosts}</span> posts across{' '}
+                  <span className="font-semibold text-[#0C1220]">{displayDays.length}</span> days
+                </p>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={resetToForm}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Start over
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyFullPlan}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                  >
+                    Copy full plan
+                  </button>
+                  {user?.id ? (
+                    <button
+                      type="button"
+                      onClick={handleSaveAllVault}
+                      disabled={savingAllVault || totalPosts === 0}
+                      className="rounded-xl bg-[#01BAD2] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0199b0] disabled:opacity-60"
+                    >
+                      {savingAllVault ? 'Saving…' : 'Save all to vault'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </>
         );
       })()}
     </div>
