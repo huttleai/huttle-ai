@@ -941,7 +941,7 @@ export default function ContentLibrary() {
                 type="button"
                 data-testid="vault-create-post-button"
                 onClick={() => setCreateMenuOpen((open) => !open)}
-                className="h-10 w-10 sm:w-auto sm:px-4 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                className="h-10 w-10 sm:w-auto sm:px-4 text-sm font-medium text-white bg-huttle-primary rounded-xl hover:bg-huttle-primary-dark transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">New content</span>
@@ -1161,7 +1161,7 @@ export default function ContentLibrary() {
                     onClick={() => setActiveCollectionId('all')}
                     className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-all min-h-[44px] sm:min-h-0 sm:py-1 ${
                       activeCollectionId === 'all'
-                        ? 'bg-gray-900 text-white'
+                        ? 'bg-[var(--huttle-cyan)] text-white'
                         : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
                     }`}
                   >
@@ -1175,7 +1175,7 @@ export default function ContentLibrary() {
                       onClick={() => setActiveCollectionId(collection.id)}
                       className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-all min-h-[44px] sm:min-h-0 sm:py-1 ${
                         activeCollectionId === collection.id
-                          ? 'bg-gray-900 text-white'
+                          ? 'bg-[var(--huttle-cyan)] text-white'
                           : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -1214,27 +1214,27 @@ export default function ContentLibrary() {
 
             {/* Selection bar */}
             {selectedIds.length > 0 && (
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-gray-900 px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-[var(--huttle-cyan)] px-5 py-4 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium">{selectedIds.length} items selected</p>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={handleCopySelected}
-                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-900 transition-all hover:bg-gray-100"
+                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[var(--huttle-cyan)] transition-all hover:bg-gray-100"
                   >
                     Copy All Selected
                   </button>
                   <button
                     type="button"
                     onClick={() => openCollectionManager(selectedIds, 'bulk')}
-                    className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
+                    className="rounded-full border border-white px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
                   >
                     Add to Collection
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeleteTarget({ id: selectedIds[0], name: `${selectedIds.length} selected items`, bulk: true })}
-                    className="rounded-full border border-red-400/30 px-4 py-2 text-sm font-medium text-red-200 transition-all hover:bg-red-500/10"
+                    className="rounded-full border border-white px-4 py-2 text-sm font-medium text-[var(--tw-gradient-to)] transition-all"
                   >
                     Delete Selected
                   </button>
