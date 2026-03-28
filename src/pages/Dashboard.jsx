@@ -9,12 +9,10 @@ import {
   Target,
   Bell,
   Sparkles,
-  Plus,
   ArrowRight,
   Beaker,
   Zap,
   ChevronRight,
-  ArrowUpRight,
   Copy,
   Check,
   MessageSquare,
@@ -1172,61 +1170,49 @@ export default function Dashboard() {
 
       {/* Welcome Header */}
       <MotionDiv className="relative mb-6 pt-2 sm:pt-3" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            {isCreator ? (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-green-600">Active Now</span>
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
-                  {greetingHeadline}
-                </h1>
-                <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
-                {hasProfilePersonalization === false && (
-                  <p className="mt-2 text-xs text-gray-500">
-                    Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
-                  {greetingHeadline}
-                </h1>
-                <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
-                {hasProfilePersonalization === false && (
-                  <p className="mt-2 text-xs text-gray-500">
-                    Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
-                  </p>
-                )}
-              </>
-            )}
-            {isTrialing && (
-              <div className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                trialDaysRemaining !== null && trialDaysRemaining <= 2
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-cyan-100 text-cyan-800'
-              }`}>
-                <span>
-                  {trialDaysRemaining === 0
-                    ? "⚠️ Trial ends today - you'll be charged tonight"
-                    : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
-                </span>
+        <div>
+          {isCreator ? (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-widest text-green-600">Active Now</span>
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard/ai-tools"
-              className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-huttle-gradient hover:bg-huttle-primary-dark text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.02]"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Content</span>
-              <ArrowUpRight className="w-4 h-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200" />
-            </Link>
-          </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
+                {greetingHeadline}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
+              {hasProfilePersonalization === false && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" data-testid="dashboard-greeting">
+                {greetingHeadline}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">{greetingSubtitle}</p>
+              {hasProfilePersonalization === false && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Complete your Brand Profile (sidebar → Account) for a personalized feed — we’ll remind you in notifications until it’s done.
+                </p>
+              )}
+            </>
+          )}
+          {isTrialing && (
+            <div className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              trialDaysRemaining !== null && trialDaysRemaining <= 2
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-cyan-100 text-cyan-800'
+            }`}>
+              <span>
+                {trialDaysRemaining === 0
+                  ? "⚠️ Trial ends today - you'll be charged tonight"
+                  : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
+              </span>
+            </div>
+          )}
         </div>
       </MotionDiv>
 
@@ -1583,7 +1569,8 @@ export default function Dashboard() {
                       : tag.estimated_reach === 'medium'
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-violet-100 text-violet-700';
-                    const isNicheTag = tag.category === 'niche';
+                    const showNicheTierBadge =
+                      hashtagMode === 'trending' && tag.category === 'niche';
                     const platformLabels = (() => {
                       const fromArr = Array.isArray(tag.relevant_platforms)
                         ? tag.relevant_platforms.filter(Boolean)
@@ -1604,7 +1591,7 @@ export default function Dashboard() {
                       >
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           <span className="font-semibold text-sm text-gray-900 truncate">{tag.hashtag}</span>
-                          {isNicheTag && (
+                          {showNicheTierBadge && (
                             <span className="flex-shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700 tracking-wide">
                               Niche
                             </span>
@@ -1725,8 +1712,8 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* Quick Create (compact) + Recently Saved */}
-      <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      {/* Quick Create (compact) above Recently Saved */}
+      <div className="relative grid grid-cols-1 gap-6 mb-6">
         {/* Quick Create - Compact */}
         <motion.div custom={6} initial="hidden" animate="visible" variants={fadeUp}>
           <div className="relative overflow-hidden rounded-xl bg-white border border-gray-100/80 shadow-sm h-full">
