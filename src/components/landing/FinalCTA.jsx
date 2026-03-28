@@ -55,7 +55,7 @@ export const FinalCTA = ({ onOpenFoundersModal }) => {
             onClick={onOpenFoundersModal}
             className="group flex items-center justify-center gap-2 bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-xl px-10 py-5 text-lg font-bold shadow-[0_0_24px_#01BAD220] transition-all hover:scale-105 active:scale-95"
           >
-            Claim Your $199/yr Founders Spot
+            Join the Founders Club Today
             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>
           

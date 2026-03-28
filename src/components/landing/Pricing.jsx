@@ -110,7 +110,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 onClick={onOpenFoundersModal}
                 className="w-full h-14 rounded-xl bg-[#01BAD2] hover:bg-[#019db3] text-white font-bold text-base shadow-[0_0_24px_#01BAD220] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
               >
-                Claim Your $199/yr Founders Spot
+                Join the Founders Club Today
                 <ArrowRight size={18} />
               </button>
             </div>

@@ -539,7 +539,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
                   </>
                 ) : (
                   <>
-                    Claim Your $199/yr Founders Spot
+                    Join the Founders Club Today
                     <ArrowRight size={18} />
                   </>
                 )}
@@ -1378,7 +1378,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
               className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow"
               beamDuration={6}
             >
-              Claim Your $199/yr Founders Spot
+              Join the Founders Club Today
               <ArrowRight size={18} className="ml-2" />
             </BorderBeamButton>
           </div>

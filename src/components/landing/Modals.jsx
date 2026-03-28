@@ -314,7 +314,7 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
                   </>
                 ) : (
                   <>
-                    Claim Your $199/yr Founders Spot
+                    Join the Founders Club Today
                     <ArrowRight size={18} />
                   </>
                 )}
