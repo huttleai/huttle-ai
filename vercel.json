@@ -1,17 +1,4 @@
 {
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.huttleai.com"
-        }
-      ],
-      "destination": "https://huttleai.com/:path*",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/((?!api/|.*\\..*).*)",
