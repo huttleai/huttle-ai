@@ -27,6 +27,7 @@ export default function Help() {
     message: ''
   });
   const [emailSubmitted, setEmailSubmitted] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
   
   // Documentation state
   const [selectedFeature, setSelectedFeature] = useState(null);
@@ -277,14 +278,49 @@ export default function Help() {
     }
   };
 
-  const handleEmailSubmit = () => {
-    // Here you would typically send to an email service or API
-    setEmailSubmitted(true);
-    setTimeout(() => {
-      setShowEmailModal(false);
-      setEmailSubmitted(false);
-      setEmailData({ email: user?.email || '', subject: '', message: '' });
-    }, 2000);
+  const handleEmailSubmit = async () => {
+    if (!emailData.email?.trim() || !emailData.subject || !emailData.message?.trim()) {
+      showToast('Please fill in all fields', 'error');
+      return;
+    }
+
+    setEmailSending(true);
+    try {
+      const response = await fetch('/api/support-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailData.email.trim(),
+          subject: emailData.subject,
+          message: emailData.message.trim(),
+          userId: user?.id || undefined,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Request failed');
+      }
+
+      setEmailSubmitted(true);
+      if (data.confirmationSent === false) {
+        showToast('Message sent to our team. If you do not see a confirmation email, check spam.', 'success');
+      } else {
+        showToast('Message sent. Check your inbox for a confirmation email.', 'success');
+      }
+
+      setTimeout(() => {
+        setShowEmailModal(false);
+        setEmailSubmitted(false);
+        setEmailData({ email: user?.email || '', subject: '', message: '' });
+      }, 2500);
+    } catch (err) {
+      console.error('Email support submit:', err);
+      showToast(err.message || 'Could not send message. Try again or email support@huttleai.com.', 'error');
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const resetDocsModal = () => {
@@ -584,7 +620,9 @@ export default function Help() {
                     <Mail className="w-8 h-8 text-green-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Message Sent!</h3>
-                  <p className="text-gray-600">We'll get back to you within 24-48 hours.</p>
+                  <p className="text-gray-600">
+                    We emailed you a short confirmation. We typically reply within 24–48 business hours.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -637,12 +675,18 @@ export default function Help() {
 
                   {/* Submit Button */}
                   <button
+                    type="button"
                     onClick={handleEmailSubmit}
-                    disabled={!emailData.email || !emailData.subject || !emailData.message}
+                    disabled={
+                      emailSending ||
+                      !emailData.email ||
+                      !emailData.subject ||
+                      !emailData.message
+                    }
                     className="w-full py-3 bg-huttle-primary text-white rounded-xl font-semibold hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
-                    Send Message
+                    {emailSending ? 'Sending…' : 'Send Message'}
                   </button>
                   
                   <p className="text-xs text-gray-500 text-center mt-4">
