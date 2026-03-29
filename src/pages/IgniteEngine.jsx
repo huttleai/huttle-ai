@@ -335,6 +335,7 @@ export default function IgniteEngine() {
         conversion_goal: brandProfile?.conversionGoal || '',
         content_persona: brandProfile?.contentPersona || '',
         monetization_goal: brandProfile?.monetizationGoal || '',
+        hashtag_isolation_rule: 'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
       };
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -1184,15 +1185,32 @@ function normalizeN8nResponse(data) {
 
   const isVideoContent = Boolean(inner.isVideoContent ?? inner.is_video_content ?? false);
 
-  const caption = String(inner.caption ?? '').trim();
+  // Strip any embedded hashtags from text fields and collect them for merging
+  const { cleaned: caption, extracted: captionTags } = extractAndStripHashtags(String(inner.caption ?? '').trim());
   const captionReason = String(inner.captionReason ?? inner.caption_reason ?? '').trim();
+  const { cleaned: hook, extracted: hookTags } = extractAndStripHashtags(String(inner.hook ?? '').trim());
+  const hookReason = String(inner.hookReason ?? inner.hook_reason ?? '').trim();
+  const { cleaned: script, extracted: scriptTags } = extractAndStripHashtags(String(inner.script ?? '').trim());
 
+  // Build the hashtags object, merging in any tags that were embedded in text fields
   const rawHashtags = inner.hashtags ?? null;
-  const hashtags = rawHashtags ? {
-    niche: normalizeArray(rawHashtags.niche),
-    mid: normalizeArray(rawHashtags.mid),
-    broad: normalizeArray(rawHashtags.broad),
-    reason: String(rawHashtags.reason ?? '').trim(),
+  let nicheArr = rawHashtags ? normalizeArray(rawHashtags.niche) : [];
+  let midArr = rawHashtags ? normalizeArray(rawHashtags.mid) : [];
+  let broadArr = rawHashtags ? normalizeArray(rawHashtags.broad) : [];
+  const hashtagReason = rawHashtags ? String(rawHashtags.reason ?? '').trim() : '';
+
+  const embeddedTags = [...captionTags, ...hookTags, ...scriptTags];
+  if (embeddedTags.length > 0) {
+    const existingSet = new Set([...nicheArr, ...midArr, ...broadArr]);
+    const newTags = [...new Set(embeddedTags)].filter(t => !existingSet.has(t));
+    nicheArr = [...nicheArr, ...newTags];
+  }
+
+  const hashtags = (rawHashtags || embeddedTags.length > 0) ? {
+    niche: nicheArr,
+    mid: midArr,
+    broad: broadArr,
+    reason: hashtagReason,
   } : null;
 
   const rawImageDir = inner.imageDirection ?? inner.image_direction ?? null;
@@ -1212,10 +1230,6 @@ function normalizeN8nResponse(data) {
   } : null;
 
   const proTip = String(inner.proTip ?? inner.pro_tip ?? '').trim();
-
-  const hook = String(inner.hook ?? '').trim();
-  const hookReason = String(inner.hookReason ?? inner.hook_reason ?? '').trim();
-  const script = String(inner.script ?? '').trim();
 
   const rawAudioVibe = inner.audioVibe ?? inner.audio_vibe ?? null;
   const audioVibe = rawAudioVibe ? {
@@ -1243,6 +1257,24 @@ function normalizeArray(value) {
   if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
   if (typeof value === 'string' && value.trim()) return [value.trim()];
   return [];
+}
+
+/**
+ * Strips hashtag tokens (#word) from a text string and returns the cleaned text
+ * along with the extracted hashtag tokens. Used as a defensive cleanup layer to
+ * ensure hashtags never leak into caption/script/hook fields regardless of AI behaviour.
+ */
+function extractAndStripHashtags(text) {
+  const extracted = [];
+  const cleaned = text
+    .replace(/#[\w\u00C0-\u024F\u0400-\u04FF]+/g, (match) => {
+      extracted.push(match);
+      return '';
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { cleaned, extracted };
 }
 
 /* ─── Grok Fallback ──────────────────────────────────────────── */
@@ -1291,6 +1323,8 @@ Return ONLY valid JSON with this exact structure:
   },
   "proTip": "<actionable pro tip>"
 }
+
+CRITICAL RULE: Return hashtags ONLY in the "hashtags" field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, script, hook, or any other text field. All hashtags must appear exclusively in the hashtags array/field.
 
 Make content specific, actionable, and optimized for ${platform} ${contentType}. Output ONLY raw JSON.`;
 
