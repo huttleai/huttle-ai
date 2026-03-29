@@ -20,26 +20,42 @@ function getScoreColor(score, thresholds) {
 export default function ScoreBadge({ label, score, icon: Icon, thresholds, loading, onClick, className = '' }) {
   const color = getScoreColor(score, thresholds);
   const displayScore = score != null ? Math.round(score) : '—';
+  const surface = loading ? 'bg-gray-50 border-gray-200' : `${color.bg} ${color.border}`;
 
   return (
     <motion.button
       type="button"
       onClick={onClick}
       disabled={!onClick}
+      aria-busy={loading || undefined}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 shadow-sm ${color.bg} ${color.border}
+      className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 shadow-sm ${surface}
         ${onClick ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}
         transition-all duration-200 ${className}`}
     >
-      {Icon && <Icon className={`w-4 h-4 ${color.text}`} />}
-      <div className="flex flex-col items-start">
-        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">{label}</span>
+      {Icon && <Icon className={`w-4 h-4 flex-shrink-0 ${loading ? 'text-gray-400' : color.text}`} />}
+      <div className="flex flex-col items-start min-w-0">
         {loading ? (
-          <div className="h-5 w-8 mt-0.5 rounded bg-gray-200 animate-pulse" />
+          <>
+            <div className="h-3 w-28 bg-gray-200 rounded animate-pulse mt-1" aria-hidden />
+            <div className="flex flex-col items-center gap-2 mt-2">
+              <div className="relative w-14 h-14">
+                <div className="w-14 h-14 rounded-full border-4 border-gray-100" aria-hidden />
+                <div
+                  className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-teal-500 animate-spin"
+                  aria-hidden
+                />
+              </div>
+              <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" aria-hidden />
+            </div>
+          </>
         ) : (
-          <span className={`text-lg font-bold leading-tight ${color.text}`}>{displayScore}</span>
+          <>
+            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">{label}</span>
+            <span className={`text-lg font-bold leading-tight ${color.text}`}>{displayScore}</span>
+          </>
         )}
       </div>
     </motion.button>

@@ -2099,7 +2099,7 @@ export default function FullPostBuilder() {
                 platform={platform}
                 onScoreChange={setHumanScore}
                 onTrackUsage={(meta) => trackFeatureUsage({ ...meta, incrementFeatureCounter: false, overallCredits: 1 })}
-                onContentUpdate={(nextContent) => { setCaption(nextContent); resetDownstream(3); }}
+                onContentUpdate={(nextContent) => { setCaption(nextContent); }}
                 compact
                 autoRun
                 hideInput

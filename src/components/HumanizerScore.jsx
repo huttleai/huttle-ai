@@ -155,15 +155,30 @@ export default function HumanizerScore({
           onClick={() => {
             if (!loading) runAnalysis();
           }}
-          className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 ${color.bg} ${color.border}`}
+          aria-busy={loading}
+          className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 ${loading ? 'bg-gray-50 border-gray-200' : `${color.bg} ${color.border}`}`}
         >
-          <User className={`w-4 h-4 ${color.text}`} />
-          <div className="flex flex-col">
-            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">Human</span>
+          <User className={`w-4 h-4 flex-shrink-0 ${loading ? 'text-gray-400' : color.text}`} />
+          <div className="flex flex-col items-start min-w-0">
             {loading ? (
-              <span className="text-xs text-gray-400">Analyzing...</span>
+              <>
+                <div className="h-3 w-28 bg-gray-200 rounded animate-pulse mt-1" aria-hidden />
+                <div className="flex flex-col items-center gap-2 mt-2">
+                  <div className="relative w-14 h-14">
+                    <div className="w-14 h-14 rounded-full border-4 border-gray-100" aria-hidden />
+                    <div
+                      className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-teal-500 animate-spin"
+                      aria-hidden
+                    />
+                  </div>
+                  <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" aria-hidden />
+                </div>
+              </>
             ) : (
-              <span className={`text-lg font-bold leading-tight ${color.text}`}>{displayScore}</span>
+              <>
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">Human</span>
+                <span className={`text-lg font-bold leading-tight ${color.text}`}>{displayScore}</span>
+              </>
             )}
           </div>
         </button>
@@ -228,14 +243,18 @@ export default function HumanizerScore({
         )}
       </button>
 
-      {/* Loading skeleton */}
       {loading && (
-        <div className="space-y-3">
-          <div className="h-20 rounded-xl bg-gray-100 animate-pulse" />
-          <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
-            ))}
+        <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-6 flex flex-col items-center" aria-busy="true">
+          <div className="h-3 w-28 bg-gray-200 rounded animate-pulse mt-1" aria-hidden />
+          <div className="flex flex-col items-center gap-2 mt-4">
+            <div className="relative w-14 h-14">
+              <div className="w-14 h-14 rounded-full border-4 border-gray-100" aria-hidden />
+              <div
+                className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-teal-500 animate-spin"
+                aria-hidden
+              />
+            </div>
+            <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" aria-hidden />
           </div>
         </div>
       )}

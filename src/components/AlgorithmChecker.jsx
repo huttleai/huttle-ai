@@ -278,12 +278,35 @@ function AnimatedScoreRing({ value, tierStroke, size = 96, strokeWidth = 7 }) {
   );
 }
 
+function ScorePanelLoadingSkeleton({ icon: Icon = Shield }) {
+  return (
+    <div className="flex min-h-[52px] items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm min-w-[140px]">
+      <Icon className="w-4 h-4 flex-shrink-0 text-gray-400" aria-hidden />
+      <div className="flex flex-col items-start min-w-0">
+        <div className="h-3 w-28 bg-gray-200 rounded animate-pulse mt-1" aria-hidden />
+        <div className="flex flex-col items-center gap-2 mt-2">
+          <div className="relative w-14 h-14">
+            <div className="w-14 h-14 rounded-full border-4 border-gray-100" aria-hidden />
+            <div
+              className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-teal-500 animate-spin"
+              aria-hidden
+            />
+          </div>
+          <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" aria-hidden />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AlgorithmChecker({
   content: externalContent,
   platform: externalPlatform,
   onScoreChange,
   compact = false,
   hideInput = false,
+  /** When true with compact + hideInput, shows the shared score loading skeleton (e.g. while parent awaits async scores). */
+  loading = false,
 }) {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
@@ -424,6 +447,9 @@ export default function AlgorithmChecker({
   }, [effectiveContent, effectivePlatform]);
 
   if (compact && hideInput) {
+    if (loading) {
+      return <ScorePanelLoadingSkeleton icon={Shield} />;
+    }
     if (!compactResult) {
       return (
         <div className="flex min-h-[52px] items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm min-w-[140px]">
