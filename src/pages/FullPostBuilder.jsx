@@ -320,6 +320,7 @@ export default function FullPostBuilder() {
   const enhanceReqIdRef = useRef(0);
   const ctaReqIdRef = useRef(0);
   const scoringReqIdRef = useRef(0);
+  const captionTextareaRef = useRef(null);
   const wizardRef = useRef({});
   const assembledPostRef = useRef('');
   /** One billable hook-generation charge per visit to step 1 (type changes / regenerate stay within the same run). */
@@ -790,9 +791,14 @@ export default function FullPostBuilder() {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate API fail', { rid, bucket });
         return;
       }
-      if (res.success && res.caption) {
-        const captions = res.caption.split(/\d+\.\s+/).filter((c) => c.trim());
-        captionText = captions[0]?.trim() || res.caption.trim();
+      if (res.success) {
+        captionText = String(
+          res.captionVariants?.[0]?.caption
+          || res.caption
+          || ''
+        )
+          .trim()
+          .replace(/^\d+\.\s+/, '');
       }
 
       if (captionText) {
@@ -1310,6 +1316,13 @@ export default function FullPostBuilder() {
     void runScoring();
   }, [showFinalPanel, assembledPost, runScoring]);
 
+  useEffect(() => {
+    if (currentStep !== 2 || !captionTextareaRef.current) return;
+    const textarea = captionTextareaRef.current;
+    textarea.style.height = '0px';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [caption, currentStep]);
+
   const handleNext = async () => {
     if (currentStep === 0 && !topic.trim()) { addToast('Enter a topic', 'warning'); return; }
     if (currentStep < 4) {
@@ -1811,6 +1824,7 @@ export default function FullPostBuilder() {
                   ) : (
                     <>
                       <textarea
+                        ref={captionTextareaRef}
                         value={caption}
                         onChange={(e) => {
                           setCaption(e.target.value);
@@ -1818,7 +1832,7 @@ export default function FullPostBuilder() {
                         }}
                         placeholder="Your caption will appear here..."
                         rows={8}
-                        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
+                        className="min-h-[12rem] w-full overflow-hidden rounded-xl border border-gray-200 px-4 py-3 text-sm leading-relaxed focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none resize-none"
                       />
                       <div className="flex items-center justify-between text-xs text-gray-500">
                         <span>
@@ -2070,7 +2084,7 @@ export default function FullPostBuilder() {
         {showFinalPanel && (
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             {/* Score Badges */}
-            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <ScoreBadge
                 key={`quality-${scoreSessionKey}`}
                 label="Quality"
@@ -2100,13 +2114,6 @@ export default function FullPostBuilder() {
                 hideInput
               />
             </div>
-            <p className="text-xs text-gray-500">
-              Quality (AI) {qualityScore != null ? Math.round(qualityScore) : '—'}
-              {' · '}
-              Human (AI) {humanScore != null ? humanScore : '—'}
-              {' · '}
-              Algorithm (checklist) {algorithmScore != null ? algorithmScore : '—'}
-            </p>
             {qualityScoreNotice && (
               <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">{qualityScoreNotice}</p>
             )}

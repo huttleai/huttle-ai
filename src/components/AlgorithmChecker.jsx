@@ -426,11 +426,11 @@ export default function AlgorithmChecker({
   if (compact && hideInput) {
     if (!compactResult) {
       return (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50 border-gray-200 min-w-[140px]">
+        <div className="flex min-h-[52px] items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 shadow-sm min-w-[140px]">
           <Shield className="w-4 h-4 text-gray-400" />
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">
-              Algorithm
+              Algorithm Score
             </span>
             <span className="text-lg font-bold leading-tight text-gray-400">—</span>
           </div>
@@ -440,7 +440,7 @@ export default function AlgorithmChecker({
     const t = scoreTier(compactResult.overallScore);
     return (
       <div
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl border min-w-[140px] ${
+        className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 shadow-sm min-w-[140px] ${
           compactResult.overallScore >= 60
             ? 'bg-cyan-50/50 border-cyan-100'
             : compactResult.overallScore >= 40
@@ -450,13 +450,8 @@ export default function AlgorithmChecker({
       >
         <Shield className={`w-4 h-4 flex-shrink-0 ${t.text}`} />
         <div className="flex flex-col min-w-0">
-          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none truncate">
-            {compactResult.platformName}{' '}
-            {formatContentTypeTitle(
-              effectivePlatform,
-              compactResult.contentTypeKey,
-            )}{' '}
-            Score
+          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide leading-none">
+            {compactResult.platformName} Score
           </span>
           <span
             className={`text-lg font-bold leading-tight tabular-nums ${t.text}`}

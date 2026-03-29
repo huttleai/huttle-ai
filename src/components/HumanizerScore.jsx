@@ -149,13 +149,13 @@ export default function HumanizerScore({
     const displayScore = result?.overall ?? '—';
     const color = result ? scoreColorMap(result.overall) : { bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-200', bar: 'bg-gray-300', label: 'Pending' };
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
         <button
           type="button"
           onClick={() => {
             if (!loading) runAnalysis();
           }}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${color.bg} ${color.border}`}
+          className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 ${color.bg} ${color.border}`}
         >
           <User className={`w-4 h-4 ${color.text}`} />
           <div className="flex flex-col">
@@ -167,23 +167,27 @@ export default function HumanizerScore({
             )}
           </div>
         </button>
-        {result?.flaggedPhrases?.length > 0 && onContentUpdate && (
-          <button
-            type="button"
-            onClick={() => handleAutoImprove(result.flaggedPhrases[0])}
-            disabled={Boolean(improvingPhrase)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            {improvingPhrase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-            Humanize It
-          </button>
-        )}
-        {result && (
-          <span className={`text-xs font-medium ${color.text}`}>{color.label}</span>
-        )}
-        {humanNotice && !loading && (
-          <span className="text-xs text-gray-500 max-w-[12rem] leading-snug">{humanNotice}</span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {result?.flaggedPhrases?.length > 0 && onContentUpdate && (
+            <button
+              type="button"
+              onClick={() => handleAutoImprove(result.flaggedPhrases[0])}
+              disabled={Boolean(improvingPhrase)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              {improvingPhrase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Humanize It
+            </button>
+          )}
+          {result && (
+            <span className={`inline-flex min-h-[40px] items-center rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium ${color.text}`}>
+              {color.label}
+            </span>
+          )}
+          {humanNotice && !loading && (
+            <span className="text-xs text-gray-500 leading-snug">{humanNotice}</span>
+          )}
+        </div>
       </div>
     );
   }

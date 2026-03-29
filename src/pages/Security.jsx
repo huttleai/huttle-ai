@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Shield, Lock, Mail, Eye, EyeOff, ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, ArrowLeft, Save, Loader2 } from 'lucide-react';
 
 export default function Security() {
   const { user, updatePassword, updateEmail } = useContext(AuthContext);
@@ -122,8 +122,8 @@ export default function Security() {
           Back to Settings
         </Link>
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-huttle-gradient flex items-center justify-center shadow-lg shadow-huttle-blue/20">
-            <Shield className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
+            <Lock className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">

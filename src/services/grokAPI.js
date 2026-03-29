@@ -173,9 +173,11 @@ function captionsFromVariantArray(raw, isSingle) {
     .filter(Boolean);
   if (cleaned.length === 0) return null;
   const limited = isSingle ? cleaned.slice(0, 1) : cleaned.slice(0, 5);
-  const captionText = limited
-    .map((v, i) => `${i + 1}. ${v.caption}`)
-    .join('\n\n');
+  const captionText = isSingle
+    ? limited[0]?.caption || ''
+    : limited
+      .map((v, i) => `${i + 1}. ${v.caption}`)
+      .join('\n\n');
   return { captionVariants: limited, captionText };
 }
 

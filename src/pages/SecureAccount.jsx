@@ -159,7 +159,6 @@ export default function SecureAccount() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-400 mt-1.5">At least 6 characters</p>
             </div>
 
             {/* Confirm Password Field */}
@@ -213,6 +212,19 @@ export default function SecureAccount() {
               )}
             </button>
           </form>
+
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500">
+              <strong>Password requirements:</strong>
+            </p>
+            <ul className="text-xs text-gray-500 mt-1 ml-4 list-disc">
+              <li>At least 8 characters</li>
+              <li>One uppercase letter</li>
+              <li>One lowercase letter</li>
+              <li>One number</li>
+              <li>Special characters recommended for extra security</li>
+            </ul>
+          </div>
 
           {/* Footer */}
           <p className="text-center text-gray-400 text-xs mt-6">

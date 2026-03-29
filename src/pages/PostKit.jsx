@@ -160,6 +160,62 @@ function renderAi(value) {
   return sanitizeAIOutput(value);
 }
 
+const POSTKIT_SLOT_PREVIEW_MAX = 80;
+
+function PostKitDetailSlotCard({ def, filled, rawContent, onRemove }) {
+  const [expanded, setExpanded] = useState(false);
+  const content = (rawContent || '').trim();
+  const needsToggle = content.length > POSTKIT_SLOT_PREVIEW_MAX;
+
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2.5 text-sm transition-all duration-200 ease-out ${
+        filled
+          ? 'border-teal-400 bg-teal-50/40'
+          : 'border-dashed border-gray-200 bg-gray-50/50 text-gray-500'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
+            {def.label}
+          </span>
+          {filled ? (
+            <>
+              <p className="mt-0.5 break-words whitespace-pre-wrap text-gray-800">
+                {needsToggle && !expanded
+                  ? `${content.slice(0, POSTKIT_SLOT_PREVIEW_MAX)}...`
+                  : content}
+              </p>
+              {needsToggle && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-1 text-xs font-medium text-[#01BAD2] hover:underline"
+                >
+                  {expanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="mt-0.5 break-words text-gray-800">{def.chipEmpty}</p>
+          )}
+        </div>
+        {filled && (
+          <button
+            type="button"
+            onClick={() => void onRemove(def.key)}
+            className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-red-600"
+            aria-label={`Clear ${def.label}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Bootstrap: /dashboard/post-kit/new
  */
@@ -597,41 +653,15 @@ export default function PostKitPage() {
             </div>
 
             <div className="mt-5 space-y-2">
-              {POSTKIT_PAGE_SLOTS.map((def) => {
-                const filled = Boolean(slots[def.key]?.content?.trim());
-                const preview = (slots[def.key]?.content || '').trim().slice(0, 60);
-                return (
-                  <div
-                    key={def.key}
-                    className={`rounded-xl border px-3 py-2.5 text-sm ${
-                      filled
-                        ? 'border-teal-400 bg-teal-50/40'
-                        : 'border-dashed border-gray-200 bg-gray-50/50 text-gray-500'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                          {def.label}
-                        </span>
-                        <p className="mt-0.5 break-words text-gray-800">
-                          {filled ? `${preview}${(slots[def.key]?.content || '').length > 60 ? '…' : ''}` : def.chipEmpty}
-                        </p>
-                      </div>
-                      {filled && (
-                        <button
-                          type="button"
-                          onClick={() => void removeSlot(def.key)}
-                          className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-red-600"
-                          aria-label={`Clear ${def.label}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {POSTKIT_PAGE_SLOTS.map((def) => (
+                <PostKitDetailSlotCard
+                  key={def.key}
+                  def={def}
+                  filled={Boolean(slots[def.key]?.content?.trim())}
+                  rawContent={slots[def.key]?.content}
+                  onRemove={removeSlot}
+                />
+              ))}
             </div>
 
             <button

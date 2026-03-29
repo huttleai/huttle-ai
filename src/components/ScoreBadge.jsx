@@ -29,7 +29,7 @@ export default function ScoreBadge({ label, score, icon: Icon, thresholds, loadi
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${color.bg} ${color.border}
+      className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 shadow-sm ${color.bg} ${color.border}
         ${onClick ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}
         transition-all duration-200 ${className}`}
     >
