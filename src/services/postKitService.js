@@ -340,14 +340,23 @@ export async function deleteSlot(slotId) {
 
 /**
  * Delete a kit; related slots are removed by ON DELETE CASCADE.
+ * @param {string} kitId
+ * @param {string} userId — required so deletes are scoped to the owner row
  */
-export async function deleteKit(kitId) {
+export async function deleteKit(kitId, userId) {
   try {
     if (!kitId) {
       return { success: false, error: 'Kit ID is required.' };
     }
+    if (!userId) {
+      return { success: false, error: 'User ID is required.' };
+    }
 
-    const { error } = await supabase.from(KITS_TABLE).delete().eq('id', kitId);
+    const { error } = await supabase
+      .from(KITS_TABLE)
+      .delete()
+      .eq('id', kitId)
+      .eq('user_id', userId);
 
     if (error) throw error;
 

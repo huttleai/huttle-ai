@@ -39,6 +39,7 @@ import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import PlatformSelector from '../components/PlatformSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
+import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import { AIDisclaimerFooter, getToastDisclaimer } from '../components/AIDisclaimer';
 import { sanitizeAIOutput } from '../utils/textHelpers';
 import { getPlatform } from '../utils/platformGuidelines';
@@ -70,6 +71,7 @@ import {
   removeKitCanonicalSlot,
   updateKitTitle,
   createKit,
+  deleteKit,
   POSTKIT_PENDING_STORAGE_KEY,
   normalizeKitCanonicalSlots,
 } from '../services/postKitService';
@@ -369,6 +371,7 @@ export function PostKitNew() {
  */
 export default function PostKitPage() {
   const { kitId } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
@@ -383,6 +386,8 @@ export default function PostKitPage() {
   const [replaceConfirm, setReplaceConfirm] = useState(null);
   const [pendingMerge, setPendingMerge] = useState(null);
   const [savingKitToVault, setSavingKitToVault] = useState(false);
+  const [kitDeleteOpen, setKitDeleteOpen] = useState(false);
+  const [kitDeleting, setKitDeleting] = useState(false);
 
   const [slots, setSlots] = useState({});
 
@@ -572,6 +577,20 @@ export default function PostKitPage() {
     else showToast(result.error || 'Save failed', 'error');
   };
 
+  const handleConfirmDeleteKit = async () => {
+    if (!kitId || !user?.id) return;
+    setKitDeleting(true);
+    const res = await deleteKit(kitId, user.id);
+    setKitDeleting(false);
+    if (!res.success) {
+      showToast(res.error || 'Could not delete post kit', 'error');
+      return;
+    }
+    setKitDeleteOpen(false);
+    showToast('Post kit deleted', 'success');
+    navigate('/dashboard/library');
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] flex-1 items-center justify-center pt-20 md:ml-12 lg:ml-64">
@@ -619,6 +638,14 @@ export default function PostKitPage() {
               <p className="mt-1 text-xs text-gray-500">Created {createdLabel}</p>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setKitDeleteOpen(true)}
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+            Delete kit
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -750,6 +777,17 @@ export default function PostKitPage() {
           </div>
         </div>
       )}
+
+      <DeleteConfirmationModal
+        isOpen={kitDeleteOpen}
+        onClose={() => !kitDeleting && setKitDeleteOpen(false)}
+        onConfirm={() => void handleConfirmDeleteKit()}
+        title="Delete post kit?"
+        message="This permanently deletes this post kit and everything saved in its slots."
+        itemName={titleDraft || kit?.title || ''}
+        type="post_kit"
+        isDeleting={kitDeleting}
+      />
     </div>
   );
 }

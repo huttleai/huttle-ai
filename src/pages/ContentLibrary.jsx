@@ -71,7 +71,7 @@ function getContentTypeDisplayLabel(contentType) {
   const key = String(contentType || '').toLowerCase();
   return DISPLAY_NAMES[key] || CONTENT_TYPE_CONFIG[key]?.singular || (key ? key : 'Saved');
 }
-import { getUserKits, POSTKIT_PENDING_STORAGE_KEY } from '../services/postKitService';
+import { deleteKit, getUserKits, POSTKIT_PENDING_STORAGE_KEY } from '../services/postKitService';
 
 function formatDate(value) {
   if (!value) return '';
@@ -401,6 +401,8 @@ export default function ContentLibrary() {
   const [kitPlatformFilter, setKitPlatformFilter] = useState('all');
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useRef(null);
+  const [kitDeleteTarget, setKitDeleteTarget] = useState(null);
+  const [kitDeleteLoading, setKitDeleteLoading] = useState(false);
   const [copiedIds, setCopiedIds] = useState(new Set());
   const [openMenuId, setOpenMenuId] = useState(null);
 
@@ -563,6 +565,20 @@ export default function ContentLibrary() {
     if (kitPlatformFilter === 'all') return kits;
     return kits.filter((k) => k.platform === kitPlatformFilter);
   }, [kits, kitPlatformFilter]);
+
+  const handleConfirmDeleteKit = async () => {
+    if (!kitDeleteTarget?.id || !user?.id) return;
+    setKitDeleteLoading(true);
+    const res = await deleteKit(kitDeleteTarget.id, user.id);
+    setKitDeleteLoading(false);
+    if (!res.success) {
+      addToast(res.error || 'Could not delete post kit', 'error');
+      return;
+    }
+    setKitDeleteTarget(null);
+    addToast('Post kit deleted', 'success');
+    void loadKits();
+  };
 
   const collectionIdsByItem = useMemo(() => getCollectionIdsByItem(collectionLinks), [collectionLinks]);
 
@@ -972,6 +988,20 @@ export default function ContentLibrary() {
                   <Link to="/dashboard/full-post-builder" onClick={() => setCreateMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50">
                     <FileText className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>Build Full Post</span>
                   </Link>
+                  <Link
+                    to="/dashboard/post-kit/new"
+                    onClick={() => {
+                      setCreateMenuOpen(false);
+                      try {
+                        localStorage.removeItem(POSTKIT_PENDING_STORAGE_KEY);
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-800 transition-colors hover:bg-gray-50"
+                  >
+                    <Layers className="h-4 w-4 shrink-0 text-[#01BAD2]" /> <span>Build Post Kit</span>
+                  </Link>
                 </div>
               )}
             </div>
@@ -1070,6 +1100,7 @@ export default function ContentLibrary() {
                     key={kit.id}
                     kit={kit}
                     onSelect={() => navigate(`/dashboard/post-kit/${kit.id}`)}
+                    onRequestDelete={(k) => setKitDeleteTarget(k)}
                   />
                 ))}
                 <button
@@ -1634,6 +1665,17 @@ export default function ContentLibrary() {
         itemName={deleteTarget?.name}
         type="content"
         isDeleting={isDeleting}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={Boolean(kitDeleteTarget)}
+        onClose={() => !kitDeleteLoading && setKitDeleteTarget(null)}
+        onConfirm={() => void handleConfirmDeleteKit()}
+        title="Delete post kit?"
+        message="This permanently deletes this post kit and everything saved in its slots."
+        itemName={kitDeleteTarget?.title || ''}
+        type="post_kit"
+        isDeleting={kitDeleteLoading}
       />
     </div>
   );

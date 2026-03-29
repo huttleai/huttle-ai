@@ -7,7 +7,7 @@ export default function DeleteConfirmationModal({
   title = "Delete Content",
   message = "This will permanently delete this content from your library.",
   itemName = "",
-  type = "content", // 'content' or 'project'
+  type = "content", // 'content' | 'project' | 'post_kit'
   isDeleting = false 
 }) {
   if (!isOpen) return null;
@@ -21,7 +21,15 @@ export default function DeleteConfirmationModal({
         cancelText: "No, Keep Project"
       };
     }
-    
+    if (type === 'post_kit') {
+      return {
+        icon: <Trash2 className="w-6 h-6" />,
+        warning: 'Caption, hook, hashtags, CTA, and visuals saved in this kit will be permanently removed.',
+        actionText: 'Yes, delete post kit',
+        cancelText: 'Cancel',
+      };
+    }
+
     return {
       icon: <Trash2 className="w-6 h-6" />,
       warning: "This file will be permanently removed from your storage and cannot be recovered.",

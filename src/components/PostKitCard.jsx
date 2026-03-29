@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Trash2 } from 'lucide-react';
 import { getSlotsForPlatform, getKitStatus, POSTKIT_PAGE_SLOTS } from '../data/postKitSlots';
 
 const PLATFORM_BADGE = {
@@ -67,8 +68,9 @@ function formatKitDate(iso) {
  * @param {Object} props.kit — id, title, platform, content_type, is_used, created_at, filled_slot_count; optional post_kit_slots for accurate status
  * @param {function(string): void} [props.onSelect] — called with kit id
  * @param {function(): void} [props.onClick] — legacy; invoked after onSelect when provided
+ * @param {function(Object): void} [props.onRequestDelete] — called with kit when delete control is used (does not navigate)
  */
-export function PostKitCard({ kit, onSelect, onClick }) {
+export function PostKitCard({ kit, onSelect, onClick, onRequestDelete }) {
   const platformSlots = useMemo(
     () => getSlotsForPlatform(kit?.platform),
     [kit?.platform]
@@ -142,69 +144,96 @@ export function PostKitCard({ kit, onSelect, onClick }) {
     onClick?.();
   };
 
-  return (
-    <button
-      type="button"
-      onClick={handleActivate}
-      className="w-full min-w-0 text-left rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm transition-all hover:border-huttle-primary/40 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-huttle-primary/30"
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold tracking-tight ${badge.className}`}
-          aria-hidden
-        >
-          {badge.abbr}
-        </div>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-display text-sm font-bold text-gray-900 line-clamp-2">
-                {kit?.title || 'Untitled kit'}
-              </h3>
-              {dateLine && <p className="mt-0.5 text-xs text-gray-500">{dateLine}</p>}
-            </div>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadge.className}`}
-            >
-              {statusBadge.label}
-            </span>
-          </div>
+  const handleCardKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleActivate();
+    }
+  };
 
-          {totalSlots > 0 && (
-            <div className="flex gap-1" aria-label="Slot progress">
-              {pipFilled.map((on, i) => (
+  return (
+    <div className="relative w-full min-w-0 rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:border-huttle-primary/40 hover:shadow-md">
+      {/* Use role="button" instead of <button> so inner layout can use block elements (valid HTML). */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Open post kit: ${kit?.title || 'Untitled kit'}`}
+        onClick={handleActivate}
+        onKeyDown={handleCardKeyDown}
+        className="w-full min-w-0 cursor-pointer rounded-xl p-3 pr-11 text-left sm:p-4 sm:pr-12 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-huttle-primary/30"
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold tracking-tight ${badge.className}`}
+            aria-hidden
+          >
+            {badge.abbr}
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-display text-sm font-bold text-gray-900 line-clamp-2">
+                  {kit?.title || 'Untitled kit'}
+                </h3>
+                {dateLine && <p className="mt-0.5 text-xs text-gray-500">{dateLine}</p>}
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadge.className}`}
+              >
+                {statusBadge.label}
+              </span>
+            </div>
+
+            {totalSlots > 0 && (
+              <div className="flex gap-1" aria-label="Slot progress">
+                {pipFilled.map((on, i) => (
+                  <span
+                    key={platformSlots[i]?.key || i}
+                    className={`h-1 min-w-[6px] flex-1 rounded-full ${on ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5">
+              {(kit?.kit_slots && typeof kit.kit_slots === 'object'
+                ? POSTKIT_PAGE_SLOTS.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
+                : platformSlots.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
+              ).map(({ key, label, i }) => (
                 <span
-                  key={platformSlots[i]?.key || i}
-                  className={`h-1 min-w-[6px] flex-1 rounded-full ${on ? 'bg-emerald-500' : 'bg-gray-200'}`}
-                />
+                  key={key}
+                  className={`inline-flex max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                    tagFilled[i]
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-gray-200 bg-white text-gray-600'
+                  }`}
+                >
+                  {label}
+                </span>
               ))}
             </div>
-          )}
 
-          <div className="flex flex-wrap gap-1.5">
-            {(kit?.kit_slots && typeof kit.kit_slots === 'object'
-              ? POSTKIT_PAGE_SLOTS.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
-              : platformSlots.map((slot, i) => ({ key: slot.key, label: slot.label, i }))
-            ).map(({ key, label, i }) => (
-              <span
-                key={key}
-                className={`inline-flex max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                  tagFilled[i]
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                    : 'border-gray-200 bg-white text-gray-600'
-                }`}
-              >
-                {label}
-              </span>
-            ))}
+            <p className="text-xs text-gray-500">
+              {filledCount} / {totalSlots}
+            </p>
           </div>
-
-          <p className="text-xs text-gray-500">
-            {filledCount} / {totalSlots}
-          </p>
         </div>
       </div>
-    </button>
+      {onRequestDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRequestDelete(kit);
+          }}
+          className="absolute right-2 top-2 rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+          aria-label={`Delete post kit: ${kit?.title || 'Untitled'}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 }
 
