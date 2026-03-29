@@ -92,11 +92,6 @@ export function sanitizeNicheContentCacheKey(key) {
 
 export function normalizeNiche(rawInput) {
   if (!rawInput || typeof rawInput !== 'string') {
-    console.log('[NicheCache] Key lookup', {
-      rawNiche: rawInput,
-      normalizedKey: 'general',
-      aliasMatch: false,
-    });
     return 'general';
   }
 
@@ -107,11 +102,6 @@ export function normalizeNiche(rawInput) {
     .slice(0, 40); // cap length for DB safety
 
   if (!cleaned) {
-    console.log('[NicheCache] Key lookup', {
-      rawNiche: rawInput,
-      normalizedKey: 'general',
-      aliasMatch: false,
-    });
     return 'general';
   }
 
@@ -120,22 +110,12 @@ export function normalizeNiche(rawInput) {
     const normalizedAliases = aliases.map((a) => sanitizeNicheContentCacheKey(a)
       .replace(/_+/g, '_'));
     if (cleaned === canonical || normalizedAliases.includes(cleaned)) {
-      console.log('[NicheCache] Key lookup', {
-        rawNiche: rawInput,
-        normalizedKey: canonical,
-        aliasMatch: true,
-      });
       return canonical;
     }
   }
 
   // Step 3: algorithmic fallback (Layer 2)
   // Works for ANY niche — "axe throwing venue" → "axe_throwing_venue"
-  console.log('[NicheCache] Key lookup', {
-    rawNiche: rawInput,
-    normalizedKey: cleaned,
-    aliasMatch: false,
-  });
   return cleaned;
 }
 
