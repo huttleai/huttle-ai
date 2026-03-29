@@ -41,10 +41,6 @@ export default function Help() {
       answer: 'In-app usage meters and per-feature monthly caps reset on the 1st of each calendar month, matching the counters shown in the app. Unused generations do not roll over. Your Stripe renewal date is for billing charges only — track live usage in the sidebar and on the Subscription page.'
     },
     {
-      question: 'How do I publish to social media?',
-      answer: 'Huttle AI uses a Copy & Open flow for posting. Click "Ready to Post" on any scheduled post, copy the full text (or caption/hashtags only), open your platform (Instagram, TikTok, YouTube, Facebook, or X), then paste and publish natively. Huttle AI never connects to your social accounts — publishing is always copy-and-paste to the native app.'
-    },
-    {
       question: 'What is the Full Post Builder?',
       answer: 'Full Post Builder is a guided 5-step wizard that creates a complete, publish-ready post from scratch. You walk through Topic → Hook → Caption → Hashtags → CTA, with AI generating options at each step. Once finished, three scoring badges (Quality, Human Score, and Algorithm Alignment) grade your post so you can fine-tune before publishing. Your draft auto-saves so you can resume later.'
     },
@@ -219,7 +215,7 @@ export default function Help() {
       description: 'Manage your account, platforms, billing, and preferences',
       tips: [
         'Quick Nav cards link you to Profile, Brand Voice, Security, and Billing pages',
-        'Preferred Platforms toggles control which platforms appear in Trend Lab, Remix Studio, and publishing flows',
+        'Preferred Platforms toggles control which platforms appear in Trend Lab, Remix Studio, and Ignite Engine',
         'Manage Billing opens Huttle AI’s in-app billing center so you can update cards, review invoices, and manage your subscription without emailing support',
         'General settings let you choose your language and timezone',
         'Notification toggles control Trend Alerts and AI Usage Alerts'
