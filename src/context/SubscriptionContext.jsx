@@ -2,12 +2,12 @@ import { createContext, useState, useContext, useEffect, useCallback, useMemo, u
 import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, supabase, TABLES, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
+import { ACTIVE_ACCESS_STATUSES, resolveSubscriptionAccessState } from './subscriptionResolution';
 
 export const SubscriptionContext = createContext();
 
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
-const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const MAX_SUBSCRIPTION_RETRIES = 3;
 const SUBSCRIPTION_INITIAL_RETRY_DELAY_MS = 1000;
 const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
@@ -280,16 +280,22 @@ export function SubscriptionProvider({ children }) {
         return;
       }
 
-      const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
-      const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
-      const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
-      const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
-      const nextTier = hasActiveSubscription
-        ? (databaseTier || resolvedStripeTier || TIERS.FREE)
-        : TIERS.FREE;
+      const {
+        stripeSubscription,
+        databaseTier,
+        stripeIsAuthoritative,
+        hasActiveSubscription,
+        nextStatus,
+        nextTier,
+      } = resolveSubscriptionAccessState({
+        databaseSubscription,
+        stripeResult,
+        normalizeTier,
+        freeTier: TIERS.FREE,
+      });
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
       // the server-side API endpoints resolve them from the authenticated user_id.
+      const shouldUseDatabaseFallback = !stripeIsAuthoritative;
       const nextSubscription = stripeSubscription
         ? {
             subscriptionRecordId: databaseSubscription?.id ?? null,
@@ -302,11 +308,11 @@ export function SubscriptionProvider({ children }) {
             billingCycle: stripeSubscription.billingCycle ?? null,
             upcomingPlanChange: stripeSubscription.upcomingPlanChange ?? null,
             user_id: databaseSubscription?.user_id ?? userId,
-            plan: databaseTier || stripeSubscription.plan || null,
-            tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
-            status: databaseSubscription?.status || stripeSubscription.status,
+            plan: hasActiveSubscription ? (nextTier || databaseTier || stripeSubscription.plan || null) : null,
+            tier: hasActiveSubscription ? (nextTier || databaseTier || stripeSubscription.tier || stripeSubscription.plan || null) : null,
+            status: nextStatus,
           }
-        : (databaseSubscription
+        : (shouldUseDatabaseFallback && databaseSubscription
           ? {
               subscriptionRecordId: databaseSubscription.id,
               currentPeriodStart: databaseSubscription.current_period_start ?? null,
@@ -317,9 +323,9 @@ export function SubscriptionProvider({ children }) {
               cancelledAt: databaseSubscription.cancelled_at ?? null,
               billingCycle: null,
               upcomingPlanChange: null,
-              plan: databaseTier,
-              tier: databaseTier,
-              status: databaseSubscription.status,
+              plan: hasActiveSubscription ? (nextTier || databaseTier) : null,
+              tier: hasActiveSubscription ? (nextTier || databaseTier) : null,
+              status: nextStatus,
             }
           : null);
       const usingSafeFallback = Boolean(stripeResult?.degraded && !databaseSubscription && !stripeSubscription);
