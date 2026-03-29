@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from 'react';
-import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink, Loader2, Hash } from 'lucide-react';
+import { Shuffle, Sparkles, ArrowRight, ArrowLeft, Copy, Check, Flame, DollarSign, Save, RefreshCw, Zap, AlertTriangle, ExternalLink, Loader2, Hash, Instagram, Youtube, Twitter, Facebook, Globe, Mail, MoreHorizontal, Music, AtSign } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +24,51 @@ import {
   getPlatformPromptRule,
   getHashtagConstraint,
 } from '../data/platformContentRules';
+
+/**
+ * Source platform options for Step 1
+ */
+const SOURCE_PLATFORMS = [
+  { id: 'Instagram', label: 'Instagram', Icon: Instagram },
+  { id: 'TikTok', label: 'TikTok', Icon: Music },
+  { id: 'X (Twitter)', label: 'X (Twitter)', Icon: Twitter },
+  { id: 'YouTube', label: 'YouTube', Icon: Youtube },
+  { id: 'Facebook', label: 'Facebook', Icon: Facebook },
+  { id: 'Threads', label: 'Threads', Icon: AtSign },
+  { id: 'Blog / Article', label: 'Blog / Article', Icon: Globe },
+  { id: 'Email / Newsletter', label: 'Email / Newsletter', Icon: Mail },
+  { id: 'Other', label: 'Other', Icon: MoreHorizontal },
+];
+
+const SOURCE_PLATFORM_PLACEHOLDER_MAP = {
+  'Instagram': 'Paste your Instagram caption here...',
+  'TikTok': 'Paste your TikTok caption or script here...',
+  'X (Twitter)': 'Paste your tweet or thread here...',
+  'YouTube': 'Paste your YouTube description, title, or script excerpt here...',
+  'Facebook': 'Paste your Facebook post here...',
+  'Threads': 'Paste your Threads post here...',
+  'Blog / Article': 'Paste your blog excerpt or article section here...',
+  'Email / Newsletter': 'Paste your email copy here...',
+  'Other': 'Paste your text content here...',
+};
+
+/** Platforms that are not social — don't exclude from output platform selector */
+const NON_SOCIAL_SOURCE_PLATFORMS = new Set(['Blog / Article', 'Email / Newsletter', 'Other']);
+
+function getSourceContext(platform) {
+  const contexts = {
+    'Instagram': 'visual-first, caption-driven, hashtag-rich, story-telling format',
+    'TikTok': 'short-form, trend-driven, conversational, hook-heavy, script-style',
+    'X (Twitter)': 'concise, punchy, thread-friendly, hot-take style, 280 chars max per tweet',
+    'YouTube': 'long-form, SEO-optimized, descriptive, keyword-rich',
+    'Facebook': 'community-oriented, shareable, longer captions acceptable, engagement-bait friendly',
+    'Threads': 'conversational, opinion-driven, text-first, casual tone',
+    'Blog / Article': 'long-form, structured, SEO-focused, educational or informational',
+    'Email / Newsletter': 'personal, direct, CTA-focused, subscriber-relationship tone',
+    'Other': 'general text content',
+  };
+  return contexts[platform] || 'general text content';
+}
 
 /**
  * Remix goal options with metadata
@@ -81,7 +126,9 @@ export default function ContentRemix() {
   // Step tracking
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Step 1: Input
+  // Step 1: Source platform + input
+  const [selectedSourcePlatform, setSelectedSourcePlatform] = useState('');
+  const [showSourceValidation, setShowSourceValidation] = useState(false);
   const [remixInput, setRemixInput] = useState('');
 
   // Step 2: Goal
@@ -386,6 +433,8 @@ export default function ContentRemix() {
           niche: getNiche(brandData),
           targetAudience: getTargetAudience(brandData),
           targetPlatforms: selectedPlatforms,
+          sourcePlatform: selectedSourcePlatform,
+          sourceContext: selectedSourcePlatform ? getSourceContext(selectedSourcePlatform) : '',
           ...brandData,
           platformRemixRules,
         }
@@ -519,6 +568,8 @@ export default function ContentRemix() {
   const handleStartOver = () => {
     setCurrentStep(1);
     setRemixInput('');
+    setSelectedSourcePlatform('');
+    setShowSourceValidation(false);
     setRemixGoal('viral');
     const namesFromBrand = brandVoicePlatforms.map((p) =>
       (typeof p === 'object' && p !== null ? p.name : String(p))
@@ -536,7 +587,7 @@ export default function ContentRemix() {
     setCurrentStep(3);
   };
 
-  const canProceedToStep2 = remixInput.trim().length > 10;
+  const canProceedToStep2 = Boolean(selectedSourcePlatform) && remixInput.trim().length >= 20;
   const canProceedToStep3 = canProceedToStep2 && remixGoal;
   const canRemix = canProceedToStep3 && selectedPlatforms.length > 0;
 
@@ -546,9 +597,19 @@ export default function ContentRemix() {
     ? `/dashboard/ai-tools?tab=hashtags&topic=${encodeURIComponent(remixTopicForHashtags)}`
     : '/dashboard/ai-tools?tab=hashtags';
 
+  // Filtered output platforms — exclude the source platform (if it's a social platform)
+  const filteredOutputPlatforms = brandVoicePlatforms.filter((platform) => {
+    if (!selectedSourcePlatform || NON_SOCIAL_SOURCE_PLATFORMS.has(selectedSourcePlatform)) return true;
+    const platformName = typeof platform === 'object' && platform !== null ? platform.name : String(platform);
+    // Normalise X/Twitter matching between source id and brand platform names
+    const sourceKey = selectedSourcePlatform === 'X (Twitter)' ? 'x' : selectedSourcePlatform.toLowerCase();
+    const platformKey = platformName.toLowerCase() === 'x' || platformName.toLowerCase() === 'twitter' ? 'x' : platformName.toLowerCase();
+    return sourceKey !== platformKey;
+  });
+
   // Step indicator data
   const steps = [
-    { num: 1, label: 'Paste Content' },
+    { num: 1, label: 'Your Content' },
     { num: 2, label: 'Choose Goal' },
     { num: 3, label: 'Select Platforms' },
     { num: 4, label: 'Results' },
@@ -644,22 +705,67 @@ export default function ContentRemix() {
           </div>
         </div>
 
-        {/* ===================== STEP 1: Paste Content ===================== */}
+        {/* ===================== STEP 1: What are you remixing? ===================== */}
         {currentStep === 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 animate-fadeIn">
             <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
               <span className="w-8 h-8 rounded-lg bg-huttle-primary/10 flex items-center justify-center text-sm font-bold text-huttle-primary">1</span>
-              Paste Your Text Content
+              What are you remixing?
             </h2>
-            <p className="text-sm text-gray-500 mb-4 ml-10">
-              Captions, blog excerpts, emails, tweets, or any written content.
+            <p className="text-sm text-gray-500 mb-5 ml-10">
+              Tell us where your content is from, then paste it in.
             </p>
 
+            {/* 1A: Source Platform Selector */}
+            <div className="mb-5">
+              <p className="text-sm font-medium text-gray-800 mb-1">
+                Where is this content from?
+              </p>
+              <p className="text-xs text-gray-400 mb-3">
+                Knowing the original platform helps us remix it intelligently
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SOURCE_PLATFORMS.map(({ id, label, Icon }) => {
+                  const isSelected = selectedSourcePlatform === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSourcePlatform(id);
+                        setShowSourceValidation(false);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'border-huttle-primary bg-huttle-primary/8 text-huttle-primary ring-1 ring-huttle-primary/30 shadow-sm'
+                          : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-huttle-primary' : 'text-gray-400'}`} />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {showSourceValidation && !selectedSourcePlatform && (
+                <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Please select where your content is from
+                </p>
+              )}
+            </div>
+
+            {/* 1B: Text Input */}
             <textarea
-              placeholder="Paste your text content here — captions, blog excerpts, emails, tweets, or any written content you want to remix into platform-optimized posts..."
+              placeholder={
+                selectedSourcePlatform
+                  ? SOURCE_PLATFORM_PLACEHOLDER_MAP[selectedSourcePlatform]
+                  : 'First, select where your content is from above ☝️'
+              }
               value={remixInput}
               onChange={(e) => setRemixInput(e.target.value)}
-              className="w-full h-48 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none text-gray-800 placeholder-gray-400 resize-none"
+              disabled={!selectedSourcePlatform}
+              className="w-full h-48 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-huttle-primary/30 focus:border-huttle-primary transition-all outline-none text-gray-800 placeholder-gray-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
             />
 
             <div className="flex items-center justify-between mt-3">
@@ -669,12 +775,20 @@ export default function ContentRemix() {
                   Looking for visual ideas? Try Visual Brainstormer <ExternalLink className="w-3 h-3" />
                 </Link>
               </p>
-              <span className="text-xs text-gray-400">{remixInput.length} chars</span>
+              <span className={`text-xs ${remixInput.trim().length > 0 && remixInput.trim().length < 20 ? 'text-amber-500' : 'text-gray-400'}`}>
+                {remixInput.length} chars{remixInput.trim().length > 0 && remixInput.trim().length < 20 ? ' (min 20)' : ''}
+              </span>
             </div>
 
             <div className="flex justify-end mt-6">
               <button
-                onClick={() => setCurrentStep(2)}
+                onClick={() => {
+                  if (!selectedSourcePlatform) {
+                    setShowSourceValidation(true);
+                    return;
+                  }
+                  setCurrentStep(2);
+                }}
                 disabled={!canProceedToStep2}
                 className="flex items-center gap-2 px-6 py-3 bg-huttle-primary text-white rounded-xl hover:bg-huttle-primary-dark transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               >
@@ -765,27 +879,45 @@ export default function ContentRemix() {
                   </p>
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {brandVoicePlatforms.map((platform) => {
-                  const platformName = typeof platform === 'object' && platform !== null ? platform.name : String(platform);
-                  const isSelected = selectedPlatforms.includes(platformName);
-                  return (
-                    <button
-                      key={platformName}
-                      onClick={() => togglePlatform(platformName)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'border-huttle-primary bg-huttle-primary/5 text-huttle-primary ring-1 ring-huttle-primary/30'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-4 h-4" />}
-                      {platformName}
-                    </button>
-                  );
-                })}
+            ) : filteredOutputPlatforms.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">No other platforms available</p>
+                  <p className="text-sm text-gray-600">
+                    Your Brand Profile only has {selectedSourcePlatform} configured, which is the source platform. Add more platforms under <span className="font-medium">Account → Brand Profile</span>.
+                  </p>
+                </div>
               </div>
+            ) : (
+              <>
+                {selectedSourcePlatform && !NON_SOCIAL_SOURCE_PLATFORMS.has(selectedSourcePlatform) && (
+                  <p className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-huttle-primary" />
+                    {selectedSourcePlatform} excluded — you&apos;re remixing <em>from</em> it
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  {filteredOutputPlatforms.map((platform) => {
+                    const platformName = typeof platform === 'object' && platform !== null ? platform.name : String(platform);
+                    const isSelected = selectedPlatforms.includes(platformName);
+                    return (
+                      <button
+                        key={platformName}
+                        onClick={() => togglePlatform(platformName)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'border-huttle-primary bg-huttle-primary/5 text-huttle-primary ring-1 ring-huttle-primary/30'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-4 h-4" />}
+                        {platformName}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             {/* Summary Card */}
@@ -793,6 +925,9 @@ export default function ContentRemix() {
               <div className="mt-5 p-4 bg-gray-50 rounded-xl border border-gray-100">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Remix Summary</h4>
                 <div className="space-y-1 text-xs text-gray-500">
+                  {selectedSourcePlatform && (
+                    <p><span className="text-gray-400">Source:</span> {selectedSourcePlatform}</p>
+                  )}
                   <p><span className="text-gray-400">Content:</span> {remixInput.substring(0, 80)}...</p>
                   <p><span className="text-gray-400">Goal:</span> {REMIX_GOALS.find(g => g.id === remixGoal)?.label}</p>
                   <p><span className="text-gray-400">Platforms:</span> {selectedPlatforms.map(p => (typeof p === 'object' && p !== null ? p.name : p)).join(', ')}</p>

@@ -168,11 +168,28 @@ function buildUserPrompt({
       })
       .join('\n\n');
 
+  const sourcePlatform = typeof additionalContext?.sourcePlatform === 'string' ? additionalContext.sourcePlatform.trim() : '';
+  const sourceContext = typeof additionalContext?.sourceContext === 'string' ? additionalContext.sourceContext.trim() : '';
+  const sourcePlatformBlock = sourcePlatform
+    ? `ORIGINAL CONTENT SOURCE: ${sourcePlatform}
+
+The user is remixing content that was originally written for ${sourcePlatform}.
+Understand what works on ${sourcePlatform} (${sourceContext || 'general content format'}) and translate the INTENT and MESSAGE — not just the words — for each target platform.
+
+Do NOT simply reword the original. Each platform remix should feel native to that platform:
+- Adapt the structure (hooks, length, formatting)
+- Adapt the tone (casual vs professional vs conversational)
+- Adapt the CTA style
+- Keep the core message and value proposition intact
+
+`
+    : '';
+
   return `${promptBrandSection}
 
 ${getModeInstructions(requestedMode, normalizedMode)}
 
-SOURCE CONTENT:
+${sourcePlatformBlock}SOURCE CONTENT:
 ${originalContent}
 
 TARGET PLATFORMS:
