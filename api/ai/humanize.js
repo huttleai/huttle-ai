@@ -141,8 +141,9 @@ export default async function handler(req, res) {
 
   if (!ANTHROPIC_API_KEY) {
     logError('humanize.missing_api_key');
-    const t = typeof bodyText === 'string' ? bodyText : '';
-    return res.status(200).json({ humanized: t, fallback: true });
+    const err = new Error('AI service is not configured');
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 
   try {
@@ -172,8 +173,9 @@ export default async function handler(req, res) {
 
     if (!rateLimit.allowed) {
       logInfo('humanize.rate_limited', { userId, remaining: rateLimit.remaining });
-      const t = typeof bodyText === 'string' ? bodyText : '';
-      return res.status(200).json({ humanized: t, fallback: true });
+      const err = new Error('Too many requests. Please try again later.');
+      console.error(err);
+      return res.status(429).json({ error: err.message });
     }
 
     const text = typeof bodyText === 'string' ? bodyText : '';
@@ -212,19 +214,36 @@ ${text}`;
     if (!response.ok) {
       const errorText = await response.text();
       logError('humanize.upstream_error', { status: response.status, errorText: errorText?.slice?.(0, 500) });
-      return res.status(200).json({ humanized: text, fallback: true });
+      let status = 500;
+      if (response.status === 401 || response.status === 403) status = 401;
+      else if (response.status === 429) status = 429;
+      else if (response.status === 400) status = 422;
+      const err = new Error(
+        errorText?.trim() ? errorText.trim().slice(0, 500) : `Upstream request failed (${response.status})`
+      );
+      console.error(err);
+      return res.status(status).json({ error: err.message });
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseErr) {
+      console.error(parseErr);
+      return res.status(422).json({ error: parseErr?.message || 'Invalid response from AI service' });
+    }
+
     const out = (data.content?.[0]?.text ?? '').trim();
     if (!out) {
-      return res.status(200).json({ humanized: text, fallback: true });
+      const err = new Error('AI returned an empty or unreadable response');
+      console.error(err);
+      return res.status(422).json({ error: err.message });
     }
 
     return res.status(200).json({ humanized: out });
   } catch (error) {
     logError('humanize.handler_error', { error: error?.message });
-    const t = typeof bodyText === 'string' ? bodyText : '';
-    return res.status(200).json({ humanized: t, fallback: true });
+    console.error(error);
+    return res.status(500).json({ error: error?.message || 'Internal server error' });
   }
 }

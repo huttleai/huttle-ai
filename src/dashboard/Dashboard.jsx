@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense, useContext } from 'react';
+import React, { Suspense, useContext } from 'react';
 import { AuthProvider, AuthContext } from '../context/AuthContext';
 import { BrandProvider } from '../context/BrandContext';
 import { ToastProvider } from '../context/ToastContext';
@@ -20,25 +20,44 @@ import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
 import useNotificationGenerator from '../hooks/useNotificationGenerator';
 
-const Dashboard = lazy(() => import('../pages/Dashboard'));
-const ContentLibrary = lazy(() => import('../pages/ContentLibrary'));
-const AIPlanBuilder = lazy(() => import('../pages/AIPlanBuilder'));
-const TrendLab = lazy(() => import('../pages/TrendLab'));
-const IgniteEngine = lazy(() => import('../pages/IgniteEngine'));
-const ContentRemix = lazy(() => import('../pages/ContentRemix'));
-const BrandVoice = lazy(() => import('../pages/BrandVoice'));
-const Subscription = lazy(() => import('../pages/Subscription'));
-const Settings = lazy(() => import('../pages/Settings'));
-const Help = lazy(() => import('../pages/Help'));
-const SocialUpdates = lazy(() => import('../pages/SocialUpdates'));
-const AITools = lazy(() => import('../pages/AITools'));
-const FullPostBuilder = lazy(() => import('../pages/FullPostBuilder'));
-const PostKitPage = lazy(() => import('../pages/PostKit'));
-const PostKitNew = lazy(() => import('../pages/PostKit').then((m) => ({ default: m.PostKitNew })));
-const SmartCalendar = lazy(() => import('../pages/SmartCalendar'));
-const NicheIntel = lazy(() => import('../pages/NicheIntel'));
-const IPhoneMockupDemo = lazy(() => import('../components/IPhoneMockupDemo'));
-const MockupShowcase = lazy(() => import('../pages/MockupShowcase'));
+const lazyWithRetry = (factory) =>
+  React.lazy(() =>
+    factory().catch((err) => {
+      const isChunkError =
+        err?.name === 'ChunkLoadError' ||
+        (err?.message && (
+          err.message.includes('Failed to fetch dynamically imported module') ||
+          err.message.includes('Importing a module script failed') ||
+          err.message.includes('Unable to preload CSS')
+        ));
+      if (isChunkError && !sessionStorage.getItem('_chunk_reload')) {
+        sessionStorage.setItem('_chunk_reload', '1');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw err;
+    })
+  );
+
+const Dashboard = lazyWithRetry(() => import('../pages/Dashboard'));
+const ContentLibrary = lazyWithRetry(() => import('../pages/ContentLibrary'));
+const AIPlanBuilder = lazyWithRetry(() => import('../pages/AIPlanBuilder'));
+const TrendLab = lazyWithRetry(() => import('../pages/TrendLab'));
+const IgniteEngine = lazyWithRetry(() => import('../pages/IgniteEngine'));
+const ContentRemix = lazyWithRetry(() => import('../pages/ContentRemix'));
+const BrandVoice = lazyWithRetry(() => import('../pages/BrandVoice'));
+const Subscription = lazyWithRetry(() => import('../pages/Subscription'));
+const Settings = lazyWithRetry(() => import('../pages/Settings'));
+const Help = lazyWithRetry(() => import('../pages/Help'));
+const SocialUpdates = lazyWithRetry(() => import('../pages/SocialUpdates'));
+const AITools = lazyWithRetry(() => import('../pages/AITools'));
+const FullPostBuilder = lazyWithRetry(() => import('../pages/FullPostBuilder'));
+const PostKitPage = lazyWithRetry(() => import('../pages/PostKit'));
+const PostKitNew = lazyWithRetry(() => import('../pages/PostKit').then((m) => ({ default: m.PostKitNew })));
+const SmartCalendar = lazyWithRetry(() => import('../pages/SmartCalendar'));
+const NicheIntel = lazyWithRetry(() => import('../pages/NicheIntel'));
+const IPhoneMockupDemo = lazyWithRetry(() => import('../components/IPhoneMockupDemo'));
+const MockupShowcase = lazyWithRetry(() => import('../pages/MockupShowcase'));
 
 function DashboardRouteFallback() {
   return <LoadingSpinner fullScreen variant="huttle" text="Loading…" />;

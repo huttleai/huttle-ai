@@ -38,6 +38,7 @@ export default function FoundersMembershipCard({
   const tierKey = normalizeTier(subscription?.tier || subscription?.plan);
   const isFounder = tierKey === 'founder';
   const membershipName = isFounder ? 'Founders Club' : 'Builders Club';
+  const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Builders Club';
   const expiryDate = formatDate(subscription?.currentPeriodEnd);
   const startDate = formatDate(subscription?.currentPeriodStart);
   const planBenefits = isFounder
@@ -108,7 +109,7 @@ export default function FoundersMembershipCard({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="inline-flex w-fit items-center gap-2 rounded-full bg-huttle-primary px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
               {isFounder ? <Sparkles className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-              {membershipName}
+              {membershipBadgeLabel}
             </span>
             <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
               isCancellationScheduled
