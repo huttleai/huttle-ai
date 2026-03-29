@@ -11,13 +11,21 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate Supabase configuration
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase configuration missing. Some features may not work.');
-  console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
+const missingSupabaseEnv = [];
+if (typeof supabaseUrl !== 'string' || !supabaseUrl.trim()) {
+  missingSupabaseEnv.push('VITE_SUPABASE_URL');
+}
+if (typeof supabaseAnonKey !== 'string' || !supabaseAnonKey.trim()) {
+  missingSupabaseEnv.push('VITE_SUPABASE_ANON_KEY');
+}
+if (missingSupabaseEnv.length > 0) {
+  throw new Error(
+    `[Supabase] Missing required environment variable(s): ${missingSupabaseEnv.join(', ')}. ` +
+      'Set them in .env for local development and in your hosting dashboard for production.'
+  );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -356,9 +364,6 @@ export async function getFeatureUsageCount(userId, feature) {
     if (error) throw error;
     return count || 0;
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'supabase.js:getFeatureUsageCount',message:'usage count query failed',data:{hypothesisId:'H2',feature,errCode:error?.code,errMsg:String(error?.message||'').slice(0,200),details:error?.details},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.error('Error getting feature usage count:', error);
     return 0;
   }
@@ -389,9 +394,6 @@ export async function getOverallAIUsageCount(userId) {
     if (error) throw error;
     return count || 0;
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'supabase.js:getOverallAIUsageCount',message:'overall usage count query failed',data:{hypothesisId:'H2',errCode:error?.code,errMsg:String(error?.message||'').slice(0,200),details:error?.details},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.error('Error getting overall AI usage count:', error);
     return 0;
   }

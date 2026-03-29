@@ -803,9 +803,6 @@ export default function AIPlanBuilder() {
     const rejectJob = (error) => {
       if (resolved) return;
       resolved = true;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'AIPlanBuilder.jsx:rejectJob',message:'job rejected',data:{hypothesisId:'H7',jobId,reason:typeof error==='string'?error.slice(0,300):String(error).slice(0,300)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       handleJobFailedRef.current(error);
     };
 
@@ -822,9 +819,6 @@ export default function AIPlanBuilder() {
         (payload) => {
           const job = payload.new;
           console.log('[PlanBuilder] Realtime UPDATE:', job.status, 'progress:', job.progress, JSON.stringify(job));
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'AIPlanBuilder.jsx:realtimeUpdate',message:'postgres UPDATE jobs',data:{hypothesisId:'H7',status:job.status,progress:job.progress,errLen:typeof job.error==='string'?job.error.length:job.error!=null?1:0,isFailedCheck:isFailed(job),isCompleteCheck:isComplete(job)},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
 
           setJobStatus(job.status);
 
@@ -839,16 +833,12 @@ export default function AIPlanBuilder() {
         }
       )
       .subscribe((status, err) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'AIPlanBuilder.jsx:realtime',message:'realtime channel status',data:{hypothesisId:'H3',jobId,status,errMsg:String(err?.message||'').slice(0,160)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (status === 'SUBSCRIBED') {
           console.log('[PlanBuilder] Realtime subscribed for job', jobId);
         }
       });
 
     let pollIntervalId = null;
-    let loggedFirstPollSuccess = false;
     const pollStartId = window.setTimeout(() => {
       pollIntervalId = window.setInterval(async () => {
         if (resolved) return;
@@ -860,19 +850,9 @@ export default function AIPlanBuilder() {
             .maybeSingle();
 
           if (error) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'AIPlanBuilder.jsx:poll',message:'jobs poll error',data:{hypothesisId:'H1',jobId,errCode:error.code,errMsg:String(error.message||'').slice(0,220),details:error.details},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             return;
           }
           if (!job) return;
-
-          if (!loggedFirstPollSuccess && job) {
-            loggedFirstPollSuccess = true;
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/d75599bc-0f49-444b-a4c6-aaf631e54b4c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3ed988'},body:JSON.stringify({sessionId:'3ed988',location:'AIPlanBuilder.jsx:poll',message:'jobs poll first row',data:{hypothesisId:'H4',status:job.status,hasResult:job.result!=null,hasProgress:'progress'in job,progressVal:job.progress,completed_at:job.completed_at?1:0,errorEmpty:typeof job.error==='string'&&job.error==='',errorLen:typeof job.error==='string'?job.error.length:job.error!=null?1:0,keys:Object.keys(job).slice(0,25)},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-          }
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
