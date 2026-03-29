@@ -231,6 +231,10 @@ export default function Help() {
     { id: 'other', label: 'Other' }
   ];
 
+  /** Help Center email support — opens the user’s mail app (no server / Resend). */
+  const SUPPORT_EMAIL = 'support@huttleai.com';
+  const MAILTO_SAFE_LEN = 1800;
+
   const handleFeedbackSubmit = async () => {
     if (!user?.id) {
       showToast('Please log in to submit feedback', 'error');
@@ -278,49 +282,43 @@ export default function Help() {
     }
   };
 
-  const handleEmailSubmit = async () => {
+  const handleEmailSubmit = () => {
     if (!emailData.email?.trim() || !emailData.subject || !emailData.message?.trim()) {
       showToast('Please fill in all fields', 'error');
       return;
     }
 
-    setEmailSending(true);
-    try {
-      const response = await fetch('/api/support-contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailData.email.trim(),
-          subject: emailData.subject,
-          message: emailData.message.trim(),
-          userId: user?.id || undefined,
-        }),
-      });
+    const topicLabel =
+      emailSubjects.find((s) => s.id === emailData.subject)?.label || 'Support';
+    const userEmail = emailData.email.trim();
+    let messageBody = emailData.message.trim();
 
-      const data = await response.json().catch(() => ({}));
+    const buildBody = (msg) => {
+      let text = `Please reply to: ${userEmail}\n\n---\n\n${msg}`;
+      if (user?.id) text += `\n\n---\nAccount ID: ${user.id}`;
+      return text;
+    };
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Request failed');
-      }
+    const subject = `[Huttle Help] ${topicLabel}`;
+    let href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildBody(messageBody))}`;
 
-      setEmailSubmitted(true);
-      if (data.confirmationSent === false) {
-        showToast('Message sent to our team. If you do not see a confirmation email, check spam.', 'success');
-      } else {
-        showToast('Message sent. Check your inbox for a confirmation email.', 'success');
-      }
-
-      setTimeout(() => {
-        setShowEmailModal(false);
-        setEmailSubmitted(false);
-        setEmailData({ email: user?.email || '', subject: '', message: '' });
-      }, 2500);
-    } catch (err) {
-      console.error('Email support submit:', err);
-      showToast(err.message || 'Could not send message. Try again or email support@huttleai.com.', 'error');
-    } finally {
-      setEmailSending(false);
+    while (href.length > MAILTO_SAFE_LEN && messageBody.length > 80) {
+      messageBody = `${messageBody.slice(0, messageBody.length - 80).trim()}…\n\n[Message shortened — add any missing detail before sending.]`;
+      href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildBody(messageBody))}`;
     }
+
+    setEmailSending(true);
+    window.location.href = href;
+
+    setEmailSubmitted(true);
+    showToast('Your email app should open with a draft to our team. Press Send there to deliver.', 'success');
+
+    setTimeout(() => {
+      setShowEmailModal(false);
+      setEmailSubmitted(false);
+      setEmailData({ email: user?.email || '', subject: '', message: '' });
+      setEmailSending(false);
+    }, 3200);
   };
 
   const resetDocsModal = () => {
@@ -619,9 +617,10 @@ export default function Help() {
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Mail className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Message Sent!</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Draft opened</h3>
                   <p className="text-gray-600">
-                    We emailed you a short confirmation. We typically reply within 24–48 business hours.
+                    Your email app should have a message addressed to {SUPPORT_EMAIL}. Send it from there
+                    to reach us — we typically reply within 24–48 business hours.
                   </p>
                 </div>
               ) : (
@@ -686,11 +685,12 @@ export default function Help() {
                     className="w-full py-3 bg-huttle-primary text-white rounded-xl font-semibold hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
-                    {emailSending ? 'Sending…' : 'Send Message'}
+                    {emailSending ? 'Opening…' : 'Open in email app'}
                   </button>
-                  
+
                   <p className="text-xs text-gray-500 text-center mt-4">
-                    We typically respond within 24-48 business hours
+                    Opens your mail app with a draft to {SUPPORT_EMAIL} — no server required. We typically
+                    respond within 24–48 business hours.
                   </p>
                 </>
               )}

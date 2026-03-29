@@ -117,7 +117,6 @@ async function setupRoutes() {
   
   // Waitlist route
   app.all('/api/subscribe-waitlist', await loadHandler('api/subscribe-waitlist.js'));
-  app.all('/api/support-contact', await loadHandler('api/support-contact.js'));
   app.all('/api/save-onboarding', await loadHandler('api/save-onboarding.js'));
   
   // Stripe routes (optional - gracefully handle missing Stripe package)
