@@ -27,64 +27,81 @@ import {
   resolveBillingContext,
 } from './_utils/billing.js';
 
-// Validate and initialize Stripe
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const mode = process.env.STRIPE_SECRET_KEY
-  ?.startsWith('sk_test') ? 'TEST' : 'LIVE';
-console.log('[Stripe] Running in', mode, 'mode');
-
-if (!STRIPE_SECRET_KEY) {
+// Validate and initialize Stripe (server-side: process.env.STRIPE_SECRET_KEY — never VITE_)
+const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || '').trim();
+const mode = STRIPE_SECRET_KEY.startsWith('sk_test') ? 'TEST' : 'LIVE';
+if (STRIPE_SECRET_KEY) {
+  console.log('[Stripe] Running in', mode, 'mode');
+} else {
   console.error('❌ STRIPE_SECRET_KEY is not configured');
 }
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
-// Initialize Supabase client for user lookup
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
+let stripe = null;
+if (STRIPE_SECRET_KEY) {
+  try {
+    stripe = new Stripe(STRIPE_SECRET_KEY);
+  } catch (initErr) {
+    console.error('[Stripe] SDK initialization failed:', initErr);
+    stripe = null;
+  }
+}
+
+// Service role client for server-side user lookup (not the anon key)
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
-  // Set secure CORS headers
-  setCorsHeaders(req, res);
-
-  // Handle preflight requests
-  if (handlePreflight(req, res)) return;
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    // If Stripe is not configured, return inactive state gracefully.
+    setCorsHeaders(req, res);
+
+    if (handlePreflight(req, res)) return;
+
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    if (!STRIPE_SECRET_KEY) {
+      console.error('Stripe secret key not configured');
+      return res.status(500).json({ error: 'Stripe secret key not configured' });
+    }
+
     if (!stripe) {
-      console.warn('Stripe not configured - returning inactive subscription status');
-      return res.status(200).json({
-        subscription: null,
-        plan: null,
-        status: 'inactive',
-        currentPeriodEnd: null,
-        trialEnd: null,
-        _warning: 'Stripe not configured'
+      console.error('Stripe client not initialized');
+      return res.status(500).json({
+        error: 'Failed to get subscription status. Please try again.',
       });
     }
-    
+
     if (!supabase) {
+      console.error('Supabase service role client not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)');
       return res.status(500).json({
         error: 'Authentication service not configured',
       });
     }
 
     const authResult = await authenticateBillingRequest(req, supabase);
-    if (authResult.error || !authResult.user) {
-      return res.status(authResult.statusCode).json({ error: authResult.error });
+    if (authResult?.error || !authResult?.user) {
+      const statusCode =
+        typeof authResult?.statusCode === 'number' &&
+        authResult.statusCode >= 400 &&
+        authResult.statusCode < 600
+          ? authResult.statusCode
+          : 401;
+      return res.status(statusCode).json({ error: authResult?.error ?? 'Authentication required' });
     }
 
-    const { customerId, subscriptionId, subscriptionRecord } = await resolveBillingContext({
+    const billingContext = await resolveBillingContext({
       supabase,
       stripe,
       userId: authResult.user.id,
       createCustomerIfMissing: false,
     });
+
+    const customerId = billingContext?.customerId ?? null;
+    const subscriptionId = billingContext?.subscriptionId ?? null;
+    const subscriptionRecord = billingContext?.subscriptionRecord ?? null;
 
     if (!customerId && !subscriptionId && !subscriptionRecord) {
       return res.status(200).json({
@@ -103,7 +120,12 @@ export default async function handler(req, res) {
       expand: ['data.schedule'],
     });
 
-    if (!stripeSubscription || stripeSubscription.status === 'incomplete_expired' || stripeSubscription.status === 'unpaid') {
+    const subStatus = stripeSubscription?.status;
+    if (
+      !stripeSubscription ||
+      subStatus === 'incomplete_expired' ||
+      subStatus === 'unpaid'
+    ) {
       return res.status(200).json({
         subscription: null,
         plan: null,
@@ -118,6 +140,16 @@ export default async function handler(req, res) {
       subscriptionRecord,
     });
 
+    if (!normalizedSubscription) {
+      return res.status(200).json({
+        subscription: null,
+        plan: null,
+        status: 'inactive',
+        currentPeriodEnd: null,
+        trialEnd: null,
+      });
+    }
+
     // Strip sensitive Stripe identifiers before sending to the client.
     // The cancel and billing endpoints resolve customer/subscription IDs
     // server-side from the authenticated user_id — clients never need them.
@@ -126,27 +158,26 @@ export default async function handler(req, res) {
       stripeSubscriptionId: _sid,
       id: _id,
       ...safeSubscription
-    } = normalizedSubscription || {};
+    } = normalizedSubscription;
 
     return res.status(200).json({
       subscription: safeSubscription,
-      plan: normalizedSubscription?.plan ?? null,
-      tier: normalizedSubscription?.tier ?? null,
-      status: normalizedSubscription?.status ?? 'inactive',
-      currentPeriodStart: normalizedSubscription?.currentPeriodStart ?? null,
-      currentPeriodEnd: normalizedSubscription?.currentPeriodEnd ?? null,
-      trialStart: normalizedSubscription?.trialStart ?? null,
-      trialEnd: normalizedSubscription?.trialEnd ?? null,
-      billingCycle: normalizedSubscription?.billingCycle ?? null,
-      cancelAtPeriodEnd: normalizedSubscription?.cancelAtPeriodEnd ?? false,
-      cancelledAt: normalizedSubscription?.cancelledAt ?? null,
-      upcomingPlanChange: normalizedSubscription?.upcomingPlanChange ?? null,
+      plan: normalizedSubscription.plan ?? null,
+      tier: normalizedSubscription.tier ?? null,
+      status: normalizedSubscription.status ?? 'inactive',
+      currentPeriodStart: normalizedSubscription.currentPeriodStart ?? null,
+      currentPeriodEnd: normalizedSubscription.currentPeriodEnd ?? null,
+      trialStart: normalizedSubscription.trialStart ?? null,
+      trialEnd: normalizedSubscription.trialEnd ?? null,
+      billingCycle: normalizedSubscription.billingCycle ?? null,
+      cancelAtPeriodEnd: normalizedSubscription.cancelAtPeriodEnd ?? false,
+      cancelledAt: normalizedSubscription.cancelledAt ?? null,
+      upcomingPlanChange: normalizedSubscription.upcomingPlanChange ?? null,
     });
   } catch (error) {
-    console.error('Subscription Status Error:', error);
+    console.error('Subscription Status Error:', error?.message ?? error, error);
     return res.status(500).json({
       error: 'Failed to get subscription status. Please try again.',
     });
   }
 }
-
