@@ -1146,7 +1146,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
             Start creating. Pick your path.
           </h2>
           <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
-            Huttle AI is currently paid-only. Founders Club and Builders Club both include full Pro feature access during the launch window.
+            Huttle AI is currently paid-only. Founders Club is open now; Builders Club opens April 7. Both include full Pro feature access during the launch window.
           </p>
         </motion.div>
 
@@ -1248,7 +1248,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                AVAILABLE SOON
+                OPENS APRIL 7
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
@@ -1288,7 +1288,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 disabled
                 className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
-                Available March 31
+                Available April 7
               </button>
             </div>
           </motion.div>
@@ -1368,7 +1368,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </p>
           <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
             <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Builders Club is also live during the launch window.
+              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Builders Club opens April 7.
             </p>
           </div>
           
@@ -1410,7 +1410,7 @@ export default function LandingPage() {
       metaDescription.name = "description";
       document.head.appendChild(metaDescription);
     }
-    metaDescription.content = "Huttle AI is currently paid-only with Founders Club and Builders Club launch pricing, followed by Essentials and Pro public plans.";
+    metaDescription.content = "Huttle AI is currently paid-only with Founders Club (open now) and Builders Club launch pricing from April 7, followed by Essentials and Pro public plans.";
   }, []);
 
   return (
@@ -1760,9 +1760,18 @@ export default function LandingPage() {
             <img src="/huttle-logo.png" alt="Huttle AI" className="h-8 md:h-10 w-auto" />
           </div>
           
-          <div className="flex-1 text-center">
+          <div className="flex-1 text-center space-y-3">
             <p className="text-sm text-slate-500">
               © 2026 Huttle AI · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link> · <Link to="/refund-policy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Refund Policy</Link>
+            </p>
+            <p className="text-sm text-slate-500" data-testid="landing-footer-support">
+              Questions?{' '}
+              <a
+                href="mailto:support@huttleai.com"
+                className="text-slate-600 hover:text-slate-900 transition-colors underline-offset-2 hover:underline font-medium"
+              >
+                support@huttleai.com
+              </a>
             </p>
           </div>
           
