@@ -348,6 +348,28 @@ export default async function handler(req, res) {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
               const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
 
+              try {
+                const { error: usersTierError } = await supabase
+                  .from('users')
+                  .update({ subscription_tier: plan })
+                  .eq('id', userId);
+                if (usersTierError) {
+                  logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                    eventId: event.id,
+                    userId,
+                    context: 'checkout.session.completed',
+                    error: usersTierError.message,
+                  });
+                }
+              } catch (usersTierErr) {
+                logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                  eventId: event.id,
+                  userId,
+                  context: 'checkout.session.completed',
+                  error: usersTierErr.message,
+                });
+              }
+
               if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
                 await addToFoundersClub(customerEmail, firstName, lastName);
               }
@@ -390,11 +412,35 @@ export default async function handler(req, res) {
           }
 
           if (profile) {
-            await updateSubscriptionRecord({
+            const tier = await updateSubscriptionRecord({
               userId: profile.user_id,
               customerId,
               subscription,
             });
+
+            if (event.type === 'customer.subscription.updated') {
+              try {
+                const { error: usersTierError } = await supabase
+                  .from('users')
+                  .update({ subscription_tier: tier })
+                  .eq('id', profile.user_id);
+                if (usersTierError) {
+                  logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                    eventId: event.id,
+                    userId: profile.user_id,
+                    context: 'customer.subscription.updated',
+                    error: usersTierError.message,
+                  });
+                }
+              } catch (usersTierErr) {
+                logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                  eventId: event.id,
+                  userId: profile.user_id,
+                  context: 'customer.subscription.updated',
+                  error: usersTierErr.message,
+                });
+              }
+            }
           }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
