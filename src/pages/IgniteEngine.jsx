@@ -231,7 +231,7 @@ export default function IgniteEngine() {
   const isFormValid = selectedPlatform && selectedPostType && topic.trim().length > 0 && targetAudience.trim().length > 0;
   const hasAccess = checkFeatureAccess('igniteEngine'); // HUTTLE AI: updated 3
   const isAtLimit = usageLimit !== Infinity && usageCount >= usageLimit;
-  const voiceContextLabel = isCreator ? 'Personal Brand' : 'Business Authority';
+  const voiceContextLabel = isCreator ? 'Personal Brand' : 'Business/Brand';
   const VoiceIcon = isCreator ? User : Building;
 
   const handlePlatformSelect = (platformId) => {
@@ -538,8 +538,8 @@ export default function IgniteEngine() {
 
       <div className="relative z-10 max-w-4xl mx-auto space-y-8">
 
-        {/* Header */}
-        <div className="mb-4 md:mb-6 lg:mb-8">
+        {/* Header — extra top spacing on mobile below fixed top bar */}
+        <div className="pt-6 md:pt-0 mb-4 md:mb-6 lg:mb-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3 md:gap-4">
             <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 md:h-12 md:w-12 lg:h-14 lg:w-14">

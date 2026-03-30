@@ -93,6 +93,32 @@
     @apply bg-gray-300;
   }
 
+  /* Dashboard sidebar: thumb only while scrolling (see Sidebar.jsx onScroll) */
+  .sidebar-nav-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .sidebar-nav-scroll::-webkit-scrollbar-thumb {
+    @apply bg-transparent rounded-full;
+  }
+
+  .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-transparent;
+  }
+
+  .sidebar-nav-scroll.sidebar-nav-scroll--scrolling {
+    scrollbar-color: theme('colors.gray.200') transparent;
+  }
+
+  .sidebar-nav-scroll.sidebar-nav-scroll--scrolling::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 rounded-full;
+  }
+
+  .sidebar-nav-scroll.sidebar-nav-scroll--scrolling::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-300;
+  }
+
   /* ===================================
      BASE TRANSITIONS
      =================================== */

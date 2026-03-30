@@ -497,7 +497,7 @@ export async function getTrendForecast({ niche, timeframe = '7 days', brandData 
  * @param {string} params.platform - Target platform (TikTok, Instagram, etc.)
  * @param {string} params.postType - Content type (Video, Reel, Carousel, etc.)
  * @param {string} params.topic - Content topic
- * @param {string} params.voiceContext - Voice context (Personal Brand / Business Authority)
+ * @param {string} params.voiceContext - Voice context (Personal Brand / Business/Brand)
  * @param {Object} [params.brandProfile] - Full brand profile
  * @returns {Promise<Object>} Ignite Engine brief payload or fallback indicator
  */

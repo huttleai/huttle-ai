@@ -15,7 +15,8 @@ import {
   Flame,
   Search,
 } from 'lucide-react';
-import { useState, useContext, useEffect, useRef } from 'react';
+import { useState, useContext, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
@@ -41,12 +42,71 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [railTooltip, setRailTooltip] = useState(null);
+  const railTipHideRef = useRef(null);
+  const sidebarScrollIdleRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
+  const [isSidebarScrolling, setIsSidebarScrolling] = useState(false);
 
   const isDrawer = sidebarMode === 'drawer';
   const isRail = sidebarMode === 'rail';
   const isExpanded = sidebarMode === 'expanded';
+
+  const clearRailTipHide = useCallback(() => {
+    if (railTipHideRef.current) {
+      clearTimeout(railTipHideRef.current);
+      railTipHideRef.current = null;
+    }
+  }, []);
+
+  const showRailTooltip = useCallback(
+    (event, text) => {
+      if (!isRail) return;
+      clearRailTipHide();
+      const el = event.currentTarget;
+      const r = el.getBoundingClientRect();
+      setRailTooltip({
+        text,
+        top: r.top + r.height / 2,
+        left: r.right + 10,
+      });
+    },
+    [isRail, clearRailTipHide]
+  );
+
+  const scheduleHideRailTooltip = useCallback(() => {
+    clearRailTipHide();
+    railTipHideRef.current = setTimeout(() => setRailTooltip(null), 120);
+  }, [clearRailTipHide]);
+
+  useEffect(() => () => clearRailTipHide(), [clearRailTipHide]);
+
+  useEffect(
+    () => () => {
+      if (sidebarScrollIdleRef.current) {
+        clearTimeout(sidebarScrollIdleRef.current);
+        sidebarScrollIdleRef.current = null;
+      }
+    },
+    []
+  );
+
+  const handleSidebarScroll = useCallback(() => {
+    setIsSidebarScrolling(true);
+    if (sidebarScrollIdleRef.current) clearTimeout(sidebarScrollIdleRef.current);
+    sidebarScrollIdleRef.current = setTimeout(() => {
+      setIsSidebarScrolling(false);
+      sidebarScrollIdleRef.current = null;
+    }, 400);
+  }, []);
+
+  useEffect(() => {
+    if (!isRail) {
+      clearRailTipHide();
+      setRailTooltip(null);
+    }
+  }, [isRail, clearRailTipHide]);
 
   useEffect(() => {
     if (!isDrawer) closeMobileNav();
@@ -149,7 +209,8 @@ export default function Sidebar() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.03),transparent_50%)]" />
 
       <div
-        className={`relative flex h-full flex-col overflow-y-auto overscroll-y-contain scrollbar-thin ${innerPadding}`}
+        className={`relative flex h-full flex-col overflow-y-auto overscroll-y-contain sidebar-nav-scroll${isSidebarScrolling ? ' sidebar-nav-scroll--scrolling' : ''} ${innerPadding}`}
+        onScroll={handleSidebarScroll}
         style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
       >
         <div className={`mb-6 mt-1 flex items-center ${isRail ? 'justify-center' : ''}`}>
@@ -160,6 +221,8 @@ export default function Sidebar() {
               window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
               closeNav();
             }}
+            onMouseEnter={isRail ? (e) => showRailTooltip(e, 'Dashboard') : undefined}
+            onMouseLeave={isRail ? scheduleHideRailTooltip : undefined}
           >
             <img
               src="/huttle-logo.png"
@@ -191,15 +254,31 @@ export default function Sidebar() {
                     <NavLink
                       key={item.path + item.name}
                       to={item.path}
-                      title={isRail ? item.name : undefined}
                       onClick={() => {
                         closeNav();
                         if (item.path === '/dashboard') {
                           window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
                         }
                       }}
-                      onMouseEnter={() => setHoveredItem(item.path)}
-                      onMouseLeave={() => setHoveredItem(null)}
+                      onMouseEnter={(e) => {
+                        setHoveredItem(item.path);
+                        if (isRail) {
+                          const label = item.badge ? `${item.name} (${item.badge})` : item.name;
+                          showRailTooltip(e, label);
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredItem(null);
+                        if (isRail) scheduleHideRailTooltip();
+                      }}
+                      onFocus={(e) => {
+                        if (!isRail) return;
+                        const label = item.badge ? `${item.name} (${item.badge})` : item.name;
+                        showRailTooltip(e, label);
+                      }}
+                      onBlur={() => {
+                        if (isRail) scheduleHideRailTooltip();
+                      }}
                       className="group relative block"
                       data-testid={`sidebar-link-${toTestId(item.name)}`}
                     >
@@ -271,7 +350,10 @@ export default function Sidebar() {
                 <div
                   className="mb-3 flex flex-col items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-2"
                   data-testid="sidebar-ai-meter"
-                  title={`AI usage ${aiUsed} of ${displayLimit}`}
+                  onMouseEnter={(e) =>
+                    showRailTooltip(e, `AI Meter — ${aiUsed} of ${displayLimit} generations this month`)
+                  }
+                  onMouseLeave={scheduleHideRailTooltip}
                 >
                   <Zap
                     className={`h-5 w-5 ${isRed ? 'text-red-500' : isAmber ? 'text-amber-500' : 'text-huttle-primary'}`}
@@ -318,7 +400,9 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={handleLogout}
-            title="Sign out"
+            title={isRail ? undefined : 'Sign out'}
+            onMouseEnter={isRail ? (e) => showRailTooltip(e, 'Sign out') : undefined}
+            onMouseLeave={isRail ? scheduleHideRailTooltip : undefined}
             className={`group flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-gray-500 transition-all duration-200 hover:bg-red-50 hover:text-red-600 ${
               isRail ? 'min-h-[44px]' : ''
             }`}
@@ -372,15 +456,33 @@ export default function Sidebar() {
     );
   }
 
+  const railTooltipPortal =
+    isRail &&
+    railTooltip &&
+    typeof document !== 'undefined' &&
+    createPortal(
+      <div
+        role="tooltip"
+        className="pointer-events-none fixed z-[100] max-w-[min(18rem,calc(100vw-3.5rem))] -translate-y-1/2 rounded-lg bg-huttle-primary px-3 py-1.5 text-left text-xs font-medium leading-snug text-white shadow-lg shadow-huttle-primary/35 ring-1 ring-white/25"
+        style={{ left: railTooltip.left, top: railTooltip.top }}
+      >
+        {railTooltip.text}
+      </div>,
+      document.body
+    );
+
   return (
-    <aside
-      className={`${asideShellClass} shadow-sm`}
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
-      onTouchStart={handleSidebarTouchStart}
-      onTouchEnd={handleSidebarTouchEnd}
-      data-testid="sidebar"
-    >
-      {sidebarInner}
-    </aside>
+    <>
+      <aside
+        className={`${asideShellClass} shadow-sm`}
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        onTouchStart={handleSidebarTouchStart}
+        onTouchEnd={handleSidebarTouchEnd}
+        data-testid="sidebar"
+      >
+        {sidebarInner}
+      </aside>
+      {railTooltipPortal}
+    </>
   );
 }
