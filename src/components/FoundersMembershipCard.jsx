@@ -248,14 +248,6 @@ export default function FoundersMembershipCard({
           </div>
         )}
 
-        {invoices.length === 0 && (
-          <div className="border-t border-gray-100 px-6 py-5 md:px-8">
-            <p className="text-sm text-gray-500">
-              Your first invoice will appear here after your trial ends.
-            </p>
-          </div>
-        )}
-
         {/* Footer actions */}
         <div className="border-t border-gray-100 px-6 py-4 md:px-8 flex items-center justify-between">
           {isCancellationScheduled ? (
