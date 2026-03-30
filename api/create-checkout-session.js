@@ -128,7 +128,7 @@ export default async function handler(req, res) {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/dashboard?${isLaunchPricingPlan ? 'success=true' : 'trial=started'}`,
+      success_url: `${process.env.VITE_APP_URL || 'https://www.huttleai.com'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/dashboard?canceled=true`,
       metadata: baseMetadata,
       subscription_data: subscriptionData,
