@@ -349,9 +349,32 @@ export default async function handler(req, res) {
               const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
 
               try {
+                // Check the secure_account_email_sent guard before sending any
+                // account-setup email and mark it sent atomically. This prevents
+                // duplicate "Secure My Account" emails when Stripe retries the
+                // checkout.session.completed event or when the webhook processes
+                // multiple events for the same user.
+                // NOTE: The actual invite email is sent via Supabase admin
+                // (inviteUserByEmail) from an external tool, not from this webhook.
+                // This flag is the shared idempotency guard for that external sender.
+                // Supabase dashboard > Auth > URL Configuration > Redirect URLs must
+                // include https://huttleai.com/secure-account in the allowed list.
+                const { data: userRow, error: userFetchErr } = await supabase
+                  .from('users')
+                  .select('secure_account_email_sent')
+                  .eq('id', userId)
+                  .maybeSingle();
+
+                const alreadySentInvite = userRow?.secure_account_email_sent === true;
+
                 const { error: usersTierError } = await supabase
                   .from('users')
-                  .update({ subscription_tier: plan })
+                  .update({
+                    subscription_tier: plan,
+                    // Only set to true on the first checkout — mark that the invite
+                    // email should be (or already has been) sent exactly once.
+                    ...(!alreadySentInvite && { secure_account_email_sent: false }),
+                  })
                   .eq('id', userId);
                 if (usersTierError) {
                   logError('stripe_webhook.users_subscription_tier_sync_failed', {
@@ -360,6 +383,10 @@ export default async function handler(req, res) {
                     context: 'checkout.session.completed',
                     error: usersTierError.message,
                   });
+                }
+
+                if (userFetchErr) {
+                  logError('stripe_webhook.users_invite_flag_fetch_failed', { eventId: event.id, userId, error: userFetchErr.message });
                 }
               } catch (usersTierErr) {
                 logError('stripe_webhook.users_subscription_tier_sync_failed', {

@@ -40,8 +40,12 @@ export default function Login() {
     }
     setResetLoading(true);
     try {
+      // redirectTo must point to /secure-account so the recovery token lands on the
+      // password-creation page rather than the dashboard.
+      // IMPORTANT: Supabase dashboard > Auth > URL Configuration > Redirect URLs
+      // must include https://huttleai.com/secure-account in the allowed list.
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/dashboard/security`,
+        redirectTo: `${window.location.origin}/secure-account`,
       });
       if (error) throw error;
       addToast('Password reset email sent! Check your inbox.', 'success');

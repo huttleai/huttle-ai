@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../config/supabase';
@@ -11,8 +11,34 @@ export default function SecureAccount() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Detect whether this is a password-recovery flow (type=recovery in the URL hash).
+  // Supabase exchanges the recovery token into an active session before React mounts,
+  // so we parse the hash directly to know which flow we're in — without relying on
+  // session state (which would otherwise redirect the user away before they set a password).
+  const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [tokenError, setTokenError] = useState('');
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    const type = params.get('type');
+
+    if (type === 'recovery') {
+      setIsRecoveryFlow(true);
+      // Pre-populate recoveryEmail from the active session so the
+      // "Request a new link" fallback knows which address to use.
+      supabase.auth.getSession().then(({ data }) => {
+        if (data?.session?.user?.email) {
+          setRecoveryEmail(data.session.user.email);
+        }
+      });
+    }
+    // For type=signup or type=magiclink (initial account setup), fall through to
+    // the existing flow — no redirect override needed.
+  }, []);
 
   const validate = () => {
     setError('');
@@ -39,13 +65,50 @@ export default function SecureAccount() {
     try {
       const { error: supaError } = await supabase.auth.updateUser({ password });
 
-      if (supaError) throw supaError;
+      if (supaError) {
+        // Expired or already-consumed token — surface a clear error with a re-send option.
+        const msg = supaError.message || '';
+        if (
+          msg.toLowerCase().includes('expired') ||
+          msg.toLowerCase().includes('invalid') ||
+          msg.toLowerCase().includes('token')
+        ) {
+          setTokenError(msg);
+          throw supaError;
+        }
+        throw supaError;
+      }
 
-      addToast('Account secured! Welcome to Huttle AI.', 'success');
+      addToast('Password saved! Taking you to your dashboard.', 'success');
       navigate('/dashboard');
     } catch (err) {
       console.error('Error setting password:', err);
-      addToast(err.message || 'Failed to set password. Please try again.', 'error');
+      if (!tokenError) {
+        addToast(err.message || 'Failed to set password. Please try again.', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestNewLink = async () => {
+    if (!recoveryEmail) {
+      addToast('Unable to determine your email address. Please go to the login page and use "Forgot password".', 'warning');
+      return;
+    }
+    setLoading(true);
+    try {
+      // IMPORTANT: Supabase dashboard > Auth > URL Configuration > Redirect URLs
+      // must include https://huttleai.com/secure-account in the allowed list.
+      const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
+        redirectTo: `${window.location.origin}/secure-account`,
+      });
+      if (error) throw error;
+      addToast('A new password reset link has been sent to your inbox.', 'success');
+      setTokenError('');
+    } catch (err) {
+      console.error('Error requesting new reset link:', err);
+      addToast(err.message || 'Failed to send reset email. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -123,8 +186,14 @@ export default function SecureAccount() {
 
           {/* Welcome Text */}
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome to Huttle AI!</h2>
-            <p className="text-gray-500 text-sm">Secure your account to get started.</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+              {isRecoveryFlow ? 'Reset Your Password' : 'Welcome to Huttle AI!'}
+            </h2>
+            <p className="text-gray-500 text-sm">
+              {isRecoveryFlow
+                ? 'Create a new password for your account.'
+                : 'Secure your account to get started.'}
+            </p>
           </div>
 
           {/* Password Form */}
@@ -192,9 +261,26 @@ export default function SecureAccount() {
               </div>
             </div>
 
-            {/* Error Message */}
+            {/* Validation Error */}
             {error && (
               <p className="text-sm text-red-500 font-medium">{error}</p>
+            )}
+
+            {/* Token Expired / Invalid Error */}
+            {tokenError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600 font-medium mb-2">
+                  This link has expired or has already been used.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRequestNewLink}
+                  disabled={loading}
+                  className="text-sm text-huttle-blue hover:underline font-medium disabled:opacity-50"
+                >
+                  {loading ? 'Sending...' : 'Request a new link →'}
+                </button>
+              </div>
             )}
 
             {/* Submit Button */}
@@ -207,7 +293,7 @@ export default function SecureAccount() {
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  Save & Continue
+                  {isRecoveryFlow ? 'Reset Password' : 'Save & Continue'}
                 </>
               )}
             </button>
