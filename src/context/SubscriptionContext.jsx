@@ -2,6 +2,7 @@ import { createContext, useState, useContext, useEffect, useCallback, useMemo, u
 import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, supabase, TABLES, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
 import { AuthContext } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
+import { getTierConfig } from '../utils/tierConfig';
 
 export const SubscriptionContext = createContext();
 
@@ -584,6 +585,7 @@ export function SubscriptionProvider({ children }) {
 
   const value = useMemo(() => ({
     userTier,
+    tierConfig: getTierConfig(userTier),
     userId,
     subscription,
     subscriptionStatus,

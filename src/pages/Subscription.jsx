@@ -9,6 +9,7 @@ import BillingManagementPanel from '../components/BillingManagementPanel';
 import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import FoundersMembershipCard from '../components/FoundersMembershipCard';
 import { supabase } from '../config/supabase';
+import { getTierConfig } from '../utils/tierConfig';
 
 const LAUNCH_PLANS = [
   {
@@ -150,6 +151,7 @@ export default function Subscription() {
   const demoMode = isDemoMode() || contextDemoMode;
   const showDemoControls = import.meta.env.DEV && demoMode;
   const currentPlanDetails = PLAN_DETAILS[userTier] || null;
+  const tierConfig = getTierConfig(subscription?.tier ?? 'free');
 
   const loadBillingDetails = useCallback(async () => {
     try {
@@ -421,6 +423,19 @@ export default function Subscription() {
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-xl font-bold text-gray-900">{currentPlanDetails?.title || getTierDisplayName(userTier)}</h2>
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
+                        tierConfig.badgeColor === 'amber'
+                          ? 'bg-amber-100 text-amber-700'
+                          : tierConfig.badgeColor === 'silver'
+                            ? 'bg-gray-100 text-gray-600'
+                            : tierConfig.badgeColor === 'purple'
+                              ? 'bg-purple-100 text-purple-700'
+                              : tierConfig.badgeColor === 'blue'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {tierConfig.badgeColor === 'amber' ? `⭐ ${tierConfig.badgeLabel}` : tierConfig.badgeLabel}
+                      </span>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         isTrialing
                           ? 'bg-cyan-100 text-cyan-700'
                           : isPastDue
@@ -432,11 +447,11 @@ export default function Subscription() {
                       </span>
                     </div>
 
-                    <p className="text-sm text-gray-600 mb-4">{currentPlanDetails?.summary}</p>
+                    <p className="text-sm text-gray-600 mb-4">{tierConfig.description}</p>
 
                     <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-semibold mb-4 ${currentPlanDetails?.accentClasses || 'border-gray-200 bg-gray-50 text-gray-700'}`}>
                       <Sparkles className="w-4 h-4" />
-                      {currentPlanDetails?.annualLabel}
+                      {tierConfig.priceLabel}
                     </div>
 
                     {/* Date stats */}
@@ -470,7 +485,21 @@ export default function Subscription() {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-3">
+                    {tierConfig.canChangePlan && (
+                      <div className="flex flex-wrap gap-3">
+                        {/* Upgrade/downgrade plan buttons go here */}
+                      </div>
+                    )}
+
+                    {!tierConfig.canChangePlan && (
+                      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mt-4">
+                        {tierConfig.badgeColor === 'amber'
+                          ? '⭐ You\'re a Founding Member — your $199/year rate is locked in forever. Your plan cannot be changed.'
+                          : '🔒 You\'re a Builders Club member — your $249/year rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 mt-4">
                       <button
                         onClick={handleCancelSubscription}
                         disabled={loading === 'portal' || loading === 'cancel'}
