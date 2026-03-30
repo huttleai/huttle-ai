@@ -21,6 +21,7 @@ import {
 import { normalizeEnumValue } from '../utils/formatEnumLabel';
 import { formatDisplayName } from '../utils/brandContextBuilder';
 import { getBrandProfileSectionCompletion } from '../hooks/useBrandProfileSectionCompletion';
+import { normalizePlatformName } from '../hooks/usePreferredPlatforms';
 import {
   InstagramIconMono,
   FacebookIconMono,
@@ -173,7 +174,13 @@ function normalizePlatformId(raw) {
 
 function normalizePlatformList(arr) {
   if (!Array.isArray(arr)) return [];
-  return [...new Set(arr.map(normalizePlatformId))];
+  return [
+    ...new Set(
+      arr
+        .map((raw) => normalizePlatformName(raw) || normalizePlatformId(raw))
+        .filter(Boolean)
+    ),
+  ];
 }
 
 function deriveCreatorKind(source = {}) {
@@ -591,14 +598,20 @@ export default function BrandVoice() {
   };
 
   const togglePlatform = (id) => {
-    const p = normalizePlatformId(id);
+    const p = normalizePlatformName(id) || normalizePlatformId(id);
+    if (!p) return;
     setFormData((prev) => {
-      const has = prev.platforms.includes(p);
-      if (!has && prev.platforms.length >= MAX_PLATFORMS) {
+      const norm = (x) => normalizePlatformName(x) || normalizePlatformId(x);
+      const has = prev.platforms.some((x) => norm(x) === p);
+      const effectiveCount = new Set(prev.platforms.map((x) => norm(x)).filter(Boolean)).size;
+      if (!has && effectiveCount >= MAX_PLATFORMS) {
         addToast(`Choose up to ${MAX_PLATFORMS} platforms.`, 'warning');
         return prev;
       }
-      const platforms = has ? prev.platforms.filter((x) => x !== p) : [...prev.platforms, p];
+      const next = has
+        ? prev.platforms.filter((x) => norm(x) !== p)
+        : [...prev.platforms, p];
+      const platforms = [...new Set(next.map((x) => norm(x)).filter(Boolean))];
       return { ...prev, platforms };
     });
   };

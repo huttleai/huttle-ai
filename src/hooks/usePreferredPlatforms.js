@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 import { BrandContext } from '../context/BrandContext';
+import { AuthContext } from '../context/AuthContext';
 
 /**
  * Master list of all supported platforms with their metadata
@@ -89,25 +90,30 @@ const STORAGE_KEY = 'preferredPlatforms';
 
 /**
  * Custom hook to manage preferred platforms
- * 
- * Brand Voice platforms are the source of truth. If the user has set platforms
- * in their Brand Voice, only those platforms are shown. If no Brand Voice
- * platforms are set, `platforms` will be empty and `hasPlatformsConfigured`
- * will be false — callers should show a setup prompt.
- * 
+ *
+ * After the signed-in user's brand profile has loaded (`brandFetchComplete`),
+ * `user_profile.preferred_platforms` is the source of truth — including an empty
+ * array — so Settings and Brand Profile stay in sync and clearing all platforms
+ * does not resurrect stale `localStorage` values.
+ *
+ * Before that (or when logged out), `preferredPlatforms` in localStorage is used.
+ *
  * @returns {Object} Platform management utilities
- * - preferredPlatforms: Array of platform names the user has selected
- * - preferredPlatformIds: Array of normalized platform IDs
- * - platforms: Full platform objects filtered by Brand Voice (empty if none configured)
+ * - preferredPlatforms: Raw localStorage-backed selection (logged-out / pre-fetch)
+ * - preferredPlatformIds: Active normalized platform IDs (profile or local fallback)
+ * - platforms: Full platform objects for active IDs
  * - allPlatforms: All available platforms (for Settings page)
- * - hasPlatformsConfigured: Whether the user has selected platforms in Brand Voice
- * - togglePlatform: Function to toggle a platform on/off
- * - isPlatformPreferred: Function to check if a platform is preferred
- * - savePlatforms: Function to save platforms to localStorage
+ * - hasPlatformsConfigured: True when at least one platform is selected
+ * - togglePlatform: Toggle by canonical id or any label `normalizePlatformName` accepts
+ * - isPlatformPreferred: Check by id or label
+ * - savePlatforms: Bulk set localStorage list
  */
 export function usePreferredPlatforms() {
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const brandContext = useContext(BrandContext);
   const brandData = brandContext?.brandData;
+  const brandFetchComplete = brandContext?.brandFetchComplete ?? false;
 
   const [preferredPlatforms, setPreferredPlatforms] = useState(() => {
     try {
@@ -135,54 +141,66 @@ export function usePreferredPlatforms() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Brand Voice platforms are the primary source of truth (Settings toggles update this when BV is configured).
-  // Dashboard widgets resolve platforms from cached `selected_platforms` then fall back to these IDs — keep labels consistent with Brand Profile.
-  const brandPlatformIds = (brandData?.platforms || [])
-    .map(name => normalizePlatformName(name))
-    .filter(Boolean);
+  const brandPlatformIds = [
+    ...new Set(
+      (brandData?.platforms || [])
+        .map((name) => normalizePlatformName(name))
+        .filter(Boolean)
+    ),
+  ];
 
-  // Whether the user has configured platforms in Brand Voice
-  const hasPlatformsConfigured = brandPlatformIds.length > 0;
+  const preferredPlatformIds = [
+    ...new Set(
+      preferredPlatforms
+        .map((name) => normalizePlatformName(name))
+        .filter(Boolean)
+    ),
+  ];
 
-  // Get normalized IDs for the preferred platforms (localStorage)
-  const preferredPlatformIds = preferredPlatforms
-    .map(name => normalizePlatformName(name))
-    .filter(Boolean);
+  /** Signed-in + profile fetch finished → always trust `brandData.platforms` (even []). */
+  const useBrandProfileForPlatforms = Boolean(user?.id && brandFetchComplete);
 
-  // If Brand Voice has platforms, use those as source of truth
-  // Otherwise, fall back to localStorage preferences (which may also be empty)
-  const activePlatformIds = hasPlatformsConfigured
+  const activePlatformIds = useBrandProfileForPlatforms
     ? brandPlatformIds
     : preferredPlatformIds;
+
+  const hasPlatformsConfigured = activePlatformIds.length > 0;
 
   // Filter ALL_PLATFORMS to only include active platforms
   const platforms = ALL_PLATFORMS.filter(platform => 
     activePlatformIds.includes(platform.id)
   );
 
-  // Toggle a platform preference.
-  // When Brand Voice has platforms configured, update Brand Voice directly
-  // so Settings changes are actually reflected app-wide.
-  const togglePlatform = useCallback((platformName) => {
-    if (hasPlatformsConfigured && brandContext?.updateBrandData) {
-      const currentBrandPlatforms = brandContext.brandData?.platforms || [];
-      const newPlatforms = currentBrandPlatforms.includes(platformName)
-        ? currentBrandPlatforms.filter(p => p !== platformName)
-        : [...currentBrandPlatforms, platformName];
-      brandContext.updateBrandData({ platforms: newPlatforms });
-      return;
-    }
+  const togglePlatform = useCallback(
+    (platformIdOrLabel) => {
+      const toggledId = normalizePlatformName(platformIdOrLabel);
+      if (!toggledId) return;
 
-    setPreferredPlatforms(prev => {
-      const newPlatforms = prev.includes(platformName)
-        ? prev.filter(p => p !== platformName)
-        : [...prev, platformName];
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPlatforms));
-      
-      return newPlatforms;
-    });
-  }, [hasPlatformsConfigured, brandContext]);
+      if (useBrandProfileForPlatforms && brandContext?.updateBrandData) {
+        const currentBrandPlatforms = brandContext.brandData?.platforms || [];
+        const isSelected = currentBrandPlatforms.some(
+          (p) => normalizePlatformName(p) === toggledId
+        );
+        const newPlatforms = isSelected
+          ? currentBrandPlatforms.filter((p) => normalizePlatformName(p) !== toggledId)
+          : [...currentBrandPlatforms, toggledId];
+        brandContext.updateBrandData({ platforms: newPlatforms });
+        return;
+      }
+
+      setPreferredPlatforms((prev) => {
+        const isSelected = prev.some((p) => normalizePlatformName(p) === toggledId);
+        const newPlatforms = isSelected
+          ? prev.filter((p) => normalizePlatformName(p) !== toggledId)
+          : [...prev, toggledId];
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPlatforms));
+
+        return newPlatforms;
+      });
+    },
+    [useBrandProfileForPlatforms, brandContext]
+  );
 
   // Check if a platform is preferred
   const isPlatformPreferred = useCallback((platformName) => {
@@ -205,7 +223,6 @@ export function usePreferredPlatforms() {
     platforms,
     // All available platforms (for Settings page)
     allPlatforms: ALL_PLATFORMS,
-    // Whether Brand Voice platforms are configured
     hasPlatformsConfigured,
     // Utility functions
     togglePlatform,

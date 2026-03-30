@@ -1,31 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save, ExternalLink } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Globe, Lock, User, CreditCard, Save } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Tooltip from '../components/Tooltip';
 import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 
 /**
- * Settings Page
- * 
- * NOTE: Social media connections are NOT required for Huttle AI.
- * Users publish content via deep linking (opening native apps directly).
- * The "Preferred Platforms" section is for tracking user preferences only.
+ * Settings Page — account preferences, preferred content platforms, and general options.
  */
 export default function Settings() {
   const { addToast } = useToast();
-  const { 
-    preferredPlatforms,
+  const {
     preferredPlatformIds,
-    allPlatforms, 
-    togglePlatform, 
+    allPlatforms,
+    togglePlatform,
     isPlatformPreferred,
-    hasPlatformsConfigured
   } = usePreferredPlatforms();
 
-  const activePlatformCount = hasPlatformsConfigured
-    ? preferredPlatformIds.length
-    : preferredPlatforms.length;
+  const activePlatformCount = preferredPlatformIds.length;
 
   const [settings, setSettings] = useState({
     // General Settings
@@ -39,14 +31,16 @@ export default function Settings() {
     addToast('Settings saved successfully!', 'success');
   };
 
-  // Transform allPlatforms to the format expected by the UI
-  const socialPlatforms = allPlatforms.map(p => ({
+  // Use canonical `id` for toggles so labels/display names never drift from saved profile ids.
+  const socialPlatforms = allPlatforms.map((p) => ({
+    id: p.id,
     name: p.displayName || p.name,
     icon: p.icon,
-    color: p.id === 'instagram' 
-      ? 'bg-gradient-to-br from-purple-600 to-pink-500' 
-      : p.color,
-    description: p.description
+    color:
+      p.id === 'instagram'
+        ? 'bg-gradient-to-br from-purple-600 to-pink-500'
+        : p.color,
+    description: p.description,
   }));
 
   return (
@@ -104,7 +98,7 @@ export default function Settings() {
               <Globe className="w-6 h-6 text-huttle-primary" />
             </div>
             <div>
-              <Tooltip content="Select your preferred platforms. When you publish, Huttle AI will open the native app on your phone or the website on desktop.">
+              <Tooltip content="Platforms you care about most. We use this to tailor formats and suggestions in features like Ignite Engine and Content Remix.">
                 <h3 className="text-lg font-semibold text-gray-900">Preferred Platforms</h3>
               </Tooltip>
               <p className="text-sm text-gray-600">Select which platforms you use most</p>
@@ -117,11 +111,12 @@ export default function Settings() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {socialPlatforms.map((platform) => {
-            const isSelected = isPlatformPreferred(platform.name);
+            const isSelected = isPlatformPreferred(platform.id);
             return (
               <button
-                key={platform.name}
-                onClick={() => togglePlatform(platform.name)}
+                key={platform.id}
+                type="button"
+                onClick={() => togglePlatform(platform.id)}
                 className={`p-4 rounded-lg border-2 transition-all text-left ${
                   isSelected
                     ? 'border-huttle-primary bg-huttle-primary/5'
@@ -149,18 +144,6 @@ export default function Settings() {
               </button>
             );
           })}
-        </div>
-
-        <div className="mt-6 p-4 bg-huttle-50 border border-huttle-200 rounded-lg">
-          <div className="flex gap-3">
-            <ExternalLink className="w-5 h-5 text-huttle-primary flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-1">How Publishing Works</h4>
-              <p className="text-sm text-gray-700">
-                When you click "Ready to Post" on a post, Huttle AI lets you copy your content and opens the native app on your phone (or the website on desktop) so you can paste and publish natively. No account connection required!
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
