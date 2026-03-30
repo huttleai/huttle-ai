@@ -48,14 +48,14 @@ const FAQ_ITEMS = [
   },
   {
     question: "Is there a money-back guarantee?",
-    answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
+    answer: "Yes. Founders Club and Builders Club include a 14-day happiness guarantee. If Huttle AI is not right for you, email support@huttleai.com within 14 days for a full refund."
   },
   {
     question: "What platforms does Huttle AI support?",
     answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All our AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
   },
   {
-    question: "Is our payment secure?",
+    question: "Is your payment secure?",
     answer: "100%. All payments are processed through Stripe, the same infrastructure trusted by Amazon, Google, and Shopify. We never store your card information on our servers."
   },
 ];
