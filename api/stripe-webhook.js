@@ -157,6 +157,7 @@ async function updateSubscriptionRecord({
   userId,
   customerId,
   subscription,
+  customerName = null,
 }) {
   const priceId = subscription.items.data[0]?.price?.id;
   const plan = resolvePlanId({
@@ -177,6 +178,7 @@ async function updateSubscriptionRecord({
     trial_end: subscription.trial_end ? toIsoDate(subscription.trial_end) : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
     cancelled_at: subscription.canceled_at ? toIsoDate(subscription.canceled_at) : null,
+    customer_name: customerName || null,
     updated_at: new Date().toISOString(),
   };
 
@@ -344,7 +346,7 @@ export default async function handler(req, res) {
           if (subscriptionId) {
             try {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-              const plan = await updateSubscriptionRecord({ userId, customerId, subscription });
+              const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
 
               if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
                 await addToFoundersClub(customerEmail, firstName, lastName);
