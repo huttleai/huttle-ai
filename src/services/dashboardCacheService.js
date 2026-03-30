@@ -1946,17 +1946,17 @@ function isDailyDashboardCacheStaleByLocalWeekday(cachedRow) {
   return cachedDay !== todayDay;
 }
 
-async function readDailyDashboardCache(userId) { // HUTTLE AI: cache fix
-  if (!userId) {
+async function readDailyDashboardCache(userId, generatedDate) { // HUTTLE AI: cache fix
+  const dateKey = coerceDashboardCacheDateKey(generatedDate);
+  if (!userId || !dateKey) {
     return null;
   }
-  const today = new Date().toISOString().split('T')[0];
 
   const { data, error } = await supabase // HUTTLE AI: cache fix
     .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
     .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at') // HUTTLE AI: cache fix
     .eq('user_id', userId) // HUTTLE AI: cache fix
-    .eq('generated_date', today) // HUTTLE AI: cache fix
+    .eq('generated_date', dateKey) // HUTTLE AI: cache fix
     .maybeSingle(); // HUTTLE AI: cache fix
 
   if (error && isMissingDashboardCacheColumnError(error)) { // HUTTLE AI: cache fix
@@ -1964,7 +1964,7 @@ async function readDailyDashboardCache(userId) { // HUTTLE AI: cache fix
       .from(DASHBOARD_CACHE_TABLE) // HUTTLE AI: cache fix
       .select('generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, created_at') // HUTTLE AI: cache fix
       .eq('user_id', userId) // HUTTLE AI: cache fix
-      .eq('generated_date', today) // HUTTLE AI: cache fix
+      .eq('generated_date', dateKey) // HUTTLE AI: cache fix
       .maybeSingle(); // HUTTLE AI: cache fix
 
     if (fallbackResult.error) { // HUTTLE AI: cache fix
@@ -2116,7 +2116,7 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
     generatedDate = new Date().toISOString().slice(0, 10);
   }
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
-  const cachedRow = await readDailyDashboardCache(userId); // HUTTLE AI: cache fix
+  const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
 
   if (!cachedRow) { // HUTTLE AI: cache fix
     return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
