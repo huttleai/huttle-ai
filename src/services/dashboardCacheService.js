@@ -605,18 +605,24 @@ async function getAuthHeaders() {
 
 const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.`;
 
-function buildDashboardTrendingUserPrompt(platformLabel, nicheLabel) {
-  return `Find the top 3 trending content topics RIGHT NOW on ${platformLabel} for the ${nicheLabel} niche. Focus on topics with real momentum in the last 7 days based on engagement data, hashtag velocity, and creator activity.
+function buildDashboardTrendingUserPrompt(platformLabel, nicheLabel, accountType) {
+  return `Find the top 6 trending content topics RIGHT NOW on ${platformLabel} for the ${nicheLabel} niche. Focus on topics with real momentum in the last 7 days based on engagement data, hashtag velocity, and creator activity.
 
-Return a JSON array of exactly 3 objects. Every object must include ALL of these fields — do not omit any:
+Only include trends that are currently gaining traction on social media in the US, UK, Europe, Australia, and Canada. Do not include trends that are primarily regional to other countries (e.g. India, Nigeria, Southeast Asia, Brazil, etc.).
+
+The user is a ${accountType}. Use this to shape how you frame every trend:
+- If "Solo Creator": frame trends around growing a following, getting more views, and building toward monetization (sponsorships, affiliates, selling digital products). This person is an everyday person who wants to grow their social media presence and eventually make money from it.
+- If "Brand/Business": frame trends around attracting clients, driving bookings, increasing sales, and building local or niche authority. This includes fitness coaches, med spas, gyms, real estate agents, local shops, restaurants, and other small businesses.
+
+Return a JSON array of exactly 6 objects. Every object must include ALL of these fields — do not omit any:
 [
   {
     "title": "Short trend name (5-8 words max)",
-    "description": "Why this is trending and how a ${nicheLabel} creator can use it (2 sentences)",
+    "description": "Write this in 2 short sentences using plain, conversational language — the kind a knowledgeable friend would use in a text message, not a marketing report. Avoid jargon, formal phrasing, and documentation-style writing. Make it feel immediate and relevant: what is this trend, and why should they care about it right now.",
     "momentum": "rising" | "peaking" | "steady" | "declining",
     "format": "reel" | "carousel" | "story" | "post" | "video" | "live",
-    "hook": "One attention-grabbing opening line a ${nicheLabel} creator could post",
-    "niche_angle": "Specific content angle for ${nicheLabel} businesses or creators",
+    "hook": "One attention-grabbing opening line a ${nicheLabel} ${accountType} could post",
+    "niche_angle": "A specific content angle for this trend tailored to a ${nicheLabel} ${accountType} — focused on growing their following and monetizing if Solo Creator, or attracting clients and driving revenue if Brand/Business",
     "hashtags": ["tag1", "tag2", "tag3"],
     "confidence": "high" | "medium" | "low"
   }
@@ -633,12 +639,18 @@ function getTrendingNicheForSlice(context, variant) {
   return context.niche || DEFAULT_NICHE;
 }
 
+function resolveAccountTypeLabel(context) {
+  const creatorType = getBrandVoiceCreatorType(context.brandProfile || {});
+  return creatorType === 'solo_creator' ? 'Solo Creator' : 'Brand/Business';
+}
+
 function buildDashboardTrendingMessages(platform, context, variant) {
   const platformLabel = formatPlatformLabel(platform);
   const nicheLabel = getTrendingNicheForSlice(context, variant);
+  const accountType = resolveAccountTypeLabel(context);
   return [
     { role: 'system', content: DASHBOARD_TRENDING_SYSTEM_PROMPT },
-    { role: 'user', content: buildDashboardTrendingUserPrompt(platformLabel, nicheLabel) },
+    { role: 'user', content: buildDashboardTrendingUserPrompt(platformLabel, nicheLabel, accountType) },
   ];
 }
 
