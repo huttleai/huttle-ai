@@ -45,16 +45,31 @@ export default async function handler(req, res) {
     }
 
     // Always resolve the subscription ID server-side from the authenticated user.
-    const { subscriptionId: stripeSubscriptionId } = await resolveBillingContext({
+    const billingContext = await resolveBillingContext({
       supabase,
       stripe,
       userId: authResult.user.id,
       createCustomerIfMissing: false,
     });
 
+    let stripeSubscriptionId = billingContext.subscriptionId ?? null;
+    const stripeCustomerId = billingContext.customerId ?? null;
+
+    // If stripe_subscription_id is null in Supabase but we have a customer ID,
+    // look up active subscriptions directly from Stripe to recover the ID.
+    if (!stripeSubscriptionId && stripeCustomerId) {
+      const foundSubscription = await getStripeSubscription({
+        stripe,
+        customerId: stripeCustomerId,
+        subscriptionId: null,
+        expand: [],
+      });
+      stripeSubscriptionId = foundSubscription?.id ?? null;
+    }
+
     if (!stripeSubscriptionId) {
       return res.status(400).json({
-        error: 'No active subscription found to cancel',
+        error: 'No active Stripe subscription found. Please contact support.',
         message: 'If you believe this is an error, please contact support@huttleai.com',
       });
     }

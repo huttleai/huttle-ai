@@ -205,21 +205,32 @@ export async function getStripeSubscription({
 
   if (subscriptionId) {
     const retrieveExpand = expand.map((value) => value.replace(/^data\./, ''));
-    return stripe.subscriptions.retrieve(subscriptionId, {
-      expand: retrieveExpand,
-    });
+    try {
+      return await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: retrieveExpand,
+      });
+    } catch (err) {
+      // If the subscription no longer exists in Stripe (e.g. stale ID), fall
+      // through to the customer list lookup rather than throwing a 500.
+      console.warn('[billing] stripe.subscriptions.retrieve failed for', subscriptionId, '—', err?.message);
+      if (!customerId) return null;
+    }
   }
 
   if (!customerId) return null;
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customerId,
-    status: 'all',
-    limit: 10,
-    expand,
-  });
-
-  return selectBestStripeSubscription(subscriptions.data);
+  try {
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 10,
+      expand,
+    });
+    return selectBestStripeSubscription(subscriptions.data);
+  } catch (err) {
+    console.warn('[billing] stripe.subscriptions.list failed for customer', customerId, '—', err?.message);
+    return null;
+  }
 }
 
 export function buildSubscriptionPayload({

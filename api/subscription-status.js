@@ -113,12 +113,62 @@ export default async function handler(req, res) {
       });
     }
 
-    const stripeSubscription = await getStripeSubscription({
-      stripe,
-      customerId,
-      subscriptionId,
-      expand: ['data.schedule'],
-    });
+    // If we have no Stripe IDs at all, return the Supabase record data without
+    // attempting any Stripe API call. This avoids a 500 when stripe_subscription_id
+    // and stripe_customer_id are null (e.g. immediately after account creation
+    // before the webhook has written back Stripe data).
+    if (!subscriptionId && !customerId) {
+      const normalizedFromRecord = buildSubscriptionPayload({
+        stripeSubscription: null,
+        subscriptionRecord,
+      });
+
+      if (!normalizedFromRecord) {
+        return res.status(200).json({
+          subscription: null,
+          plan: null,
+          status: 'inactive',
+          currentPeriodEnd: null,
+          trialEnd: null,
+        });
+      }
+
+      const {
+        customerId: _cid,
+        stripeSubscriptionId: _sid,
+        id: _id,
+        ...safeSubscription
+      } = normalizedFromRecord;
+
+      return res.status(200).json({
+        subscription: safeSubscription,
+        plan: normalizedFromRecord.plan ?? null,
+        tier: normalizedFromRecord.tier ?? null,
+        status: normalizedFromRecord.status ?? 'inactive',
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        trialStart: null,
+        trialEnd: normalizedFromRecord.trialEnd ?? null,
+        billingCycle: normalizedFromRecord.billingCycle ?? null,
+        cancelAtPeriodEnd: normalizedFromRecord.cancelAtPeriodEnd ?? false,
+        cancelledAt: normalizedFromRecord.cancelledAt ?? null,
+        upcomingPlanChange: null,
+      });
+    }
+
+    // Only attempt Stripe API calls when we have at least one Stripe identifier.
+    let stripeSubscription = null;
+    try {
+      stripeSubscription = await getStripeSubscription({
+        stripe,
+        customerId,
+        subscriptionId,
+        expand: ['data.schedule'],
+      });
+    } catch (stripeErr) {
+      // Log but do not throw — fall back to Supabase record data below.
+      console.error('[subscription-status] Stripe lookup failed:', stripeErr?.message ?? stripeErr);
+    }
 
     const subStatus = stripeSubscription?.status;
     if (
@@ -126,6 +176,39 @@ export default async function handler(req, res) {
       subStatus === 'incomplete_expired' ||
       subStatus === 'unpaid'
     ) {
+      // If Stripe has no active subscription, return what Supabase knows.
+      // This keeps the billing UI functional even when Stripe data is unavailable.
+      if (subscriptionRecord) {
+        const normalizedFromRecord = buildSubscriptionPayload({
+          stripeSubscription: null,
+          subscriptionRecord,
+        });
+
+        if (normalizedFromRecord) {
+          const {
+            customerId: _cid,
+            stripeSubscriptionId: _sid,
+            id: _id,
+            ...safeSubscription
+          } = normalizedFromRecord;
+
+          return res.status(200).json({
+            subscription: safeSubscription,
+            plan: normalizedFromRecord.plan ?? null,
+            tier: normalizedFromRecord.tier ?? null,
+            status: normalizedFromRecord.status ?? 'inactive',
+            currentPeriodStart: normalizedFromRecord.currentPeriodStart ?? null,
+            currentPeriodEnd: normalizedFromRecord.currentPeriodEnd ?? null,
+            trialStart: null,
+            trialEnd: null,
+            billingCycle: normalizedFromRecord.billingCycle ?? null,
+            cancelAtPeriodEnd: normalizedFromRecord.cancelAtPeriodEnd ?? false,
+            cancelledAt: normalizedFromRecord.cancelledAt ?? null,
+            upcomingPlanChange: null,
+          });
+        }
+      }
+
       return res.status(200).json({
         subscription: null,
         plan: null,

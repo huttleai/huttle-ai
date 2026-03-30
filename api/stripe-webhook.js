@@ -258,180 +258,213 @@ export default async function handler(req, res) {
     }
 
     // Handle the event
+    // Each case is wrapped in its own try/catch so that a processing error
+    // never causes a non-200 response. Stripe retries on non-200 responses,
+    // which would cause duplicate processing of already-handled events.
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object;
-        
-        const customerId = session.customer;
-        const subscriptionId = session.subscription;
-        const customerEmail = session.customer_email || session.customer_details?.email;
+        try {
+          const session = event.data.object;
 
-        // Setup-mode sessions are payment method updates — sync new card and move on.
-        if (session.mode === 'setup' && customerId && session.setup_intent) {
-          const setupIntent = await stripe.setupIntents.retrieve(session.setup_intent);
-          const paymentMethodId = typeof setupIntent.payment_method === 'string'
-            ? setupIntent.payment_method
-            : setupIntent.payment_method?.id;
+          const customerId = session.customer;
+          const subscriptionId = session.subscription;
+          const customerEmail = session.customer_email || session.customer_details?.email;
 
-          if (paymentMethodId) {
-            await stripe.customers.update(customerId, {
-              invoice_settings: { default_payment_method: paymentMethodId },
-            });
+          // Setup-mode sessions are payment method updates — sync new card and move on.
+          if (session.mode === 'setup' && customerId && session.setup_intent) {
+            try {
+              const setupIntent = await stripe.setupIntents.retrieve(session.setup_intent);
+              const paymentMethodId = typeof setupIntent.payment_method === 'string'
+                ? setupIntent.payment_method
+                : setupIntent.payment_method?.id;
 
-            const { data: subscriptionRecord } = await supabase
-              .from('subscriptions')
-              .select('stripe_subscription_id')
-              .eq('stripe_customer_id', customerId)
-              .maybeSingle();
+              if (paymentMethodId) {
+                await stripe.customers.update(customerId, {
+                  invoice_settings: { default_payment_method: paymentMethodId },
+                });
 
-            if (subscriptionRecord?.stripe_subscription_id) {
-              await stripe.subscriptions.update(subscriptionRecord.stripe_subscription_id, {
-                default_payment_method: paymentMethodId,
-              });
+                const { data: subscriptionRecord } = await supabase
+                  .from('subscriptions')
+                  .select('stripe_subscription_id')
+                  .eq('stripe_customer_id', customerId)
+                  .maybeSingle();
+
+                if (subscriptionRecord?.stripe_subscription_id) {
+                  await stripe.subscriptions.update(subscriptionRecord.stripe_subscription_id, {
+                    default_payment_method: paymentMethodId,
+                  });
+                }
+              }
+            } catch (setupErr) {
+              logError('stripe_webhook.setup_session_error', { eventId: event.id, error: setupErr.message });
             }
-          }
-
-          break;
-        }
-
-        if (!customerId) break;
-
-        // Resolve the Supabase user — prefer the user_id embedded in checkout
-        // metadata (most reliable), then fall back to email lookup.
-        let userId = session.metadata?.supabase_user_id || null;
-        let customerName = session.customer_details?.name || '';
-
-        if (!userId && customerEmail) {
-          const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
-            filter: `email.eq.${customerEmail}`,
-            page: 1,
-            perPage: 1,
-          });
-          if (userLookupError) {
-            console.error('Error finding auth user by email:', userLookupError);
             break;
           }
-          userId = userList?.users?.[0]?.id ?? null;
-        }
 
-        if (!userId) {
-          console.warn('checkout.session.completed: no Supabase user found for customer', customerId, 'email', customerEmail);
-          break;
-        }
+          if (!customerId) break;
 
-        const nameParts = customerName.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join(' ') || '';
+          // Resolve the Supabase user — prefer the user_id embedded in checkout
+          // metadata (most reliable), then fall back to email lookup.
+          let userId = session.metadata?.supabase_user_id || null;
+          let customerName = session.customer_details?.name || '';
 
-        // Backfill the stripe_customer_id on user_profile for future lookups.
-        await supabase.from('user_profile').upsert({
-          user_id: userId,
-          stripe_customer_id: customerId,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-
-        if (subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-          const plan = await updateSubscriptionRecord({ userId, customerId, subscription });
-
-          if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
-            await addToFoundersClub(customerEmail, firstName, lastName);
+          if (!userId && customerEmail) {
+            const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
+              filter: `email.eq.${customerEmail}`,
+              page: 1,
+              perPage: 1,
+            });
+            if (userLookupError) {
+              logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
+              break;
+            }
+            userId = userList?.users?.[0]?.id ?? null;
           }
+
+          if (!userId) {
+            logWarn('stripe_webhook.checkout_no_user_found', { eventId: event.id, customerId, customerEmail });
+            break;
+          }
+
+          const nameParts = customerName.split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          // Backfill the stripe_customer_id on user_profile for future lookups.
+          try {
+            await supabase.from('user_profile').upsert({
+              user_id: userId,
+              stripe_customer_id: customerId,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' });
+          } catch (profileErr) {
+            logError('stripe_webhook.checkout_profile_upsert_failed', { eventId: event.id, userId, error: profileErr.message });
+          }
+
+          if (subscriptionId) {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const plan = await updateSubscriptionRecord({ userId, customerId, subscription });
+
+              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
+                await addToFoundersClub(customerEmail, firstName, lastName);
+              }
+            } catch (subErr) {
+              logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+            }
+          }
+        } catch (err) {
+          logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
         }
         break;
       }
 
       case 'customer.subscription.trial_will_end': {
-        const subscription = event.data.object;
-        await maybeSendTrialReminder({ stripe, supabase, subscription });
+        try {
+          const subscription = event.data.object;
+          await maybeSendTrialReminder({ stripe, supabase, subscription });
+        } catch (err) {
+          logError('stripe_webhook.trial_will_end_error', { eventId: event.id, error: err.message });
+        }
         break;
       }
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        const subscription = event.data.object;
-        const customerId = subscription.customer;
+        try {
+          const subscription = event.data.object;
+          const customerId = subscription.customer;
 
-        // Find user by Stripe customer ID
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profile')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .maybeSingle();
+          // Find user by Stripe customer ID
+          const { data: profile, error: profileError } = await supabase
+            .from('user_profile')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
 
-        if (profileError && profileError.code !== 'PGRST116') {
-          console.error('Error finding user profile by customer id:', profileError);
-          break;
-        }
+          if (profileError && profileError.code !== 'PGRST116') {
+            logError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
+            break;
+          }
 
-        if (profile) {
-          await updateSubscriptionRecord({
-            userId: profile.user_id,
-            customerId,
-            subscription,
-          });
+          if (profile) {
+            await updateSubscriptionRecord({
+              userId: profile.user_id,
+              customerId,
+              subscription,
+            });
+          }
+        } catch (err) {
+          logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
         }
         break;
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object;
-        const customerId = subscription.customer;
+        try {
+          const subscription = event.data.object;
+          const customerId = subscription.customer;
 
-        const { data: profile } = await supabase
-          .from('user_profile')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .maybeSingle();
+          const { data: profile } = await supabase
+            .from('user_profile')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
 
-        if (profile) {
-          // Reset tier to 'free' so paid-feature gates fail immediately.
-          // cancelled_at may not exist yet on older schemas — fall back gracefully.
-          const deletionPayload = {
-            tier: 'free',
-            status: 'canceled',
-            cancel_at_period_end: false,
-            updated_at: new Date().toISOString(),
-            cancelled_at: new Date().toISOString(),
-          };
+          if (profile) {
+            // Reset tier to 'free' so paid-feature gates fail immediately.
+            // cancelled_at may not exist yet on older schemas — fall back gracefully.
+            const deletionPayload = {
+              tier: 'free',
+              status: 'canceled',
+              cancel_at_period_end: false,
+              updated_at: new Date().toISOString(),
+              cancelled_at: new Date().toISOString(),
+            };
 
-          let { error: delError } = await supabase
-            .from('subscriptions')
-            .update(deletionPayload)
-            .eq('user_id', profile.user_id);
+            let { error: delError } = await supabase
+              .from('subscriptions')
+              .update(deletionPayload)
+              .eq('user_id', profile.user_id);
 
-          if (delError?.message?.toLowerCase().includes('cancelled_at')) {
-            const { cancelled_at: _ca, ...fallback } = deletionPayload;
-            delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
+            if (delError?.message?.toLowerCase().includes('cancelled_at')) {
+              const { cancelled_at: _ca, ...fallback } = deletionPayload;
+              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
+            }
+
+            if (delError) {
+              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+            }
           }
-
-          if (delError) {
-            console.error('customer.subscription.deleted update error:', delError.message);
-          }
+        } catch (err) {
+          logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
         }
         break;
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object;
-        const customerId = invoice.customer;
+        try {
+          const invoice = event.data.object;
+          const customerId = invoice.customer;
 
-        // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
-        const { data: profile } = await supabase
-          .from('user_profile')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .maybeSingle();
+          // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
+          const { data: profile } = await supabase
+            .from('user_profile')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
 
-        if (profile) {
-          // Update subscription status to past_due
-          await supabase
-            .from('subscriptions')
-            .update({
-              status: 'past_due',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('user_id', profile.user_id);
+          if (profile) {
+            await supabase
+              .from('subscriptions')
+              .update({
+                status: 'past_due',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('user_id', profile.user_id);
+          }
+        } catch (err) {
+          logError('stripe_webhook.invoice_payment_failed_error', { eventId: event.id, error: err.message });
         }
         break;
       }
@@ -440,44 +473,48 @@ export default async function handler(req, res) {
       // annual renewals. This is the canonical event for clearing past_due state
       // and refreshing billing period dates after every successful renewal.
       case 'invoice.paid': {
-        const invoice = event.data.object;
-        const customerId = invoice.customer;
+        try {
+          const invoice = event.data.object;
+          const customerId = invoice.customer;
 
-        const { data: profile } = await supabase
-          .from('user_profile')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .maybeSingle();
+          const { data: profile } = await supabase
+            .from('user_profile')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
 
-        if (profile && invoice.subscription) {
-          // Fetch the live subscription to get accurate period dates.
-          let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
-          let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
+          if (profile && invoice.subscription) {
+            // Fetch the live subscription to get accurate period dates.
+            let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
+            let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
 
-          try {
-            const stripeSub = await stripe.subscriptions.retrieve(invoice.subscription);
-            periodStart = toIsoDate(stripeSub.current_period_start) || periodStart;
-            periodEnd = toIsoDate(stripeSub.current_period_end) || periodEnd;
-          } catch (subErr) {
-            logWarn('stripe_webhook.invoice_paid_sub_fetch_failed', { error: subErr.message });
+            try {
+              const stripeSub = await stripe.subscriptions.retrieve(invoice.subscription);
+              periodStart = toIsoDate(stripeSub.current_period_start) || periodStart;
+              periodEnd = toIsoDate(stripeSub.current_period_end) || periodEnd;
+            } catch (subErr) {
+              logWarn('stripe_webhook.invoice_paid_sub_fetch_failed', { eventId: event.id, error: subErr.message });
+            }
+
+            const updatePayload = {
+              status: 'active',
+              cancel_at_period_end: false,
+              updated_at: new Date().toISOString(),
+              ...(periodStart && { current_period_start: periodStart }),
+              ...(periodEnd && { current_period_end: periodEnd }),
+            };
+
+            const { error: paidError } = await supabase
+              .from('subscriptions')
+              .update(updatePayload)
+              .eq('user_id', profile.user_id);
+
+            if (paidError) {
+              logError('stripe_webhook.invoice_paid_update_failed', { eventId: event.id, userId: profile.user_id, error: paidError.message });
+            }
           }
-
-          const updatePayload = {
-            status: 'active',
-            cancel_at_period_end: false,
-            updated_at: new Date().toISOString(),
-            ...(periodStart && { current_period_start: periodStart }),
-            ...(periodEnd && { current_period_end: periodEnd }),
-          };
-
-          const { error: paidError } = await supabase
-            .from('subscriptions')
-            .update(updatePayload)
-            .eq('user_id', profile.user_id);
-
-          if (paidError) {
-            console.error('invoice.paid update error:', paidError.message);
-          }
+        } catch (err) {
+          logError('stripe_webhook.invoice_paid_error', { eventId: event.id, error: err.message });
         }
         break;
       }
@@ -486,27 +523,31 @@ export default async function handler(req, res) {
       // fires when a payment attempt succeeds (not for manual invoice-paid marks).
       // Keep both for full coverage; period dates are refreshed here too.
       case 'invoice.payment_succeeded': {
-        const invoice = event.data.object;
-        const customerId = invoice.customer;
+        try {
+          const invoice = event.data.object;
+          const customerId = invoice.customer;
 
-        const { data: profile } = await supabase
-          .from('user_profile')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .maybeSingle();
+          const { data: profile } = await supabase
+            .from('user_profile')
+            .select('user_id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle();
 
-        if (profile) {
-          const updatePayload = {
-            status: 'active',
-            updated_at: new Date().toISOString(),
-            ...(invoice.period_start && { current_period_start: toIsoDate(invoice.period_start) }),
-            ...(invoice.period_end && { current_period_end: toIsoDate(invoice.period_end) }),
-          };
+          if (profile) {
+            const updatePayload = {
+              status: 'active',
+              updated_at: new Date().toISOString(),
+              ...(invoice.period_start && { current_period_start: toIsoDate(invoice.period_start) }),
+              ...(invoice.period_end && { current_period_end: toIsoDate(invoice.period_end) }),
+            };
 
-          await supabase
-            .from('subscriptions')
-            .update(updatePayload)
-            .eq('user_id', profile.user_id);
+            await supabase
+              .from('subscriptions')
+              .update(updatePayload)
+              .eq('user_id', profile.user_id);
+          }
+        } catch (err) {
+          logError('stripe_webhook.invoice_payment_succeeded_error', { eventId: event.id, error: err.message });
         }
         break;
       }
@@ -525,8 +566,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Webhook Error:', error);
-    return res.status(500).json({ error: 'An unexpected error occurred processing this webhook.' });
+    // Only signature verification failures (400) and config errors (500) should
+    // reach here — those are returned above before any event processing begins.
+    // Any error that escapes the per-event try/catch is unexpected; log it and
+    // still return 200 so Stripe does not retry an event we may have partially
+    // processed.
+    logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
+    return res.status(200).json({ received: true, error: 'Internal processing error — logged for review' });
   }
 }
 
