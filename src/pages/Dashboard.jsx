@@ -51,6 +51,7 @@ import {
   fetchDashboardForYouHashtags,
   fetchDashboardTrendingHashtagsForPlatforms,
   setCachedTrends,
+  getBrandPersonalizationKey,
 } from '../services/dashboardCacheService';
 import { formatRelativeTime } from '../utils/formatRelativeTime';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -417,6 +418,7 @@ export default function Dashboard() {
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
   const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
   const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
+  const lastPersonalizationKeyRef = useRef(null);
   dashboardDayKeyRef.current = dashboardDayKey;
 
   const copyHashtag = async (hashtag) => {
@@ -459,7 +461,11 @@ export default function Dashboard() {
     setDashboardAlerts(Array.isArray(nextDashboardData.daily_alerts) ? nextDashboardData.daily_alerts : []); // HUTTLE AI: cache fix
     setDashboardError(''); // HUTTLE AI: cache fix
     setTrendingStatus(computeTrendingStatusFromData(nextDashboardData));
-    setDashboardSnapshot(user.id, { generatedDate, data: nextDashboardData }); // HUTTLE AI: cache fix
+    setDashboardSnapshot(user.id, {
+      generatedDate,
+      data: nextDashboardData,
+      personalizationKey: getBrandPersonalizationKey(brandProfileRef.current),
+    }); // HUTTLE AI: cache fix
     if (Array.isArray(nextDashboardData.trending_topics)) {
       setCachedTrends(nextDashboardData.trending_topics);
     }
@@ -484,8 +490,15 @@ export default function Dashboard() {
         return { success: false, errorType: deleteResult.errorType, errorMessage: deleteResult.errorMessage };
       } // HUTTLE AI: cache fix
     } else { // HUTTLE AI: cache fix
+      const perspKey = getBrandPersonalizationKey(brandProfileRef.current);
+      const snapshotMatchesBrand = (snap) => snap?.personalizationKey === perspKey;
+
       const memorySnapshot = getDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
-      if (memorySnapshot?.data && hasPersistableTrendingTopics(memorySnapshot.data.trending_topics)) { // HUTTLE AI: cache fix
+      if (
+        memorySnapshot?.data
+        && snapshotMatchesBrand(memorySnapshot)
+        && hasPersistableTrendingTopics(memorySnapshot.data.trending_topics)
+      ) { // HUTTLE AI: cache fix
         applyDashboardPayload(memorySnapshot.data, generatedDate); // HUTTLE AI: cache fix
         hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
         setIsDashboardLoading(false); // HUTTLE AI: cache fix
@@ -494,7 +507,11 @@ export default function Dashboard() {
       } // HUTTLE AI: cache fix
 
       const sessionSnapshot = loadSessionDashboardSnapshot(user.id, generatedDate); // HUTTLE AI: cache fix
-      if (sessionSnapshot?.data && hasPersistableTrendingTopics(sessionSnapshot.data.trending_topics)) { // HUTTLE AI: cache fix
+      if (
+        sessionSnapshot?.data
+        && snapshotMatchesBrand(sessionSnapshot)
+        && hasPersistableTrendingTopics(sessionSnapshot.data.trending_topics)
+      ) { // HUTTLE AI: cache fix
         applyDashboardPayload(sessionSnapshot.data, generatedDate); // HUTTLE AI: cache fix
         hasFetchedTodayRef.current = true; // HUTTLE AI: cache fix
         setIsDashboardLoading(false); // HUTTLE AI: cache fix
@@ -605,6 +622,11 @@ export default function Dashboard() {
 
     localStorage.setItem(snapshotKey, JSON.stringify(currentSnapshot));
   }, [subscriptionStatus, showToast, user?.id]);
+
+  const brandPersonalizationKey = useMemo(
+    () => getBrandPersonalizationKey(brandProfile),
+    [brandProfile]
+  );
 
   const isCreator = isCreatorProfile(brandProfile);
   const greetingFirstName = userProfile?.first_name?.trim() || '';
@@ -745,11 +767,38 @@ export default function Dashboard() {
     setIsAlertsLoading(false); // HUTTLE AI: cache fix
     setTrendingStatus('loading');
     setDashboardDayKey(getDashboardGeneratedDate());
+    lastPersonalizationKeyRef.current = null;
   }, [user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
     brandProfileRef.current = brandProfile; // HUTTLE AI: cache fix
   }, [brandProfile]); // HUTTLE AI: cache fix
+
+  useEffect(() => {
+    if (!user?.id || !brandFetchComplete) return;
+    const key = brandPersonalizationKey;
+    const prev = lastPersonalizationKeyRef.current;
+    if (prev === key) return;
+
+    const needsRefresh = prev !== null || hasFetchedTodayRef.current;
+    lastPersonalizationKeyRef.current = key;
+    if (!needsRefresh) return;
+
+    clearDashboardSnapshot(user.id);
+    hasFetchedTodayRef.current = false;
+    forYouRequestKeyRef.current = '';
+    trendingRequestKeyRef.current = '';
+    setForYouHashtags(null);
+    setGeneralTrendingHashtags([]);
+    setGeneralTrendingReady(false);
+    void loadDashboardData({ forceRefresh: true });
+  }, [
+    user?.id,
+    brandFetchComplete,
+    brandPersonalizationKey,
+    clearDashboardSnapshot,
+    loadDashboardData,
+  ]);
 
   useEffect(() => {
     if (authLoading || !user?.id || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
@@ -935,14 +984,17 @@ export default function Dashboard() {
     [dashboardData?.selected_platforms]
   );
 
-  /** Brand Voice `platforms` (and Settings when BV unset) — same source as `buildDashboardBrandContext` in dashboardCacheService. */
+  /** Prefer live Brand Profile platforms when loaded; avoids stale `selected_platforms` from the daily snapshot. */
   const resolvedDashboardPlatformLabels = useMemo(() => {
+    if (brandFetchComplete && Array.isArray(brandProfile?.platforms) && brandProfile.platforms.length > 0) {
+      return [...new Set(brandProfile.platforms.map(toDashboardPlatformLabel))];
+    }
     if (dashboardHashtagPlatforms.length > 0) return dashboardHashtagPlatforms;
     if (Array.isArray(brandProfile?.platforms) && brandProfile.platforms.length > 0) {
       return [...new Set(brandProfile.platforms.map(toDashboardPlatformLabel))];
     }
     return ['Instagram'];
-  }, [dashboardHashtagPlatforms, brandProfile?.platforms]);
+  }, [brandFetchComplete, brandProfile?.platforms, dashboardHashtagPlatforms]);
 
   const displayedDashboardTrendingTopics = useMemo(
     () => padTrendingListToCount(
@@ -956,8 +1008,9 @@ export default function Dashboard() {
   const displayedDashboardHashtags = useMemo(() => {
     const deduplicatedHashtags = [];
     const hashtagMap = new Map();
+    const platformLabels = resolvedDashboardPlatformLabels;
 
-    if (dashboardHashtagPlatforms.length === 0) {
+    if (platformLabels.length === 0) {
       for (const hashtag of dashboardHashtags) {
         mergeHashtagIntoMap(hashtagMap, deduplicatedHashtags, hashtag);
         if (deduplicatedHashtags.length >= TOTAL_HASHTAG_CAP) break;
@@ -966,16 +1019,16 @@ export default function Dashboard() {
       return deduplicatedHashtags;
     }
 
-    const hashtagsByPlatform = dashboardHashtagPlatforms.map((platform) => ({
+    const hashtagsByPlatform = platformLabels.map((platform) => ({
       platform,
       hashtags: dashboardHashtags.filter((tag) => tag.platform === platform),
       index: 0,
     }));
 
-    const perPlatformLimit = Math.floor(TOTAL_HASHTAG_CAP / dashboardHashtagPlatforms.length);
-    const remainder = TOTAL_HASHTAG_CAP % dashboardHashtagPlatforms.length;
+    const perPlatformLimit = Math.floor(TOTAL_HASHTAG_CAP / platformLabels.length);
+    const remainder = TOTAL_HASHTAG_CAP % platformLabels.length;
     const initialPlatformLimits = new Map(
-      dashboardHashtagPlatforms.map((platform, index) => [
+      platformLabels.map((platform, index) => [
         platform,
         perPlatformLimit + (index < remainder ? 1 : 0),
       ])
@@ -1011,7 +1064,7 @@ export default function Dashboard() {
     }
 
     return deduplicatedHashtags;
-  }, [dashboardHashtagPlatforms, dashboardHashtags]);
+  }, [resolvedDashboardPlatformLabels, dashboardHashtags]);
 
   const retryForYouHashtags = useCallback(() => {
     forYouRequestKeyRef.current = '';
