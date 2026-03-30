@@ -29,7 +29,7 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const FOUNDING_SPOTS_LEFT = 38;
+const FOUNDING_SPOTS_LEFT = 31;
 const SITE_URL = "https://huttleai.com";
 const LOGO_URL = `${SITE_URL}/logo-512.png`;
 
@@ -1248,7 +1248,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                OPENS APRIL 7
+                UP NEXT
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
@@ -1288,7 +1288,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 disabled
                 className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
               >
-                Available April 7
+                After Founders Club Sells Out
               </button>
             </div>
           </motion.div>
@@ -1303,7 +1303,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           >
             <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                AFTER LAUNCH WINDOW
+                FULL PRICE
               </div>
 
               <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Public Pricing</h3>
@@ -1329,7 +1329,7 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               </ul>
 
               <button disabled className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed">
-                Available After Launch
+                Price After Launch
               </button>
             </div>
           </motion.div>
@@ -1368,7 +1368,7 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           </p>
           <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
             <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Builders Club opens April 7.
+              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining.
             </p>
           </div>
           
