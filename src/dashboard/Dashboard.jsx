@@ -20,6 +20,9 @@ import SecureAccount from '../pages/SecureAccount';
 import OnboardingQuiz from '../components/OnboardingQuiz';
 import useNotificationGenerator from '../hooks/useNotificationGenerator';
 
+const CHUNK_RELOAD_KEY = '_chunk_reload_at';
+const CHUNK_RELOAD_WINDOW_MS = 30_000; // only block reloads within a 30s window
+
 const lazyWithRetry = (factory) =>
   React.lazy(() =>
     factory().catch((err) => {
@@ -30,10 +33,14 @@ const lazyWithRetry = (factory) =>
           err.message.includes('Importing a module script failed') ||
           err.message.includes('Unable to preload CSS')
         ));
-      if (isChunkError && !sessionStorage.getItem('_chunk_reload')) {
-        sessionStorage.setItem('_chunk_reload', '1');
-        window.location.reload();
-        return new Promise(() => {});
+      if (isChunkError) {
+        const lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+        const recentlyReloaded = Date.now() - lastReload < CHUNK_RELOAD_WINDOW_MS;
+        if (!recentlyReloaded) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+          window.location.reload();
+          return new Promise(() => {});
+        }
       }
       throw err;
     })
