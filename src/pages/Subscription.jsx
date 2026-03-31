@@ -2,7 +2,7 @@ import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'r
 import { useSearchParams } from 'react-router-dom';
 import { Award, BadgeCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
 import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode } from '../services/stripeAPI';
-import { useSubscription } from '../context/SubscriptionContext';
+import { useSubscription, clearSubscriptionCache } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import BillingManagementPanel from '../components/BillingManagementPanel';
@@ -197,6 +197,7 @@ export default function Subscription() {
 
     if (billingState === 'payment-method-updated') {
       addToast('Your payment method was updated successfully.', 'success');
+      clearSubscriptionCache();
       void refreshSubscription();
       void loadBillingDetails();
       nextParams.delete('billing');
@@ -287,6 +288,7 @@ export default function Subscription() {
           `Your subscription has been cancelled. You'll keep access until ${formatDate(result.accessUntil || subscription?.currentPeriodEnd)}.`,
           'success'
         );
+        clearSubscriptionCache();
         await refreshSubscription();
       }
     } catch (error) {

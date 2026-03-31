@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, CalendarClock, Check, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import { SUBSCRIPTION_PLANS, cancelSubscription, createPaymentMethodUpdateSession } from '../services/stripeAPI';
 import { CardNetworkMark } from './CardNetworkMark';
 import UpdateCardModal from './UpdateCardModal';
@@ -72,6 +73,7 @@ export default function FoundersMembershipCard({
       );
 
       if (typeof onCancelled === 'function') {
+        clearSubscriptionCache();
         await onCancelled();
       }
     } catch (error) {

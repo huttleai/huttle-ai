@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRightLeft, CalendarClock, CreditCard, ExternalLink, FileText, Loader2, Download } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import {
   SUBSCRIPTION_PLANS,
   changeSubscriptionPlan,
@@ -157,6 +158,7 @@ export default function BillingManagementPanel({
 
       await loadBillingData({ silent: true });
       if (typeof onSubscriptionUpdated === 'function') {
+        clearSubscriptionCache();
         await onSubscriptionUpdated();
       }
     } catch (error) {

@@ -2,11 +2,16 @@ import { useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, Sparkles, Crown, Mail, ArrowRight } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import confetti from 'canvas-confetti';
 
 export default function PaymentSuccess() {
   const hasConfettiFired = useRef(false);
   const authContext = useContext(AuthContext);
+
+  useEffect(() => {
+    clearSubscriptionCache();
+  }, []);
 
   // Mark payment as confirmed so ProtectedRoute allows access
   useEffect(() => {

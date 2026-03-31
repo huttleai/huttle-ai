@@ -6,6 +6,14 @@ import { getTierConfig } from '../utils/tierConfig';
 
 export const SubscriptionContext = createContext();
 
+const subscriptionCache = { data: null, timestamp: null };
+const CACHE_TTL_MS = 60 * 1000;
+
+export function clearSubscriptionCache() {
+  subscriptionCache.data = null;
+  subscriptionCache.timestamp = null;
+}
+
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
 const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
@@ -157,7 +165,7 @@ export function SubscriptionProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [skipAuth]);
 
-  const refreshSubscription = useCallback(async ({ preserveRetryState = false } = {}) => {
+  const refreshSubscription = useCallback(async ({ preserveRetryState = false, bypassCache = false } = {}) => {
     if (skipAuth) {
       retryCountRef.current = 0;
       setUserTier(localStorage.getItem(DEMO_TIER_KEY) || TIERS.PRO);
@@ -256,9 +264,17 @@ export function SubscriptionProvider({ children }) {
         return;
       }
 
+      const isCacheValid =
+        !bypassCache &&
+        subscriptionCache.data !== null &&
+        subscriptionCache.timestamp !== null &&
+        Date.now() - subscriptionCache.timestamp < CACHE_TTL_MS;
+
       const [databaseResult, stripeResult] = await Promise.all([
         getDatabaseSubscription(userId),
-        getSubscriptionStatus({ signal: abortController.signal }),
+        isCacheValid
+          ? Promise.resolve(subscriptionCache.data)
+          : getSubscriptionStatus({ signal: abortController.signal }),
       ]);
 
       clearRequestTimeout();
@@ -324,6 +340,11 @@ export function SubscriptionProvider({ children }) {
             }
           : null);
       const usingSafeFallback = Boolean(stripeResult?.degraded && !databaseSubscription && !stripeSubscription);
+
+      if (!isCacheValid && stripeResult?.success && !stripeResult?.shouldRetry) {
+        subscriptionCache.data = stripeResult;
+        subscriptionCache.timestamp = Date.now();
+      }
 
       setSubscription(nextSubscription);
       setSubscriptionStatus(nextStatus);
