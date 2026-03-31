@@ -46,12 +46,20 @@ import {
   normalizePlatformRulesKey,
 } from '../data/platformContentRules';
 
-const CONTENT_GOALS = [
-  'Grow followers',
-  'Drive traffic',
+const BUSINESS_GOALS = [
+  'Drive foot traffic',
   'Generate leads',
   'Increase sales',
   'Build brand awareness',
+  'Grow online community',
+];
+
+const CREATOR_GOALS = [
+  'Grow followers',
+  'Build niche authority',
+  'Land brand deals',
+  'Increase engagement',
+  'Grow to monetization',
 ];
 
 const FOLLOWER_RANGE_OPTIONS = [
@@ -613,13 +621,19 @@ const isFailed = (job) => {
  */
 export default function AIPlanBuilder() {
   const { showToast } = useToast();
-  const { brandProfile, brandFetchComplete } = useBrand();
+  const { brandProfile, brandFetchComplete, isCreator } = useBrand();
   const { getTierDisplayName, userTier } = useSubscription();
   const planUsage = useAIUsage('planBuilder');
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
 
-  const [selectedGoal, setSelectedGoal] = useState(CONTENT_GOALS[0]);
+  const CONTENT_GOALS = isCreator ? CREATOR_GOALS : BUSINESS_GOALS;
+
+  const [selectedGoal, setSelectedGoal] = useState('');
+  useEffect(() => {
+    if (!brandFetchComplete) return;
+    setSelectedGoal(CONTENT_GOALS[0]);
+  }, [brandFetchComplete, isCreator]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedPeriod, setSelectedPeriod] = useState(7);
   const [postingFreqMode, setPostingFreqMode] = useState('5');
   const [postingFreqCustom, setPostingFreqCustom] = useState(5);
@@ -697,7 +711,7 @@ export default function AIPlanBuilder() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('goal');
     setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, CONTENT_GOALS]);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -1063,7 +1077,9 @@ export default function AIPlanBuilder() {
               AI Plan Builder
             </h1>
             <p className="text-sm md:text-base text-gray-500 font-plan-body">
-              Generate your content strategy
+              {isCreator
+                ? 'Plan content that grows your personal brand'
+                : 'Generate your content strategy'}
             </p>
           </div>
         </div>
@@ -1538,7 +1554,7 @@ export default function AIPlanBuilder() {
                         {sanitizeAIOutput(planTitle)}
                       </h2>
                       <p className="mt-2 text-sm text-gray-500">
-                        {selectedPeriod}-Day {subtitlePlatforms} Strategy{niche ? ` for ${niche}` : ''}
+                        {selectedPeriod}-Day {subtitlePlatforms} {isCreator ? 'Creator Plan' : 'Strategy'}{niche ? ` for ${niche}` : ''}
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">

@@ -194,7 +194,7 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     creatorMonetizationPath: formData.creatorMonetizationPath ?? null,
     isLocalBusiness: formData.isLocalBusiness ?? false,
     city: formData.city ?? null,
-    audienceLocationType: formData.audienceLocationType ?? 'local',
+    audienceLocationType: formData.audienceLocationType ?? null,
     contentMixOverride: formData.contentMixOverride ?? null,
   };
 

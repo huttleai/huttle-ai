@@ -54,7 +54,7 @@ function createEmptyBrandData() {
     businessPrimaryGoal: null,
     creatorMonetizationPath: null,
     isLocalBusiness: false,
-    audienceLocationType: 'local',
+    audienceLocationType: null,
     contentMix: null,
   };
 }
@@ -87,7 +87,8 @@ export function useBrand() {
     loading: context.loading,
     brandFetchComplete: context.brandFetchComplete,
     // Convenience helpers for profile type
-    isCreator: context.brandData?.profileType === 'creator',
+    isCreator: context.brandData?.profileType === 'creator' ||
+               context.brandData?.profileType === 'solo_creator',
     isBrand: isBusinessProfileType(context.brandData?.profileType),
   };
 }
@@ -258,7 +259,7 @@ export function BrandProvider({ children }) {
             businessPrimaryGoal: data.business_primary_goal || null,
             creatorMonetizationPath: data.creator_monetization_path || null,
             isLocalBusiness: data.is_local_business || false,
-            audienceLocationType: data.audience_location_type || 'local',
+            audienceLocationType: data.audience_location_type || null,
             contentMix: data.content_mix || null,
           };
 
@@ -352,6 +353,11 @@ export function BrandProvider({ children }) {
           biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
           hook_style_preference: normalizeOptionalEnum(updated.hookStylePreference) || null,
           emotional_triggers: updated.emotionalTriggers || [],
+          business_primary_goal: updated.businessPrimaryGoal || null,
+          creator_monetization_path: updated.creatorMonetizationPath || null,
+          is_local_business: typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false,
+          audience_location_type: updated.audienceLocationType || null,
+          content_mix: updated.contentMix || null,
           updated_at: new Date().toISOString(),
         };
 

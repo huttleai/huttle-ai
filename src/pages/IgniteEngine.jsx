@@ -114,12 +114,20 @@ const PLATFORMS = [
   }
 ];
 
-const GOALS = [
-  { id: 'Grow Followers', label: 'Grow Followers', emoji: '🚀' },
-  { id: 'Drive Engagement', label: 'Drive Engagement', emoji: '💬' },
+const BUSINESS_GOALS_IGNITE = [
+  { id: 'Drive Foot Traffic', label: 'Drive Foot Traffic', emoji: '📍' },
   { id: 'Generate Leads', label: 'Generate Leads', emoji: '🎯' },
   { id: 'Sales/Conversions', label: 'Sales/Conversions', emoji: '💰' },
-  { id: 'Build Authority', label: 'Build Authority', emoji: '🤝' },
+  { id: 'Build Brand Awareness', label: 'Build Brand Awareness', emoji: '📣' },
+  { id: 'Grow Online Community', label: 'Grow Online Community', emoji: '🤝' },
+];
+
+const CREATOR_GOALS_IGNITE = [
+  { id: 'Grow Followers', label: 'Grow Followers', emoji: '🚀' },
+  { id: 'Build Niche Authority', label: 'Build Niche Authority', emoji: '🧠' },
+  { id: 'Land Brand Deals', label: 'Land Brand Deals', emoji: '🤝' },
+  { id: 'Drive Engagement', label: 'Drive Engagement', emoji: '💬' },
+  { id: 'Grow to Monetization', label: 'Grow to Monetization', emoji: '💰' },
 ];
 
 const cardVariants = {
@@ -132,13 +140,15 @@ const cardVariants = {
 };
 
 export default function IgniteEngine() {
-  const { brandProfile, isCreator } = useBrand();
+  const { brandProfile, brandFetchComplete, isCreator } = useBrand();
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const blueprintUsage = useAIUsage('igniteEngine'); // HUTTLE AI: updated 3
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const GOALS = isCreator ? CREATOR_GOALS_IGNITE : BUSINESS_GOALS_IGNITE;
 
   const availablePlatforms = hasPlatformsConfigured
     ? PLATFORMS.filter(p => {
@@ -153,7 +163,11 @@ export default function IgniteEngine() {
   // Form state
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedPostType, setSelectedPostType] = useState('');
-  const [goal, setGoal] = useState('Grow Followers');
+  const [goal, setGoal] = useState('');
+  useEffect(() => {
+    if (!brandFetchComplete) return;
+    setGoal((prev) => (prev ? prev : GOALS[0]?.id || ''));
+  }, [brandFetchComplete, isCreator]); // eslint-disable-line react-hooks/exhaustive-deps
   const [topic, setTopic] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [trendingExtras, setTrendingExtras] = useState(null);
@@ -340,7 +354,7 @@ export default function IgniteEngine() {
         business_primary_goal: brandProfile?.businessPrimaryGoal || null,
         creator_monetization_path: brandProfile?.creatorMonetizationPath || null,
         is_local_business: brandProfile?.isLocalBusiness || false,
-        audience_location_type: brandProfile?.audienceLocationType || 'local',
+        audience_location_type: brandProfile?.audienceLocationType || null,
       };
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -621,7 +635,9 @@ export default function IgniteEngine() {
                   <div className="flex items-center gap-3 p-4 bg-huttle-50 border border-huttle-primary/20 rounded-xl animate-fadeIn">
                     <Sparkles className="w-5 h-5 text-huttle-primary flex-shrink-0" />
                     <p className="text-sm text-gray-700">
-                      Finishing <span className="font-medium">Brand Profile</span> (sidebar → Account) improves brief personalization.
+                      {isCreator
+                        ? <>Complete your <span className="font-medium">Creator Profile</span> (sidebar → Account) so briefs match your voice and niche.</>
+                        : <>Finishing <span className="font-medium">Brand Profile</span> (sidebar → Account) improves brief personalization.</>}
                     </p>
                   </div>
                 )}
@@ -632,8 +648,16 @@ export default function IgniteEngine() {
                     <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
-                        <p className="text-xs text-amber-600 mt-0.5">Choose platforms under Account → Brand Profile in the sidebar.</p>
+                        <p className="text-sm font-medium text-amber-800">
+                          {isCreator
+                            ? "You haven't added your creator platforms yet."
+                            : "You haven't selected your business platforms yet."}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          {isCreator
+                            ? 'Add the platforms you create on under Account → Creator Profile.'
+                            : 'Choose platforms under Account → Brand Profile in the sidebar.'}
+                        </p>
                       </div>
                     </div>
                   ) : (
