@@ -482,8 +482,14 @@ export default async function handler(req, res) {
       platforms,
       brandVoice,
       userId,
-      additionalContext = {},
+      additionalContext: rawAdditionalContext = {},
+      profileType: bodyProfileType,
     } = req.body || {};
+
+    const additionalContext = {
+      ...rawAdditionalContext,
+      profileType: rawAdditionalContext.profileType || bodyProfileType || null,
+    };
 
     if (userId && userId !== authenticatedUserId) {
       return res.status(403).json({ error: 'User mismatch for remix request.' });
@@ -501,8 +507,9 @@ export default async function handler(req, res) {
     const { requestedMode, normalizedMode } = normalizeMode(mode);
     const remixPromptGoal = resolveRemixPromptGoal(goalFromBody, normalizedMode);
     const brandBlock = buildCreatorBrandBlock({ ...additionalContext, brandVoice }, { ...additionalContext }); // HUTTLE AI: brand context injected
+    const profileTypeForRemix = additionalContext?.profileType || req.body?.profileType || 'brand_business';
     const systemPrompt = `${brandBlock}${buildSystemPrompt(
-      buildContentRemixClaudeSystemCore(remixPromptGoal),
+      buildContentRemixClaudeSystemCore(remixPromptGoal, profileTypeForRemix),
       {
         ...additionalContext,
         brandVoice,

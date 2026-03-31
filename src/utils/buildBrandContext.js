@@ -8,13 +8,17 @@ export function buildBrandContext(brandVoice, userProfile) {
 
   const lines = [];
 
+  const profileType = brandVoice?.profile_type || brandVoice?.profileType;
+  const isBusiness = profileType === 'brand_business'
+    || profileType === 'brand'
+    || profileType === 'business';
   const name = userProfile?.first_name || userProfile?.firstName || '';
   const handle = brandVoice?.handle || brandVoice?.socialHandle
     ? ` (${brandVoice?.handle || brandVoice?.socialHandle})`
     : '';
-  if (name || handle) lines.push(`Creator: ${name}${handle}`);
-
-  const profileType = brandVoice?.profile_type || brandVoice?.profileType;
+  if (name || handle) {
+    lines.push(`${isBusiness ? 'Business Owner' : 'Creator'}: ${name}${handle}`);
+  }
   if (profileType) lines.push(`Profile Type: ${profileType}`);
 
   const niche = brandVoice?.niche;
@@ -38,14 +42,23 @@ export function buildBrandContext(brandVoice, userProfile) {
   if (lines.length === 0) return '';
 
   return [
-    '=== CREATOR BRAND PROFILE ===',
+    isBusiness
+      ? '=== BRAND / BUSINESS PROFILE ==='
+      : '=== CREATOR BRAND PROFILE ===',
     lines.join('\n'),
-    '=== END BRAND PROFILE ===',
+    isBusiness
+      ? '=== END BRAND PROFILE ==='
+      : '=== END BRAND PROFILE ===',
     '',
-    'You are generating content specifically for this creator. Match their tone, ',
-    'speak directly to their target audience, and reflect their niche in every ',
-    'word. Do not produce generic content. Every output must feel like it was ',
-    'written for this specific person and their brand.',
+    isBusiness
+      ? 'You are generating content for this business. Every output must serve ' +
+        'the business goals — not celebrate the niche personally. Write on behalf ' +
+        'of the brand, not a hobbyist. Ask: would a real business owner post this ' +
+        'to attract customers? If not, replace it.'
+      : 'You are generating content specifically for this creator. Match their ' +
+        'tone, speak directly to their target audience, and reflect their niche ' +
+        'in every word. Do not produce generic content. Every output must feel ' +
+        'like it was written for this specific person and their brand.',
     ''
   ].join('\n');
 }

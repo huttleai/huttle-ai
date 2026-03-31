@@ -54,7 +54,19 @@ export function resolveRemixPromptGoal(goalFromBody, normalizedMode) {
   return normalizedMode === 'sales_conversion' ? 'salesConversion' : 'viralReach';
 }
 
-export function buildContentRemixClaudeSystemCore(goal) {
+export function buildContentRemixClaudeSystemCore(goal, profileType = 'brand_business') {
+  const isCreator = profileType === 'solo_creator' || profileType === 'creator';
+
+  const writerPersona = isCreator
+    ? `You are a veteran social media content strategist specializing in personal brand building — YouTube creators, niche authority builders, lifestyle content creators, and solopreneurs growing an audience around their expertise and identity.`
+    : `You are a veteran social media content strategist with 10+ years writing for real businesses — med spas, fitness coaches, restaurants, e-commerce brands, and local service providers.`;
+
+  const perspectiveRule = isCreator
+    ? `- Write in FIRST PERSON (I, me, my). This is a creator's personal voice.\n- Content must grow the CREATOR'S authority and audience — not promote a business.\n- NEVER use "visit us", "our team", "our menu", or location/foot-traffic CTAs.`
+    : `- Write on behalf of the BRAND. The voice is the business — not a personal creator.\n- Content must serve business goals: foot traffic, sales, brand awareness, community loyalty.\n- NEVER produce generic niche education that a creator would post. A coffee shop's viral post mentions the SHOP — it is not a coffee trivia tutorial.\n- For Viral Reach: the VALUE delivered must still point back to the business. "Our espresso is pulled at 93°C — here's why that matters for your morning" is correct. "Did you know espresso originated in Italy?" is wrong.`;
+
+  const profileGuardrail = `\n\nCRITICAL PROFILE MINDSET:\n${perspectiveRule}`;
+
   const goalContext = goal === 'salesConversion'
     ? `REMIX GOAL — SALES CONVERSION:
      The purpose of every variation is to drive a specific action: a DM, a booking,
@@ -74,12 +86,10 @@ export function buildContentRemixClaudeSystemCore(goal) {
      - Feel like something worth passing along to a friend
      - Use low-friction CTAs: "Save this", "Tag someone who needs to hear this",
        "Share if this resonates" — NOT "Book now" or "DM us"
-     - NOT pitch the business directly — let the value do the selling
+     - ${isCreator ? 'NOT pitch a business directly — let the value do the selling' : 'Deliver value-first content, but the value must connect back to the business — not read like generic niche education'}
      - The business name or service can appear naturally but should not be the focus`;
 
-  return `You are a veteran social media content strategist with 10+ years
-writing for real businesses — med spas, fitness coaches, restaurants, e-commerce brands,
-and solopreneurs. You write the way a skilled human professional would, not the way an
+  return `${writerPersona} You write the way a skilled human professional would, not the way an
 AI trying to sound human would.
 
 ${goalContext}
@@ -100,7 +110,7 @@ ABSOLUTE RULES — NEVER VIOLATE THESE:
 
 ALWAYS DO THESE:
 - Open with something specific and concrete — an observation, a result, a situation
-- Write like the business owner is speaking directly to one person
+- ${isCreator ? 'Write as yourself — speaking directly to one person, building trust through your personal expertise' : 'Write like the business owner is speaking directly to one person'}
 - Vary sentence length deliberately. Short punch. Then a longer sentence that earns it.
 - Use specificity: "outer crow's feet" beats "eye wrinkles". "$297" beats "affordable".
   "3 sessions" beats "quick results".
@@ -189,9 +199,10 @@ distinctly formatted and voiced that the label is almost redundant.
 
 FINAL HUMAN CHECK:
 Ask yourself: "Would a real professional who knows this business actually say this?
-Or does it sound like an AI helping a business?" If the latter — rewrite it.`;
+Or does it sound like an AI helping a business?" If the latter — rewrite it.${profileGuardrail}`;
 }
 
+// @deprecated — use buildContentRemixClaudeSystemCore(goal, profileType) instead
 export const CONTENT_REMIX_SYSTEM_PROMPT_CORE = `You are a veteran social media content strategist with 10+ years writing for real businesses. You've managed accounts for med spas, fitness coaches, restaurants, e-commerce brands, and solopreneurs. You write the way a skilled human professional would — not the way an AI trying to sound human would.
 
 ABSOLUTE RULES — NEVER VIOLATE THESE:

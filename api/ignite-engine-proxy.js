@@ -114,6 +114,13 @@ export default async function handler(req, res) {
       excluded_sections,
       viral_score_weights,
       blueprint_label,
+      profile_type,
+      business_primary_goal,
+      creator_monetization_path,
+      is_local_business,
+      audience_location_type,
+      brand_context,
+      city,
     } = req.body || {};
 
     if (!platform || !topic) {
@@ -153,6 +160,16 @@ export default async function handler(req, res) {
       video_hook_guidance:
         rules.video?.hook || 'Hook must land in first 2 seconds',
       platform_display_name: rules.displayName,
+      profile_type: profile_type || 'brand_business',
+      user_type: profile_type || 'brand_business',
+      business_primary_goal: business_primary_goal || null,
+      creator_monetization_path: creator_monetization_path || null,
+      is_local_business: typeof is_local_business === 'boolean'
+        ? is_local_business : false,
+      audience_location_type: audience_location_type || null,
+      brand_context: typeof brand_context === 'string'
+        ? brand_context.substring(0, 2000) : '',
+      city: city ? String(city).substring(0, 100) : '',
       // Legacy fields for backward compatibility with existing n8n workflows
       format: content_type || 'Post',
       postType: content_type || 'Post',

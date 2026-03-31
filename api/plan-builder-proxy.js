@@ -103,6 +103,14 @@ export default async function handler(req, res) {
     trendContext,
     platform_rules_block,
     platforms_list,
+    profileType,
+    firstName,
+    businessPrimaryGoal,
+    creatorMonetizationPath,
+    isLocalBusiness,
+    audienceLocationType,
+    contentMixOverride,
+    city,
   } = body;
 
   if (!job_id) {
@@ -158,6 +166,15 @@ export default async function handler(req, res) {
           : Array.isArray(platformFocus)
             ? platformFocus.join(', ')
             : '',
+      profileType: profileType ?? null,
+      firstName: firstName ?? null,
+      businessPrimaryGoal: businessPrimaryGoal ?? null,
+      creatorMonetizationPath: creatorMonetizationPath ?? null,
+      isLocalBusiness: typeof isLocalBusiness === 'boolean'
+        ? isLocalBusiness : false,
+      audienceLocationType: audienceLocationType ?? null,
+      contentMixOverride: contentMixOverride ?? null,
+      city: city ?? null,
     };
 
     // Forward request to n8n webhook

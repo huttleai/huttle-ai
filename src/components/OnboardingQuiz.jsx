@@ -96,6 +96,7 @@ const defaultFormData = {
   business_name: '',
   creator_handle: '',
   niche: '',
+  target_audience: '',
   business_primary_goal: '',
   audience_location_type: '',
   is_local_business: false,
@@ -210,6 +211,7 @@ export default function OnboardingQuiz({ onComplete }) {
           brandName: isBrandBusiness ? (formData.business_name.trim() || null) : null,
           creatorHandle: !isBrandBusiness ? (formData.creator_handle.trim() || null) : null,
           niche: formData.niche.trim() || null,
+          targetAudience: formData.target_audience.trim() || null,
           platforms: formData.platforms,
           businessPrimaryGoal: isBrandBusiness ? (formData.business_primary_goal || null) : null,
           audienceLocationType: isBrandBusiness ? (formData.audience_location_type || null) : null,
@@ -237,6 +239,7 @@ export default function OnboardingQuiz({ onComplete }) {
         handle: !isBrandBusiness ? formData.creator_handle.trim() : '',
         niche: formData.niche.trim(),
         contentFocus: formData.niche.trim(),
+        targetAudience: formData.target_audience.trim(),
         platforms: formData.platforms,
         businessPrimaryGoal: isBrandBusiness ? formData.business_primary_goal : null,
         audienceLocationType: isBrandBusiness ? formData.audience_location_type : 'mostly_online',
@@ -416,6 +419,18 @@ export default function OnboardingQuiz({ onComplete }) {
             placeholder={nichePlaceholder}
             className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
           />
+
+          <div className="mt-5">
+            <FieldLabel>Target Audience</FieldLabel>
+            <input
+              type="text"
+              value={formData.target_audience}
+              onChange={(event) => setFormData((prev) => ({ ...prev, target_audience: event.target.value }))}
+              placeholder={isBrandBusiness ? 'e.g. Busy moms, local homeowners, small biz owners...' : 'e.g. Aspiring photographers, new entrepreneurs...'}
+              className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+            />
+            <p className="mt-1 text-sm text-slate-400">Who are you creating content for?</p>
+          </div>
         </div>
       );
     }
