@@ -355,6 +355,12 @@ export default function IgniteEngine() {
         creator_monetization_path: brandProfile?.creatorMonetizationPath || null,
         is_local_business: brandProfile?.isLocalBusiness || false,
         audience_location_type: brandProfile?.audienceLocationType || null,
+        profileType: brandProfile?.profileType || 'brand_business',
+        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
+        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
+        isLocalBusiness: brandProfile?.isLocalBusiness || false,
+        audienceLocationType: brandProfile?.audienceLocationType || null,
+        firstName: brandProfile?.firstName || null,
       };
 
       const { data: { session } } = await supabase.auth.getSession();
