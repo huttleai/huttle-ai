@@ -69,9 +69,10 @@ function isBusinessProfileType(profileType) {
 }
 
 function normalizeProfileTypeForDb(profileType) {
-  const p = String(profileType || '').toLowerCase();
-  if (p === 'creator' || p === 'solo_creator') return 'creator';
-  return 'business';
+  const p = String(profileType || '').toLowerCase().trim();
+  if (p === 'solo_creator' || p === 'creator') return 'solo_creator';
+  if (p === 'brand_business' || p === 'business' || p === 'brand') return 'brand_business';
+  return 'brand_business';
 }
 
 export function useBrand() {
