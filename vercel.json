@@ -36,6 +36,9 @@
     },
     "api/ai/claude.js": {
       "maxDuration": 30
+    },
+    "api/ai/humanize.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

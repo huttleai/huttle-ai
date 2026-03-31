@@ -12,11 +12,13 @@ const _rawKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
   typeof _rawKey === 'string' && _rawKey.trim() ? _rawKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const HUMANIZE_MODEL = 'claude-sonnet-4-6-20250514';
+/** Stable id; snapshot ids can 404 when deprecated. */
+const HUMANIZE_MODEL = 'claude-sonnet-4-6';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 40;
@@ -41,6 +43,19 @@ const ALLOWED_PLATFORM = new Set([
   'LinkedIn',
   'Email',
 ]);
+
+function parseJsonBody(req) {
+  const b = req.body;
+  if (b == null) return {};
+  if (typeof b === 'string') {
+    try {
+      return JSON.parse(b);
+    } catch {
+      return {};
+    }
+  }
+  return typeof b === 'object' ? b : {};
+}
 
 function sanitizeBrandVoiceType(raw) {
   const s = typeof raw === 'string' ? raw.trim() : '';
@@ -137,12 +152,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { text: bodyText, brandVoiceType: bodyVoice, platform: bodyPlatform } = req.body || {};
+  const body = parseJsonBody(req);
+  const { text: bodyText, brandVoiceType: bodyVoice, platform: bodyPlatform } = body;
 
   if (!ANTHROPIC_API_KEY) {
     logError('humanize.missing_api_key');
     const err = new Error('AI service is not configured');
-    console.error(err);
+    console.error('[humanize] configuration error:', err);
     return res.status(500).json({ error: err.message });
   }
 
@@ -174,7 +190,7 @@ export default async function handler(req, res) {
     if (!rateLimit.allowed) {
       logInfo('humanize.rate_limited', { userId, remaining: rateLimit.remaining });
       const err = new Error('Too many requests. Please try again later.');
-      console.error(err);
+      console.error('[humanize]', err);
       return res.status(429).json({ error: err.message });
     }
 
@@ -188,6 +204,14 @@ export default async function handler(req, res) {
 
     const brandVoiceType = sanitizeBrandVoiceType(bodyVoice);
     const platform = sanitizePlatform(bodyPlatform);
+
+    logInfo('humanize.request', {
+      userId,
+      textLen: text.length,
+      brandVoiceType,
+      platform,
+      model: HUMANIZE_MODEL,
+    });
 
     const userMessage = `Brand voice type: ${brandVoiceType}
 Platform: ${platform}
@@ -213,7 +237,11 @@ ${text}`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      logError('humanize.upstream_error', { status: response.status, errorText: errorText?.slice?.(0, 500) });
+      logError('humanize.upstream_error', {
+        status: response.status,
+        errorText: errorText?.slice?.(0, 800),
+      });
+      console.error('[humanize] Anthropic error:', response.status, errorText?.slice?.(0, 1200));
       let status = 500;
       if (response.status === 401 || response.status === 403) status = 401;
       else if (response.status === 429) status = 429;
@@ -221,7 +249,6 @@ ${text}`;
       const err = new Error(
         errorText?.trim() ? errorText.trim().slice(0, 500) : `Upstream request failed (${response.status})`
       );
-      console.error(err);
       return res.status(status).json({ error: err.message });
     }
 
@@ -229,21 +256,27 @@ ${text}`;
     try {
       data = await response.json();
     } catch (parseErr) {
-      console.error(parseErr);
+      console.error('[humanize] JSON parse error:', parseErr);
       return res.status(422).json({ error: parseErr?.message || 'Invalid response from AI service' });
     }
 
     const out = (data.content?.[0]?.text ?? '').trim();
     if (!out) {
       const err = new Error('AI returned an empty or unreadable response');
-      console.error(err);
+      console.error('[humanize]', err, { stopReason: data?.stop_reason });
+      logError('humanize.empty_output', { userId, stopReason: data?.stop_reason });
       return res.status(422).json({ error: err.message });
     }
 
+    logInfo('humanize.success', { userId, outLen: out.length });
     return res.status(200).json({ humanized: out });
   } catch (error) {
-    logError('humanize.handler_error', { error: error?.message });
-    console.error(error);
+    logError('humanize.handler_error', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.slice?.(0, 1200),
+    });
+    console.error('[humanize] unhandled error:', error);
     return res.status(500).json({ error: error?.message || 'Internal server error' });
   }
 }

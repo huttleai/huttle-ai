@@ -2,8 +2,6 @@
  * Ignite Engine Webhook Proxy
  *
  * Serverless function that proxies Ignite Engine requests to n8n webhook.
- * Now supports the enriched blueprintContext payload with required_sections,
- * excluded_sections, viral_score_weights, etc.
  *
  * Environment Variables Required:
  * - N8N_IGNITE_ENGINE_WEBHOOK: n8n webhook endpoint for Ignite Engine
@@ -12,20 +10,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import {
-  getPlatformPromptRule,
-  getHashtagConstraint,
-  PLATFORM_CONTENT_RULES,
-} from '../src/data/platformContentRules.js';
+import { logInfo, logError } from './_utils/observability.js';
+import { buildIgniteN8nPayload } from '../src/utils/igniteEngineN8nPayload.js';
 
 const N8N_WEBHOOK_URL =
-  process.env.N8N_IGNITE_ENGINE_WEBHOOK || // HUTTLE AI: updated 3
-  process.env.VITE_N8N_IGNITE_ENGINE_WEBHOOK; // HUTTLE AI: updated 3
+  process.env.N8N_IGNITE_ENGINE_WEBHOOK ||
+  process.env.VITE_N8N_IGNITE_ENGINE_WEBHOOK;
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube', 'LinkedIn']);
 
@@ -50,6 +46,19 @@ function normalizeWebhookPlatform(raw) {
   return alias && ALLOWED_PLATFORMS.has(alias) ? alias : null;
 }
 
+function parseRequestBody(req) {
+  const b = req.body;
+  if (b == null) return {};
+  if (typeof b === 'string') {
+    try {
+      return JSON.parse(b);
+    } catch {
+      return {};
+    }
+  }
+  return typeof b === 'object' ? b : {};
+}
+
 function hasUsefulBlueprintContent(payload) {
   if (!payload) return false;
   if (typeof payload === 'string') return payload.trim().length > 0;
@@ -57,17 +66,23 @@ function hasUsefulBlueprintContent(payload) {
   if (typeof payload !== 'object') return false;
 
   const meaningfulKeys = [
-    'blueprint', 'sections', 'viral_score', 'viral_score_breakdown',
-    'directors_cut', 'directorsCut', 'slide_breakdown', 'tweet_breakdown',
-    'frame_breakdown', 'caption_structure', 'hooks', 'content_script',
-    'seo_keywords', 'suggested_hashtags',
+    'blueprint',
+    'sections',
+    'viral_score',
+    'viral_score_breakdown',
+    'directors_cut',
+    'directorsCut',
+    'slide_breakdown',
+    'tweet_breakdown',
+    'frame_breakdown',
+    'caption_structure',
+    'hooks',
+    'content_script',
+    'seo_keywords',
+    'suggested_hashtags',
   ];
 
   if (meaningfulKeys.some((key) => payload[key])) return true;
-
-  if (Array.isArray(payload) && payload.length > 0) {
-    return hasUsefulBlueprintContent(payload[0]);
-  }
 
   return ['data', 'result', 'output', 'response', 'payload'].some((key) =>
     hasUsefulBlueprintContent(payload[key])
@@ -89,39 +104,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const token = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser(token);
   if (authError || !user) {
     return res.status(401).json({ error: 'Invalid authentication' });
   }
 
   if (!N8N_WEBHOOK_URL) {
-    console.error('[ignite-engine-proxy] N8N webhook URL not configured', { requestId }); // HUTTLE AI: updated 3
+    logError('ignite_proxy.missing_webhook_url', { requestId });
     return res.status(500).json({ error: 'Service not configured. Please try again later.', requestId });
   }
 
   try {
-    const {
-      topic,
-      platform,
-      content_type,
-      goal,
-      niche,
-      target_audience,
-      brand_voice_tone,
-      required_sections,
-      optional_sections,
-      excluded_sections,
-      viral_score_weights,
-      blueprint_label,
-      profile_type,
-      business_primary_goal,
-      creator_monetization_path,
-      is_local_business,
-      audience_location_type,
-      brand_context,
-      city,
-    } = req.body || {};
+    const rawBody = parseRequestBody(req);
+    const { topic, platform } = rawBody;
 
     if (!platform || !topic) {
       return res.status(400).json({ error: 'Missing required fields: platform, topic', requestId });
@@ -131,87 +130,75 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
-    const platformRulesKey = canonicalPlatform.toLowerCase();
-    const rules =
-      PLATFORM_CONTENT_RULES[platformRulesKey] || PLATFORM_CONTENT_RULES.instagram;
+    const mergedIn = { ...rawBody, platform: canonicalPlatform };
+    const canonical = buildIgniteN8nPayload(mergedIn);
+    const n8nPayload = { ...mergedIn, ...canonical };
+    if (GROK_API_KEY) n8nPayload.grokApiKey = GROK_API_KEY;
 
-    const sanitizedPayload = {
-      topic: String(topic).substring(0, 500),
-      platform: canonicalPlatform,
-      content_type: content_type || 'Post',
-      goal: goal || 'Grow Followers',
-      niche: niche ? String(niche).substring(0, 200) : '',
-      target_audience: target_audience ? String(target_audience).substring(0, 200) : '',
-      brand_voice_tone: brand_voice_tone ? String(brand_voice_tone).substring(0, 100) : 'Authentic',
-      required_sections: Array.isArray(required_sections) ? required_sections : [],
-      optional_sections: Array.isArray(optional_sections) ? optional_sections : [],
-      excluded_sections: Array.isArray(excluded_sections) ? excluded_sections : [],
-      viral_score_weights: viral_score_weights && typeof viral_score_weights === 'object' ? viral_score_weights : {},
-      blueprint_label: blueprint_label || '',
-      hashtag_instruction: getHashtagConstraint(canonicalPlatform),
-      platform_content_rules: getPlatformPromptRule(canonicalPlatform),
-      platform_rules: getPlatformPromptRule(platformRulesKey),
-      hashtag_constraint: getHashtagConstraint(platformRulesKey),
-      hashtag_max: rules.hashtags.max,
-      hashtag_optimal: rules.hashtags.optimal,
-      caption_visible_chars: rules.caption.visibleBeforeTruncation,
-      caption_optimal_length:
-        rules.caption.optimalChars || `max ${rules.caption.maxChars}`,
-      video_hook_guidance:
-        rules.video?.hook || 'Hook must land in first 2 seconds',
-      platform_display_name: rules.displayName,
-      profile_type: profile_type || 'brand_business',
-      user_type: profile_type || 'brand_business',
-      business_primary_goal: business_primary_goal || null,
-      creator_monetization_path: creator_monetization_path || null,
-      is_local_business: typeof is_local_business === 'boolean'
-        ? is_local_business : false,
-      audience_location_type: audience_location_type || null,
-      brand_context: typeof brand_context === 'string'
-        ? brand_context.substring(0, 2000) : '',
-      city: city ? String(city).substring(0, 100) : '',
-      // Legacy fields for backward compatibility with existing n8n workflows
-      format: content_type || 'Post',
-      postType: content_type || 'Post',
-      requestedPostType: content_type || 'Post',
-      objective: goal || 'viral',
-      targetAudience: target_audience || '',
-      ...(GROK_API_KEY ? { grokApiKey: GROK_API_KEY } : {}),
-    };
+    logInfo('ignite_proxy.n8n_outbound', {
+      requestId,
+      userId: user.id,
+      platform: n8nPayload.platform,
+      user_type: n8nPayload.user_type,
+      profile_type: n8nPayload.profile_type,
+      topicLen: String(n8nPayload.topic || '').length,
+      keys: Object.keys(n8nPayload).sort(),
+      hashtag_max: n8nPayload.hashtag_max,
+    });
 
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
-      body: JSON.stringify(sanitizedPayload),
+      body: JSON.stringify(n8nPayload),
       signal: AbortSignal.timeout(120000),
     });
 
+    const rawResponse = await response.text().catch(() => '');
+
+    let data = null;
+    if (rawResponse) {
+      try {
+        data = JSON.parse(rawResponse);
+      } catch {
+        data = null;
+      }
+    }
+
+    logInfo('ignite_proxy.n8n_inbound', {
+      requestId,
+      ok: response.ok,
+      status: response.status,
+      bytes: rawResponse.length,
+      parsed: data != null,
+      hasUsefulBlueprint: hasUsefulBlueprintContent(data || rawResponse),
+    });
+
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'No error details');
-      console.error('[ignite-engine-proxy] n8n error response:', errorText, { requestId }); // HUTTLE AI: updated 3
+      const errorText = rawResponse || 'No error details';
+      logError('ignite_proxy.n8n_http_error', {
+        requestId,
+        status: response.status,
+        snippet: errorText.slice(0, 400),
+      });
       return res.status(response.status).json({
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
-        requestId
+        requestId,
       });
     }
-
-    const rawResponse = await response.text().catch(() => '');
-    let data = rawResponse ? (() => {
-      try { return JSON.parse(rawResponse); } catch { return null; }
-    })() : {};
 
     if (Array.isArray(data) && data.length > 0) {
       data = data[0];
     }
 
     if (!hasUsefulBlueprintContent(data || rawResponse)) {
+      logError('ignite_proxy.n8n_empty_blueprint', { requestId });
       return res.status(502).json({
         error: 'n8n response missing blueprint content.',
-        requestId
+        requestId,
       });
     }
 
@@ -220,15 +207,18 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ content: rawResponse, requestId });
-
   } catch (error) {
-    console.error('[ignite-engine-proxy] Error:', { // HUTTLE AI: updated 3
+    logError('ignite_proxy.handler_error', {
+      requestId,
       name: error.name,
       message: error.message,
+      stack: error.stack?.slice?.(0, 800),
     });
 
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      return res.status(504).json({ error: 'Request timeout: n8n workflow took longer than 120 seconds', requestId });
+      return res
+        .status(504)
+        .json({ error: 'Request timeout: n8n workflow took longer than 120 seconds', requestId });
     }
 
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {

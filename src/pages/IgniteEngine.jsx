@@ -49,19 +49,17 @@ import {
   getViralScoreWeights,
   getSectionMeta,
 } from '../data/blueprintSchema';
-import {
-  getPlatformPromptRule,
-  getHashtagConstraint,
-  PLATFORM_CONTENT_RULES,
-} from '../data/platformContentRules';
+import { buildIgniteN8nPayload } from '../utils/igniteEngineN8nPayload';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { parseJsonLenient } from '../utils/parseAiJson';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { getCachedTrends } from '../services/dashboardCacheService';
-import humanizeContent, {
+import {
   mapBrandVoiceToHumanizeType,
   normalizeHumanizePlatform,
+  validateHumanizeRequest,
+  humanizeContentOrOriginal,
 } from '../services/humanizeContent';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
@@ -271,9 +269,18 @@ export default function IgniteEngine() {
       try {
         const brandVoiceType = mapBrandVoiceToHumanizeType(brandProfile?.brandVoice);
         const platform = normalizeHumanizePlatform(selectedPlatform);
-        const h = await humanizeContent({ text: raw, brandVoiceType, platform });
+        const checked = validateHumanizeRequest({ text: raw, brandVoiceType, platform });
+        if (!checked.ok) {
+          console.warn('[IgniteEngine] humanize skipped:', checked.reason);
+          return;
+        }
+        const h = await humanizeContentOrOriginal(checked.payload);
         if (gen !== scriptPolishGenRef.current) return;
         setGeneratedBrief((prev) => (prev ? { ...prev, script: h } : null));
+      } catch (e) {
+        console.warn('[IgniteEngine] script humanize skipped:', e?.message || e);
+        if (gen === scriptPolishGenRef.current) setIsPolishingScript(false);
+        return;
       } finally {
         if (gen === scriptPolishGenRef.current) setIsPolishingScript(false);
       }
@@ -303,9 +310,7 @@ export default function IgniteEngine() {
       const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: brandProfile?.firstName }); // HUTTLE AI: brand context injected
-      const platform = selectedPlatform?.toLowerCase() || 'instagram';
-      const rules = PLATFORM_CONTENT_RULES[platform] || PLATFORM_CONTENT_RULES['instagram'];
-      const briefContext = {
+      const briefContext = buildIgniteN8nPayload({
         topic: topic.trim(),
         platform: selectedPlatform,
         content_type: selectedPostType,
@@ -318,50 +323,21 @@ export default function IgniteEngine() {
         excluded_sections: excluded,
         viral_score_weights: viralWeights,
         blueprint_label: briefLabel,
-        hashtag_instruction: getHashtagConstraint(selectedPlatform),
-        platform_content_rules: getPlatformPromptRule(selectedPlatform),
-        platform_rules: getPlatformPromptRule(platform),
-        hashtag_constraint: getHashtagConstraint(platform),
-        hashtag_max: rules.hashtags.max,
-        hashtag_optimal: rules.hashtags.optimal,
-        caption_visible_chars: rules.caption.visibleBeforeTruncation,
-        caption_optimal_length: rules.caption.optimalChars || `max ${rules.caption.maxChars}`,
-        video_hook_guidance: rules.video?.hook || 'Hook must land in first 2 seconds',
-        platform_display_name: rules.displayName,
-        user_type: brandProfile?.profileType || 'brand',
-        brand_name: brandProfile?.brandName || '',
-        handle: brandProfile?.socialHandle || '',
-        creator_name: brandProfile?.brandName || brandProfile?.firstName || '', // HUTTLE AI: brand context injected
-        brand_context: brandBlock, // HUTTLE AI: brand context injected
+        brand_context: brandBlock,
         trending_format_type: trendingExtras?.format_type || '',
         trending_niche_angle: trendingExtras?.niche_angle || '',
-        sub_niche: brandProfile?.subNiche || '',
-        city: brandProfile?.city || '',
-        audience_pain_point: brandProfile?.audiencePainPoint || '',
-        audience_action_trigger: brandProfile?.audienceActionTrigger || '',
-        tone_chips: brandProfile?.toneChips || [],
-        writing_style: brandProfile?.writingStyle || '',
-        example_post: brandProfile?.examplePost || '',
-        content_to_post: brandProfile?.contentToPost || [],
-        content_to_avoid: brandProfile?.contentToAvoid || '',
-        follower_count: brandProfile?.followerCount || '',
-        primary_offer: brandProfile?.primaryOffer || '',
-        conversion_goal: brandProfile?.conversionGoal || '',
-        content_persona: brandProfile?.contentPersona || '',
-        monetization_goal: brandProfile?.monetizationGoal || '',
-        hashtag_isolation_rule: 'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
-        profile_type: brandProfile?.profileType,
-        business_primary_goal: brandProfile?.businessPrimaryGoal || null,
-        creator_monetization_path: brandProfile?.creatorMonetizationPath || null,
-        is_local_business: brandProfile?.isLocalBusiness || false,
-        audience_location_type: brandProfile?.audienceLocationType || null,
-        profileType: brandProfile?.profileType || 'brand_business',
-        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
-        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
-        isLocalBusiness: brandProfile?.isLocalBusiness || false,
-        audienceLocationType: brandProfile?.audienceLocationType || null,
-        firstName: brandProfile?.firstName || null,
-      };
+        brandProfile,
+        hashtag_isolation_rule:
+          'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
+      });
+
+      console.log('[IgniteEngine] n8n outbound', {
+        platform: briefContext.platform,
+        user_type: briefContext.user_type,
+        profile_type: briefContext.profile_type,
+        topicLen: String(briefContext.topic || '').length,
+        keys: Object.keys(briefContext).sort(),
+      });
 
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
@@ -415,6 +391,11 @@ export default function IgniteEngine() {
       }
 
       const normalized = normalizeN8nResponse(responseData);
+      console.log('[IgniteEngine] n8n inbound', {
+        hasHook: Boolean(normalized?.hook?.trim?.()),
+        hasScript: Boolean(normalized?.script?.trim?.()),
+        hasCaption: Boolean(normalized?.caption?.trim?.()),
+      });
       const hasBriefBody = normalized && (
         (normalized.hook && normalized.hook.trim())
         || (normalized.script && normalized.script.trim())
