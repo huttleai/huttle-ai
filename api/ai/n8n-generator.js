@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
       verifiedUserId = user.id;
-    } catch (error) {
+    } catch {
       return res.status(401).json({ error: 'Authentication failed' });
     }
   } else if (supabase) {
@@ -123,8 +123,8 @@ export default async function handler(req, res) {
       clearTimeout(timeoutId);
 
       if (!n8nResponse.ok) {
-        const errorText = await n8nResponse.text();
-        console.error('[n8n-generator] N8n error:', n8nResponse.status);
+        const errorBody = await n8nResponse.text();
+        console.error('[n8n-generator] N8n error:', n8nResponse.status, errorBody?.slice?.(0, 200));
         
         // SECURITY: Don't expose n8n error details to client
         return res.status(502).json({

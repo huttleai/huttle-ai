@@ -38,7 +38,7 @@ function pickFirstDefined(...values) {
  * Track AI analytics for performance monitoring
  * DISABLED in safe mode - will be re-enabled when Supabase is fixed
  */
-async function trackAIAnalytics(data) {
+async function trackAIAnalytics(_data) {
   // Temporarily disabled - don't block user flow
   // Analytics will be re-enabled later
   return Promise.resolve();

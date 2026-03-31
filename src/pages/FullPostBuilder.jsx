@@ -300,8 +300,8 @@ export default function FullPostBuilder() {
 
   // Score state
   const [qualityScore, setQualityScore] = useState(null);
-  const [humanScore, setHumanScore] = useState(null);
-  const [algorithmScore, setAlgorithmScore] = useState(null);
+  const [, setHumanScore] = useState(null);
+  const [, setAlgorithmScore] = useState(null);
   const [loadingQuality, setLoadingQuality] = useState(false);
   const [savedPartIds, setSavedPartIds] = useState({});
   /** Bumps when entering the final panel so score widgets remount and recompute from latest assembly. */

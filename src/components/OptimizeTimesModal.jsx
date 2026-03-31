@@ -384,7 +384,7 @@ export default function OptimizeTimesModal({
 
                 {/* Changes List */}
                 <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
-                  {optimizationResults.recommendations.map((rec, index) => {
+                  {optimizationResults.recommendations.map((rec) => {
                     const post = futurePosts.find(p => p.id === rec.postId);
                     const hasChange = rec.originalTime !== rec.optimizedTime;
                     const Icon = getPlatformIcon(rec.platform);

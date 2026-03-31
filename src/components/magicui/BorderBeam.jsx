@@ -61,7 +61,7 @@ export function BorderBeamButton({
   className = "",
   onClick,
   disabled = false,
-  beamSize = 150,
+  beamSize: _beamSize = 150,
   beamDuration = 8,
   colorFrom = "#01bad2",
   colorTo = "#2B8FC7",

@@ -557,7 +557,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
       }
       setLayer2Results(parsed);
       setClaudeUnavailable(false);
-    } catch (e) {
+    } catch {
       console.log('AlgorithmChecker: Claude enhancement unavailable');
       setClaudeUnavailable(true);
       setLayer2Results(null);

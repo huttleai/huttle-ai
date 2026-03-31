@@ -10,10 +10,6 @@ import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../co
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
-// Trend Lab mixes direct AI routes with workflow-backed features.
-import { getTrendForecast, getTrendDeepDive } from '../services/n8nWorkflowAPI';
-import { WORKFLOW_NAMES, isWorkflowConfigured } from '../utils/workflowConstants';
-
 /**
  * Trend Lab Page - Feature Separation
  * 
@@ -28,8 +24,7 @@ export default function TrendLab() {
   const { brandData } = useContext(BrandContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess } = useSubscription();
-  const [, setActiveFeature] = useState(null);
-  const [trendForecast, setTrendForecast] = useState(null);
+  const [trendForecast, _setTrendForecast] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);

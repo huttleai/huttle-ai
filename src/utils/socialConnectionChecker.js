@@ -96,7 +96,7 @@ export const validatePost = (post) => {
  * Deep linking doesn't require OAuth connections - always returns true
  * Kept for backward compatibility
  */
-export const checkPlatformConnections = async (post, userId = null) => {
+export const checkPlatformConnections = async (post, _userId = null) => {
   // Deep linking doesn't require connections
   // Users open the app directly and post manually
   return {
@@ -110,7 +110,7 @@ export const checkPlatformConnections = async (post, userId = null) => {
  * Deep linking doesn't require OAuth connections
  * Kept for backward compatibility
  */
-export const checkSocialConnections = async (userId = null) => {
+export const checkSocialConnections = async (_userId = null) => {
   // Deep linking doesn't require connections
   // Return empty state to indicate no connections needed
   return {
@@ -128,6 +128,6 @@ export const checkSocialConnections = async (userId = null) => {
  * Deep linking doesn't require OAuth connections
  * Kept for backward compatibility
  */
-export const setSocialConnection = (platform, isConnected) => {
+export const setSocialConnection = (_platform, _isConnected) => {
   // No-op - deep linking doesn't require connections
 };

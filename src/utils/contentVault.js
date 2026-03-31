@@ -70,6 +70,7 @@ export const CONTENT_TYPE_FILTERS = [
   { id: 'hashtag', label: 'Hashtags' },
   { id: 'cta', label: 'CTAs' },
   { id: 'full_post', label: 'Full Posts' },
+  { id: 'plan', label: 'Plans' },
   { id: 'blueprint', label: 'Ignite Engine' },
   { id: 'remix', label: 'Remixes' },
   { id: 'manual_post', label: 'Manual' },

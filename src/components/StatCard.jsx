@@ -3,10 +3,10 @@ export default function StatCard({
   title, 
   value, 
   iconColor = 'text-huttle-primary', 
-  bgColor = 'bg-cyan-50',
+  bgColor: _bgColor = 'bg-cyan-50',
   gradientFrom = null,
   gradientTo = null,
-  valueColor = 'text-gray-900',
+  valueColor: _valueColor = 'text-gray-900',
   subtitle = null,
   trend = null
 }) {

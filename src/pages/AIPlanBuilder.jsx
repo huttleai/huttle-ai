@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Plus,
   X,
 } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
@@ -99,8 +98,6 @@ function contentTypeBadgeProps(raw) {
   return { ...CONTENT_TYPE_BADGE.default, label: raw ? String(raw).slice(0, 24) : 'Post' };
 }
 
-const PILLAR_QUICK_ADD = ['Educational tips', 'Behind the scenes', 'Client results'];
-
 /** Supabase `jobs.id` is UUID; reject ISO dates and other strings that break Realtime filters */
 const PLAN_BUILDER_JOB_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,7 +105,7 @@ const PLAN_BUILDER_JOB_UUID_RE =
 /** Rotating button label while a plan job is running — signals progress, not a freeze. */
 const PLAN_BUILDER_LOADING_PHRASES = [
   'Analyzing your niche...',
-  'Mapping content pillars...',
+  'Mapping your content themes...',
   'Scheduling optimal times...',
   'Writing your plan...',
   'Building your strategy...',
@@ -275,17 +272,13 @@ const MIX_BAR_COLOR = {
   Personal: 'bg-green-400',
 };
 
-function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
+function PlanBuilderPostCard({ post, dayNum, dayLabel, userId, showToast }) {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [hashtagsExpanded, setHashtagsExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [savingVault, setSavingVault] = useState(false);
   const [savedVault, setSavedVault] = useState(false);
   const [copiedPost, setCopiedPost] = useState(false);
-
-  useEffect(() => {
-    if (batchSaved) setSavedVault(true);
-  }, [batchSaved]);
 
   const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || 'Platform';
   const borderC = PLATFORM_CARD_BORDER[platLabel] || '#64748b';
@@ -337,18 +330,22 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
     }
     setSavingVault(true);
     try {
+      const postSnippet = sanitizeAIOutput(
+        String(post.hook || post.caption || post.topic || '').replace(/\s+/g, ' ').trim()
+      ).slice(0, 60);
       const result = await saveToVault(userId, {
         ...buildContentVaultPayload({
-          name: `${platLabel} — Day ${dayNum}`,
+          name: `${dayLabel} - ${platLabel}${postSnippet ? ` - ${postSnippet}` : ''}`,
           contentText: formatPostVaultBody(post),
           contentType: 'plan',
           toolSource: 'ai_plan_builder',
           toolLabel: 'AI Plan Builder',
-          topic: (post.hook || '').slice(0, 80),
+          topic: postSnippet,
           platform: post.platform,
-          description: 'Saved from AI Plan Builder',
+          description: `AI Plan Builder | ${dayLabel} | ${platLabel}`,
           metadata: {
             day: dayNum,
+            day_label: dayLabel,
             contentType: post.contentType ?? '',
             bestTime: post.postTime ?? '',
           },
@@ -480,7 +477,7 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
                     : 'bg-[#01BAD2] text-white hover:bg-[#0199b0]'
                 }`}
               >
-                {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
+                {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to Vault'}
               </button>
               {hasFullDetailsContent && (
                 <button
@@ -630,8 +627,6 @@ export default function AIPlanBuilder() {
   const [nicheInput, setNicheInput] = useState('');
   const [targetAudienceInput, setTargetAudienceInput] = useState('');
   const [brandVoiceToneInput, setBrandVoiceToneInput] = useState('');
-  const [contentPillars, setContentPillars] = useState([]);
-  const [pillarDraft, setPillarDraft] = useState('');
   const [followerRange, setFollowerRange] = useState('0-500');
   const [extraContext, setExtraContext] = useState('');
   const [optionalOpen, setOptionalOpen] = useState(false);
@@ -641,16 +636,14 @@ export default function AIPlanBuilder() {
   const [generationError, setGenerationError] = useState(null);
   const [editingInputs, setEditingInputs] = useState(true);
   const [savingAllVault, setSavingAllVault] = useState(false);
-  const [batchSavedKeys, setBatchSavedKeys] = useState(new Set());
-  const [allSavedCount, setAllSavedCount] = useState(0);
+  const [savedFullPlan, setSavedFullPlan] = useState(false);
 
   useEffect(() => {
-    setBatchSavedKeys(new Set());
-    setAllSavedCount(0);
+    setSavedFullPlan(false);
   }, [generatedPlan]);
 
   const [currentJobId, setCurrentJobId] = useState(null);
-  const [jobStatus, setJobStatus] = useState(null);
+  const [, setJobStatus] = useState(null);
   const [loadingPhraseIndex, setLoadingPhraseIndex] = useState(0);
 
   const resolvedPostingFrequency = useMemo(() => {
@@ -734,7 +727,7 @@ export default function AIPlanBuilder() {
       if (typeof planData === 'string') {
         try {
           planData = JSON.parse(planData);
-        } catch (_) {
+        } catch {
           /* leave as string — safeParse in planBuilderJobResult will handle it */
         }
       }
@@ -749,7 +742,7 @@ export default function AIPlanBuilder() {
       if (typeof payload === 'string') {
         try {
           payload = JSON.parse(payload);
-        } catch (_) {
+        } catch {
           /* leave as string — safeParse in planBuilderJobResult will handle it */
         }
       }
@@ -832,7 +825,7 @@ export default function AIPlanBuilder() {
           }
         }
       )
-      .subscribe((status, err) => {
+      .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('[PlanBuilder] Realtime subscribed for job', jobId);
         }
@@ -887,25 +880,6 @@ export default function AIPlanBuilder() {
     );
   };
 
-  const addPillar = () => {
-    const t = pillarDraft.trim();
-    if (!t) return;
-    if (contentPillars.length >= 5) {
-      showToast('Maximum 5 content pillars', 'warning');
-      return;
-    }
-    if (contentPillars.some((p) => p.toLowerCase() === t.toLowerCase())) {
-      setPillarDraft('');
-      return;
-    }
-    setContentPillars((p) => [...p, t]);
-    setPillarDraft('');
-  };
-
-  const removePillar = (idx) => {
-    setContentPillars((p) => p.filter((_, i) => i !== idx));
-  };
-
   const resetToForm = () => {
     setGeneratedPlan(null);
     setEditingInputs(true);
@@ -915,10 +889,6 @@ export default function AIPlanBuilder() {
   const handleGeneratePlan = async () => {
     if (selectedPlatforms.length === 0) {
       showToast('Please select at least one platform', 'error');
-      return;
-    }
-    if (contentPillars.length < 1) {
-      showToast('Add at least one content pillar', 'error');
       return;
     }
 
@@ -970,7 +940,6 @@ export default function AIPlanBuilder() {
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
         brandVoiceTone: brandVoiceToneInput.trim(),
-        contentPillars,
         followerRange,
         extraContext: extraContext.trim() || null,
         trendContext,
@@ -1009,7 +978,6 @@ export default function AIPlanBuilder() {
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
         brandVoiceTone: brandVoiceToneInput.trim(),
-        contentPillars,
         followerRange,
         extraContext: extraContext.trim() || null,
         brandVoice: brandVoiceToneInput.trim(),
@@ -1297,74 +1265,7 @@ export default function AIPlanBuilder() {
                 </div>
               </StepSection>
 
-              <StepSection n={4} title="Content Pillars">
-                <p className="text-xs text-gray-500">
-                  3–5 themes you post about (min 1, max 5).
-                </p>
-                <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-[#01BAD2]/25 focus-within:border-[#01BAD2]">
-                  <input
-                    type="text"
-                    value={pillarDraft}
-                    disabled={isGenerating}
-                    onChange={(e) => setPillarDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addPillar())}
-                    placeholder="Add a pillar..."
-                    className="flex-1 min-w-0 border-0 px-4 py-2.5 text-sm focus:ring-0"
-                  />
-                  <button
-                    type="button"
-                    disabled={isGenerating}
-                    onClick={addPillar}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center border-l border-gray-200 bg-gray-50 text-[#01BAD2] hover:bg-[#01BAD2]/10"
-                    aria-label="Add pillar"
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-1 mb-0">
-                  {PILLAR_QUICK_ADD.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      disabled={isGenerating}
-                      onClick={() => {
-                        if (contentPillars.length >= 5) {
-                          showToast('Maximum 5 content pillars', 'warning');
-                          return;
-                        }
-                        if (contentPillars.some((p) => p.toLowerCase() === s.toLowerCase())) return;
-                        setContentPillars((prev) => [...prev, s]);
-                      }}
-                      className="text-xs font-medium text-[#01BAD2] underline-offset-2 hover:underline"
-                    >
-                      + {s}
-                    </button>
-                  ))}
-                </div>
-                {contentPillars.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {contentPillars.map((p, i) => (
-                      <span
-                        key={`${p}-${i}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-[#01BAD2]/20 bg-[#01BAD2]/8 px-3 py-1 text-sm text-[#0C1220]"
-                      >
-                        {p}
-                        <button
-                          type="button"
-                          disabled={isGenerating}
-                          className="rounded-full p-0.5 text-gray-500 hover:bg-[#01BAD2]/15 hover:text-[#0C1220]"
-                          onClick={() => removePillar(i)}
-                          aria-label={`Remove ${p}`}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </StepSection>
-
-              <StepSection n={5} title="Follower Range">
+              <StepSection n={4} title="Follower Range">
                 <div className="relative">
                   <select
                     value={followerRange}
@@ -1382,7 +1283,7 @@ export default function AIPlanBuilder() {
                 </div>
               </StepSection>
 
-              <StepSection n={6} title="Optional Context">
+              <StepSection n={5} title="Optional Context">
                 <button
                   type="button"
                   disabled={isGenerating}
@@ -1528,7 +1429,7 @@ export default function AIPlanBuilder() {
         ].filter(([, val]) => Number(val) > 0);
         const mixTotal = mixEntries.reduce((s, [, n]) => s + Number(n), 0) || 1;
 
-        const keyThemes = extractKeyThemesForDisplay(plan, contentPillars);
+        const keyThemes = extractKeyThemesForDisplay(plan, []);
         const optimalMap = extractOptimalTimesMap(plan);
         const filteredOptimalEntries = optimalMap
           ? Object.entries(optimalMap).filter(([plat]) => {
@@ -1557,7 +1458,7 @@ export default function AIPlanBuilder() {
             .then(() => showToast('Full plan copied to clipboard', 'success'));
         };
 
-        const handleSaveAllVault = async () => {
+        const handleSaveFullPlan = async () => {
           if (!user?.id) {
             showToast('Sign in to save to your vault', 'warning');
             return;
@@ -1567,61 +1468,51 @@ export default function AIPlanBuilder() {
             return;
           }
           setSavingAllVault(true);
-          let saved = 0;
-          const newKeys = new Set();
           try {
-            for (let di = 0; di < displayDays.length; di += 1) {
-              const day = displayDays[di];
-              const dayNum = Number(day?.day) || di + 1;
-              const posts = getDayPosts(day);
-              for (let pi = 0; pi < posts.length; pi += 1) {
-                const post = posts[pi];
-                const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || '';
-                const result = await saveToVault(user.id, {
-                  ...buildContentVaultPayload({
-                    name: `${platLabel} — Day ${dayNum} (${pi + 1})`,
-                    contentText: formatPostVaultBody(post),
-                    contentType: 'plan',
-                    toolSource: 'ai_plan_builder',
-                    toolLabel: 'AI Plan Builder',
-                    topic: (post.hook || '').slice(0, 80),
-                    platform: post.platform,
-                    description: 'Saved from AI Plan Builder',
-                    metadata: {
-                      day: dayNum,
-                      contentType: post.contentType ?? '',
-                      bestTime: post.postTime ?? '',
-                    },
-                  }),
-                  type: 'plan_builder',
-                });
-                if (result.success) {
-                  saved += 1;
-                  newKeys.add(`${di}-${pi}`);
-                }
-              }
+            const dateLabels = displayDays
+              .map((day, index) => getDayDisplayLabel(day, index))
+              .filter(Boolean);
+            const dateRangeLabel = dateLabels.length > 1
+              ? `${dateLabels[0]} to ${dateLabels[dateLabels.length - 1]}`
+              : (dateLabels[0] || `${selectedPeriod} Days`);
+            const result = await saveToVault(user.id, buildContentVaultPayload({
+              name: `${niche || 'Content'} Plan - ${dateRangeLabel}`,
+              contentText: formatFullPlan(plan, displayDays),
+              contentType: 'plan',
+              toolSource: 'ai_plan_builder',
+              toolLabel: 'AI Plan Builder',
+              topic: niche || planTitle,
+              platform: '',
+              description: `AI Plan Builder | ${dateRangeLabel} | ${subtitlePlatforms}`,
+              metadata: {
+                goal: selectedGoal,
+                period_days: selectedPeriod,
+                total_posts: totalPosts,
+                platforms: platformList,
+                user_id: user.id,
+                saved_at: new Date().toISOString(),
+                date_range: dateRangeLabel,
+              },
+            }));
+            if (!result.success) {
+              throw new Error(result.error || 'Could not save full plan');
             }
-            if (saved > 0) {
-              setAllSavedCount(saved);
-              setBatchSavedKeys(newKeys);
-              showToast(`${saved} posts saved to your Content Vault`, 'success');
-            } else {
-              showToast('Could not save posts to vault', 'error');
-            }
+            setSavedFullPlan(true);
+            showToast('Saved to vault ✓', 'success');
           } catch (err) {
-            console.error('[AIPlanBuilder] save all vault:', err);
-            showToast('Could not save posts to vault', 'error');
+            console.error('[AIPlanBuilder] save full plan vault:', err);
+            showToast('Could not save full plan to vault', 'error');
           } finally {
             setSavingAllVault(false);
           }
         };
 
-        const saveAllBtnClass = allSavedCount > 0
+        const saveAllBtnClass = savedFullPlan
           ? 'rounded-xl bg-green-50 border border-green-200 px-4 py-2.5 text-sm font-semibold text-green-700'
           : 'rounded-xl bg-[#01BAD2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0199b0] disabled:opacity-60';
-        const saveAllBtnText = allSavedCount > 0
-          ? `Saved ${allSavedCount} posts ✓`
-          : savingAllVault ? 'Saving…' : 'Save all to vault';
+        const saveAllBtnText = savedFullPlan
+          ? 'Saved ✓'
+          : savingAllVault ? 'Saving…' : 'Save Full Plan';
 
         return (
           <>
@@ -1664,8 +1555,8 @@ export default function AIPlanBuilder() {
                       {user?.id && (
                         <button
                           type="button"
-                          onClick={handleSaveAllVault}
-                          disabled={savingAllVault || allSavedCount > 0 || totalPosts === 0}
+                          onClick={handleSaveFullPlan}
+                          disabled={savingAllVault || savedFullPlan || totalPosts === 0}
                           className={saveAllBtnClass}
                         >
                           {saveAllBtnText}
@@ -1791,9 +1682,9 @@ export default function AIPlanBuilder() {
                             <PlanBuilderPostCard
                               post={post}
                               dayNum={dayNum}
+                              dayLabel={getDayDisplayLabel(day, di)}
                               userId={user?.id}
                               showToast={showToast}
-                              batchSaved={batchSavedKeys.has(`${di}-${pi}`)}
                             />
                           </Motion.div>
                         ))}
@@ -1828,10 +1719,10 @@ export default function AIPlanBuilder() {
                   {user?.id && (
                     <button
                       type="button"
-                      onClick={handleSaveAllVault}
-                      disabled={savingAllVault || allSavedCount > 0 || totalPosts === 0}
+                      onClick={handleSaveFullPlan}
+                      disabled={savingAllVault || savedFullPlan || totalPosts === 0}
                       className={
-                        allSavedCount > 0
+                        savedFullPlan
                           ? 'rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm font-semibold text-green-700'
                           : 'rounded-xl bg-[#01BAD2] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0199b0] disabled:opacity-60'
                       }

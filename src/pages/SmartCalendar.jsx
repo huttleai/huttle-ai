@@ -24,10 +24,7 @@ import {
 } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
-import { useNotifications } from '../context/NotificationContext';
-import { useSubscription } from '../context/SubscriptionContext';
 import { usePostReminders } from '../hooks/usePostReminders';
-import { useOfflineDetection } from '../hooks/useOfflineDetection';
 import { updatePostStatus } from '../config/supabase';
 import { AuthContext } from '../context/AuthContext';
 import PostValidationAlert from '../components/PostValidationAlert';
@@ -35,9 +32,9 @@ import CreatePostModal from '../components/CreatePostModal';
 import PublishModal from '../components/PublishModal';
 import UpgradeModal from '../components/UpgradeModal';
 import OptimizeTimesModal from '../components/OptimizeTimesModal';
-import { downloadPostAsText, downloadPostAsJSON, copyPostToClipboard, downloadForPlatform } from '../utils/downloadHelpers';
+import { downloadPostAsText, downloadPostAsJSON, copyPostToClipboard } from '../utils/downloadHelpers';
 import { formatTo12Hour } from '../utils/timeFormatter';
-import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon, getPlatformColor } from '../components/SocialIcons';
+import { InstagramIcon, FacebookIcon, TikTokIcon, TwitterXIcon, YouTubeIcon } from '../components/SocialIcons';
 
 // Platform icon mapping
 const getPlatformIconComponent = (platform) => {
@@ -110,9 +107,9 @@ export default function SmartCalendar() {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('week');
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [, setSelectedDay] = useState(null);
   const [mobileWeekSelectedDate, setMobileWeekSelectedDate] = useState(new Date());
-  const [selectedPost, setSelectedPost] = useState(null);
+  const [, setSelectedPost] = useState(null);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [postToPublish, setPostToPublish] = useState(null);
@@ -121,7 +118,6 @@ export default function SmartCalendar() {
   const [dragOverDate, setDragOverDate] = useState(null);
   const [quickAddDate, setQuickAddDate] = useState(null);
   const [hoveredPost, setHoveredPost] = useState(null);
-  const [showPostActions, setShowPostActions] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
   const [composerDraft, setComposerDraft] = useState(null);
@@ -172,9 +168,6 @@ export default function SmartCalendar() {
   const { user } = useContext(AuthContext);
   const { scheduledPosts, deleteScheduledPost, updateScheduledPost, loading, syncing, getMediaUrl, getDraft, clearDraft } = useContent();
   const { addToast } = useToast();
-  const { addInfo } = useNotifications();
-  const { userTier, TIERS } = useSubscription();
-  const isOnline = useOfflineDetection();
 
   // Enable post reminders
   usePostReminders();
@@ -424,11 +417,6 @@ export default function SmartCalendar() {
   const handleCopy = async (post) => {
     const result = await copyPostToClipboard(post);
     addToast(result.message, result.success ? 'success' : 'error');
-  };
-
-  const handlePlatformDownload = (post, platform) => {
-    downloadForPlatform(post, platform);
-    addToast(`Downloaded for ${platform}!`, 'success');
   };
 
   const handlePostClick = (post, e) => {

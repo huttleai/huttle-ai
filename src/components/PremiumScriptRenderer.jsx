@@ -46,53 +46,53 @@ export default function PremiumScriptRenderer({ content, onCopy }) {
           remarkPlugins={[remarkGfm]}
           components={{
             // Style H3 headers as section titles with subtle background
-            h3: ({ node, ...props }) => (
+            h3: ({ node: _node, ...props }) => (
               <h3 
                 className="text-xs font-bold uppercase tracking-widest text-gray-700 mt-6 mb-3 first:mt-0 bg-gradient-to-r from-indigo-50 to-purple-50 border-l-4 border-indigo-400 px-4 py-3 rounded-r-lg shadow-sm"
                 {...props}
               />
             ),
-            h2: ({ node, ...props }) => (
+            h2: ({ node: _node, ...props }) => (
               <h2 
                 className="text-sm font-bold uppercase tracking-wide text-gray-600 mt-5 mb-3 first:mt-0"
                 {...props}
               />
             ),
             // Style bold text with accent color
-            strong: ({ node, ...props }) => (
+            strong: ({ node: _node, ...props }) => (
               <strong 
                 className="font-semibold text-indigo-600"
                 {...props}
               />
             ),
             // Style paragraphs
-            p: ({ node, ...props }) => (
+            p: ({ node: _node, ...props }) => (
               <p 
                 className="text-gray-800 leading-relaxed mb-4 whitespace-pre-wrap"
                 {...props}
               />
             ),
             // Style lists with better spacing for readability
-            ul: ({ node, ...props }) => (
+            ul: ({ node: _node, ...props }) => (
               <ul 
                 className="space-y-3 my-4 list-disc list-inside"
                 {...props}
               />
             ),
-            ol: ({ node, ...props }) => (
+            ol: ({ node: _node, ...props }) => (
               <ol 
                 className="space-y-3 my-4 list-decimal list-inside"
                 {...props}
               />
             ),
-            li: ({ node, ...props }) => (
+            li: ({ node: _node, ...props }) => (
               <li 
                 className="text-gray-700 leading-relaxed ml-4 pl-2"
                 {...props}
               />
             ),
             // Style code blocks
-            code: ({ node, inline, ...props }) => 
+            code: ({ node: _node, inline, ...props }) => 
               inline ? (
                 <code 
                   className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-mono"

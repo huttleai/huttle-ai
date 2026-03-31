@@ -13,7 +13,7 @@ export default function EngagementPredictor({
   caption = '', 
   hashtags = '', 
   title = '',
-  platforms = [],
+  platforms: _platforms = [],
   onScoreChange = null,
   compact = false,
   autoAnalyze = false
@@ -122,7 +122,7 @@ export default function EngagementPredictor({
       if (firstLine.includes('?')) hook += 20;
       if (firstLine.match(/^[A-Z]/)) hook += 10;
       if (firstLine.length > 10 && firstLine.length < 80) hook += 15;
-      if (firstLine.match(/[!🔥💡✨🚀]/)) hook += 10;
+      if (firstLine.match(/[!🔥💡✨🚀]/u)) hook += 10;
     }
 
     // CTA analysis

@@ -204,7 +204,7 @@ export function formatEnumArray(values) {
         if (Array.isArray(parsed)) {
           return parsed.map(formatEnumLabel).filter(Boolean).join(', ');
         }
-      } catch (e) {
+      } catch {
         // Not valid JSON, treat as comma-separated
       }
     }
@@ -282,7 +282,7 @@ export function normalizeEnumArray(values) {
         if (Array.isArray(parsed)) {
           return parsed.map(normalizeEnumValue).filter(Boolean).join(', ');
         }
-      } catch (e) {
+      } catch {
         // Ignore and treat as a plain string below
       }
     }

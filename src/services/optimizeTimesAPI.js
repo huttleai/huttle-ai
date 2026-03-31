@@ -22,7 +22,7 @@ async function getAuthHeaders() {
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
     }
-  } catch (e) { /* ignore */ }
+  } catch { /* ignore */ }
   return headers;
 }
 
@@ -118,9 +118,9 @@ export async function generateOptimalTimes(brandData, posts) {
   const platforms = [...new Set(posts.flatMap(p => p.platforms || []))];
   
   // Get brand context
-  const niche = getNiche(brandData, 'general');
-  const audience = getTargetAudience(brandData, 'general audience');
-  const brandContext = buildBrandContext(brandData);
+  void getNiche(brandData, 'general');
+  void getTargetAudience(brandData, 'general audience');
+  void buildBrandContext(brandData);
 
   try {
     // Try AI-powered optimization first
@@ -299,10 +299,9 @@ function generateFallbackOptimization(posts, brandData) {
  * @returns {Object} Optimal time recommendation
  */
 export function getOptimalTimeForPlatform(platform, contentType = 'post', brandData = null) {
+  void brandData;
   const platformData = PLATFORM_BEST_TIMES[platform] || PLATFORM_BEST_TIMES.Instagram;
-  const industry = brandData?.industry?.toLowerCase() || 'default';
-  const industryTiming = INDUSTRY_TIMING[industry] || INDUSTRY_TIMING.default;
-  
+
   // Get base best time
   let bestTime = platformData.bestTimes[0];
   

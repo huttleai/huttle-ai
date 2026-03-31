@@ -77,7 +77,7 @@ export default function ContentRepurposer() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
-  const { saveGeneratedContent, setDraft } = useContent();
+  const { setDraft } = useContent();
   const navigate = useNavigate();
 
   const [originalContent, setOriginalContent] = useState('');

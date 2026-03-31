@@ -140,6 +140,6 @@ export const getPlatformIcon = (platform, className, monochrome = true) => {
 };
 
 // Clean styling helper - no colored backgrounds
-export const getPlatformColor = (platform) => {
+export const getPlatformColor = (_platform) => {
   return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
 };

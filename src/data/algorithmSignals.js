@@ -26,7 +26,6 @@ const PLATFORM_NAMES = {
 const wordCount = (text) => String(text || '').trim().split(/\s+/).filter(Boolean).length;
 const firstSentence = (text) => (String(text || '').match(/^[^.!?\n]+[.!?]?/) || [''])[0].trim();
 const firstLine = (text) => String(text || '').split('\n').find((l) => l.trim())?.trim() || '';
-const hasPattern = (text, pattern) => pattern.test(String(text || ''));
 const countHashtags = (text) => (String(text || '').match(/#\w+/g) || []).length;
 const sentences = (text) =>
   String(text || '')
@@ -291,7 +290,7 @@ function checkCarouselSaveWorthy(text) {
 }
 
 function checkCarouselSlideCount(text) {
-  if (/\bswipe|slide\s*\d|slide \d|^\d+[\).]/im.test(text) || /\b(part|pt\.)\s*\d\b/i.test(text)) {
+  if (/\bswipe|slide\s*\d|slide \d|^\d+[).]/im.test(text) || /\b(part|pt\.)\s*\d\b/i.test(text)) {
     return { score: 1, reason: 'Swipe or slide numbering is referenced — expectation for multi-card value is set' };
   }
   if (/\bcard|frame|page\b/i.test(text)) {

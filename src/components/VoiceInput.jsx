@@ -82,7 +82,7 @@ export default function VoiceInput({
         // Restart if we're still supposed to be listening
         try {
           recognition.start();
-        } catch (e) {
+        } catch {
           setIsListening(false);
         }
       }

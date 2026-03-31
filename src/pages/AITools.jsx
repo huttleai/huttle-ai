@@ -3,12 +3,11 @@ import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, 
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { useContent } from '../context/ContentContext';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AIFeatureLock from '../components/AIFeatureLock';
 import PlatformSelector from '../components/PlatformSelector';
-import { getPlatformTips, getPlatform } from '../utils/platformGuidelines';
+import { getPlatform } from '../utils/platformGuidelines';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -22,7 +21,6 @@ import {
   generateHashtags, 
   generateHooks, 
   generateStyledCTAs,
-  generateVisualIdeas,
   generateVisualBrainstorm 
 } from '../services/grokAPI';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -233,8 +231,6 @@ export default function AITools() {
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { userTier, getFeatureLimit } = useSubscription();
-  const { saveGeneratedContent } = useContent();
-
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParamInitial = searchParams.get('tab');
   const initialToolFromUrl = tabParamInitial && TAB_QUERY_TO_TOOL[tabParamInitial]
@@ -274,9 +270,7 @@ export default function AITools() {
   // CTA Suggester State (redesigned)
   const [ctaPromoting, setCtaPromoting] = useState('');
   const [ctaGoalType, setCtaGoalType] = useState('');
-  const [ctaGoal, setCtaGoal] = useState(''); // kept for legacy compat
   const [ctaPlatform, setCtaPlatform] = useState('instagram');
-  const [generatedCTAs, setGeneratedCTAs] = useState([]);
   const [styledCTAs, setStyledCTAs] = useState(null);
   const [isLoadingCTAs, setIsLoadingCTAs] = useState(false);
   const [isPolishingCTAs, setIsPolishingCTAs] = useState(false);
@@ -294,7 +288,6 @@ export default function AITools() {
   const [visualPlatform, setVisualPlatform] = useState('instagram');
   const [visualContentFormat, setVisualContentFormat] = useState('Image');
   const [visualOutputType, setVisualOutputType] = useState('');
-  const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
   const [visualBrainstormResult, setVisualBrainstormResult] = useState(null);
   const [visualBrainstormPhase, setVisualBrainstormPhase] = useState(null);
@@ -311,7 +304,7 @@ export default function AITools() {
   // AI Usage Tracking
   const [aiGensUsed, setAiGensUsed] = useState(0);
   const [aiGensLimit, setAiGensLimit] = useState(Infinity);
-  const [isAILocked, setIsAILocked] = useState(false);
+  const [_isAILocked, setIsAILocked] = useState(false);
 
   // Modal state
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
@@ -744,8 +737,8 @@ export default function AITools() {
       const overall = overallMatch ? parseInt(overallMatch[1]) : null;
       const hook = hookMatch ? parseInt(hookMatch[1]) : null;
       const cta = ctaMatch ? parseInt(ctaMatch[1]) : null;
-      const hashtags = hashtagMatch ? parseInt(hashtagMatch[1]) : null;
-      const engagement = engagementMatch ? parseInt(engagementMatch[1]) : null;
+      const _hashtags = hashtagMatch ? parseInt(hashtagMatch[1]) : null;
+      const _engagement = engagementMatch ? parseInt(engagementMatch[1]) : null;
       
       // Extract suggestions (lines starting with - or *)
       const suggestionLines = text.match(/[-*•]\s*(.+)/g) || [];
@@ -945,19 +938,11 @@ export default function AITools() {
     }
   };
 
-  // Legacy handler kept for backward compat
-  const handleGenerateVisualIdeas = handleGenerateVisualBrainstorm;
-
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
     showToast('Copied to clipboard!', 'success');
     setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  const handleSaveContent = (content, type, metadata = {}) => {
-    saveGeneratedContent({ type, content, metadata, tool: activeTool });
-    showToast('Content saved! Access it from Content Vault.', 'success');
   };
 
   const handleAddToLibrary = async (content, contentType, metadata = {}, itemIndex = null) => {
@@ -968,10 +953,10 @@ export default function AITools() {
 
     try {
       const toolNames = {
-        caption: 'Caption',
-        hashtags: 'Hashtag',
-        hooks: 'Hook',
-        cta: 'CTA',
+        caption: 'Caption Generator',
+        hashtags: 'Hashtag Generator',
+        hooks: 'Hook Builder',
+        cta: 'CTA Suggester',
         'visual-brainstorm': 'Visual Brainstorm',
         scorer: 'Content Scorer',
       };

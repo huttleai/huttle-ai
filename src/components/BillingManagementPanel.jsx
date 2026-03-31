@@ -43,7 +43,7 @@ export default function BillingManagementPanel({
   userTier = null,
   compact = false,
   showPlanSwitcher = true,
-  showManageAction = true,
+  showManageAction: _showManageAction = true,
   onSubscriptionUpdated = null,
 }) {
   const { addToast } = useToast();

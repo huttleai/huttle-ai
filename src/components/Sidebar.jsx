@@ -51,7 +51,6 @@ export default function Sidebar() {
 
   const isDrawer = sidebarMode === 'drawer';
   const isRail = sidebarMode === 'rail';
-  const isExpanded = sidebarMode === 'expanded';
 
   const clearRailTipHide = useCallback(() => {
     if (railTipHideRef.current) {

@@ -72,7 +72,8 @@ function DashboardRouteFallback() {
 
 function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   const authContext = useContext(AuthContext);
-  
+  useNotificationGenerator();
+
   // Safety check - if context is undefined, show error
   if (!authContext) {
     console.error('AuthContext is not available. This should not happen.');
@@ -87,8 +88,6 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   }
 
   const { user, loading, needsOnboarding, profileChecked, completeOnboarding } = authContext;
-
-  useNotificationGenerator();
 
   // Show loading state while checking auth OR while profile is being checked
   // CRITICAL: Wait for BOTH auth loading AND profile check to complete
