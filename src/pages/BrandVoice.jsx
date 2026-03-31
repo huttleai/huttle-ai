@@ -166,12 +166,12 @@ const GROWTH_STAGE_OPTIONS = [
 ];
 
 const BUSINESS_PRIMARY_GOAL_OPTIONS = [
-  { value: 'drive_foot_traffic', label: 'Drive Foot Traffic' },
-  { value: 'increase_sales', label: 'Increase Sales' },
-  { value: 'grow_local_following', label: 'Grow Local Following' },
-  { value: 'promote_events', label: 'Promote Events' },
+  { value: 'drive_sales', label: 'Drive Sales' },
+  { value: 'increase_foot_traffic', label: 'Increase Foot Traffic' },
+  { value: 'build_community', label: 'Build Community' },
   { value: 'grow_online_presence', label: 'Grow Online Presence' },
   { value: 'build_brand_awareness', label: 'Build Brand Awareness' },
+  { value: 'launch_product', label: 'Launch a Product' },
 ];
 
 const CREATOR_MONETIZATION_PATH_OPTIONS = [
