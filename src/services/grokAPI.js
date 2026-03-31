@@ -32,6 +32,7 @@ import {
   getPromptBrandProfile
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { buildUserContextBlock } from '../utils/buildUserContext';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import {
   PLATFORM_CONTENT_RULES,
@@ -786,11 +787,12 @@ export async function generateTrendIdeas(brandData, trendTopic) {
       'You are an expert content creator assistant. Generate creative, engaging content ideas that resonate with the target audience.',
       brandData
     );
+    const trendIdeasUserCtx = buildUserContextBlock(brandData);
 
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: systemPrompt
+        content: trendIdeasUserCtx ? `${trendIdeasUserCtx}\n\n${systemPrompt}` : systemPrompt
       },
       {
         role: 'user',
@@ -1007,8 +1009,9 @@ ${captionHints}`;
       userMessage += `\n\n— Regeneration request (${captionRegenNonce}) — Produce a meaningfully different caption body while honoring every constraint above (including the exact opening hook line when provided). Vary structure, examples, and phrasing.`;
     }
 
+    const userContextBlock = buildUserContextBlock(brandData);
     const captionMessages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: userContextBlock ? `${userContextBlock}\n\n${systemPrompt}` : systemPrompt },
       { role: 'user', content: userMessage },
     ];
 
@@ -1586,8 +1589,9 @@ Return ONLY a JSON array with 6–10 objects. Each object:
 
 Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); no mixing in unrelated hook types. No two hooks may share the same generic sentence frame with only a noun swapped.`;
 
+    const hookUserContextBlock = buildUserContextBlock(brandData);
     const hookBuilderMessages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: hookUserContextBlock ? `${hookUserContextBlock}\n\n${systemPrompt}` : systemPrompt },
       { role: 'user', content: userMessage },
     ];
     let data;
@@ -2536,6 +2540,7 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
 
     const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal);
     const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
+    const remixUserCtx = buildUserContextBlock(brandData);
 
     const modeLabels = {
       viral: 'maximum viral reach and engagement',
@@ -2618,7 +2623,7 @@ ${platformRemixRulesBlock}`;
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: systemPrompt
+        content: remixUserCtx ? `${remixUserCtx}\n\n${systemPrompt}` : systemPrompt
       },
       {
         role: 'user',
@@ -3486,10 +3491,11 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
     const researchContext = structuredResearch
       ? JSON.stringify(structuredResearch, null, 2)
       : String(researchData || '').trim();
+    const nicheIntelUserCtx = buildUserContextBlock(brandData);
     const messages = [
       {
         role: 'system',
-        content: `You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
+        content: `${nicheIntelUserCtx ? `${nicheIntelUserCtx}\n\n` : ''}You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
 
 OUTPUT — Return ONLY valid JSON:
 {

@@ -985,6 +985,14 @@ export default function AIPlanBuilder() {
         trendContext,
         platform_rules_block: platformRulesBlock,
         platforms_list: platformsArray.join(', '),
+        profileType: brandProfile?.profileType,
+        firstName: brandProfile?.firstName,
+        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
+        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
+        isLocalBusiness: brandProfile?.isLocalBusiness || false,
+        city: brandProfile?.city || null,
+        audienceLocationType: brandProfile?.audienceLocationType || 'local',
+        contentMixOverride: brandProfile?.contentMix || null,
       });
 
       if (!webhookSuccess) {

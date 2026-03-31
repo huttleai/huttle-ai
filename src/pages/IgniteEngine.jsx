@@ -336,6 +336,11 @@ export default function IgniteEngine() {
         content_persona: brandProfile?.contentPersona || '',
         monetization_goal: brandProfile?.monetizationGoal || '',
         hashtag_isolation_rule: 'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
+        profile_type: brandProfile?.profileType,
+        business_primary_goal: brandProfile?.businessPrimaryGoal || null,
+        creator_monetization_path: brandProfile?.creatorMonetizationPath || null,
+        is_local_business: brandProfile?.isLocalBusiness || false,
+        audience_location_type: brandProfile?.audienceLocationType || 'local',
       };
 
       const { data: { session } } = await supabase.auth.getSession();

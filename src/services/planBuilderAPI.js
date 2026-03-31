@@ -188,6 +188,14 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
         : Array.isArray(platformFocus)
           ? platformFocus.join(', ')
           : '',
+    profileType: formData.profileType ?? null,
+    firstName: formData.firstName ?? null,
+    businessPrimaryGoal: formData.businessPrimaryGoal ?? null,
+    creatorMonetizationPath: formData.creatorMonetizationPath ?? null,
+    isLocalBusiness: formData.isLocalBusiness ?? false,
+    city: formData.city ?? null,
+    audienceLocationType: formData.audienceLocationType ?? 'local',
+    contentMixOverride: formData.contentMixOverride ?? null,
   };
 
   if (import.meta.env.DEV) {

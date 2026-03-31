@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { buildPromptBrandSection, getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { buildUserContextBlock } from '../utils/buildUserContext';
 import { getPlatform } from '../utils/platformGuidelines';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 
@@ -64,11 +65,12 @@ export async function enhanceCaptionWithClaude(
     brandVoice
     || getPromptBrandProfile(brandData, { platforms: [plat] }).tone
     || 'authentic';
+  const captionUserCtx = buildUserContextBlock(brandData);
 
   const messages = [
     {
       role: 'system',
-      content: `${brandBlock}You are a senior social copy editor. Polish the caption for clarity, specificity, storytelling flow, and emotional resonance on ${platformData?.name || plat}.
+      content: `${captionUserCtx ? `${captionUserCtx}\n\n` : ''}${brandBlock}You are a senior social copy editor. Polish the caption for clarity, specificity, storytelling flow, and emotional resonance on ${platformData?.name || plat}.
 
 Rules:
 - Preserve all factual claims and offers exactly — do not invent discounts, guarantees, medical outcomes, or services not stated in the original.
@@ -155,7 +157,8 @@ export async function generateFullPostHooksWithClaude(
   const audience = passedAudience || promptProfile.targetAudience || 'followers';
   const tone = promptProfile.tone || 'authentic';
 
-  const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
+  const fullPostHooksUserCtx = buildUserContextBlock(brandData);
+  const system = `${fullPostHooksUserCtx ? `${fullPostHooksUserCtx}\n\n` : ''}${buildCreatorBrandBlock(brandData, brandData) || ''}
 You write scroll-stopping social hooks. Output exactly as the user specifies.`.trim();
 
   const hookRequirementInject = String(options.fullPostBuilderHookRequirement ?? '').trim();

@@ -10,7 +10,7 @@ export const BrandContext = createContext();
  * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
  */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix';
 
 const QUERY_TIMEOUT_MS = 5000;
 
@@ -51,6 +51,11 @@ function createEmptyBrandData() {
     emotionalTriggers: [],
     /** true = already shown or legacy user; false = new profile, eligible for one-time welcome notification */
     hasSeenWelcomeNotification: true,
+    businessPrimaryGoal: null,
+    creatorMonetizationPath: null,
+    isLocalBusiness: false,
+    audienceLocationType: 'local',
+    contentMix: null,
   };
 }
 
@@ -250,6 +255,11 @@ export function BrandProvider({ children }) {
             hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
             hasSeenWelcomeNotification: data.has_seen_welcome_notification !== false,
+            businessPrimaryGoal: data.business_primary_goal || null,
+            creatorMonetizationPath: data.creator_monetization_path || null,
+            isLocalBusiness: data.is_local_business || false,
+            audienceLocationType: data.audience_location_type || 'local',
+            contentMix: data.content_mix || null,
           };
 
           const mergedData = userPreferences
@@ -264,7 +274,7 @@ export function BrandProvider({ children }) {
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
             .from('user_profile')
-            .upsert({ user_id: user.id, profile_type: 'brand' }, { onConflict: 'user_id' });
+            .upsert({ user_id: user.id, profile_type: 'brand' }, { onConflict: 'user_id', ignoreDuplicates: true });
 
           if (insertError) {
             console.warn('[Brand] Default row insert failed (non-critical):', insertError.message);

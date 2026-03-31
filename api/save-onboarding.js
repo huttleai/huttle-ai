@@ -8,19 +8,16 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null;
 
 function normalizeProfileType(profileType, creatorType) {
-  const normalizedProfileType = String(profileType || '').trim().toLowerCase();
-  const normalizedCreatorType = String(creatorType || '').trim().toLowerCase();
+  const p = String(profileType || '').trim().toLowerCase();
+  const ct = String(creatorType || '').trim().toLowerCase();
 
-  if (
-    normalizedProfileType === 'business'
-    || normalizedProfileType === 'brand'
-    || normalizedProfileType === 'brand_business'
-    || normalizedCreatorType === 'brand_business'
-  ) {
-    return 'business';
-  }
+  // Accept the new constrained values directly
+  if (p === 'brand_business' || ct === 'brand_business') return 'brand_business';
+  if (p === 'solo_creator' || ct === 'solo_creator') return 'solo_creator';
 
-  return 'creator';
+  // Legacy fallback for any in-flight requests using old values
+  if (p === 'business' || p === 'brand') return 'brand_business';
+  return 'solo_creator';
 }
 
 export default async function handler(req, res) {
@@ -56,6 +53,7 @@ export default async function handler(req, res) {
       firstName,
       profileType,
       brandName,
+      creatorHandle,
       creatorType,
       niche,
       growthStage,
@@ -67,6 +65,12 @@ export default async function handler(req, res) {
       conversionGoal,
       contentPersona,
       city,
+      businessPrimaryGoal,
+      audienceLocationType,
+      isLocalBusiness,
+      creatorMonetizationPath,
+      audienceStage,
+      postingFrequency,
       quizCompletedAt,
       onboardingStep,
     } = req.body || {};
@@ -79,6 +83,7 @@ export default async function handler(req, res) {
       first_name: firstName || null,
       profile_type: normalizedProfileType,
       brand_name: brandName || null,
+      social_handle: creatorHandle || null,
       niche: niche || null,
       target_audience: targetAudience || null,
       audience_pain_point: audiencePainPoint || null,
@@ -87,6 +92,12 @@ export default async function handler(req, res) {
       tone_chips: Array.isArray(toneChips) ? toneChips : [],
       conversion_goal: conversionGoal || null,
       content_persona: contentPersona || null,
+      business_primary_goal: businessPrimaryGoal || null,
+      audience_location_type: audienceLocationType || null,
+      is_local_business: typeof isLocalBusiness === 'boolean' ? isLocalBusiness : false,
+      creator_monetization_path: creatorMonetizationPath || null,
+      audience_stage: audienceStage || null,
+      posting_frequency: postingFrequency || null,
       has_completed_onboarding: true,
       quiz_completed_at: quizCompletedAt || nowIso,
       onboarding_step: onboardingStep || 8,
