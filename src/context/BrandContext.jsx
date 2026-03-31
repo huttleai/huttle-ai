@@ -10,7 +10,7 @@ export const BrandContext = createContext();
  * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
  */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,location_state,country,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix';
 
 const QUERY_TIMEOUT_MS = 5000;
 
@@ -25,6 +25,8 @@ function createEmptyBrandData() {
     subNiche: '',
     contentFocus: '',
     city: '',
+    locationState: null,
+    country: 'US',
     industry: '',
     growthStage: '',
     creatorType: null,
@@ -230,6 +232,8 @@ export function BrandProvider({ children }) {
             subNiche: data.sub_niche || '',
             contentFocus: '',
             city: data.city || '',
+            locationState: data.location_state || null,
+            country: data.country || 'US',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
             growthStage: '',
             creatorType: null,
@@ -312,7 +316,9 @@ export function BrandProvider({ children }) {
   }, [userId, reloadTrigger]);
 
   const updateBrandData = useCallback(async (newData) => {
-    const updated = { ...brandDataRef.current, ...newData };
+    const existing = brandDataRef.current;
+    const updates = newData;
+    const updated = { ...existing, ...updates };
     setBrandData(updated);
     brandDataRef.current = updated;
 
@@ -328,6 +334,8 @@ export function BrandProvider({ children }) {
           brand_name: updated.brandName || null,
           social_handle: updated.handle || null,
           city: updated.city || null,
+          location_state: updates.locationState ?? existing.locationState,
+          country: updates.country ?? existing.country,
           industry: updated.industry
             ? normalizeOptionalEnum(updated.industry) || String(updated.industry).trim() || null
             : null,

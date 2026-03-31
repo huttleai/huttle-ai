@@ -84,6 +84,7 @@ function pick(input, ...keys) {
  */
 export function buildIgniteN8nPayload(input) {
   const bp = input.brandProfile && typeof input.brandProfile === 'object' ? input.brandProfile : {};
+  const profile = { ...bp, ...input };
 
   const {
     topic,
@@ -198,6 +199,17 @@ export function buildIgniteN8nPayload(input) {
     brandName,
     handle,
     city,
+    location_state: profile.locationState || profile.location_state || null,
+    locationState: profile.locationState || profile.location_state || null,
+    country: profile.country || 'US',
+    locationFull: (() => {
+      const parts = [
+        profile.city || profile.brandCity || null,
+        profile.locationState || profile.location_state || null,
+        profile.country !== 'US' ? (profile.country || null) : null,
+      ].filter(Boolean);
+      return parts.length ? parts.join(', ') : null;
+    })(),
     sub_niche: subNiche,
     subNiche,
     audience_pain_point: audiencePainPoint,

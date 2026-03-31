@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BrandContext } from '../context/BrandContext';
+import { BrandContext, useBrand } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -166,12 +166,12 @@ const GROWTH_STAGE_OPTIONS = [
 ];
 
 const BUSINESS_PRIMARY_GOAL_OPTIONS = [
-  { value: 'drive_sales', label: 'Drive More Sales' },
-  { value: 'increase_foot_traffic', label: 'Increase Foot Traffic' },
-  { value: 'build_community', label: 'Build a Loyal Community' },
+  { value: 'drive_foot_traffic', label: 'Drive Foot Traffic' },
+  { value: 'increase_sales', label: 'Increase Sales' },
+  { value: 'grow_local_following', label: 'Grow Local Following' },
+  { value: 'promote_events', label: 'Promote Events' },
   { value: 'grow_online_presence', label: 'Grow Online Presence' },
   { value: 'build_brand_awareness', label: 'Build Brand Awareness' },
-  { value: 'launch_product', label: 'Launch a New Product' },
 ];
 
 const CREATOR_MONETIZATION_PATH_OPTIONS = [
@@ -179,7 +179,6 @@ const CREATOR_MONETIZATION_PATH_OPTIONS = [
   { value: 'digital_products', label: 'Digital Products' },
   { value: 'coaching', label: 'Coaching' },
   { value: 'affiliate', label: 'Affiliate' },
-  { value: 'community_membership', label: 'Paid Community' },
   { value: 'not_yet_monetizing', label: 'Just Growing for Now' },
 ];
 
@@ -226,6 +225,8 @@ function toFormData(source = {}) {
     niche: source.niche || '',
     subNiche: source.subNiche || '',
     city: source.city || '',
+    locationState: source.locationState ?? source.location_state ?? null,
+    country: source.country || 'US',
     industry: source.industry || '',
     growthStage: source.growthStage || '',
     targetAudience: source.targetAudience || '',
@@ -270,6 +271,8 @@ function buildBrandUpdatePayload(fd) {
     niche: fd.niche,
     subNiche: fd.subNiche,
     city: fd.city,
+    locationState: fd.locationState,
+    country: fd.country,
     industry: fd.industry,
     growthStage: fd.growthStage,
     targetAudience: fd.targetAudience,
@@ -451,6 +454,7 @@ function CollapsibleSection({
 
 export default function BrandVoice() {
   const { brandData, updateBrandData, brandFetchComplete } = useContext(BrandContext);
+  const { isCreator } = useBrand();
   const { user, updateUser } = useContext(AuthContext);
   const { addToast } = useToast();
   const { userTier } = useSubscription();
@@ -847,41 +851,99 @@ export default function BrandVoice() {
               />
             </FieldInput>
 
-            <FieldInput label="City" helper="Local trends and hashtags when available">
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => setField({ city: e.target.value })}
-                className={inputClasses}
-                placeholder="e.g. Atlanta"
-              />
-            </FieldInput>
+            <div className="space-y-6">
+              <FieldInput label="City" helper="Local trends and hashtags when available">
+                <input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => setField({ city: e.target.value })}
+                  className={inputClasses}
+                  placeholder="e.g. Atlanta"
+                />
+              </FieldInput>
 
-            {isBusiness && (
-              <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-900 uppercase tracking-wide">Local Business</p>
-                  <p className="mt-0.5 text-xs text-gray-400">
-                    Turn on if you serve a specific city or area — unlocks local hashtags and neighborhood-specific content
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={formData.isLocalBusiness}
-                  onClick={() => setField({ isLocalBusiness: !formData.isLocalBusiness })}
-                  className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-huttle-primary/50 focus:ring-offset-2 ${
-                    formData.isLocalBusiness ? 'bg-huttle-primary' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${
-                      formData.isLocalBusiness ? 'translate-x-5' : 'translate-x-0.5'
+              <FieldInput label="State / Region">
+                <input
+                  type="text"
+                  value={formData.locationState ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setField({ locationState: v.trim() ? v : null });
+                  }}
+                  className={inputClasses}
+                  placeholder="e.g. Georgia, Ontario, New South Wales"
+                />
+              </FieldInput>
+
+              <FieldInput label="Country">
+                <input
+                  type="text"
+                  value={formData.country || 'US'}
+                  onChange={(e) => setField({ country: e.target.value })}
+                  className={inputClasses}
+                  placeholder="e.g. US, UK, Australia, Canada"
+                />
+              </FieldInput>
+
+              {!isCreator && (
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-900 uppercase tracking-wide">Local Business</p>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      Turn on if you serve a specific city or area — unlocks local hashtags and neighborhood content in AI
+                      generation
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formData.isLocalBusiness}
+                    onClick={() => setField({ isLocalBusiness: !formData.isLocalBusiness })}
+                    className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-huttle-primary/50 focus:ring-offset-2 ${
+                      formData.isLocalBusiness ? 'bg-huttle-primary' : 'bg-gray-200'
                     }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${
+                        formData.isLocalBusiness ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
+              {!isCreator && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    Primary Business Goal
+                  </label>
+                  <p className="text-xs text-gray-400 mb-2">
+                    What&apos;s the #1 thing your social media should do for your business?
+                  </p>
+                  <ChipSelect
+                    options={BUSINESS_PRIMARY_GOAL_OPTIONS}
+                    value={formData.businessPrimaryGoal || ''}
+                    onChange={(v) => setField({ businessPrimaryGoal: v || null })}
                   />
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+
+              {isCreator && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                    How are you monetizing (or planning to)?
+                  </label>
+                  <p className="text-xs text-gray-400 mb-2">
+                    This shapes how your content positions you to your audience.
+                  </p>
+                  <ChipSelect
+                    options={CREATOR_MONETIZATION_PATH_OPTIONS}
+                    value={formData.creatorMonetizationPath || ''}
+                    onChange={(v) => setField({ creatorMonetizationPath: v || null })}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </CollapsibleSection>
 
@@ -1189,19 +1251,6 @@ export default function BrandVoice() {
                     onChange={(v) => setField({ conversionGoal: v })}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                    Primary Business Goal
-                  </label>
-                  <p className="text-xs text-gray-400 mb-2">
-                    What's the #1 thing your social media should do for your business?
-                  </p>
-                  <ChipSelect
-                    options={BUSINESS_PRIMARY_GOAL_OPTIONS}
-                    value={formData.businessPrimaryGoal || ''}
-                    onChange={(v) => setField({ businessPrimaryGoal: v || null })}
-                  />
-                </div>
               </>
             ) : (
               <>
@@ -1223,19 +1272,6 @@ export default function BrandVoice() {
                     options={MONETIZATION_GOAL_OPTIONS}
                     value={formData.monetizationGoal}
                     onChange={(v) => setField({ monetizationGoal: v })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                    How you monetize (or plan to)
-                  </label>
-                  <p className="text-xs text-gray-400 mb-2">
-                    This shapes how your content positions you to your audience.
-                  </p>
-                  <ChipSelect
-                    options={CREATOR_MONETIZATION_PATH_OPTIONS}
-                    value={formData.creatorMonetizationPath || ''}
-                    onChange={(v) => setField({ creatorMonetizationPath: v || null })}
                   />
                 </div>
                 <div>
