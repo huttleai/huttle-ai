@@ -6,12 +6,13 @@ import { getTierConfig } from '../utils/tierConfig';
 
 export const SubscriptionContext = createContext();
 
-const subscriptionCache = { data: null, timestamp: null };
+const subscriptionCache = { data: null, timestamp: null, userId: null };
 const CACHE_TTL_MS = 60 * 1000;
 
 export function clearSubscriptionCache() {
   subscriptionCache.data = null;
   subscriptionCache.timestamp = null;
+  subscriptionCache.userId = null;
 }
 
 // Demo mode storage key
@@ -95,6 +96,11 @@ export function SubscriptionProvider({ children }) {
 
   useEffect(() => {
     setSubscriptionReady(false);
+  }, [userId]);
+
+  // Prevent cross-account cache reuse: clear cache whenever auth identity changes.
+  useEffect(() => {
+    clearSubscriptionCache();
   }, [userId]);
 
   const applySubscriptionFallback = useCallback(({ status = 'inactive', tier = null, degraded = false, error = null } = {}) => {
@@ -266,6 +272,7 @@ export function SubscriptionProvider({ children }) {
 
       const isCacheValid =
         !bypassCache &&
+        subscriptionCache.userId === userId &&
         subscriptionCache.data !== null &&
         subscriptionCache.timestamp !== null &&
         Date.now() - subscriptionCache.timestamp < CACHE_TTL_MS;
@@ -344,6 +351,7 @@ export function SubscriptionProvider({ children }) {
       if (!isCacheValid && stripeResult?.success && !stripeResult?.shouldRetry) {
         subscriptionCache.data = stripeResult;
         subscriptionCache.timestamp = Date.now();
+        subscriptionCache.userId = userId;
       }
 
       setSubscription(nextSubscription);
