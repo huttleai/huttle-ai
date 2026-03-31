@@ -216,10 +216,19 @@ export function buildPromptBrandSection(brandData = {}, overrides = {}) {
     growthStage,
   } = getPromptBrandProfile(brandData, overrides);
 
-  return `About this business:
-- Niche: ${niche}
-- Target audience: ${targetAudience || `customers interested in ${niche}`}
-- Brand tone: ${tone || 'Professional and approachable'}
+  const isCreatorProf = creatorType === 'solo_creator' || creatorType === 'creator';
+  const entityLabel = isCreatorProf ? 'creator' : 'business';
+  const nicheLabel = isCreatorProf ? 'Content niche' : 'Niche';
+  const audienceLabel = isCreatorProf ? 'Community / audience' : 'Target audience';
+  const audienceFallback = isCreatorProf
+    ? `${niche} enthusiasts and followers`
+    : `customers interested in ${niche}`;
+  const toneLabel = isCreatorProf ? 'Creator voice' : 'Brand tone';
+
+  return `About this ${entityLabel}:
+- ${nicheLabel}: ${niche}
+- ${audienceLabel}: ${targetAudience || audienceFallback}
+- ${toneLabel}: ${tone || 'Professional and approachable'}
 - Location: ${city || 'United States'}
 - Primary platforms: ${platforms.join(', ') || 'Instagram'}
 - Content style: ${contentStyle || 'Helpful, specific, and trust-building content'}
@@ -233,7 +242,8 @@ export function buildPromptBrandSection(brandData = {}, overrides = {}) {
  * @returns {boolean} True if creator profile
  */
 export function isCreatorProfile(brandData) {
-  return brandData?.profileType === 'creator';
+  const pt = brandData?.profileType;
+  return pt === 'creator' || pt === 'solo_creator';
 }
 
 /**
@@ -360,8 +370,12 @@ export function buildBrandContext(brandData) {
     parts.push(`Content should make audience feel: ${emotionDescriptions}`);
   }
 
-  return parts.length > 0 
-    ? parts.join('\n')
+  const contentMindset = isCreator
+    ? `\n\nCONTENT MINDSET: This user is a SOLO CREATOR building a personal brand. Content must be first-person, personality-driven, and audience-growth oriented. Do NOT produce "visit us", "our store", or foot-traffic language. The CREATOR IS the brand.`
+    : `\n\nCONTENT MINDSET: This user is a BUSINESS OWNER. Every output must serve business goals — not celebrate the niche personally. A coffee shop owner does NOT post generic coffee facts. They post about THEIR shop, THEIR specials, THEIR team, and reasons to visit THEIR location. Ask: "Would a real business owner post this to attract customers or drive sales?" If no — rewrite it.`;
+
+  return parts.length > 0
+    ? parts.join('\n') + contentMindset
     : 'No profile available. Use a professional, engaging tone.';
 }
 
@@ -466,9 +480,9 @@ export function buildSystemPrompt(basePrompt, brandData) {
   const brandContext = buildBrandContext(brandData);
   const instructions = buildProfileInstructions(brandData);
   const isCreator = isCreatorProfile(brandData);
-  
+
   const headerLabel = isCreator ? 'CREATOR PROFILE' : 'BRAND PROFILE';
-  
+
   return `${basePrompt}
 
 ${headerLabel}:

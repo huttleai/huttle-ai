@@ -2538,7 +2538,7 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
 
     const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
-    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal);
+    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal, brandData?.profileType || 'brand_business');
     const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
     const remixUserCtx = buildUserContextBlock(brandData);
 
