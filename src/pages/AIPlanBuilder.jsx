@@ -951,6 +951,15 @@ export default function AIPlanBuilder() {
         })
         .join('\n\n');
 
+      const locationFull = (() => {
+        const parts = [
+          brandProfile?.city,
+          brandProfile?.locationState,
+          brandProfile?.country && brandProfile.country !== 'US' ? brandProfile.country : null,
+        ].filter(Boolean);
+        return parts.length ? parts.join(', ') : null;
+      })();
+
       const { jobId: createdJobId, error: createError } = await createJobDirectly({
         contentGoal: selectedGoal,
         timePeriod: selectedPeriod,
@@ -959,7 +968,7 @@ export default function AIPlanBuilder() {
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
         brandVoiceTone: brandVoiceToneInput.trim(),
-        contentPillars,
+        contentPillars: contentPillars || brandProfile?.contentPillars || [],
         followerRange,
         extraContext: extraContext.trim() || null,
         trendContext,
@@ -967,6 +976,16 @@ export default function AIPlanBuilder() {
         businessName: brandProfile?.businessName || brandProfile?.brandName || '',
         brandName: brandProfile?.brandName || '',
         website: brandProfile?.website || '',
+        profileType: brandProfile?.profileType || 'brand_business',
+        firstName: brandProfile?.firstName || null,
+        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
+        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
+        isLocalBusiness: brandProfile?.isLocalBusiness || false,
+        city: brandProfile?.city || null,
+        locationState: brandProfile?.locationState || null,
+        country: brandProfile?.country || 'US',
+        locationFull,
+        audienceLocationType: brandProfile?.audienceLocationType || null,
       });
 
       if (createError || !createdJobId) {

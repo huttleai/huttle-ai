@@ -52,6 +52,16 @@ function safeJsonParse(value) {
  * @param {string|null} [params.extraContext]
  * @param {string} [params.trendContext]
  * @param {string} [params.platform_rules_block]
+ * @param {string} [params.profileType]
+ * @param {string|null} [params.firstName]
+ * @param {string|null} [params.businessPrimaryGoal]
+ * @param {string|null} [params.creatorMonetizationPath]
+ * @param {boolean} [params.isLocalBusiness]
+ * @param {string|null} [params.city]
+ * @param {string|null} [params.locationState]
+ * @param {string} [params.country]
+ * @param {string|null} [params.locationFull]
+ * @param {string|null} [params.audienceLocationType]
  * @returns {Promise<{jobId?: string, error?: Error}>}
  */
 export async function createJobDirectly({
@@ -70,6 +80,16 @@ export async function createJobDirectly({
   businessName = '',
   brandName = '',
   website = '',
+  profileType,
+  firstName = null,
+  businessPrimaryGoal = null,
+  creatorMonetizationPath = null,
+  isLocalBusiness = false,
+  city = null,
+  locationState = null,
+  country = 'US',
+  locationFull = null,
+  audienceLocationType = null,
 }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -106,6 +126,16 @@ export async function createJobDirectly({
           businessName: typeof businessName === 'string' ? businessName : '',
           brandName: typeof brandName === 'string' ? brandName : '',
           website: typeof website === 'string' ? website : '',
+          profileType: profileType ?? 'brand_business',
+          firstName: firstName ?? null,
+          businessPrimaryGoal: businessPrimaryGoal ?? null,
+          creatorMonetizationPath: creatorMonetizationPath ?? null,
+          isLocalBusiness: Boolean(isLocalBusiness),
+          city: city ?? null,
+          locationState: locationState ?? null,
+          country: country ?? 'US',
+          locationFull: locationFull ?? null,
+          audienceLocationType: audienceLocationType ?? null,
         },
         created_at: new Date().toISOString()
       })
