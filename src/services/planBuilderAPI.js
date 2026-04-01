@@ -62,6 +62,14 @@ function safeJsonParse(value) {
  * @param {string} [params.country]
  * @param {string|null} [params.locationFull]
  * @param {string|null} [params.audienceLocationType]
+ * @param {string|null} [params.audiencePainPoint]
+ * @param {string|null} [params.audienceActionTrigger]
+ * @param {string[]} [params.toneChips]
+ * @param {string|null} [params.writingStyle]
+ * @param {string|null} [params.primaryOffer]
+ * @param {string|null} [params.conversionGoal]
+ * @param {string|null} [params.subNiche]
+ * @param {string|null} [params.followerCount]
  * @returns {Promise<{jobId?: string, error?: Error}>}
  */
 export async function createJobDirectly({
@@ -90,6 +98,14 @@ export async function createJobDirectly({
   country = 'US',
   locationFull = null,
   audienceLocationType = null,
+  audiencePainPoint = null,
+  audienceActionTrigger = null,
+  toneChips = [],
+  writingStyle = null,
+  primaryOffer = null,
+  conversionGoal = null,
+  subNiche = null,
+  followerCount = null,
 }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -136,6 +152,14 @@ export async function createJobDirectly({
           country: country ?? 'US',
           locationFull: locationFull ?? null,
           audienceLocationType: audienceLocationType ?? null,
+          audiencePainPoint: audiencePainPoint ?? null,
+          audienceActionTrigger: audienceActionTrigger ?? null,
+          toneChips: Array.isArray(toneChips) ? toneChips : [],
+          writingStyle: writingStyle ?? null,
+          primaryOffer: primaryOffer ?? null,
+          conversionGoal: conversionGoal ?? null,
+          subNiche: subNiche ?? null,
+          followerCount: followerCount ?? null,
         },
         created_at: new Date().toISOString()
       })
@@ -226,6 +250,14 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     city: formData.city ?? null,
     audienceLocationType: formData.audienceLocationType ?? null,
     contentMixOverride: formData.contentMixOverride ?? null,
+    audiencePainPoint: formData.audiencePainPoint ?? null,
+    audienceActionTrigger: formData.audienceActionTrigger ?? null,
+    toneChips: Array.isArray(formData.toneChips) ? formData.toneChips : [],
+    writingStyle: formData.writingStyle ?? null,
+    primaryOffer: formData.primaryOffer ?? null,
+    conversionGoal: formData.conversionGoal ?? null,
+    subNiche: formData.subNiche ?? null,
+    followerCount: formData.followerCount ?? null,
   };
 
   if (import.meta.env.DEV) {

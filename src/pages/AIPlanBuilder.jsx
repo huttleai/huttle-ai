@@ -986,6 +986,14 @@ export default function AIPlanBuilder() {
         country: brandProfile?.country || 'US',
         locationFull,
         audienceLocationType: brandProfile?.audienceLocationType || null,
+        audiencePainPoint: brandProfile?.audiencePainPoint || null,
+        audienceActionTrigger: brandProfile?.audienceActionTrigger || null,
+        toneChips: brandProfile?.toneChips || [],
+        writingStyle: brandProfile?.writingStyle || null,
+        primaryOffer: brandProfile?.primaryOffer || null,
+        conversionGoal: brandProfile?.conversionGoal || null,
+        subNiche: brandProfile?.subNiche || null,
+        followerCount: brandProfile?.followerCount || null,
       });
 
       if (createError || !createdJobId) {
@@ -1033,6 +1041,14 @@ export default function AIPlanBuilder() {
         city: brandProfile?.city || null,
         audienceLocationType: brandProfile?.audienceLocationType || 'local',
         contentMixOverride: brandProfile?.contentMix || null,
+        audiencePainPoint: brandProfile?.audiencePainPoint || null,
+        audienceActionTrigger: brandProfile?.audienceActionTrigger || null,
+        toneChips: brandProfile?.toneChips || [],
+        writingStyle: brandProfile?.writingStyle || null,
+        primaryOffer: brandProfile?.primaryOffer || null,
+        conversionGoal: brandProfile?.conversionGoal || null,
+        subNiche: brandProfile?.subNiche || null,
+        followerCount: brandProfile?.followerCount || null,
       });
 
       if (!webhookSuccess) {

@@ -165,6 +165,19 @@ const GROWTH_STAGE_OPTIONS = [
   { value: 'large_audience', label: 'Large Audience' },
 ];
 
+const POSTING_FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
+  { value: '3_5x_week', label: '3–5x per week' },
+  { value: '1_2x_week', label: '1–2x per week' },
+  { value: 'few_times_month', label: 'A few times a month' },
+];
+
+const AUDIENCE_STAGE_OPTIONS = [
+  { value: 'early', label: 'Just starting out (under 500)' },
+  { value: 'growing', label: 'Building momentum (500–10K)' },
+  { value: 'established', label: 'Established audience (10K+)' },
+];
+
 const BUSINESS_PRIMARY_GOAL_OPTIONS = [
   { value: 'drive_sales', label: 'Drive Sales' },
   { value: 'increase_foot_traffic', label: 'Increase Foot Traffic' },
@@ -254,6 +267,8 @@ function toFormData(source = {}) {
     businessPrimaryGoal: source.businessPrimaryGoal || null,
     creatorMonetizationPath: source.creatorMonetizationPath || null,
     isLocalBusiness: source.isLocalBusiness || false,
+    postingFrequency: source.postingFrequency || '',
+    audienceStage: source.audienceStage || '',
   };
 }
 
@@ -300,6 +315,8 @@ function buildBrandUpdatePayload(fd) {
     businessPrimaryGoal: fd.businessPrimaryGoal || null,
     creatorMonetizationPath: fd.creatorMonetizationPath || null,
     isLocalBusiness: typeof fd.isLocalBusiness === 'boolean' ? fd.isLocalBusiness : false,
+    postingFrequency: fd.postingFrequency || null,
+    audienceStage: fd.audienceStage || null,
   };
 }
 
@@ -1128,7 +1145,7 @@ export default function BrandVoice() {
                 onChange={(v) => setField({ writingStyle: v })}
               />
             </div>
-            <FieldInput label="Example post" helper="Paste a post that sounds like you">
+            <FieldInput label="Example post you love" helper="Paste a post that captures your exact voice — the AI will match this style when writing for you.">
               <textarea
                 value={formData.examplePost}
                 onChange={(e) => setField({ examplePost: e.target.value })}
@@ -1147,12 +1164,12 @@ export default function BrandVoice() {
                 multi
               />
             </div>
-            <FieldInput label="Content to avoid" helper="Optional">
-              <input
-                type="text"
+            <FieldInput label="Content to avoid" helper="Topics, formats, or language you never want in your content.">
+              <textarea
                 value={formData.contentToAvoid}
                 onChange={(e) => setField({ contentToAvoid: e.target.value })}
-                className={inputClasses}
+                rows={3}
+                className={`${inputClasses} resize-none`}
               />
             </FieldInput>
           </div>
@@ -1211,6 +1228,30 @@ export default function BrandVoice() {
                 onChange={(v) => setField({ followerCount: v })}
               />
             </div>
+            <FieldInput label="How often do you post?">
+              <select
+                value={formData.postingFrequency}
+                onChange={(e) => setField({ postingFrequency: e.target.value })}
+                className={inputClasses}
+              >
+                <option value="">Select frequency…</option>
+                {POSTING_FREQUENCY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </FieldInput>
+            {isCreator && (
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Where is your audience right now?
+                </label>
+                <ChipSelect
+                  options={AUDIENCE_STAGE_OPTIONS}
+                  value={formData.audienceStage}
+                  onChange={(v) => setField({ audienceStage: v })}
+                />
+              </div>
+            )}
           </div>
         </CollapsibleSection>
 

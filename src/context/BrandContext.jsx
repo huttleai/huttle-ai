@@ -10,7 +10,7 @@ export const BrandContext = createContext();
  * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
  */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,location_state,country,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,location_state,country,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix,posting_frequency,audience_stage';
 
 const QUERY_TIMEOUT_MS = 5000;
 
@@ -58,6 +58,8 @@ function createEmptyBrandData() {
     isLocalBusiness: false,
     audienceLocationType: null,
     contentMix: null,
+    postingFrequency: '',
+    audienceStage: '',
   };
 }
 
@@ -266,6 +268,8 @@ export function BrandProvider({ children }) {
             isLocalBusiness: data.is_local_business || false,
             audienceLocationType: data.audience_location_type || null,
             contentMix: data.content_mix || null,
+            postingFrequency: data.posting_frequency || '',
+            audienceStage: data.audience_stage || '',
           };
 
           const mergedData = userPreferences
@@ -367,6 +371,8 @@ export function BrandProvider({ children }) {
           is_local_business: typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false,
           audience_location_type: updated.audienceLocationType || null,
           content_mix: updated.contentMix || null,
+          posting_frequency: updated.postingFrequency || null,
+          audience_stage: updated.audienceStage || null,
           updated_at: new Date().toISOString(),
         };
 
