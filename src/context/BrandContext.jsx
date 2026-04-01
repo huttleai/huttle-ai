@@ -60,6 +60,9 @@ function createEmptyBrandData() {
     contentMix: null,
     postingFrequency: '',
     audienceStage: '',
+    userBrandType: '',
+    brandVibes: [],
+    contentFocusPillars: [],
   };
 }
 
@@ -75,8 +78,15 @@ function isBusinessProfileType(profileType) {
 function normalizeProfileTypeForDb(profileType) {
   const p = String(profileType || '').toLowerCase().trim();
   if (p === 'solo_creator' || p === 'creator') return 'solo_creator';
-  if (p === 'brand_business' || p === 'business' || p === 'brand') return 'brand_business';
+  if (p === 'brand_business' || p === 'business' || p === 'brand' || p === 'business_owner' || p === 'hybrid') return 'brand_business';
   return 'brand_business';
+}
+
+function deriveUserBrandTypeFromProfileType(profileType) {
+  const p = String(profileType || '').toLowerCase().trim();
+  if (p === 'solo_creator' || p === 'creator') return 'solo_creator';
+  if (p === 'brand_business' || p === 'brand' || p === 'business') return 'business_owner';
+  return 'hybrid';
 }
 
 export function useBrand() {
@@ -178,6 +188,15 @@ export function BrandProvider({ children }) {
       creatorType: userPreferences.creator_type
         ? normalizeOptionalEnum(userPreferences.creator_type)
         : baseData.creatorType,
+      userBrandType: userPreferences.user_brand_type
+        ? String(userPreferences.user_brand_type)
+        : (baseData.userBrandType || deriveUserBrandTypeFromProfileType(baseData.profileType)),
+      brandVibes: Array.isArray(userPreferences.brand_vibes)
+        ? userPreferences.brand_vibes
+        : (baseData.brandVibes || []),
+      contentFocusPillars: Array.isArray(userPreferences.content_focus_pillars)
+        ? userPreferences.content_focus_pillars
+        : (baseData.contentFocusPillars || []),
     });
 
     const fetchBrandData = async () => {
@@ -270,6 +289,9 @@ export function BrandProvider({ children }) {
             contentMix: data.content_mix || null,
             postingFrequency: data.posting_frequency || '',
             audienceStage: data.audience_stage || '',
+            userBrandType: '',
+            brandVibes: [],
+            contentFocusPillars: [],
           };
 
           const mergedData = userPreferences
@@ -401,6 +423,11 @@ export function BrandProvider({ children }) {
           content_focus: nicheForPrefs,
           target_audience: updated.targetAudience || null,
           platforms: Array.isArray(updated.platforms) ? updated.platforms : [],
+          user_brand_type: updated.userBrandType || null,
+          brand_vibes: Array.isArray(updated.brandVibes) ? updated.brandVibes : [],
+          content_focus_pillars: Array.isArray(updated.contentFocusPillars)
+            ? updated.contentFocusPillars
+            : [],
         });
 
         if (!prefResult?.success) {

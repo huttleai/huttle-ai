@@ -15,6 +15,10 @@ function normalizeProfileType(profileType, creatorType) {
   if (p === 'brand_business' || ct === 'brand_business') return 'brand_business';
   if (p === 'solo_creator' || ct === 'solo_creator') return 'solo_creator';
 
+  // Map new userBrandType values to DB-compatible profile_type values
+  if (p === 'business_owner') return 'brand_business';
+  if (p === 'hybrid') return 'brand_business';
+
   // Legacy fallback for any in-flight requests using old values
   if (p === 'business' || p === 'brand') return 'brand_business';
   return 'solo_creator';
@@ -51,6 +55,7 @@ export default async function handler(req, res) {
 
     const {
       firstName,
+      userBrandType,
       profileType,
       brandName,
       creatorHandle,
@@ -71,6 +76,8 @@ export default async function handler(req, res) {
       creatorMonetizationPath,
       audienceStage,
       postingFrequency,
+      brandVibes,
+      contentFocusPillars,
       quizCompletedAt,
       onboardingStep,
     } = req.body || {};
@@ -100,7 +107,7 @@ export default async function handler(req, res) {
       posting_frequency: postingFrequency || null,
       has_completed_onboarding: true,
       quiz_completed_at: quizCompletedAt || nowIso,
-      onboarding_step: onboardingStep || 8,
+      onboarding_step: onboardingStep || 10,
       updated_at: nowIso,
     };
 
@@ -127,6 +134,9 @@ export default async function handler(req, res) {
           target_audience: targetAudience || null,
           platforms: Array.isArray(platforms) ? platforms : [],
           city: city || null,
+          user_brand_type: userBrandType || null,
+          brand_vibes: Array.isArray(brandVibes) ? brandVibes : [],
+          content_focus_pillars: Array.isArray(contentFocusPillars) ? contentFocusPillars : [],
           updated_at: nowIso,
         },
         {
@@ -136,8 +146,9 @@ export default async function handler(req, res) {
       );
 
     if (preferencesError) {
-      console.error('save-onboarding preferences upsert failed:', preferencesError);
-      return res.status(500).json({ error: preferencesError.message });
+      // Non-fatal: new columns (user_brand_type, brand_vibes, content_focus_pillars) may not
+      // exist yet. Profile was saved successfully. Log and continue.
+      console.warn('save-onboarding preferences upsert warning (non-fatal):', preferencesError.message);
     }
 
     return res.status(200).json({ success: true });

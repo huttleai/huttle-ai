@@ -32,6 +32,7 @@ import {
   getPromptBrandProfile
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
 import { buildUserContextBlock } from '../utils/buildUserContext';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import {
@@ -94,11 +95,23 @@ function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}
   ].filter(Boolean).join('\n');
 }
 
-// HUTTLE AI: brand context injected — prepend creator brand profile to any system prompt
+/*
+ * HUTTLE AUDIT — Central system prompt builder
+ * Criteria A: getBrandStoryContext(brandData) is prepended to ALL system messages
+ *   that flow through this function. This covers: Caption Generator, Hook Builder,
+ *   CTA Suggester, Hashtag Generator, Content Plan Builder, Full Post Builder,
+ *   Content Remix Studio, Visual Ideas, and Visual Brainstorm.
+ * Criteria B: No niche-as-topic hardcoding — niche is only used as freeform user
+ *   context from brandData, never as a routing key or content topic signal.
+ * Criteria C: No influencer framing for business owners — framing is determined
+ *   exclusively by userBrandType via getBrandStoryContext.
+ */
 function buildSystemPromptWithBrandBlock(basePrompt, brandData) {
+  const storyContext = getBrandStoryContext(brandData);
   const brandBlock = buildCreatorBrandBlock(brandData, brandData);
   const fullPrompt = buildSystemPrompt(basePrompt, brandData);
-  return brandBlock ? `${brandBlock}\n${fullPrompt}` : fullPrompt;
+  const parts = [storyContext, brandBlock, fullPrompt].filter(Boolean);
+  return parts.join('\n\n');
 }
 
 const AI_POWER_BRAIN_BASE = `You are Huttle AI's AI Power Brain: a cross-platform social growth strategist,
@@ -2538,7 +2551,7 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
 
     const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
-    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal, brandData?.profileType || 'brand_business');
+    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal, brandData?.userBrandType || brandData?.profileType || 'brand_business');
     const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
     const remixUserCtx = buildUserContextBlock(brandData);
 
@@ -3485,6 +3498,14 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
   }
 
   try {
+    /*
+     * HUTTLE AUDIT — analyzeNiche (Niche Intel + Trend Lab Quick Scan)
+     * Criteria A: getBrandStoryContext(brandData) prepended to system message below.
+     * Criteria B: Research data is the content topic source — niche is never hardcoded
+     *   as the content topic. Ideas reference research findings, not niche category.
+     * Criteria C: No influencer framing — storyContext routes framing via userBrandType.
+     */
+    const storyContext = getBrandStoryContext(brandData);
     const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
     const brandContext = brandData ? `${creatorBlock}${buildBrandContext(brandData)}` : '';
     const structuredResearch = normalizeResearchPayload(researchData);
@@ -3495,7 +3516,7 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
     const messages = [
       {
         role: 'system',
-        content: `${nicheIntelUserCtx ? `${nicheIntelUserCtx}\n\n` : ''}You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
+        content: `${storyContext ? `${storyContext}\n\n` : ''}${nicheIntelUserCtx ? `${nicheIntelUserCtx}\n\n` : ''}You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
 
 OUTPUT — Return ONLY valid JSON:
 {

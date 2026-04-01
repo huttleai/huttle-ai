@@ -10,7 +10,6 @@ import {
   Facebook,
   Globe,
   Instagram,
-  Linkedin,
   Loader2,
   Sparkles,
   TrendingUp,
@@ -23,22 +22,51 @@ import { AuthContext } from '../context/AuthContext';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 10;
 const MAX_PLATFORM_SELECTIONS = 4;
+const MAX_VIBE_SELECTIONS = 3;
+const MAX_PILLAR_SELECTIONS = 2;
 
-const CREATOR_TYPES = [
-  {
-    value: 'brand_business',
-    title: 'I own a brand or business',
-    subtitle: 'Coffee shop, salon, agency, restaurant, etc.',
-    icon: Briefcase,
-  },
+const USER_BRAND_TYPES = [
   {
     value: 'solo_creator',
-    title: "I'm a solo content creator",
-    subtitle: 'Personal brand, influencer, niche content',
-    icon: Sparkles,
+    emoji: '🎤',
+    title: "I'm the brand",
+    subtitle: 'Your name, face, and story are the product',
   },
+  {
+    value: 'business_owner',
+    emoji: '🏪',
+    title: 'I run a business',
+    subtitle: 'Coffee shop, salon, agency, studio — any kind',
+  },
+  {
+    value: 'hybrid',
+    emoji: '🚀',
+    title: "I'm building both",
+    subtitle: 'Your name and your business grow together',
+  },
+];
+
+const BRAND_VIBES_OPTIONS = [
+  { label: 'Authentic & Raw' },
+  { label: 'Professional & Polished' },
+  { label: 'Bold & Edgy' },
+  { label: 'Warm & Community-Focused' },
+  { label: 'Fun & Playful' },
+  { label: 'Educational & Informative' },
+  { label: 'Aspirational & Inspiring' },
+  { label: 'Luxe & Elevated' },
+];
+
+const CONTENT_FOCUS_PILLARS_OPTIONS = [
+  { label: 'My customers & community' },
+  { label: 'My life running my business' },
+  { label: 'Behind the scenes' },
+  { label: 'Products & services in action' },
+  { label: 'Education & tips' },
+  { label: 'Personal stories & journey' },
+  { label: 'Trends & pop culture' },
 ];
 
 const BUSINESS_GOAL_OPTIONS = [
@@ -75,7 +103,6 @@ const PLATFORM_OPTIONS = [
   { value: 'instagram', label: 'Instagram', icon: Instagram },
   { value: 'tiktok', label: 'TikTok', icon: Video },
   { value: 'facebook', label: 'Facebook', icon: Facebook },
-  { value: 'linkedin', label: 'LinkedIn', icon: Linkedin },
   { value: 'x', label: 'X (Twitter)', icon: Twitter },
   { value: 'youtube', label: 'YouTube', icon: Youtube },
   { value: 'pinterest', label: 'Pinterest', icon: Globe },
@@ -88,14 +115,20 @@ const POSTING_FREQUENCY_OPTIONS = [
   { value: 'heavy', label: 'Multiple times per day' },
 ];
 
-const STEP_LABELS = ['Name', 'Type', 'Setup', 'Niche', 'Goal', 'Audience', 'Platforms', 'Posting'];
+const STEP_LABELS = [
+  'Type', 'Name', 'Setup', 'Niche',
+  'Vibe', 'Feed', 'Goal', 'Audience',
+  'Platforms', 'Posting',
+];
 
 const defaultFormData = {
+  user_brand_type: '',
   full_name: '',
-  profile_type: '',
   business_name: '',
   creator_handle: '',
   niche: '',
+  brand_vibes: [],
+  content_focus_pillars: [],
   target_audience: '',
   business_primary_goal: '',
   audience_location_type: '',
@@ -120,30 +153,28 @@ export default function OnboardingQuiz({ onComplete }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
 
-  const isBrandBusiness = formData.profile_type === 'brand_business';
+  const isSoloCreator = formData.user_brand_type === 'solo_creator';
   const progress = (step / TOTAL_STEPS) * 100;
 
+  const derivedProfileType = isSoloCreator ? 'solo_creator' : 'brand_business';
+
   const validateCurrentStep = (currentStep = step) => {
-    if (currentStep === 1 && !formData.full_name.trim()) {
+    if (currentStep === 1 && !formData.user_brand_type) {
+      addToast('Choose how you describe yourself to continue.', 'warning');
+      return false;
+    }
+    if (currentStep === 2 && !formData.full_name.trim()) {
       addToast('Enter your name to continue.', 'warning');
       return false;
     }
-
-    if (currentStep === 2 && !formData.profile_type) {
-      addToast('Choose how you will use Huttle AI to continue.', 'warning');
-      return false;
-    }
-
     if (currentStep === 4 && !formData.niche.trim()) {
       addToast('Tell us your niche so we can personalize your dashboard.', 'warning');
       return false;
     }
-
-    if (currentStep === 7 && formData.platforms.length === 0) {
+    if (currentStep === 9 && formData.platforms.length === 0) {
       addToast('Select at least one primary platform.', 'warning');
       return false;
     }
-
     return true;
   };
 
@@ -158,22 +189,48 @@ export default function OnboardingQuiz({ onComplete }) {
 
   const handlePlatformToggle = (platformValue) => {
     const isSelected = formData.platforms.includes(platformValue);
-
     if (!isSelected && formData.platforms.length >= MAX_PLATFORM_SELECTIONS) {
       addToast(`Choose up to ${MAX_PLATFORM_SELECTIONS} platforms to stay focused.`, 'warning');
       return;
     }
-
     setFormData((prev) => ({
       ...prev,
       platforms: isSelected
-        ? prev.platforms.filter((value) => value !== platformValue)
+        ? prev.platforms.filter((v) => v !== platformValue)
         : [...prev.platforms, platformValue],
     }));
   };
 
-  const handleSubmit = async ({ skipCity = false } = {}) => {
-    if (!validateCurrentStep(7)) return;
+  const handleVibeToggle = (label) => {
+    const isSelected = formData.brand_vibes.includes(label);
+    if (!isSelected && formData.brand_vibes.length >= MAX_VIBE_SELECTIONS) {
+      addToast(`Choose up to ${MAX_VIBE_SELECTIONS} vibes.`, 'warning');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      brand_vibes: isSelected
+        ? prev.brand_vibes.filter((v) => v !== label)
+        : [...prev.brand_vibes, label],
+    }));
+  };
+
+  const handlePillarToggle = (label) => {
+    const isSelected = formData.content_focus_pillars.includes(label);
+    if (!isSelected && formData.content_focus_pillars.length >= MAX_PILLAR_SELECTIONS) {
+      addToast(`Choose up to ${MAX_PILLAR_SELECTIONS} feed pillars.`, 'warning');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      content_focus_pillars: isSelected
+        ? prev.content_focus_pillars.filter((v) => v !== label)
+        : [...prev.content_focus_pillars, label],
+    }));
+  };
+
+  const handleSubmit = async ({ skipPosting = false } = {}) => {
+    if (!validateCurrentStep(9)) return;
 
     if (!user?.id) {
       addToast('Please log in again to finish onboarding.', 'error');
@@ -181,7 +238,7 @@ export default function OnboardingQuiz({ onComplete }) {
     }
 
     const nowIso = new Date().toISOString();
-    const postingFrequency = skipCity ? '' : formData.posting_frequency;
+    const postingFrequency = skipPosting ? '' : formData.posting_frequency;
     const isLocal =
       formData.audience_location_type === 'mostly_local' ||
       formData.audience_location_type === 'split_evenly';
@@ -206,20 +263,23 @@ export default function OnboardingQuiz({ onComplete }) {
         },
         body: JSON.stringify({
           firstName: formData.full_name.trim() || null,
-          profileType: formData.profile_type,
-          creatorType: formData.profile_type,
-          brandName: isBrandBusiness ? (formData.business_name.trim() || null) : null,
-          creatorHandle: !isBrandBusiness ? (formData.creator_handle.trim() || null) : null,
+          userBrandType: formData.user_brand_type,
+          profileType: derivedProfileType,
+          creatorType: derivedProfileType,
+          brandName: !isSoloCreator ? (formData.business_name.trim() || null) : null,
+          creatorHandle: isSoloCreator ? (formData.creator_handle.trim() || null) : null,
           niche: formData.niche.trim() || null,
           targetAudience: formData.target_audience.trim() || null,
+          brandVibes: formData.brand_vibes,
+          contentFocusPillars: formData.content_focus_pillars,
           platforms: formData.platforms,
-          businessPrimaryGoal: isBrandBusiness ? (formData.business_primary_goal || null) : null,
-          audienceLocationType: isBrandBusiness ? (formData.audience_location_type || null) : null,
-          isLocalBusiness: isBrandBusiness ? isLocal : false,
-          creatorMonetizationPath: !isBrandBusiness
+          businessPrimaryGoal: !isSoloCreator ? (formData.business_primary_goal || null) : null,
+          audienceLocationType: !isSoloCreator ? (formData.audience_location_type || null) : null,
+          isLocalBusiness: !isSoloCreator ? isLocal : false,
+          creatorMonetizationPath: isSoloCreator
             ? (formData.creator_monetization_path || null)
             : null,
-          audienceStage: !isBrandBusiness ? (formData.audience_stage || null) : null,
+          audienceStage: isSoloCreator ? (formData.audience_stage || null) : null,
           postingFrequency: postingFrequency || null,
           quizCompletedAt: nowIso,
           onboardingStep: TOTAL_STEPS,
@@ -234,18 +294,21 @@ export default function OnboardingQuiz({ onComplete }) {
 
       localStorage.setItem('brandData', JSON.stringify({
         firstName: formData.full_name.trim() || '',
-        profileType: formData.profile_type,
-        brandName: isBrandBusiness ? formData.business_name.trim() : '',
-        handle: !isBrandBusiness ? formData.creator_handle.trim() : '',
+        userBrandType: formData.user_brand_type,
+        profileType: derivedProfileType,
+        brandName: !isSoloCreator ? formData.business_name.trim() : '',
+        handle: isSoloCreator ? formData.creator_handle.trim() : '',
         niche: formData.niche.trim(),
         contentFocus: formData.niche.trim(),
+        brandVibes: formData.brand_vibes,
+        contentFocusPillars: formData.content_focus_pillars,
         targetAudience: formData.target_audience.trim(),
         platforms: formData.platforms,
-        businessPrimaryGoal: isBrandBusiness ? formData.business_primary_goal : null,
-        audienceLocationType: isBrandBusiness ? formData.audience_location_type : 'mostly_online',
-        isLocalBusiness: isBrandBusiness ? isLocal : false,
-        creatorMonetizationPath: !isBrandBusiness ? formData.creator_monetization_path : null,
-        audienceStage: !isBrandBusiness ? formData.audience_stage : null,
+        businessPrimaryGoal: !isSoloCreator ? formData.business_primary_goal : null,
+        audienceLocationType: !isSoloCreator ? formData.audience_location_type : 'mostly_online',
+        isLocalBusiness: !isSoloCreator ? isLocal : false,
+        creatorMonetizationPath: isSoloCreator ? formData.creator_monetization_path : null,
+        audienceStage: isSoloCreator ? formData.audience_stage : null,
       }));
 
       refreshBrandData?.();
@@ -272,64 +335,46 @@ export default function OnboardingQuiz({ onComplete }) {
   };
 
   const renderStepContent = () => {
-    // Step 1: Name
+    // Step 1: What best describes you? (userBrandType — required, no skip)
     if (step === 1) {
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            What's your name?
+            What best describes you?
           </h2>
-          <p className="mb-6 text-slate-500">We'll use this to personalize your experience</p>
+          <p className="mb-6 text-slate-500">
+            This shapes every piece of content we generate for you
+          </p>
 
-          <FieldLabel>Your Name</FieldLabel>
-          <input
-            type="text"
-            value={formData.full_name}
-            onChange={(event) => setFormData((prev) => ({ ...prev, full_name: event.target.value }))}
-            placeholder="e.g. Alex Johnson"
-            className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-          />
-        </div>
-      );
-    }
-
-    // Step 2: Account Type
-    if (step === 2) {
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            How would you describe yourself?
-          </h2>
-          <p className="mb-6 text-slate-500">This helps us personalize everything for you</p>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {CREATOR_TYPES.map((option) => {
-              const Icon = option.icon;
-              const isSelected = formData.profile_type === option.value;
-
+          <div className="grid grid-cols-1 gap-4">
+            {USER_BRAND_TYPES.map((option) => {
+              const isSelected = formData.user_brand_type === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, profile_type: option.value }))}
-                  className={`relative min-h-[150px] rounded-2xl border-2 p-5 text-left transition-all ${
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, user_brand_type: option.value }))
+                  }
+                  className={`relative flex items-center gap-5 rounded-2xl border-2 p-5 text-left transition-all ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-lg'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
                   }`}
                 >
                   <div
-                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${
-                      isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600'
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-3xl ${
+                      isSelected ? 'bg-huttle-primary/10' : 'bg-slate-50'
                     }`}
                   >
-                    <Icon className="h-6 w-6" />
+                    {option.emoji}
                   </div>
-                  <h3 className="mb-1 text-lg font-bold text-slate-900">{option.title}</h3>
-                  <p className="text-sm leading-6 text-slate-500">{option.subtitle}</p>
-
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900">{option.title}</h3>
+                    <p className="text-sm leading-6 text-slate-500">{option.subtitle}</p>
+                  </div>
                   {isSelected && (
-                    <div className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-huttle-primary text-white">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-huttle-primary text-white">
                       <Check className="h-3.5 w-3.5" />
                     </div>
                   )}
@@ -341,9 +386,32 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 3: Business Name (brand) or Creator Handle (creator)
+    // Step 2: Name
+    if (step === 2) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What's your name?
+          </h2>
+          <p className="mb-6 text-slate-500">We'll use this to personalize your experience</p>
+
+          <FieldLabel>Your Name</FieldLabel>
+          <input
+            type="text"
+            value={formData.full_name}
+            onChange={(event) =>
+              setFormData((prev) => ({ ...prev, full_name: event.target.value }))
+            }
+            placeholder="e.g. Alex Johnson"
+            className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+          />
+        </div>
+      );
+    }
+
+    // Step 3: Business Name (business/hybrid) or Creator Handle (solo_creator)
     if (step === 3) {
-      if (isBrandBusiness) {
+      if (!isSoloCreator) {
         return (
           <div className="animate-fadeIn">
             <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
@@ -391,18 +459,18 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 4: Niche
+    // Step 4: Niche / Business Type + Target Audience
     if (step === 4) {
-      const nicheTitle = isBrandBusiness
+      const nicheTitle = !isSoloCreator
         ? 'What kind of business is it?'
         : "What's your content niche?";
-      const nichePlaceholder = isBrandBusiness
+      const nichePlaceholder = !isSoloCreator
         ? 'e.g. Coffee shop, fitness studio, law firm...'
-        : 'e.g. Coffee lover, fitness tips, travel vlogs...';
-      const nicheHelper = isBrandBusiness
+        : 'e.g. Personal finance, travel photography, fitness...';
+      const nicheHelper = !isSoloCreator
         ? 'This personalizes your trends, hashtags, and content ideas'
         : 'Your main topic or passion — be specific for better results';
-      const nicheLabel = isBrandBusiness ? 'Business Type' : 'Content Niche';
+      const nicheLabel = !isSoloCreator ? 'Business Type' : 'Content Niche';
 
       return (
         <div className="animate-fadeIn">
@@ -415,7 +483,9 @@ export default function OnboardingQuiz({ onComplete }) {
           <input
             type="text"
             value={formData.niche}
-            onChange={(event) => setFormData((prev) => ({ ...prev, niche: event.target.value }))}
+            onChange={(event) =>
+              setFormData((prev) => ({ ...prev, niche: event.target.value }))
+            }
             placeholder={nichePlaceholder}
             className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
           />
@@ -425,8 +495,14 @@ export default function OnboardingQuiz({ onComplete }) {
             <input
               type="text"
               value={formData.target_audience}
-              onChange={(event) => setFormData((prev) => ({ ...prev, target_audience: event.target.value }))}
-              placeholder={isBrandBusiness ? 'e.g. Busy moms, local homeowners, small biz owners...' : 'e.g. Aspiring photographers, new entrepreneurs...'}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, target_audience: event.target.value }))
+              }
+              placeholder={
+                !isSoloCreator
+                  ? 'e.g. Busy moms, local homeowners, small biz owners...'
+                  : 'e.g. Aspiring photographers, new entrepreneurs...'
+              }
               className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
             />
             <p className="mt-1 text-sm text-slate-400">Who are you creating content for?</p>
@@ -435,9 +511,91 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 5: Primary Goal (brand) or Monetization Path (creator)
+    // Step 5: What's your vibe? (brandVibes — multi-select max 3)
     if (step === 5) {
-      if (isBrandBusiness) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What's your vibe?
+          </h2>
+          <p className="mb-2 text-slate-500">
+            How do you want your content to feel? Pick up to {MAX_VIBE_SELECTIONS}.
+          </p>
+          <div className="mb-4 flex justify-end">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              {formData.brand_vibes.length}/{MAX_VIBE_SELECTIONS}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {BRAND_VIBES_OPTIONS.map((option) => {
+              const isSelected = formData.brand_vibes.includes(option.label);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => handleVibeToggle(option.label)}
+                  className={`flex items-center justify-between gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="text-sm font-semibold leading-5 text-slate-900">
+                    {option.label}
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // Step 6: What do you want your feed to feel like? (contentFocusPillars — multi-select max 2)
+    if (step === 6) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What do you want your feed to feel like?
+          </h2>
+          <p className="mb-2 text-slate-500">
+            What content types fit your brand best? Pick up to {MAX_PILLAR_SELECTIONS}.
+          </p>
+          <div className="mb-4 flex justify-end">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              {formData.content_focus_pillars.length}/{MAX_PILLAR_SELECTIONS}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {CONTENT_FOCUS_PILLARS_OPTIONS.map((option) => {
+              const isSelected = formData.content_focus_pillars.includes(option.label);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => handlePillarToggle(option.label)}
+                  className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                  {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // Step 7: Primary Goal (business/hybrid) or Monetization Path (solo_creator)
+    if (step === 7) {
+      if (!isSoloCreator) {
         return (
           <div className="animate-fadeIn">
             <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
@@ -507,9 +665,9 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 6: Audience Location (brand) or Audience Stage (creator)
-    if (step === 6) {
-      if (isBrandBusiness) {
+    // Step 8: Audience Location (business/hybrid) or Audience Stage (solo_creator)
+    if (step === 8) {
+      if (!isSoloCreator) {
         return (
           <div className="animate-fadeIn">
             <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
@@ -595,12 +753,12 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 7: Platforms
-    if (step === 7) {
+    // Step 9: Platforms
+    if (step === 9) {
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            {isBrandBusiness
+            {!isSoloCreator
               ? 'Which platforms do you want to post on?'
               : 'Which platforms do you want to create content for?'}
           </h2>
@@ -648,7 +806,7 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    // Step 8: Posting Frequency
+    // Step 10: Posting Frequency
     return (
       <div className="animate-fadeIn">
         <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
@@ -697,7 +855,7 @@ export default function OnboardingQuiz({ onComplete }) {
             <div className="border-b border-slate-100 px-5 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-8">
               <div className="mb-5 flex items-start gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-huttle-primary text-white">
-                  {formData.profile_type === 'solo_creator' ? (
+                  {isSoloCreator ? (
                     <Sparkles className="h-5 w-5" />
                   ) : (
                     <Briefcase className="h-5 w-5" />
@@ -725,7 +883,7 @@ export default function OnboardingQuiz({ onComplete }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-10 gap-1">
                 {STEP_LABELS.map((label, index) => {
                   const stepNumber = index + 1;
                   const isActive = stepNumber === step;
@@ -734,7 +892,7 @@ export default function OnboardingQuiz({ onComplete }) {
                   return (
                     <div key={label} className="text-center">
                       <div
-                        className={`mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                        className={`mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ${
                           isActive
                             ? 'bg-huttle-primary text-white'
                             : isComplete
@@ -742,9 +900,9 @@ export default function OnboardingQuiz({ onComplete }) {
                               : 'bg-slate-100 text-slate-400'
                         }`}
                       >
-                        {isComplete ? <Check className="h-4 w-4" /> : stepNumber}
+                        {isComplete ? <Check className="h-3 w-3" /> : stepNumber}
                       </div>
-                      <span className="hidden text-[11px] font-medium text-slate-400 sm:block">
+                      <span className="hidden text-[10px] font-medium text-slate-400 sm:block">
                         {label}
                       </span>
                     </div>
@@ -777,8 +935,9 @@ export default function OnboardingQuiz({ onComplete }) {
                     onClick={handleNext}
                     disabled={
                       isSaving ||
-                      (step === 1 && !formData.full_name.trim()) ||
-                      (step === 2 && !formData.profile_type)
+                      (step === 1 && !formData.user_brand_type) ||
+                      (step === 2 && !formData.full_name.trim()) ||
+                      (step === 4 && !formData.niche.trim())
                     }
                     className="flex-1 rounded-2xl bg-huttle-primary px-6 py-3 font-semibold text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -812,7 +971,7 @@ export default function OnboardingQuiz({ onComplete }) {
                 <div className="mt-3 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => handleSubmit({ skipCity: true })}
+                    onClick={() => handleSubmit({ skipPosting: true })}
                     disabled={isSaving}
                     className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >

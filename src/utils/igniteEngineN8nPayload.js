@@ -5,16 +5,18 @@ import {
   getCaptionOptimalLengthPhrase,
   getCaptionVisibleBeforeHint,
 } from '../data/platformContentRules.js';
+import { getBrandStoryContext } from './getBrandStoryContext.js';
 
 /**
- * Canonical user_type for n8n + downstream: derived only from profileType.
+ * Canonical user_type for n8n + downstream: derived from profileType or userBrandType.
  * Matches BrandContext business detection: brand / business / brand_business → business; else creator.
  * @param {string|null|undefined} profileType
- * @returns {'business'|'creator'}
+ * @returns {'business'|'creator'|'hybrid'}
  */
 export function deriveUserType(profileType) {
   const p = String(profileType ?? '').trim().toLowerCase();
-  if (!p || p === 'brand' || p === 'business' || p === 'brand_business') return 'business';
+  if (p === 'hybrid') return 'hybrid';
+  if (!p || p === 'brand' || p === 'business' || p === 'brand_business' || p === 'business_owner') return 'business';
   return 'creator';
 }
 
@@ -109,7 +111,26 @@ export function buildIgniteN8nPayload(input) {
     pick(input, 'profileType', 'profile_type') ?? bp.profileType ?? bp.profile_type,
     'brand_business'
   );
-  const userType = deriveUserType(profileType);
+  const userBrandType = normStr(
+    pick(input, 'userBrandType', 'user_brand_type') ?? bp.userBrandType ?? bp.user_brand_type,
+    ''
+  );
+  const userType = deriveUserType(userBrandType || profileType);
+  const brandVibes = normStrArray(
+    pick(input, 'brandVibes', 'brand_vibes') ?? bp.brandVibes ?? bp.brand_vibes
+  );
+  const contentFocusPillars = normStrArray(
+    pick(input, 'contentFocusPillars', 'content_focus_pillars') ?? bp.contentFocusPillars ?? bp.content_focus_pillars
+  );
+
+  const brandProfileForContext = {
+    userBrandType: userBrandType || profileType,
+    profileType,
+    contentFocusPillars,
+    brandVibes,
+    ...bp,
+  };
+  const brandStoryContext = getBrandStoryContext(brandProfileForContext);
 
   const pr = getPlatformRulesForN8n(platform);
 
@@ -183,8 +204,20 @@ export function buildIgniteN8nPayload(input) {
 
     profile_type: profileType,
     profileType,
+    user_brand_type: userBrandType,
+    userBrandType,
     user_type: userType,
     userType,
+    brand_vibes: brandVibes,
+    brandVibes,
+    content_focus_pillars: contentFocusPillars,
+    contentFocusPillars,
+    // IMPORTANT: This field must be mapped to the Ignite Engine n8n
+    // workflow system message node. Verify in n8n that the AI Agent
+    // system message references: {{ $json.brand_story_context }}
+    // Without this, getBrandStoryContext output never reaches the model.
+    brand_story_context: brandStoryContext,
+    brandStoryContext,
 
     business_primary_goal: businessPrimaryGoal,
     businessPrimaryGoal,

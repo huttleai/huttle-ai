@@ -228,10 +228,22 @@ function deriveCreatorKind(source = {}) {
   return CREATOR_KIND.brand;
 }
 
+function deriveUserBrandType(source = {}) {
+  const ubt = String(source.userBrandType || '').trim().toLowerCase();
+  if (ubt === 'solo_creator' || ubt === 'business_owner' || ubt === 'hybrid') return ubt;
+
+  const ct = String(source.creatorType || '').trim().toLowerCase();
+  const pt = String(source.profileType || '').trim().toLowerCase();
+  if (ct === 'solo_creator' || pt === 'solo_creator' || pt === 'creator') return 'solo_creator';
+  if (ct === 'brand_business' || pt === 'brand_business' || pt === 'business' || pt === 'brand') return 'business_owner';
+  return 'hybrid';
+}
+
 function toFormData(source = {}) {
   const kind = deriveCreatorKind(source);
   return {
     firstName: source.firstName || '',
+    userBrandType: deriveUserBrandType(source),
     creatorKind: kind,
     brandName: source.brandName || '',
     handle: source.handle || '',
@@ -279,8 +291,9 @@ function getInitialFormData() {
 function buildBrandUpdatePayload(fd) {
   return {
     firstName: fd.firstName?.trim() || '',
-    profileType: fd.creatorKind === CREATOR_KIND.solo ? 'creator' : 'business',
-    creatorType: fd.creatorKind,
+    userBrandType: fd.userBrandType || 'hybrid',
+    profileType: fd.userBrandType === 'solo_creator' ? 'creator' : 'business',
+    creatorType: fd.userBrandType === 'solo_creator' ? CREATOR_KIND.solo : CREATOR_KIND.brand,
     brandName: fd.brandName,
     handle: fd.handle,
     niche: fd.niche,
@@ -797,50 +810,63 @@ export default function BrandVoice() {
               </div>
             </div>
 
-            <FieldInput label="Creator type" required helper="How you use Huttle AI">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setField({
-                      creatorKind: CREATOR_KIND.solo,
-                      goals: [],
-                    })
-                  }
-                  className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
-                    formData.creatorKind === CREATOR_KIND.solo
-                      ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                  data-testid="brand-profile-creator-solo"
-                >
-                  <Sparkles className="w-6 h-6 text-huttle-primary" />
-                  <div>
-                    <p className="font-bold text-gray-900">Solo Creator</p>
-                    <p className="text-xs text-gray-500">Personal brand &amp; audience</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setField({
-                      creatorKind: CREATOR_KIND.brand,
-                      goals: [],
-                    })
-                  }
-                  className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left min-h-[48px] transition-all ${
-                    formData.creatorKind === CREATOR_KIND.brand
-                      ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                  data-testid="brand-profile-creator-brand"
-                >
-                  <Briefcase className="w-6 h-6 text-huttle-primary" />
-                  <div>
-                    <p className="font-bold text-gray-900">Brand / Business</p>
-                    <p className="text-xs text-gray-500">Company or client work</p>
-                  </div>
-                </button>
+            <FieldInput label="Creator type" required helper="Shapes your AI content philosophy for every feature">
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  {
+                    value: 'solo_creator',
+                    emoji: '🎤',
+                    title: "I'm the brand",
+                    subtitle: 'Your name, face, and story are the product',
+                    testId: 'brand-profile-creator-solo',
+                  },
+                  {
+                    value: 'business_owner',
+                    emoji: '🏪',
+                    title: 'I run a business',
+                    subtitle: 'Coffee shop, salon, agency, studio — any kind',
+                    testId: 'brand-profile-creator-brand',
+                  },
+                  {
+                    value: 'hybrid',
+                    emoji: '🚀',
+                    title: "I'm building both",
+                    subtitle: 'Your name and your business grow together',
+                    testId: 'brand-profile-creator-hybrid',
+                  },
+                ].map((option) => {
+                  const isSelected = formData.userBrandType === option.value;
+                  const syncedCreatorKind =
+                    option.value === 'solo_creator' ? CREATOR_KIND.solo : CREATOR_KIND.brand;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        setField({
+                          userBrandType: option.value,
+                          creatorKind: syncedCreatorKind,
+                          goals: [],
+                        })
+                      }
+                      className={`flex items-center gap-4 rounded-xl border-2 p-4 text-left min-h-[56px] transition-all ${
+                        isSelected
+                          ? 'border-huttle-primary bg-white shadow-md ring-1 ring-huttle-primary'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                      data-testid={option.testId}
+                    >
+                      <span className="text-2xl">{option.emoji}</span>
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-900">{option.title}</p>
+                        <p className="text-xs text-gray-500">{option.subtitle}</p>
+                      </div>
+                      {isSelected && (
+                        <Check className="w-4 h-4 shrink-0 text-huttle-primary" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </FieldInput>
 
