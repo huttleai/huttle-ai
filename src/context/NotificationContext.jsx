@@ -1,8 +1,17 @@
-import { createContext, useState, useContext, useEffect, useRef, useMemo } from 'react';
+import { createContext, useState, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
+import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink, Sparkles, Zap } from 'lucide-react';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
 import { AuthContext } from './AuthContext';
+import {
+  fetchNotifications as fetchNotificationsFromDb,
+  markAsRead as markServerNotificationRead,
+  dismissNotification as dismissServerNotification,
+  markAllAsRead as markAllServerNotificationsRead,
+} from '../services/notificationsService';
+
+const NOTIFICATION_SOURCE_SUPABASE = 'supabase';
+const NOTIFICATION_SOURCE_LOCAL = 'local';
 
 const NotificationContext = createContext();
 
@@ -14,6 +23,23 @@ function getDismissalStorageKey(userId) {
   return userId ? `huttleDismissed:${userId}` : null;
 }
 
+function mapServerRowToPanel(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    message: row.message,
+    read: Boolean(row.read),
+    timestamp: row.created_at,
+    actionUrl: row.cta_url || null,
+    actionLabel: row.cta_label || null,
+    cta_url: row.cta_url ?? null,
+    cta_label: row.cta_label ?? null,
+    _source: NOTIFICATION_SOURCE_SUPABASE,
+    created_at: row.created_at,
+  };
+}
+
 export function useNotifications() {
   return useContext(NotificationContext);
 }
@@ -23,50 +49,71 @@ export function NotificationProvider({ children }) {
   const currentUserId = authContext?.user?.id || null;
   const prevUserIdRef = useRef(currentUserId);
 
-  const [notifications, setNotifications] = useState([]);
+  const [localNotifications, setLocalNotifications] = useState([]);
+  const [serverNotifications, setServerNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
 
-  // Clear stale data and reload when user changes (sign-out, different account)
+  const notifications = useMemo(() => {
+    const server = serverNotifications.map(mapServerRowToPanel);
+    return [...server, ...localNotifications];
+  }, [serverNotifications, localNotifications]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!currentUserId) {
+      setServerNotifications([]);
+      return;
+    }
+    const rows = await fetchNotificationsFromDb(currentUserId);
+    const list = Array.isArray(rows) ? rows : [];
+    setServerNotifications(list);
+  }, [currentUserId]);
+
+  // Clear stale data and reload locals when user changes (sign-out, different account)
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     prevUserIdRef.current = currentUserId;
 
     if (prevId !== currentUserId) {
-      // User changed — wipe in-memory state immediately
-      setNotifications([]);
+      setLocalNotifications([]);
+      setServerNotifications([]);
       setUnreadCount(0);
       setShowNotificationPanel(false);
     }
 
-    // Load user-scoped notifications (or nothing if logged out)
     const storageKey = getNotificationStorageKey(currentUserId);
     if (storageKey) {
       const parsed = safeReadJson(localStorage, storageKey, []);
       if (Array.isArray(parsed)) {
-        setNotifications(parsed);
-        setUnreadCount(parsed.filter(n => !n.read).length);
+        setLocalNotifications(parsed);
       }
     }
   }, [currentUserId]);
 
-  // Persist notifications to user-scoped localStorage
+  useEffect(() => {
+    if (!currentUserId) {
+      setServerNotifications([]);
+      return;
+    }
+    void refreshNotifications();
+  }, [currentUserId, refreshNotifications]);
+
+  // Persist local notifications to user-scoped localStorage
   useEffect(() => {
     const storageKey = getNotificationStorageKey(currentUserId);
     if (storageKey) {
-      safeWriteJson(localStorage, storageKey, notifications, { maxBytes: 1_500_000 });
+      safeWriteJson(localStorage, storageKey, localNotifications, { maxBytes: 1_500_000 });
     }
-    setUnreadCount(notifications.filter(n => !n.read).length);
-  }, [notifications, currentUserId]);
+    setUnreadCount(notifications.filter((n) => !n.read).length);
+  }, [localNotifications, notifications, currentUserId]);
 
   /**
    * Add a notification
    * @param {Object} notification - { type, title, message, action, actionLabel, persistent }
    */
   const addNotification = (notification) => {
-    // Deduplicate: skip if same title exists unread OR has been permanently dismissed
     const dismissKeyEarly = notification.dismissKey || notification.title;
-    const isDuplicate = notifications.some(
+    const isDuplicate = localNotifications.some(
       (n) =>
         (dismissKeyEarly && n.dismissKey === dismissKeyEarly)
         || (n.title === notification.title && !n.read),
@@ -83,14 +130,14 @@ export function NotificationProvider({ children }) {
     }
 
     const newNotification = {
+      ...notification,
       id: Date.now() + Math.random(),
       timestamp: new Date().toISOString(),
       read: false,
-      ...notification,
+      _source: NOTIFICATION_SOURCE_LOCAL,
     };
 
-    setNotifications(prev => {
-      // Keep a max of 50 notifications to prevent unbounded growth
+    setLocalNotifications((prev) => {
       const updated = [newNotification, ...prev];
       return updated.slice(0, 50);
     });
@@ -98,9 +145,6 @@ export function NotificationProvider({ children }) {
     return newNotification.id;
   };
 
-  /**
-   * Add a connection warning
-   */
   const addConnectionWarning = (platform) => {
     return addNotification({
       type: 'warning',
@@ -112,9 +156,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add a missing content warning
-   */
   const addMissingContentWarning = (post, missingFields) => {
     return addNotification({
       type: 'error',
@@ -126,9 +167,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add a success notification
-   */
   const addSuccess = (title, message) => {
     return addNotification({
       type: 'success',
@@ -138,9 +176,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add an info notification
-   */
   const addInfo = (title, message, action = null, actionLabel = null) => {
     return addNotification({
       type: 'info',
@@ -152,9 +187,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add a dashboard panel update notification
-   */
   const addPanelUpdate = (panelName, description) => {
     return addNotification({
       type: 'info',
@@ -166,9 +198,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add an AI usage limit warning
-   */
   const addAIUsageWarning = (used, limit, percentage) => {
     let severity = 'info';
     let title = 'AI Usage Update';
@@ -198,9 +227,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add a social update notification
-   */
   const addSocialUpdate = (platform, title, impact) => {
     const impactColors = {
       high: 'error',
@@ -218,9 +244,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add an engagement spike notification
-   */
   const addEngagementSpike = (platform, percentage, postTitle) => {
     return addNotification({
       type: 'success',
@@ -232,9 +255,6 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  /**
-   * Add a content performance insight
-   */
   const addContentInsight = (insight, description) => {
     return addNotification({
       type: 'info',
@@ -246,21 +266,45 @@ export function NotificationProvider({ children }) {
     });
   };
 
-  const markAsRead = (id) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-  };
+  const markAsRead = useCallback((id) => {
+    const idStr = id != null ? String(id) : '';
+    const serverMatch = serverNotifications.find((n) => String(n.id) === idStr);
+    if (serverMatch) {
+      setServerNotifications((prev) =>
+        prev.map((n) => (String(n.id) === idStr ? { ...n, read: true } : n)),
+      );
+      void markServerNotificationRead(idStr).then((ok) => {
+        if (ok) void refreshNotifications();
+      });
+      return;
+    }
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, read: true }))
+    setLocalNotifications((prev) =>
+      prev.map((n) => (String(n.id) === idStr ? { ...n, read: true } : n)),
     );
-  };
+  }, [serverNotifications, refreshNotifications]);
 
-  const removeNotification = (id) => {
-    setNotifications(prev => {
-      const target = prev.find(n => n.id === id);
+  const markAllAsRead = useCallback(async () => {
+    if (currentUserId) {
+      setServerNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      await markAllServerNotificationsRead(currentUserId);
+      void refreshNotifications();
+    }
+    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, [currentUserId, refreshNotifications]);
+
+  const dismissNotification = useCallback(async (notificationId) => {
+    const idStr = notificationId != null ? String(notificationId) : '';
+    const serverMatch = serverNotifications.some((n) => String(n.id) === idStr);
+    if (serverMatch) {
+      setServerNotifications((prev) => prev.filter((n) => String(n.id) !== idStr));
+      await dismissServerNotification(idStr);
+      void refreshNotifications();
+      return;
+    }
+
+    setLocalNotifications((prev) => {
+      const target = prev.find((n) => String(n.id) === idStr);
       const dismissStorageKey = getDismissalStorageKey(currentUserId);
       if (target?.dismissKey && dismissStorageKey) {
         try {
@@ -269,16 +313,21 @@ export function NotificationProvider({ children }) {
           localStorage.setItem(dismissStorageKey, JSON.stringify([...dismissed]));
         } catch { /* ignore */ }
       }
-      return prev.filter(n => n.id !== id);
+      return prev.filter((n) => String(n.id) !== idStr);
     });
-  };
+  }, [serverNotifications, currentUserId, refreshNotifications]);
 
-  const clearAll = () => {
-    setNotifications([]);
-  };
+  const removeNotification = useCallback((id) => {
+    dismissNotification(id);
+  }, [dismissNotification]);
+
+  const clearAll = useCallback(() => {
+    setLocalNotifications([]);
+  }, []);
 
   const value = useMemo(() => ({
     notifications,
+    localNotifications,
     unreadCount,
     showNotificationPanel,
     setShowNotificationPanel,
@@ -294,9 +343,22 @@ export function NotificationProvider({ children }) {
     addContentInsight,
     markAsRead,
     markAllAsRead,
+    dismissNotification,
     removeNotification,
     clearAll,
-  }), [notifications, unreadCount, showNotificationPanel]);
+    refreshNotifications,
+  }), [
+    notifications,
+    localNotifications,
+    unreadCount,
+    showNotificationPanel,
+    markAsRead,
+    markAllAsRead,
+    dismissNotification,
+    removeNotification,
+    clearAll,
+    refreshNotifications,
+  ]);
 
   return (
     <NotificationContext.Provider value={value}>
@@ -317,24 +379,30 @@ function NotificationPanel() {
     setShowNotificationPanel,
     markAsRead,
     markAllAsRead,
-    removeNotification,
+    dismissNotification,
     clearAll,
+    localNotifications,
   } = useNotifications();
   const navigate = useNavigate();
 
   // Auto-mark all as read when the panel is opened
   useEffect(() => {
     if (showNotificationPanel && unreadCount > 0) {
-      // Small delay so the user sees the unread styling briefly
-      const timer = setTimeout(() => markAllAsRead(), 1500);
+      const timer = setTimeout(() => {
+        void markAllAsRead();
+      }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [showNotificationPanel]);
+  }, [showNotificationPanel, unreadCount, markAllAsRead]);
 
   if (!showNotificationPanel) return null;
 
-  const getIcon = (type) => {
-    switch (type) {
+  const getIcon = (notification) => {
+    if (notification._source === NOTIFICATION_SOURCE_SUPABASE) {
+      const Icon = notification.type === 'brand_voice_update' ? Sparkles : Zap;
+      return <Icon className="w-5 h-5 text-amber-500" />;
+    }
+    switch (notification.type) {
       case 'reminder':
         return <Clock className="w-5 h-5 text-huttle-primary" />;
       case 'warning':
@@ -358,6 +426,8 @@ function NotificationPanel() {
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     return `${Math.floor(seconds / 86400)}d ago`;
   };
+
+  const hasLocal = localNotifications.length > 0;
 
   return (
     <>
@@ -392,17 +462,19 @@ function NotificationPanel() {
         {notifications.length > 0 && (
           <div className="flex gap-2 p-4 border-b border-gray-200">
             <button
-              onClick={markAllAsRead}
+              onClick={() => void markAllAsRead()}
               className="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-all font-medium"
             >
               Mark all read
             </button>
-            <button
-              onClick={clearAll}
-              className="flex-1 px-3 py-2 text-sm bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-all font-medium"
-            >
-              Clear all
-            </button>
+            {hasLocal && (
+              <button
+                onClick={clearAll}
+                className="flex-1 px-3 py-2 text-sm bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-all font-medium"
+              >
+                Clear all
+              </button>
+            )}
           </div>
         )}
 
@@ -416,63 +488,71 @@ function NotificationPanel() {
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`p-4 hover:bg-gray-50 transition-all cursor-pointer ${
-                    !notification.read ? 'bg-huttle-50 bg-opacity-50' : ''
-                  }`}
-                  onClick={() => !notification.read && markAsRead(notification.id)}
-                >
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      {getIcon(notification.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="font-semibold text-gray-900 text-sm">
-                          {notification.title}
-                        </h4>
-                        {!notification.read && (
-                          <div className="w-2 h-2 bg-huttle-primary rounded-full flex-shrink-0 mt-1" />
-                        )}
+              {notifications.map((notification) => {
+                const unreadClasses = !notification.read
+                  ? 'bg-huttle-50 bg-opacity-50 border-l-4 border-l-amber-400'
+                  : '';
+                const ctaUrl = notification.cta_url || notification.actionUrl;
+                const ctaLabel = notification.cta_label || notification.actionLabel;
+
+                return (
+                  <div
+                    key={notification.id}
+                    className={`p-4 hover:bg-gray-50 transition-all cursor-pointer ${unreadClasses}`}
+                    onClick={() => !notification.read && markAsRead(notification.id)}
+                  >
+                    <div className="flex gap-3 relative">
+                      <div className="flex-shrink-0 mt-1">
+                        {getIcon(notification)}
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">
-                          {getTimeAgo(notification.timestamp)}
-                        </span>
-                        {(notification.action || notification.actionUrl) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (typeof notification.action === 'function') {
-                                notification.action();
-                              } else if (notification.actionUrl) {
-                                navigate(notification.actionUrl);
-                              }
-                              setShowNotificationPanel(false);
-                            }}
-                            className="text-xs font-medium text-huttle-primary hover:underline flex items-center gap-1"
-                          >
-                            {notification.actionLabel || 'View'}
-                            <ExternalLink className="w-3 h-3" />
-                          </button>
-                        )}
+                      <div className="flex-1 min-w-0 pr-8">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="font-semibold text-gray-900 text-sm">
+                            {notification.title}
+                          </h4>
+                          {!notification.read && (
+                            <div className="w-2 h-2 bg-huttle-primary rounded-full flex-shrink-0 mt-1" />
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <span className="text-xs text-gray-500">
+                            {getTimeAgo(notification.timestamp)}
+                          </span>
+                          {(notification.action || ctaUrl) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (typeof notification.action === 'function') {
+                                  notification.action();
+                                } else if (ctaUrl) {
+                                  navigate(ctaUrl);
+                                }
+                                setShowNotificationPanel(false);
+                              }}
+                              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors w-fit"
+                            >
+                              {ctaLabel || 'View'}
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void dismissNotification(notification.id);
+                        }}
+                        className="absolute top-0 right-0 p-1 hover:bg-gray-200 rounded transition-all"
+                        aria-label="Dismiss notification"
+                      >
+                        <X className="w-4 h-4 text-gray-500" />
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeNotification(notification.id);
-                      }}
-                      className="flex-shrink-0 p-1 hover:bg-gray-200 rounded transition-all"
-                    >
-                      <X className="w-4 h-4 text-gray-500" />
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -496,4 +576,3 @@ function NotificationPanel() {
     </>
   );
 }
-

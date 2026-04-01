@@ -35,6 +35,7 @@ import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
 import FloatingActionButton from '../components/FloatingActionButton';
+import { BrandVoiceUpdateBanner } from '../components/BrandVoiceUpdateBanner';
 import { hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
@@ -1268,6 +1269,8 @@ export default function Dashboard() {
           )}
         </div>
       </MotionDiv>
+
+      <BrandVoiceUpdateBanner />
 
       {/* Hero Section - Trending Now (2/3) + Hashtags of the Day (1/3) */}
       <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

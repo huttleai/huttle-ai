@@ -89,6 +89,21 @@ function deriveUserBrandTypeFromProfileType(profileType) {
   return 'hybrid';
 }
 
+/** Values persisted in `user_preferences.user_brand_type` — not derived from profile_type. */
+const EXPLICIT_USER_BRAND_TYPE_VALUES = new Set(['solo_creator', 'business_owner', 'hybrid']);
+
+/**
+ * @param {unknown} rawUserBrandType — literal `user_brand_type` from user_preferences (before merge fallbacks).
+ * @returns {boolean}
+ */
+function computeHasExplicitBrandType(rawUserBrandType) {
+  if (rawUserBrandType == null) return false;
+  if (typeof rawUserBrandType !== 'string') return false;
+  const t = rawUserBrandType.trim().toLowerCase();
+  if (!t) return false;
+  return EXPLICIT_USER_BRAND_TYPE_VALUES.has(t);
+}
+
 export function useBrand() {
   const context = useContext(BrandContext);
   if (!context) {
@@ -105,12 +120,15 @@ export function useBrand() {
     isCreator: context.brandData?.profileType === 'creator' ||
                context.brandData?.profileType === 'solo_creator',
     isBrand: isBusinessProfileType(context.brandData?.profileType),
+    hasExplicitBrandType: context.hasExplicitBrandType,
   };
 }
 
 export function BrandProvider({ children }) {
   const { user } = useContext(AuthContext);
   const [brandData, setBrandData] = useState(createEmptyBrandData);
+  /** True only when `user_preferences.user_brand_type` is set in DB to a known Brand Voice value (not derived). */
+  const [hasExplicitBrandType, setHasExplicitBrandType] = useState(false);
   /** Background profile fetch — never used to block primary UI; optional spinners only. */
   const [loading, setLoading] = useState(false);
   /** True after first fetch attempt finishes (success, timeout, or error) for the current user. */
@@ -134,10 +152,12 @@ export function BrandProvider({ children }) {
     if (prevId && userId && prevId !== userId) {
       localStorage.removeItem('brandData');
       setBrandData(createEmptyBrandData());
+      setHasExplicitBrandType(false);
       setBrandFetchComplete(false);
     } else if (!userId && prevId) {
       localStorage.removeItem('brandData');
       setBrandData(createEmptyBrandData());
+      setHasExplicitBrandType(false);
       setBrandFetchComplete(true);
     }
   }, [userId]);
@@ -300,6 +320,7 @@ export function BrandProvider({ children }) {
 
           if (isActive) {
             setBrandData(mergedData);
+            setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
           }
           localStorage.setItem('brandData', JSON.stringify(mergedData));
         } else {
@@ -319,6 +340,7 @@ export function BrandProvider({ children }) {
               localStorage.setItem('brandData', JSON.stringify(merged));
               return merged;
             });
+            setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
           }
         }
       } catch (error) {
@@ -438,6 +460,8 @@ export function BrandProvider({ children }) {
           };
         }
 
+        setHasExplicitBrandType(computeHasExplicitBrandType(updated.userBrandType));
+
         return { success: true };
       } catch (error) {
         console.error('Error updating brand data:', error);
@@ -507,13 +531,14 @@ export function BrandProvider({ children }) {
   const value = useMemo(
     () => ({
       brandData,
+      hasExplicitBrandType,
       updateBrandData,
       resetBrandData,
       refreshBrandData,
       loading,
       brandFetchComplete,
     }),
-    [brandData, updateBrandData, resetBrandData, refreshBrandData, loading, brandFetchComplete]
+    [brandData, hasExplicitBrandType, updateBrandData, resetBrandData, refreshBrandData, loading, brandFetchComplete]
   );
 
   return (

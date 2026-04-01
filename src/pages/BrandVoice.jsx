@@ -17,6 +17,7 @@ import {
   Briefcase,
   Sparkles,
   Save,
+  Info,
 } from 'lucide-react';
 import { normalizeEnumValue } from '../utils/formatEnumLabel';
 import { formatDisplayName } from '../utils/brandContextBuilder';
@@ -172,6 +173,30 @@ const POSTING_FREQUENCY_OPTIONS = [
   { value: 'few_times_month', label: 'A few times a month' },
 ];
 
+const MAX_VIBE_SELECTIONS = 3;
+const MAX_PILLAR_SELECTIONS = 2;
+
+const BRAND_VIBES_OPTIONS = [
+  { label: 'Authentic & Raw' },
+  { label: 'Professional & Polished' },
+  { label: 'Bold & Edgy' },
+  { label: 'Warm & Community-Focused' },
+  { label: 'Fun & Playful' },
+  { label: 'Educational & Informative' },
+  { label: 'Aspirational & Inspiring' },
+  { label: 'Luxe & Elevated' },
+];
+
+const CONTENT_FOCUS_PILLARS_OPTIONS = [
+  { label: 'My customers & community' },
+  { label: 'My life running my business' },
+  { label: 'Behind the scenes' },
+  { label: 'Products & services in action' },
+  { label: 'Education & tips' },
+  { label: 'Personal stories & journey' },
+  { label: 'Trends & pop culture' },
+];
+
 const AUDIENCE_STAGE_OPTIONS = [
   { value: 'early', label: 'Just starting out (under 500)' },
   { value: 'growing', label: 'Building momentum (500–10K)' },
@@ -281,6 +306,8 @@ function toFormData(source = {}) {
     isLocalBusiness: source.isLocalBusiness || false,
     postingFrequency: source.postingFrequency || '',
     audienceStage: source.audienceStage || '',
+    brandVibes: source.brandVibes || [],
+    contentFocusPillars: source.contentFocusPillars || [],
   };
 }
 
@@ -330,6 +357,8 @@ function buildBrandUpdatePayload(fd) {
     isLocalBusiness: typeof fd.isLocalBusiness === 'boolean' ? fd.isLocalBusiness : false,
     postingFrequency: fd.postingFrequency || null,
     audienceStage: fd.audienceStage || null,
+    brandVibes: Array.isArray(fd.brandVibes) ? fd.brandVibes : [],
+    contentFocusPillars: Array.isArray(fd.contentFocusPillars) ? fd.contentFocusPillars : [],
   };
 }
 
@@ -337,6 +366,14 @@ function normalizeWritingStyle(value, options) {
   if (!value) return '';
   const normalized = normalizeEnumValue(value);
   return options.some((o) => o.value === normalized) ? normalized : '';
+}
+
+function NewBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ml-2 leading-none">
+      NEW
+    </span>
+  );
 }
 
 function FieldInput({ label, required, helper, children }) {
@@ -484,7 +521,7 @@ function CollapsibleSection({
 
 export default function BrandVoice() {
   const { brandData, updateBrandData, brandFetchComplete } = useContext(BrandContext);
-  const { isCreator } = useBrand();
+  const { isCreator, hasExplicitBrandType } = useBrand();
   const { user, updateUser } = useContext(AuthContext);
   const { addToast } = useToast();
   const { userTier } = useSubscription();
@@ -772,6 +809,21 @@ export default function BrandVoice() {
       </div>
 
       <div className="max-w-3xl">
+        {/* New-fields callout banner — visible only until Creator Type is saved */}
+        {!hasExplicitBrandType && (
+          <div className="mb-4 md:mb-6 flex gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-4">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-sky-500" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-sky-900">A few new fields need your attention</p>
+              <p className="mt-1 text-sm text-sky-700 leading-relaxed">
+                We added Creator Type, Your Vibe, and Content Focus to help the AI understand you better.
+                The fields marked <NewBadge /> below are what&apos;s changed — update them and save to unlock smarter
+                content across every tool.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Section 1 — About You */}
         <CollapsibleSection
           sectionKey="aboutYou"
@@ -810,7 +862,11 @@ export default function BrandVoice() {
               </div>
             </div>
 
-            <FieldInput label="Creator type" required helper="Shapes your AI content philosophy for every feature">
+            <FieldInput
+              label={<>Creator type {!hasExplicitBrandType && <NewBadge />}</>}
+              required
+              helper="Shapes your AI content philosophy for every feature"
+            >
               <div className="grid grid-cols-1 gap-3">
                 {[
                   {
@@ -1136,6 +1192,80 @@ export default function BrandVoice() {
           saveTestId="brand-profile-save-section-your-voice"
         >
           <div className="space-y-6 pt-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide flex items-center flex-wrap gap-y-1">
+                Your Vibe
+                {!hasExplicitBrandType && <NewBadge />}
+              </label>
+              <p className="text-xs text-gray-400 mb-3">
+                How do you want your content to feel? Pick up to {MAX_VIBE_SELECTIONS}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BRAND_VIBES_OPTIONS.map((option) => {
+                  const active = Array.isArray(formData.brandVibes) && formData.brandVibes.includes(option.label);
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        const cur = Array.isArray(formData.brandVibes) ? formData.brandVibes : [];
+                        if (active) {
+                          setField({ brandVibes: cur.filter((v) => v !== option.label) });
+                        } else if (cur.length >= MAX_VIBE_SELECTIONS) {
+                          addToast(`Pick up to ${MAX_VIBE_SELECTIONS} vibes.`, 'warning');
+                        } else {
+                          setField({ brandVibes: [...cur, option.label] });
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
+                        active
+                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide flex items-center flex-wrap gap-y-1">
+                Your Content Focus
+                {!hasExplicitBrandType && <NewBadge />}
+              </label>
+              <p className="text-xs text-gray-400 mb-3">
+                What do you want your feed to focus on? Pick up to {MAX_PILLAR_SELECTIONS}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {CONTENT_FOCUS_PILLARS_OPTIONS.map((option) => {
+                  const active = Array.isArray(formData.contentFocusPillars) && formData.contentFocusPillars.includes(option.label);
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        const cur = Array.isArray(formData.contentFocusPillars) ? formData.contentFocusPillars : [];
+                        if (active) {
+                          setField({ contentFocusPillars: cur.filter((v) => v !== option.label) });
+                        } else if (cur.length >= MAX_PILLAR_SELECTIONS) {
+                          addToast(`Pick up to ${MAX_PILLAR_SELECTIONS} content pillars.`, 'warning');
+                        } else {
+                          setField({ contentFocusPillars: [...cur, option.label] });
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border min-h-[44px] ${
+                        active
+                          ? 'bg-huttle-primary text-white border-huttle-primary shadow-md'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
                 Tone <span className="text-red-500">*</span>
