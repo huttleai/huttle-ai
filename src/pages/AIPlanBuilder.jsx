@@ -69,6 +69,54 @@ const FOLLOWER_RANGE_OPTIONS = [
   { value: '50K+', label: 'Large (50K+)' },
 ];
 
+const TONE_CHIP_LABELS = {
+  bold: 'Bold',
+  raw_authentic: 'Raw & Authentic',
+  warm: 'Warm',
+  professional: 'Professional',
+  humorous: 'Humorous',
+  inspirational: 'Inspirational',
+  educational: 'Educational',
+  conversational: 'Conversational',
+  luxury: 'Luxury',
+  playful: 'Playful',
+  direct: 'Direct',
+  storytelling: 'Storytelling',
+};
+
+/** Map comma-separated segments that match tone chip labels back to DB keys (fallback when user edits the field). */
+function brandVoiceToneToPayload(input) {
+  const trimmed = typeof input === 'string' ? input.trim() : '';
+  if (!trimmed) return '';
+  return trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((seg) => {
+      if (Object.prototype.hasOwnProperty.call(TONE_CHIP_LABELS, seg)) return seg;
+      const fromLabel = Object.entries(TONE_CHIP_LABELS).find(([, label]) => label === seg)?.[0];
+      if (fromLabel) return fromLabel;
+      return seg;
+    })
+    .join(', ');
+}
+
+/** Keeps API payloads using raw tone keys when the field shows chip labels; handles unedited profile defaults safely. */
+function resolveBrandVoiceToneForPayload(input, brandProfile) {
+  const t = typeof input === 'string' ? input.trim() : '';
+  if (!t) return '';
+  const profileToneRaw = [brandProfile?.brandVoice, ...(brandProfile?.toneChips || [])]
+    .filter(Boolean)
+    .join(', ');
+  const displayVoice = (brandProfile?.toneChips || [])
+    .map((chip) => TONE_CHIP_LABELS[chip] || chip)
+    .join(', ');
+  const profileToneDisplay = [brandProfile?.brandVoice, displayVoice].filter(Boolean).join(', ');
+  if (t === profileToneDisplay.trim()) return profileToneRaw;
+  if (t === profileToneRaw.trim()) return profileToneRaw;
+  return brandVoiceToneToPayload(t);
+}
+
 const PLAN_BUILDER_PLATFORMS = [
   { id: 'instagram', name: 'Instagram', icon: InstagramIcon, monoIcon: InstagramIconMono },
   { id: 'tiktok', name: 'TikTok', icon: TikTokIcon, monoIcon: TikTokIcon },
@@ -672,7 +720,10 @@ export default function AIPlanBuilder() {
     if (!brandFetchComplete) return;
     setNicheInput((prev) => (prev.trim() ? prev : (brandProfile?.niche || '')));
     setTargetAudienceInput((prev) => (prev.trim() ? prev : (brandProfile?.targetAudience ? String(brandProfile.targetAudience) : '')));
-    const tone = [brandProfile?.brandVoice, ...(brandProfile?.toneChips || [])].filter(Boolean).join(', ');
+    const displayVoice = (brandProfile?.toneChips || [])
+      .map((t) => TONE_CHIP_LABELS[t] || t)
+      .join(', ');
+    const tone = [brandProfile?.brandVoice, displayVoice].filter(Boolean).join(', ');
     setBrandVoiceToneInput((prev) => (prev.trim() ? prev : tone));
   }, [brandFetchComplete, brandProfile]);
 
@@ -967,7 +1018,7 @@ export default function AIPlanBuilder() {
         platformFocus: platformsArray,
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
-        brandVoiceTone: brandVoiceToneInput.trim(),
+        brandVoiceTone: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         contentPillars: contentPillars || brandProfile?.contentPillars || [],
         followerRange,
         extraContext: extraContext.trim() || null,
@@ -1024,11 +1075,11 @@ export default function AIPlanBuilder() {
         platformFocus: platformsArray,
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
-        brandVoiceTone: brandVoiceToneInput.trim(),
+        brandVoiceTone: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         contentPillars,
         followerRange,
         extraContext: extraContext.trim() || null,
-        brandVoice: brandVoiceToneInput.trim(),
+        brandVoice: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         brandContext: brandBlock,
         trendContext,
         platform_rules_block: platformRulesBlock,
@@ -1056,7 +1107,7 @@ export default function AIPlanBuilder() {
         try {
           const { generateContentPlan } = await import('../services/grokAPI');
           const grokResult = await generateContentPlan(
-            `${selectedGoal} on ${platformsArray.join(', ')}. Brand voice: ${brandVoiceToneInput || 'engaging'}`,
+            `${selectedGoal} on ${platformsArray.join(', ')}. Brand voice: ${resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile) || 'engaging'}`,
             brandProfile,
             selectedPeriod,
             { platformRulesBlock }
