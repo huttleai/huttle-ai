@@ -211,7 +211,7 @@ export default function TrendLab() {
                   <div className="space-y-3">
                     <div className="bg-white/60 rounded-lg p-4 border border-gray-300">
                       <p className="text-sm text-gray-600 italic">
-                        "Eco-travel hooks surge next week: 3 remix ideas ready"
+                        {`"${brandData?.niche || 'your niche'} trends surge next week: 3 post ideas ready"`}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">Preview of what you'll get</p>
                     </div>
