@@ -5,7 +5,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Zap,
   Sparkles,
@@ -29,6 +29,7 @@ import {
   Clock,
   Camera,
   Loader2,
+  Shuffle,
 } from 'lucide-react';
 import {
   TikTokIcon,
@@ -145,6 +146,7 @@ export default function IgniteEngine() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const blueprintUsage = useAIUsage('igniteEngine'); // HUTTLE AI: updated 3
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const GOALS = isCreator ? CREATOR_GOALS_IGNITE : BUSINESS_GOALS_IGNITE;
 
@@ -1002,6 +1004,22 @@ export default function IgniteEngine() {
                     {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
                     <span>{savedBrief ? 'Saved ✓' : 'Save to Vault'}</span>
                   </button>
+                  {bp && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/dashboard/content-remix', {
+                        state: {
+                          prefillContent: bp.caption || bp.script || bp.hook || '',
+                          prefillTopic: topic || '',
+                          sourcePlatform: selectedPlatform || '',
+                        },
+                      })}
+                      className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
+                    >
+                      <Shuffle className="w-5 h-5 text-huttle-primary" />
+                      <span>Remix for Other Platforms</span>
+                    </button>
+                  )}
                   <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
                     <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
                     <span>Create New Brief</span>

@@ -11,7 +11,7 @@ import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from '../components/AIUsageMeter';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -122,6 +122,8 @@ export default function ContentRemix() {
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const remixUsage = useAIUsage('contentRemix');
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const prefill = location.state;
 
   // Step tracking
   const [currentStep, setCurrentStep] = useState(1);
@@ -129,7 +131,7 @@ export default function ContentRemix() {
   // Step 1: Source platform + input
   const [selectedSourcePlatform, setSelectedSourcePlatform] = useState('');
   const [showSourceValidation, setShowSourceValidation] = useState(false);
-  const [remixInput, setRemixInput] = useState('');
+  const [remixInput, setRemixInput] = useState(prefill?.prefillContent || '');
 
   // Step 2: Goal
   const [remixGoal, setRemixGoal] = useState('viral');
