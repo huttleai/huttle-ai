@@ -641,6 +641,7 @@ export default function AIPlanBuilder() {
   const [nicheInput, setNicheInput] = useState('');
   const [targetAudienceInput, setTargetAudienceInput] = useState('');
   const [brandVoiceToneInput, setBrandVoiceToneInput] = useState('');
+  const [contentPillarsInput, setContentPillarsInput] = useState('');
   const [followerRange, setFollowerRange] = useState('0-500');
   const [extraContext, setExtraContext] = useState('');
   const [optionalOpen, setOptionalOpen] = useState(false);
@@ -919,6 +920,10 @@ export default function AIPlanBuilder() {
     setJobStatus('pending');
 
     try {
+      const contentPillars = contentPillarsInput
+        .split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
       const cachedTrends = getCachedTrends();
       const trendContext =
         Array.isArray(cachedTrends) && cachedTrends.length > 0
@@ -954,6 +959,7 @@ export default function AIPlanBuilder() {
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
         brandVoiceTone: brandVoiceToneInput.trim(),
+        contentPillars,
         followerRange,
         extraContext: extraContext.trim() || null,
         trendContext,
@@ -992,6 +998,7 @@ export default function AIPlanBuilder() {
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
         brandVoiceTone: brandVoiceToneInput.trim(),
+        contentPillars,
         followerRange,
         extraContext: extraContext.trim() || null,
         brandVoice: brandVoiceToneInput.trim(),
@@ -1253,6 +1260,23 @@ export default function AIPlanBuilder() {
                       disabled={isGenerating}
                       onChange={(e) => setBrandVoiceToneInput(e.target.value)}
                       placeholder="e.g. Warm, direct, expert-but-friendly"
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      What do you post about?
+                    </label>
+                    <p className="text-xs text-gray-500 mb-1">
+                      List 3–5 topics you cover most — e.g. behind the scenes, new menu items, customer stories,
+                      local events, team highlights.
+                    </p>
+                    <input
+                      type="text"
+                      value={contentPillarsInput}
+                      disabled={isGenerating}
+                      onChange={(e) => setContentPillarsInput(e.target.value)}
+                      placeholder="e.g. behind the scenes, new menu items, customer stories"
                       className={fieldClass}
                     />
                   </div>
