@@ -1891,6 +1891,7 @@ function buildDashboardDataPayload(context, payload = {}) { // HUTTLE AI: cache 
   }); // HUTTLE AI: cache fix
 
   return { // HUTTLE AI: cache fix
+    niche: context.brandProfile?.niche || null,
     trending_topics: ensureArray(payload.trendingTopics), // HUTTLE AI: cache fix
     hashtags_of_day: ensureArray(payload.hashtagsOfDay), // HUTTLE AI: cache fix
     ai_insights: normalizeInsights(payload.aiInsights), // HUTTLE AI: cache fix
@@ -2080,6 +2081,7 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
   const fullUpsertRow = {
     user_id: userId,
     generated_date: dateKey,
+    niche: dashboardData.niche || null,
     trending_topics: dashboardData.trending_topics,
     hashtags_of_day: dashboardData.hashtags_of_day,
     ai_insights: dashboardData.ai_insights,
@@ -2092,6 +2094,7 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
   const minimalUpsertRow = {
     user_id: userId,
     generated_date: dateKey,
+    niche: dashboardData.niche || null,
     trending_topics: dashboardData.trending_topics,
     hashtags_of_day: dashboardData.hashtags_of_day,
     ai_insights: dashboardData.ai_insights,
@@ -2140,6 +2143,54 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     return false;
   }
 } // HUTTLE AI: cache fix
+
+/**
+ * Write only the hashtags_of_day column to daily_dashboard_cache so the frontend
+ * receives each platform's hashtags via Supabase Realtime as soon as they are ready.
+ */
+async function updateCacheHashtags(userId, generatedDate, hashtagsOfDay, context) {
+  const dateKey = coerceDashboardCacheDateKey(generatedDate);
+  if (!userId || !dateKey) return;
+
+  try {
+    await supabase
+      .from(DASHBOARD_CACHE_TABLE)
+      .upsert(
+        {
+          user_id: userId,
+          generated_date: dateKey,
+          hashtags_of_day: hashtagsOfDay,
+          niche: context?.niche || null,
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,generated_date' },
+      );
+  } catch (err) {
+    console.warn('[DashCache] Incremental hashtag update failed:', err?.message || err);
+  }
+}
+
+const X_HASHTAG_BLOCKLIST_RE = /explorepage|fyp|instagood|instagram|reels|tiktok/i;
+const X_HASHTAG_MAX = 5;
+
+/**
+ * For X (Twitter), remove Instagram/TikTok-specific tags and cap at 5,
+ * preferring category "niche" over "growth".
+ */
+function filterHashtagsForPlatform(hashtags, platform) {
+  if (normalizePlatformValue(platform) !== 'twitter') return hashtags;
+
+  const cleaned = hashtags.filter((h) => {
+    const tag = h?.hashtag || '';
+    return !X_HASHTAG_BLOCKLIST_RE.test(tag);
+  });
+
+  if (cleaned.length <= X_HASHTAG_MAX) return cleaned;
+
+  const categoryOrder = { niche: 0, growth: 1 };
+  cleaned.sort((a, b) => (categoryOrder[a?.category] ?? 1) - (categoryOrder[b?.category] ?? 1));
+  return cleaned.slice(0, X_HASHTAG_MAX);
+}
 
 /**
  * YYYY-MM-DD key for daily dashboard cache: local calendar date, rolling at 6:00 AM in the user's timezone.
@@ -2280,29 +2331,56 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
   const optionsWithGeneratedDate = { ...normalizedOptions, generatedDate }; // HUTTLE AI: cache fix
 
   try { // HUTTLE AI: cache fix
-    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, optionsWithGeneratedDate); // HUTTLE AI: cache fix
+    const platformResults = [];
+    const allHashtags = [];
+    const allTrendingTopics = [];
+
+    for (const [index, platform] of context.selectedPlatforms.entries()) {
+      try {
+        const trendingResult = await fetchPerPlatformWidgetData('trending', platform, context, headers, optionsWithGeneratedDate);
+        const hashtagResult = await fetchPerPlatformWidgetData('hashtags', platform, context, headers, optionsWithGeneratedDate);
+
+        platformResults.push({ platform, trendingResult, hashtagResult });
+
+        const platformTrending = ensureArray(trendingResult.items).map((item) => ({
+          ...item,
+          from_cache: item.from_cache ?? trendingResult.fromCache,
+          generated_at: item.generated_at || trendingResult.generatedAt,
+          relevant_platform: item.relevant_platform || formatPlatformLabel(platform),
+          platform: item.platform || normalizePlatformValue(platform),
+        }));
+        allTrendingTopics.push(...platformTrending);
+
+        const platformHashtags = ensureArray(hashtagResult.items)
+          .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday))
+          .filter(Boolean);
+        allHashtags.push(...filterHashtagsForPlatform(platformHashtags, platform));
+
+        await updateCacheHashtags(userId, generatedDate, allHashtags, context);
+      } catch (error) {
+        console.warn(`[Dashboard] Failed to load ${platform}, using fallback widgets:`, error);
+        platformResults.push({
+          platform,
+          trendingResult: { items: [], fromCache: false, fromYesterday: false, generatedAt: null, fallbackMessage: 'Trends are refreshing — check back in a few minutes.' },
+          hashtagResult: { items: [], fromCache: false, fromYesterday: false, generatedAt: null, fallbackMessage: 'Hashtags loading — refresh in a moment.' },
+        });
+      }
+
+      if (index < context.selectedPlatforms.length - 1) {
+        await sleep(800);
+      }
+    }
+
     const [aiInsightsResult, dailyAlerts] = await Promise.all([ // HUTTLE AI: cache fix
       generateAIInsights(context, headers), // HUTTLE AI: cache fix
       fetchDailyAlerts(), // HUTTLE AI: cache fix
     ]); // HUTTLE AI: cache fix
 
-    const trendingTopics = platformResults.flatMap(({ platform, trendingResult }) =>
-      ensureArray(trendingResult.items).map((item) => ({
-        ...item,
-        from_cache: item.from_cache ?? trendingResult.fromCache,
-        generated_at: item.generated_at || trendingResult.generatedAt,
-        relevant_platform: item.relevant_platform || formatPlatformLabel(platform),
-        platform: item.platform || normalizePlatformValue(platform),
-      }))
-    );
+    const trendingTopics = allTrendingTopics;
 
     setCachedTrends(trendingTopics);
 
-    let hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) => // HUTTLE AI: cache fix
-      ensureArray(hashtagResult.items) // HUTTLE AI: cache fix
-        .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday)) // HUTTLE AI: cache fix
-        .filter(Boolean) // HUTTLE AI: cache fix
-    ); // HUTTLE AI: cache fix
+    let hashtagsOfDay = allHashtags;
 
     if (hashtagsOfDay.length === 0) { // HUTTLE AI: cache fix
       hashtagsOfDay = buildHashtagFallbackItems(context.primaryPlatform) // HUTTLE AI: cache fix
