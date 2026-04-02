@@ -125,7 +125,8 @@ export function useBrand() {
 }
 
 export function BrandProvider({ children }) {
-  const { user } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const { user } = authContext || {};
   const [brandData, setBrandData] = useState(createEmptyBrandData);
   /** True only when `user_preferences.user_brand_type` is set in DB to a known Brand Voice value (not derived). */
   const [hasExplicitBrandType, setHasExplicitBrandType] = useState(false);

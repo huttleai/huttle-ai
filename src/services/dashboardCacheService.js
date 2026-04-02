@@ -1891,7 +1891,7 @@ function buildDashboardDataPayload(context, payload = {}) { // HUTTLE AI: cache 
   }); // HUTTLE AI: cache fix
 
   return { // HUTTLE AI: cache fix
-    niche: context.brandProfile?.niche || null,
+    niche: context.niche || context.brandProfile?.niche || null,
     trending_topics: ensureArray(payload.trendingTopics), // HUTTLE AI: cache fix
     hashtags_of_day: ensureArray(payload.hashtagsOfDay), // HUTTLE AI: cache fix
     ai_insights: normalizeInsights(payload.aiInsights), // HUTTLE AI: cache fix

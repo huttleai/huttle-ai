@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../config/supabase';
 
-export const AuthContext = createContext();
+export const AuthContext = createContext({});
 const AUTH_STATE_CACHE_KEY = 'huttle-auth-state-cache';
 
 function getOnboardingCompletionKey(userId) {
