@@ -2186,7 +2186,7 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
 
   let generatedDate = coerceDashboardCacheDateKey(options.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   if (!isDashboardCacheDateKey(generatedDate)) {
-    generatedDate = new Date().toISOString().slice(0, 10);
+    generatedDate = getDashboardGeneratedDate();
   }
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
@@ -2273,7 +2273,7 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
 
   let generatedDate = coerceDashboardCacheDateKey(normalizedOptions.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   if (!isDashboardCacheDateKey(generatedDate)) {
-    generatedDate = new Date().toISOString().slice(0, 10);
+    generatedDate = getDashboardGeneratedDate();
   }
   const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
@@ -2392,7 +2392,7 @@ export async function deleteDashboardCache(userId) {
 
   let dateKey = coerceDashboardCacheDateKey(getDashboardGeneratedDate());
   if (!dateKey) {
-    dateKey = new Date().toISOString().slice(0, 10);
+    dateKey = getDashboardGeneratedDate();
   }
 
   try {
