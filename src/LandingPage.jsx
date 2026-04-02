@@ -29,7 +29,7 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const FOUNDING_SPOTS_LEFT = 31;
+const FOUNDING_SPOTS_LEFT = 28;
 const SITE_URL = "https://huttleai.com";
 const LOGO_URL = `${SITE_URL}/logo-512.png`;
 

@@ -7,7 +7,7 @@ import {
   Zap, Users, Lock, X, AlertCircle
 } from 'lucide-react';
 
-const FOUNDING_SPOTS_LEFT = 38;
+const FOUNDING_SPOTS_LEFT = 28;
 
 // ============================================
 // WAITLIST MODAL (Copied from LandingPage)

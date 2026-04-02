@@ -5,7 +5,7 @@ import { createCheckoutSession, openStripeCheckoutTab } from '../../services/str
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Check, AlertCircle, Crown, ArrowRight } from 'lucide-react';
 
-const FOUNDING_SPOTS_LEFT = 38;
+const FOUNDING_SPOTS_LEFT = 28;
 
 export const WaitlistModal = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '' });

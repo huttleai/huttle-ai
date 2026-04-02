@@ -4,7 +4,7 @@ import React, { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 
-const FOUNDING_SPOTS_LEFT = 38;
+const FOUNDING_SPOTS_LEFT = 28;
 
 export const FinalCTA = ({ onOpenFoundersModal }) => {
   const ref = useRef(null);

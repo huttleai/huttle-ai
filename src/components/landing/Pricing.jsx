@@ -4,7 +4,7 @@ import React, { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Check, Users } from 'lucide-react';
 
-const FOUNDING_SPOTS_LEFT = 38;
+const FOUNDING_SPOTS_LEFT = 28;
 
 export const PricingSection = ({ onOpenFoundersModal }) => {
   const ref = useRef(null);
