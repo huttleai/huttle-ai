@@ -215,7 +215,7 @@ export const SUBSCRIPTION_PLANS = {
         'Locked-in Founders pricing forever',
         'All future features included',
         'Priority support',
-        'Founders Club badge'
+        'Early access to new features'
       ]
     }
   }

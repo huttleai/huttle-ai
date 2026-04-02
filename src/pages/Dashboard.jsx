@@ -1370,17 +1370,17 @@ export default function Dashboard() {
                               {getPlatformIcon(sanitizedTrendPlatform, 'w-4 h-4 text-gray-600')}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm leading-snug text-gray-900 dark:text-gray-100 hyphens-none text-pretty min-w-0">{sanitizedTrendTopic}</p>
+                              <p className="font-bold text-sm leading-snug text-gray-900 hyphens-none text-pretty min-w-0">{sanitizedTrendTopic}</p>
                               {formatBadge && (
                                 <span
                                   data-testid="trend-format-badge"
-                                  className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-300"
+                                  className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700"
                                 >
                                   <Camera className="w-3 h-3" aria-hidden />
                                   {formatBadge}
                                 </span>
                               )}
-                              <span className="block text-[11px] text-gray-500 font-medium mt-0.5">{sanitizedTrendPlatform}</span>
+                              <span className="block text-[11px] text-gray-600 font-medium mt-0.5">{sanitizedTrendPlatform}</span>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
@@ -1398,7 +1398,7 @@ export default function Dashboard() {
 
                         {sanitizedTrendDescription && (
                           <p
-                            className={`text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-3 hyphens-none ${detailsOpen ? '' : 'line-clamp-3'}`}
+                            className={`text-xs text-gray-700 leading-relaxed mb-3 hyphens-none ${detailsOpen ? '' : 'line-clamp-3'}`}
                           >
                             {sanitizedTrendDescription}
                           </p>
@@ -1421,10 +1421,10 @@ export default function Dashboard() {
                         {detailsOpen && nicheAngle && (
                           <div
                             data-testid="trend-niche-section"
-                            className="mb-3 rounded-r-lg border-l-2 border-cyan-300 dark:border-cyan-600 bg-cyan-50/50 dark:bg-cyan-900/15 pl-3 pr-2.5 py-2"
+                            className="mb-3 rounded-r-lg border-l-2 border-cyan-400 bg-cyan-50/80 pl-3 pr-2.5 py-2"
                           >
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-800 dark:text-cyan-200 mb-1">For your niche</p>
-                            <p className="text-xs text-gray-800 dark:text-gray-100 leading-relaxed hyphens-none">{nicheAngle}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-900 mb-1">For your niche</p>
+                            <p className="text-xs text-gray-800 leading-relaxed hyphens-none">{nicheAngle}</p>
                           </div>
                         )}
 
@@ -1432,7 +1432,7 @@ export default function Dashboard() {
                           <div className="mb-3 flex items-start gap-2 min-w-0">
                             <div className="min-w-0 flex-1">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Your hook</p>
-                              <p data-testid="trend-hook-text" className="text-xs text-gray-900 dark:text-gray-100 leading-relaxed hyphens-none">
+                              <p data-testid="trend-hook-text" className="text-xs text-gray-900 leading-relaxed hyphens-none">
                                 &quot;{hookLine}&quot;
                               </p>
                             </div>
@@ -1440,7 +1440,7 @@ export default function Dashboard() {
                               type="button"
                               data-testid="trend-hook-copy"
                               onClick={() => copyTrendHook(cardKey, hookLine)}
-                              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-600 hover:text-huttle-primary hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors"
+                              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-600 hover:text-huttle-primary hover:bg-gray-50 transition-colors"
                             >
                               {copiedTrendHookKey === cardKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                               {copiedTrendHookKey === cardKey ? <span className="text-[10px] font-semibold text-emerald-600">✓ Copied</span> : <span className="text-[10px] font-semibold">Copy</span>}
@@ -1449,7 +1449,7 @@ export default function Dashboard() {
                         )}
 
                         {detailsOpen && whyLine && (
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex gap-1.5">
+                          <p className="text-[11px] text-gray-500 mb-3 flex gap-1.5">
                             <span aria-hidden>⚡</span>
                             <span className="hyphens-none">{whyLine}</span>
                           </p>
@@ -1480,7 +1480,7 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); navigate('/dashboard/trend-lab', { state: { deepDiveTopic: sanitizedTrendTopic, autoRun: true } }); }}
-                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white dark:bg-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Beaker className="w-3 h-3" /> Deep Dive
                           </button>
@@ -1494,10 +1494,10 @@ export default function Dashboard() {
                           <span
                             className={`rounded-full px-2 py-0.5 font-semibold ${
                               trendType === 'niche'
-                                ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200'
+                                ? 'bg-cyan-100 text-cyan-900'
                                 : trendType === 'hybrid'
-                                  ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                                  ? 'bg-violet-100 text-violet-900'
+                                  : 'bg-gray-100 text-gray-700'
                             }`}
                           >
                             {trendType}

@@ -1153,7 +1153,7 @@ export default function AIPlanBuilder() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 font-plan-body text-[#0C1220] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12 max-w-full overflow-x-hidden">
-      <div className="mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
+      <div className="pt-6 md:pt-0 mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
         <div className="flex items-center gap-3 md:gap-4 py-2">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm">
             <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />

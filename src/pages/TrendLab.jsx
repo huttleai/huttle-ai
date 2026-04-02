@@ -136,7 +136,7 @@ export default function TrendLab() {
       
       <div className="relative z-10">
         {/* Header */}
-        <div className="mb-8">
+        <div className="pt-6 md:pt-0 mb-8">
           <div className="flex items-center gap-4 mb-2">
             <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
               <Lightbulb className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />

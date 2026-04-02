@@ -1038,7 +1038,7 @@ export default function AITools() {
       
       <div className="relative z-10 max-w-full">
         {/* Header */}
-        <div className="mb-4 md:mb-6 lg:mb-8">
+        <div className="pt-6 md:pt-0 mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
             <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
               <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
@@ -1062,9 +1062,9 @@ export default function AITools() {
 
         {/* Tool Selector */}
         <div className="mb-3 md:mb-4 lg:mb-6">
-          {/* Mobile Horizontal Scroll Tabs */}
-          <div className="md:hidden -mx-4">
-            <div className="flex gap-2 overflow-x-auto pb-2 px-4 snap-x snap-mandatory scrollbar-hide">
+          {/* Mobile Horizontal Scroll Tabs — stay within page padding so first tab aligns with header */}
+          <div className="md:hidden">
+            <div className="flex gap-2 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory scrollbar-hide">
               {tools.map((tool) => (
                 <button
                   key={tool.id}
@@ -1125,20 +1125,20 @@ export default function AITools() {
               {isBrandVoiceComplete && pickCachedTrendTopicChips().length > 0 && (
                 <div
                   data-testid="caption-trending-chips"
-                  className="rounded-xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-3"
+                  className="rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-3"
                 >
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200 mb-2 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5" aria-hidden />
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-950 mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-800" aria-hidden />
                     Trending in your niche
                   </p>
-                  <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2">Click a trend to use it as your caption topic</p>
+                  <p className="text-[11px] text-gray-600 mb-2">Click a trend to use it as your caption topic</p>
                   <div className="flex flex-wrap gap-2">
                     {pickCachedTrendTopicChips().map((t, i) => (
                       <button
                         key={`${t.topic}-${i}`}
                         type="button"
                         onClick={() => setCaptionInput(sanitizeAIOutput(t.topic || t.title) || '')}
-                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-amber-200 text-gray-800 hover:border-huttle-primary transition-colors"
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-900 hover:border-huttle-primary transition-colors shadow-sm"
                       >
                         {sanitizeAIOutput(t.topic || t.title)}
                       </button>

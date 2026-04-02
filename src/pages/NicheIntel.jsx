@@ -314,8 +314,8 @@ export default function NicheIntel() {
   // Upgrade prompt for non-Pro users
   if (!hasAccess) {
     return (
-      <div className="flex-1 ml-0 md:ml-12 lg:ml-64 pt-16 md:pt-20 p-4 md:p-8">
-        <div className="max-w-2xl mx-auto">
+      <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+        <div className="max-w-2xl mx-auto pt-6 md:pt-0">
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20 border border-black" style={{ background: 'linear-gradient(135deg, rgba(1, 186, 210, 1) 0%, rgba(59, 130, 246, 1) 100%)' }}>
               <Search className="w-8 h-8 text-white" />
@@ -371,7 +371,7 @@ export default function NicheIntel() {
       )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
+        <div className="pt-6 md:pt-0 mb-6 md:mb-8">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
               <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />

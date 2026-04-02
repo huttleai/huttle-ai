@@ -11,13 +11,10 @@ import { usePreferredPlatforms } from '../hooks/usePreferredPlatforms';
 export default function Settings() {
   const { addToast } = useToast();
   const {
-    preferredPlatformIds,
     allPlatforms,
     togglePlatform,
     isPlatformPreferred,
   } = usePreferredPlatforms();
-
-  const activePlatformCount = preferredPlatformIds.length;
 
   const [settings, setSettings] = useState({
     // General Settings
@@ -45,7 +42,7 @@ export default function Settings() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
-      <div className="mb-6 md:mb-8">
+      <div className="pt-6 md:pt-0 mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
             <SettingsIcon className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
@@ -92,21 +89,16 @@ export default function Settings() {
 
       {/* Preferred Platforms */}
       <div className="card p-5 md:p-6 mb-6 md:mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-huttle-primary bg-opacity-10 flex items-center justify-center">
-              <Globe className="w-6 h-6 text-huttle-primary" />
-            </div>
-            <div>
-              <Tooltip content="Platforms you care about most. We use this to tailor formats and suggestions in features like Ignite Engine and Content Remix.">
-                <h3 className="text-lg font-semibold text-gray-900">Preferred Platforms</h3>
-              </Tooltip>
-              <p className="text-sm text-gray-600">Select which platforms you use most</p>
-            </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-full bg-huttle-primary bg-opacity-10 flex items-center justify-center">
+            <Globe className="w-6 h-6 text-huttle-primary" />
           </div>
-          <span className="text-xs bg-huttle-100 text-huttle-primary px-3 py-1 rounded-full font-semibold">
-            {activePlatformCount} Selected
-          </span>
+          <div>
+            <Tooltip content="Platforms you care about most. We use this to tailor formats and suggestions in features like Ignite Engine and Content Remix.">
+              <h3 className="text-lg font-semibold text-gray-900">Preferred Platforms</h3>
+            </Tooltip>
+            <p className="text-sm text-gray-600">Select which platforms you use most</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

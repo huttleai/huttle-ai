@@ -739,7 +739,7 @@ export default function BrandVoice() {
       className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-24 md:pb-28"
       data-testid="brand-profile-page"
     >
-      <div className="mb-6 md:mb-8 max-w-3xl">
+      <div className="pt-6 md:pt-0 mb-6 md:mb-8 max-w-3xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-3 md:gap-4">
             <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
