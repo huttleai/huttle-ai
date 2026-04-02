@@ -1473,7 +1473,7 @@ export default function FullPostBuilder() {
   const topicPreview = topic.trim() || (Array.isArray(brandData?.niche) ? brandData.niche[0] : brandData?.niche) || 'your niche';
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 border border-black shadow-[0_4px_12px_0_rgba(0,0,0,0.15)] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       {loadingHooks && (
         <LoadingSpinner
           fullScreen
