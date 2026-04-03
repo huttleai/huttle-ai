@@ -375,90 +375,121 @@ export function BrandProvider({ children }) {
 
     if (user?.id) {
       try {
-        const profileData = {
+        const nowIso = new Date().toISOString();
+        const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
+
+        const profilePatch = {
           user_id: user.id,
-          first_name: updated.firstName?.trim() || null,
-          profile_type: normalizeProfileTypeForDb(updated.profileType),
-          creator_archetype: normalizeOptionalEnum(updated.creatorArchetype) || null,
-          brand_name: updated.brandName || null,
-          social_handle: updated.handle || null,
-          city: updated.city || null,
-          location_state: updates.locationState ?? existing.locationState,
-          country: updates.country ?? existing.country,
-          industry: updated.industry
-            ? normalizeOptionalEnum(updated.industry) || String(updated.industry).trim() || null
-            : null,
-          niche: updated.niche,
-          sub_niche: updated.subNiche || null,
-          target_audience: updated.targetAudience,
-          brand_voice_preference: updated.brandVoice,
-          preferred_platforms: updated.platforms,
-          content_goals: updated.goals,
-          audience_pain_point: updated.audiencePainPoint || null,
-          audience_action_trigger: updated.audienceActionTrigger || null,
-          tone_chips: updated.toneChips || [],
-          writing_style: updated.writingStyle || null,
-          example_post: updated.examplePost || null,
-          content_to_post: updated.contentToPost || [],
-          content_to_avoid: updated.contentToAvoid || null,
-          follower_count: updated.followerCount || null,
-          primary_offer: updated.primaryOffer || null,
-          conversion_goal: updated.conversionGoal || null,
-          content_persona: updated.contentPersona || null,
-          monetization_goal: updated.monetizationGoal || null,
-          show_up_style: updated.showUpStyle || null,
-          content_strengths: updated.contentStrengths || [],
-          biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
-          hook_style_preference: normalizeOptionalEnum(updated.hookStylePreference) || null,
-          emotional_triggers: updated.emotionalTriggers || [],
-          business_primary_goal: updated.businessPrimaryGoal || null,
-          creator_monetization_path: updated.creatorMonetizationPath || null,
-          is_local_business: typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false,
-          audience_location_type: updated.audienceLocationType || null,
-          content_mix: updated.contentMix || null,
-          posting_frequency: updated.postingFrequency || null,
-          audience_stage: updated.audienceStage || null,
-          updated_at: new Date().toISOString(),
+          updated_at: nowIso,
+        };
+        let hasProfileChanges = false;
+        const setProfileField = (column, value) => {
+          profilePatch[column] = value;
+          hasProfileChanges = true;
         };
 
-        const { error: profileError } = await supabase
-          .from('user_profile')
-          .upsert(profileData, {
-            onConflict: 'user_id'
-          });
+        if (hasOwn('firstName')) setProfileField('first_name', updated.firstName?.trim() || null);
+        if (hasOwn('profileType')) setProfileField('profile_type', normalizeProfileTypeForDb(updated.profileType));
+        if (hasOwn('creatorArchetype')) setProfileField('creator_archetype', normalizeOptionalEnum(updated.creatorArchetype) || null);
+        if (hasOwn('brandName')) setProfileField('brand_name', updated.brandName || null);
+        if (hasOwn('handle')) setProfileField('social_handle', updated.handle || null);
+        if (hasOwn('city')) setProfileField('city', updated.city || null);
+        if (hasOwn('locationState')) setProfileField('location_state', updated.locationState ?? null);
+        if (hasOwn('country')) setProfileField('country', updated.country || null);
+        if (hasOwn('industry')) {
+          setProfileField(
+            'industry',
+            updated.industry
+              ? normalizeOptionalEnum(updated.industry) || String(updated.industry).trim() || null
+              : null,
+          );
+        }
+        if (hasOwn('niche')) setProfileField('niche', updated.niche || null);
+        if (hasOwn('subNiche')) setProfileField('sub_niche', updated.subNiche || null);
+        if (hasOwn('targetAudience')) setProfileField('target_audience', updated.targetAudience || null);
+        if (hasOwn('brandVoice')) setProfileField('brand_voice_preference', updated.brandVoice || null);
+        if (hasOwn('platforms')) setProfileField('preferred_platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
+        if (hasOwn('goals')) setProfileField('content_goals', Array.isArray(updated.goals) ? updated.goals : []);
+        if (hasOwn('audiencePainPoint')) setProfileField('audience_pain_point', updated.audiencePainPoint || null);
+        if (hasOwn('audienceActionTrigger')) setProfileField('audience_action_trigger', updated.audienceActionTrigger || null);
+        if (hasOwn('toneChips')) setProfileField('tone_chips', Array.isArray(updated.toneChips) ? updated.toneChips : []);
+        if (hasOwn('writingStyle')) setProfileField('writing_style', updated.writingStyle || null);
+        if (hasOwn('examplePost')) setProfileField('example_post', updated.examplePost || null);
+        if (hasOwn('contentToPost')) setProfileField('content_to_post', Array.isArray(updated.contentToPost) ? updated.contentToPost : []);
+        if (hasOwn('contentToAvoid')) setProfileField('content_to_avoid', updated.contentToAvoid || null);
+        if (hasOwn('followerCount')) setProfileField('follower_count', updated.followerCount || null);
+        if (hasOwn('primaryOffer')) setProfileField('primary_offer', updated.primaryOffer || null);
+        if (hasOwn('conversionGoal')) setProfileField('conversion_goal', updated.conversionGoal || null);
+        if (hasOwn('contentPersona')) setProfileField('content_persona', updated.contentPersona || null);
+        if (hasOwn('monetizationGoal')) setProfileField('monetization_goal', updated.monetizationGoal || null);
+        if (hasOwn('showUpStyle')) setProfileField('show_up_style', updated.showUpStyle || null);
+        if (hasOwn('contentStrengths')) setProfileField('content_strengths', Array.isArray(updated.contentStrengths) ? updated.contentStrengths : []);
+        if (hasOwn('biggestChallenge')) setProfileField('biggest_challenge', normalizeOptionalEnum(updated.biggestChallenge) || null);
+        if (hasOwn('hookStylePreference')) setProfileField('hook_style_preference', normalizeOptionalEnum(updated.hookStylePreference) || null);
+        if (hasOwn('emotionalTriggers')) setProfileField('emotional_triggers', Array.isArray(updated.emotionalTriggers) ? updated.emotionalTriggers : []);
+        if (hasOwn('businessPrimaryGoal')) setProfileField('business_primary_goal', updated.businessPrimaryGoal || null);
+        if (hasOwn('creatorMonetizationPath')) setProfileField('creator_monetization_path', updated.creatorMonetizationPath || null);
+        if (hasOwn('isLocalBusiness')) setProfileField('is_local_business', typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false);
+        if (hasOwn('audienceLocationType')) setProfileField('audience_location_type', updated.audienceLocationType || null);
+        if (hasOwn('contentMix')) setProfileField('content_mix', updated.contentMix || null);
+        if (hasOwn('postingFrequency')) setProfileField('posting_frequency', updated.postingFrequency || null);
+        if (hasOwn('audienceStage')) setProfileField('audience_stage', updated.audienceStage || null);
 
-        if (profileError) {
-          console.error('Error saving brand data to Supabase:', profileError);
-          return { success: false, error: profileError.message };
+        if (hasProfileChanges) {
+          const { error: profileError } = await supabase
+            .from('user_profile')
+            .upsert(profilePatch, {
+              onConflict: 'user_id'
+            });
+
+          if (profileError) {
+            console.error('Error saving brand data to Supabase:', profileError);
+            return { success: false, error: profileError.message };
+          }
         }
 
-        const nicheForPrefs =
-          typeof updated.niche === 'string'
-            ? updated.niche
-            : updated.niche
-              ? String(updated.niche)
-              : null;
+        const preferencesPatch = {
+          updated_at: nowIso,
+        };
+        let hasPreferenceChanges = false;
+        const setPreferenceField = (column, value) => {
+          preferencesPatch[column] = value;
+          hasPreferenceChanges = true;
+        };
 
-        const prefResult = await saveUserPreferences(user.id, {
-          creator_type: updated.creatorType || null,
-          city: updated.city || null,
-          growth_stage: normalizeOptionalEnum(updated.growthStage) || null,
-          content_focus: nicheForPrefs,
-          target_audience: updated.targetAudience || null,
-          platforms: Array.isArray(updated.platforms) ? updated.platforms : [],
-          user_brand_type: updated.userBrandType || null,
-          brand_vibes: Array.isArray(updated.brandVibes) ? updated.brandVibes : [],
-          content_focus_pillars: Array.isArray(updated.contentFocusPillars)
-            ? updated.contentFocusPillars
-            : [],
-        });
+        if (hasOwn('creatorType')) setPreferenceField('creator_type', updated.creatorType || null);
+        if (hasOwn('city')) setPreferenceField('city', updated.city || null);
+        if (hasOwn('growthStage')) setPreferenceField('growth_stage', normalizeOptionalEnum(updated.growthStage) || null);
+        if (hasOwn('niche')) {
+          const nicheForPrefs =
+            typeof updated.niche === 'string'
+              ? updated.niche
+              : updated.niche
+                ? String(updated.niche)
+                : null;
+          setPreferenceField('content_focus', nicheForPrefs);
+        }
+        if (hasOwn('targetAudience')) setPreferenceField('target_audience', updated.targetAudience || null);
+        if (hasOwn('platforms')) setPreferenceField('platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
+        if (hasOwn('userBrandType')) setPreferenceField('user_brand_type', updated.userBrandType || null);
+        if (hasOwn('brandVibes')) setPreferenceField('brand_vibes', Array.isArray(updated.brandVibes) ? updated.brandVibes : []);
+        if (hasOwn('contentFocusPillars')) {
+          setPreferenceField(
+            'content_focus_pillars',
+            Array.isArray(updated.contentFocusPillars) ? updated.contentFocusPillars : [],
+          );
+        }
 
-        if (!prefResult?.success) {
-          console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
-          return {
-            success: true,
-            preferencesError: prefResult?.error || 'Could not sync preferences (growth stage, creator type, etc.)',
-          };
+        if (hasPreferenceChanges) {
+          const prefResult = await saveUserPreferences(user.id, preferencesPatch);
+
+          if (!prefResult?.success) {
+            console.warn('[Brand] user_preferences sync failed:', prefResult?.error);
+            return {
+              success: true,
+              preferencesError: prefResult?.error || 'Could not sync preferences (growth stage, creator type, etc.)',
+            };
+          }
         }
 
         setHasExplicitBrandType(computeHasExplicitBrandType(updated.userBrandType));
