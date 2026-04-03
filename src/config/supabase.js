@@ -1,6 +1,16 @@
 /**
- * Supabase Configuration
- * 
+ * SINGLETON — DO NOT IMPORT createClient ANYWHERE ELSE IN src/
+ *
+ * This is the only Supabase client instance for the entire
+ * client-side application. Multiple instances cause:
+ * - Separate auth sessions with different user IDs
+ * - Cache read/write mismatches (cache written for user A,
+ *   read for user B → permanent cache miss)
+ * - "Multiple GoTrueClient instances" console warnings
+ *
+ * Server-side Vercel functions (api/) use the service role key
+ * and are correctly separate. Everything in src/ shares this client.
+ *
  * Used for:
  * - User authentication and profiles
  * - Content storage (generated captions, trends, etc.)
@@ -36,6 +46,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'huttle-auth-token',
   },
 });
+
+if (typeof window !== 'undefined') {
+  if (window.__HUTTLE_SUPABASE_INITIALIZED__) {
+    console.error(
+      '[Supabase] FATAL: Supabase client instantiated more than once. ' +
+      'This causes auth session mismatches and cache corruption. ' +
+      'Import from src/config/supabase.js — never call createClient() directly.'
+    );
+  }
+  window.__HUTTLE_SUPABASE_INITIALIZED__ = true;
+}
 
 /**
  * Test Supabase connection
