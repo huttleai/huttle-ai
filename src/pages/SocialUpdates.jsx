@@ -423,7 +423,7 @@ export default function SocialUpdates() {
 
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                     <span>{getRelativePublishedDate(publishedDate)}</span>
-                    {sourceUrl ? (
+                    {sourceUrl && (
                       <a
                         href={sourceUrl}
                         target="_blank"
@@ -434,8 +434,6 @@ export default function SocialUpdates() {
                         Source
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                    ) : (
-                      <span className="text-gray-400 italic">No source available</span>
                     )}
                   </div>
                 </div>
