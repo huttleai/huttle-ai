@@ -809,8 +809,8 @@ export default function BrandVoice() {
       </div>
 
       <div className="max-w-3xl">
-        {/* New-fields callout banner — visible only until Creator Type is saved */}
-        {!hasExplicitBrandType && (
+        {/* New-fields callout — only for profiles with no persisted niche yet (supplementary fields, not required once niche exists) */}
+        {!hasExplicitBrandType && !String(brandData?.niche ?? '').trim() && (
           <div className="mb-4 md:mb-6 flex gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-4">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-sky-500" aria-hidden="true" />
             <div className="min-w-0">
