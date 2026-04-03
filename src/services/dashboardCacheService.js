@@ -510,7 +510,7 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
   try {
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('payload, hit_count')
+      .select('payload, result_data, expires_at')
       .eq('cache_key', cacheKey)
       .is('user_id', null)
       .gt('expires_at', new Date().toISOString())
@@ -524,7 +524,7 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
       return null;
     }
 
-    const rowPayload = data?.payload;
+    const rowPayload = data?.payload || data?.result_data;
 
     if (type === 'trending') {
       const hit = Boolean(rowPayload) && isValidDashboardTrendingWarmPayload(rowPayload);
