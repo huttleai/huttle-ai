@@ -276,7 +276,7 @@ async function getCachedPerplexityResult(cacheConfig, cacheAccess) {
 
   return {
     resultData: data.payload ?? data.result_data,
-    generatedAt: data.generated_at,
+    generatedAt: data.generated_date || data.created_at,
   };
 }
 
@@ -310,12 +310,34 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
     niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'trending',
+    cache_date: now.toISOString().split('T')[0],
     payload: cachePayload,
-    generated_at: now.toISOString(),
+    result_data: cachePayload,
     expires_at: expiresAt.toISOString(),
     hit_count: 0,
     user_id: cacheAccess?.userId || null,
   };
+
+  const VALID_CACHE_COLUMNS = new Set([
+    'id', 'cache_key', 'feature', 'niche', 'platform',
+    'user_type', 'cache_date', 'payload', 'hit_count',
+    'created_at', 'expires_at', 'user_id', 'result_data',
+    'generated_date',
+  ]);
+
+  const invalidFields = Object.keys(cacheRow).filter(
+    (k) => !VALID_CACHE_COLUMNS.has(k),
+  );
+
+  if (invalidFields.length > 0) {
+    console.error(
+      '[NicheCache] WRITE ABORTED — payload contains invalid columns:',
+      invalidFields,
+      '| These columns do not exist in niche_content_cache and will',
+      'cause a 400. Remove them from the payload.',
+    );
+    return null;
+  }
 
   const scopedLookupQuery = applyCacheUserScope(
     supabase

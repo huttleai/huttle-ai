@@ -564,18 +564,17 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
 
   try {
     const currentPlatform = normalizePlatformValue(platform);
-    const currentDateStart = new Date(`${generatedDate}T00:00:00.000Z`).toISOString();
     const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('cache_key, payload, generated_at')
+      .select('cache_key, payload, generated_date, created_at')
       .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
       .is('user_id', null)
       .like('cache_key', cacheKeyPattern)
-      .lt('generated_at', currentDateStart)
-      .order('generated_at', { ascending: false })
+      .lt('generated_date', generatedDate)
+      .order('generated_date', { ascending: false })
       .limit(1);
 
     if (error || !Array.isArray(data) || data.length === 0) {
@@ -1305,7 +1304,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           'global',
           platform,
           false,
-          previousDayCache.generated_at,
+          previousDayCache.generated_date || previousDayCache.created_at,
           nicheGlobal,
         ))
         .filter(Boolean);
@@ -1314,7 +1313,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           items: merged,
           fromCache: false,
           fromYesterday: true,
-          generatedAt: previousDayCache.generated_at,
+          generatedAt: previousDayCache.generated_date || previousDayCache.created_at,
           fallbackMessage: 'Last updated from cache — tap refresh for latest.',
         };
       }
@@ -1408,7 +1407,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
         items: ensureArray(previousDayCache.payload),
         fromCache: false,
         fromYesterday: true,
-        generatedAt: previousDayCache.generated_at || null,
+        generatedAt: previousDayCache.generated_date || previousDayCache.created_at || null,
         fallbackMessage: 'From yesterday — updating now',
       };
     }

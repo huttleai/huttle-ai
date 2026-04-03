@@ -45,7 +45,7 @@ export async function getCachedResult(cacheKey) {
     if (!result) return null;
     return {
       data: result.payload ?? result.result_data,
-      generatedAt: result.generated_at,
+      generatedAt: result.generated_date || result.created_at,
       cached: true,
     };
   } catch {
