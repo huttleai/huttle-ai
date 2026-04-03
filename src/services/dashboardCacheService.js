@@ -2053,6 +2053,16 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     return false;
   }
 
+  const niche = dashboardData.niche;
+  if (!userId || !niche) {
+    console.warn(
+      '[DashboardCache] Aborting cache write — userId or niche is missing. userId:', userId,
+      '| niche:', niche,
+      '| This prevents writing corrupt cache data that causes permanent cache misses for this user.'
+    );
+    return false;
+  }
+
   if (!hasPersistableTrendingTopics(dashboardData.trending_topics)) {
     console.warn('[DashCache] Skipped daily cache write — all samples', { userId, date: dateKey });
     return false;

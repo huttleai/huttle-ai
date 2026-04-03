@@ -802,12 +802,12 @@ export default function Dashboard() {
   ]);
 
   useEffect(() => {
-    if (authLoading || !user?.id || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
+    if (authLoading || !user?.id || !brandFetchComplete || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
     loadDashboardData(); // HUTTLE AI: cache fix
     return () => { // HUTTLE AI: cache fix
       activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
     }; // HUTTLE AI: cache fix
-  }, [authLoading, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
+  }, [authLoading, brandFetchComplete, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
     if (!user?.id || authLoading) return undefined;
