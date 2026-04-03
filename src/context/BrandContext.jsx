@@ -377,6 +377,18 @@ export function BrandProvider({ children }) {
       try {
         const nowIso = new Date().toISOString();
         const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
+        const areValuesEqual = (a, b) => {
+          if (Array.isArray(a) || Array.isArray(b)) {
+            if (!Array.isArray(a) || !Array.isArray(b)) return false;
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i += 1) {
+              if (a[i] !== b[i]) return false;
+            }
+            return true;
+          }
+          return a === b;
+        };
+        const hasChanged = (key) => hasOwn(key) && !areValuesEqual(updates[key], existing[key]);
 
         const profilePatch = {
           user_id: user.id,
@@ -388,15 +400,15 @@ export function BrandProvider({ children }) {
           hasProfileChanges = true;
         };
 
-        if (hasOwn('firstName')) setProfileField('first_name', updated.firstName?.trim() || null);
-        if (hasOwn('profileType')) setProfileField('profile_type', normalizeProfileTypeForDb(updated.profileType));
-        if (hasOwn('creatorArchetype')) setProfileField('creator_archetype', normalizeOptionalEnum(updated.creatorArchetype) || null);
-        if (hasOwn('brandName')) setProfileField('brand_name', updated.brandName || null);
-        if (hasOwn('handle')) setProfileField('social_handle', updated.handle || null);
-        if (hasOwn('city')) setProfileField('city', updated.city || null);
-        if (hasOwn('locationState')) setProfileField('location_state', updated.locationState ?? null);
-        if (hasOwn('country')) setProfileField('country', updated.country || null);
-        if (hasOwn('industry')) {
+        if (hasChanged('firstName')) setProfileField('first_name', updated.firstName?.trim() || null);
+        if (hasChanged('profileType')) setProfileField('profile_type', normalizeProfileTypeForDb(updated.profileType));
+        if (hasChanged('creatorArchetype')) setProfileField('creator_archetype', normalizeOptionalEnum(updated.creatorArchetype) || null);
+        if (hasChanged('brandName')) setProfileField('brand_name', updated.brandName || null);
+        if (hasChanged('handle')) setProfileField('social_handle', updated.handle || null);
+        if (hasChanged('city')) setProfileField('city', updated.city || null);
+        if (hasChanged('locationState')) setProfileField('location_state', updated.locationState ?? null);
+        if (hasChanged('country')) setProfileField('country', updated.country || null);
+        if (hasChanged('industry')) {
           setProfileField(
             'industry',
             updated.industry
@@ -404,36 +416,36 @@ export function BrandProvider({ children }) {
               : null,
           );
         }
-        if (hasOwn('niche')) setProfileField('niche', updated.niche || null);
-        if (hasOwn('subNiche')) setProfileField('sub_niche', updated.subNiche || null);
-        if (hasOwn('targetAudience')) setProfileField('target_audience', updated.targetAudience || null);
-        if (hasOwn('brandVoice')) setProfileField('brand_voice_preference', updated.brandVoice || null);
-        if (hasOwn('platforms')) setProfileField('preferred_platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
-        if (hasOwn('goals')) setProfileField('content_goals', Array.isArray(updated.goals) ? updated.goals : []);
-        if (hasOwn('audiencePainPoint')) setProfileField('audience_pain_point', updated.audiencePainPoint || null);
-        if (hasOwn('audienceActionTrigger')) setProfileField('audience_action_trigger', updated.audienceActionTrigger || null);
-        if (hasOwn('toneChips')) setProfileField('tone_chips', Array.isArray(updated.toneChips) ? updated.toneChips : []);
-        if (hasOwn('writingStyle')) setProfileField('writing_style', updated.writingStyle || null);
-        if (hasOwn('examplePost')) setProfileField('example_post', updated.examplePost || null);
-        if (hasOwn('contentToPost')) setProfileField('content_to_post', Array.isArray(updated.contentToPost) ? updated.contentToPost : []);
-        if (hasOwn('contentToAvoid')) setProfileField('content_to_avoid', updated.contentToAvoid || null);
-        if (hasOwn('followerCount')) setProfileField('follower_count', updated.followerCount || null);
-        if (hasOwn('primaryOffer')) setProfileField('primary_offer', updated.primaryOffer || null);
-        if (hasOwn('conversionGoal')) setProfileField('conversion_goal', updated.conversionGoal || null);
-        if (hasOwn('contentPersona')) setProfileField('content_persona', updated.contentPersona || null);
-        if (hasOwn('monetizationGoal')) setProfileField('monetization_goal', updated.monetizationGoal || null);
-        if (hasOwn('showUpStyle')) setProfileField('show_up_style', updated.showUpStyle || null);
-        if (hasOwn('contentStrengths')) setProfileField('content_strengths', Array.isArray(updated.contentStrengths) ? updated.contentStrengths : []);
-        if (hasOwn('biggestChallenge')) setProfileField('biggest_challenge', normalizeOptionalEnum(updated.biggestChallenge) || null);
-        if (hasOwn('hookStylePreference')) setProfileField('hook_style_preference', normalizeOptionalEnum(updated.hookStylePreference) || null);
-        if (hasOwn('emotionalTriggers')) setProfileField('emotional_triggers', Array.isArray(updated.emotionalTriggers) ? updated.emotionalTriggers : []);
-        if (hasOwn('businessPrimaryGoal')) setProfileField('business_primary_goal', updated.businessPrimaryGoal || null);
-        if (hasOwn('creatorMonetizationPath')) setProfileField('creator_monetization_path', updated.creatorMonetizationPath || null);
-        if (hasOwn('isLocalBusiness')) setProfileField('is_local_business', typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false);
-        if (hasOwn('audienceLocationType')) setProfileField('audience_location_type', updated.audienceLocationType || null);
-        if (hasOwn('contentMix')) setProfileField('content_mix', updated.contentMix || null);
-        if (hasOwn('postingFrequency')) setProfileField('posting_frequency', updated.postingFrequency || null);
-        if (hasOwn('audienceStage')) setProfileField('audience_stage', updated.audienceStage || null);
+        if (hasChanged('niche')) setProfileField('niche', updated.niche || null);
+        if (hasChanged('subNiche')) setProfileField('sub_niche', updated.subNiche || null);
+        if (hasChanged('targetAudience')) setProfileField('target_audience', updated.targetAudience || null);
+        if (hasChanged('brandVoice')) setProfileField('brand_voice_preference', updated.brandVoice || null);
+        if (hasChanged('platforms')) setProfileField('preferred_platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
+        if (hasChanged('goals')) setProfileField('content_goals', Array.isArray(updated.goals) ? updated.goals : []);
+        if (hasChanged('audiencePainPoint')) setProfileField('audience_pain_point', updated.audiencePainPoint || null);
+        if (hasChanged('audienceActionTrigger')) setProfileField('audience_action_trigger', updated.audienceActionTrigger || null);
+        if (hasChanged('toneChips')) setProfileField('tone_chips', Array.isArray(updated.toneChips) ? updated.toneChips : []);
+        if (hasChanged('writingStyle')) setProfileField('writing_style', updated.writingStyle || null);
+        if (hasChanged('examplePost')) setProfileField('example_post', updated.examplePost || null);
+        if (hasChanged('contentToPost')) setProfileField('content_to_post', Array.isArray(updated.contentToPost) ? updated.contentToPost : []);
+        if (hasChanged('contentToAvoid')) setProfileField('content_to_avoid', updated.contentToAvoid || null);
+        if (hasChanged('followerCount')) setProfileField('follower_count', updated.followerCount || null);
+        if (hasChanged('primaryOffer')) setProfileField('primary_offer', updated.primaryOffer || null);
+        if (hasChanged('conversionGoal')) setProfileField('conversion_goal', updated.conversionGoal || null);
+        if (hasChanged('contentPersona')) setProfileField('content_persona', updated.contentPersona || null);
+        if (hasChanged('monetizationGoal')) setProfileField('monetization_goal', updated.monetizationGoal || null);
+        if (hasChanged('showUpStyle')) setProfileField('show_up_style', updated.showUpStyle || null);
+        if (hasChanged('contentStrengths')) setProfileField('content_strengths', Array.isArray(updated.contentStrengths) ? updated.contentStrengths : []);
+        if (hasChanged('biggestChallenge')) setProfileField('biggest_challenge', normalizeOptionalEnum(updated.biggestChallenge) || null);
+        if (hasChanged('hookStylePreference')) setProfileField('hook_style_preference', normalizeOptionalEnum(updated.hookStylePreference) || null);
+        if (hasChanged('emotionalTriggers')) setProfileField('emotional_triggers', Array.isArray(updated.emotionalTriggers) ? updated.emotionalTriggers : []);
+        if (hasChanged('businessPrimaryGoal')) setProfileField('business_primary_goal', updated.businessPrimaryGoal || null);
+        if (hasChanged('creatorMonetizationPath')) setProfileField('creator_monetization_path', updated.creatorMonetizationPath || null);
+        if (hasChanged('isLocalBusiness')) setProfileField('is_local_business', typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false);
+        if (hasChanged('audienceLocationType')) setProfileField('audience_location_type', updated.audienceLocationType || null);
+        if (hasChanged('contentMix')) setProfileField('content_mix', updated.contentMix || null);
+        if (hasChanged('postingFrequency')) setProfileField('posting_frequency', updated.postingFrequency || null);
+        if (hasChanged('audienceStage')) setProfileField('audience_stage', updated.audienceStage || null);
 
         if (hasProfileChanges) {
           const { error: profileError } = await supabase
@@ -457,10 +469,10 @@ export function BrandProvider({ children }) {
           hasPreferenceChanges = true;
         };
 
-        if (hasOwn('creatorType')) setPreferenceField('creator_type', updated.creatorType || null);
-        if (hasOwn('city')) setPreferenceField('city', updated.city || null);
-        if (hasOwn('growthStage')) setPreferenceField('growth_stage', normalizeOptionalEnum(updated.growthStage) || null);
-        if (hasOwn('niche')) {
+        if (hasChanged('creatorType')) setPreferenceField('creator_type', updated.creatorType || null);
+        if (hasChanged('city')) setPreferenceField('city', updated.city || null);
+        if (hasChanged('growthStage')) setPreferenceField('growth_stage', normalizeOptionalEnum(updated.growthStage) || null);
+        if (hasChanged('niche')) {
           const nicheForPrefs =
             typeof updated.niche === 'string'
               ? updated.niche
@@ -469,11 +481,11 @@ export function BrandProvider({ children }) {
                 : null;
           setPreferenceField('content_focus', nicheForPrefs);
         }
-        if (hasOwn('targetAudience')) setPreferenceField('target_audience', updated.targetAudience || null);
-        if (hasOwn('platforms')) setPreferenceField('platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
-        if (hasOwn('userBrandType')) setPreferenceField('user_brand_type', updated.userBrandType || null);
-        if (hasOwn('brandVibes')) setPreferenceField('brand_vibes', Array.isArray(updated.brandVibes) ? updated.brandVibes : []);
-        if (hasOwn('contentFocusPillars')) {
+        if (hasChanged('targetAudience')) setPreferenceField('target_audience', updated.targetAudience || null);
+        if (hasChanged('platforms')) setPreferenceField('platforms', Array.isArray(updated.platforms) ? updated.platforms : []);
+        if (hasChanged('userBrandType')) setPreferenceField('user_brand_type', updated.userBrandType || null);
+        if (hasChanged('brandVibes')) setPreferenceField('brand_vibes', Array.isArray(updated.brandVibes) ? updated.brandVibes : []);
+        if (hasChanged('contentFocusPillars')) {
           setPreferenceField(
             'content_focus_pillars',
             Array.isArray(updated.contentFocusPillars) ? updated.contentFocusPillars : [],
