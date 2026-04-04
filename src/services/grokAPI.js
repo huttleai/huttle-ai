@@ -1000,12 +1000,14 @@ FULL POST BUILDER — platform-native caption (Instagram/TikTok):
 - Add 1–3 short, concrete value beats (benefits, objection handling, or proof-style specifics tied to THIS topic — not generic filler).
 - End with one clear CTA suited to the platform: Instagram → save, share, comment, DM, or link in bio; TikTok → comment keyword, follow, stitch/duet, or DM as appropriate.
 - Sound like a strong human creator in this niche — avoid vague AI phrases ("unlock", "game-changer", "in today's world", "whether you're a beginner or pro").
-- Keep total length sensible for feed viewing; no markdown in caption body.`
+- Keep total length sensible for feed viewing; no markdown in caption body.
+IMPORTANT: Do NOT include any hashtags in the caption. Hashtags are handled separately in the next step. The caption must be clean body text only — no # symbols anywhere in the output.`
         : `
 
 FULL POST BUILDER:
 - Structure: hook echo → concrete value → single clear CTA.
-- Stay specific to the topic; avoid generic templates.`;
+- Stay specific to the topic; avoid generic templates.
+IMPORTANT: Do NOT include any hashtags in the caption. Hashtags are handled separately in the next step. The caption must be clean body text only — no # symbols anywhere in the output.`;
       const captionHints = String(options.fullPostBuilderCaptionHints ?? '').trim();
       if (captionHints) {
         userMessage += `
