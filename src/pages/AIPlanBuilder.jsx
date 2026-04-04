@@ -389,25 +389,22 @@ function PlanBuilderPostCard({ post, dayNum, dayLabel, userId, showToast }) {
       const postSnippet = sanitizeAIOutput(
         String(post.hook || post.caption || post.topic || '').replace(/\s+/g, ' ').trim()
       ).slice(0, 60);
-      const result = await saveToVault(userId, {
-        ...buildContentVaultPayload({
-          name: `${dayLabel} - ${platLabel}${postSnippet ? ` - ${postSnippet}` : ''}`,
-          contentText: formatPostVaultBody(post),
-          contentType: 'plan',
-          toolSource: 'ai_plan_builder',
-          toolLabel: 'AI Plan Builder',
-          topic: postSnippet,
-          platform: post.platform,
-          description: `AI Plan Builder | ${dayLabel} | ${platLabel}`,
-          metadata: {
-            day: dayNum,
-            day_label: dayLabel,
-            contentType: post.contentType ?? '',
-            bestTime: post.postTime ?? '',
-          },
-        }),
-        type: 'plan_builder',
-      });
+      const result = await saveToVault(userId, buildContentVaultPayload({
+        name: `${dayLabel} - ${platLabel}${postSnippet ? ` - ${postSnippet}` : ''}`,
+        contentText: formatPostVaultBody(post),
+        contentType: 'plan',
+        toolSource: 'ai_plan_builder',
+        toolLabel: 'AI Plan Builder',
+        topic: postSnippet,
+        platform: post.platform,
+        description: `AI Plan Builder | ${dayLabel} | ${platLabel}`,
+        metadata: {
+          day: dayNum,
+          day_label: dayLabel,
+          contentType: post.contentType ?? '',
+          bestTime: post.postTime ?? '',
+        },
+      }));
       if (result.success) setSavedVault(true);
       else showToast(result.error || 'Could not save to vault', 'error');
     } catch (e) {
