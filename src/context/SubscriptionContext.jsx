@@ -62,8 +62,6 @@ function normalizeTier(plan) {
 export function SubscriptionProvider({ children }) {
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
-  const authLoading = authContext?.loading ?? true;
-  const profileChecked = authContext?.profileChecked ?? false;
   const sessionConfirmed = authContext?.sessionConfirmed ?? false;
   
   // Check for dev mode (same pattern as AuthContext)
@@ -178,12 +176,7 @@ export function SubscriptionProvider({ children }) {
       return;
     }
 
-    if (authLoading) {
-      setLoading(true);
-      return;
-    }
-
-    if (!sessionConfirmed || (userId && !profileChecked)) {
+    if (!sessionConfirmed) {
       clearSubscriptionTimers();
       applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
       setLoading(false);
@@ -386,7 +379,7 @@ export function SubscriptionProvider({ children }) {
       }
       setSubscriptionReady(true);
     }
-  }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, authLoading, clearRequestTimeout, clearSubscriptionTimers, profileChecked, sessionConfirmed, skipAuth, userId]);
+  }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, clearRequestTimeout, clearSubscriptionTimers, sessionConfirmed, skipAuth, userId]);
 
   const refreshStorageUsage = useCallback(async () => {
     if (skipAuth) {
@@ -417,16 +410,7 @@ export function SubscriptionProvider({ children }) {
       };
     }
 
-    if (authLoading) {
-      setLoading(true);
-      clearSubscriptionTimers();
-
-      return () => {
-        clearSubscriptionTimers();
-      };
-    }
-
-    if (!sessionConfirmed || (userId && !profileChecked)) {
+    if (!sessionConfirmed) {
       clearSubscriptionTimers();
       applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
       setLoading(false);
@@ -455,7 +439,7 @@ export function SubscriptionProvider({ children }) {
     return () => {
       clearSubscriptionTimers();
     };
-  }, [applySubscriptionFallback, authLoading, clearSubscriptionTimers, profileChecked, refreshSubscription, sessionConfirmed, skipAuth, userId]);
+  }, [applySubscriptionFallback, clearSubscriptionTimers, refreshSubscription, sessionConfirmed, skipAuth, userId]);
 
   useEffect(() => {
     if (userId) {
