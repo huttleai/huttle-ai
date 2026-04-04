@@ -32,6 +32,7 @@ import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { parseVariants } from '../utils/parseAIResponse';
 import AddToKitModal from '../components/AddToKitModal';
 import { getCachedTrends } from '../services/dashboardCacheService';
 import humanizeContent, {
@@ -502,7 +503,17 @@ export default function AITools() {
           );
         }
         if (parsedCaptions.length === 0 && result.caption) {
-          parsedCaptions = parseCaptionFallbackBlocks(result.caption);
+          // Guard: if result.caption is a raw JSON string (service parse failed),
+          // recover caption fields from it rather than displaying the JSON literal.
+          const recovered = parseVariants(result.caption);
+          if (recovered.length > 0 && recovered[0]?.caption) {
+            parsedCaptions = uniqueNonEmpty(
+              recovered.map((v) => String(v?.caption || '').trim()).filter(Boolean)
+            );
+          }
+          if (parsedCaptions.length === 0) {
+            parsedCaptions = parseCaptionFallbackBlocks(result.caption);
+          }
         }
         const fallbackCaptions = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
         const finalCaptions = uniqueNonEmpty([...parsedCaptions, ...fallbackCaptions])

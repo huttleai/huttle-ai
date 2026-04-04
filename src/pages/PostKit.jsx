@@ -42,6 +42,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import { AIDisclaimerFooter, getToastDisclaimer } from '../components/AIDisclaimer';
 import { sanitizeAIOutput } from '../utils/textHelpers';
+import { parseVariants } from '../utils/parseAIResponse';
 import { getPlatform } from '../utils/platformGuidelines';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { saveToVault } from '../services/contentService';
@@ -950,7 +951,17 @@ function KitCaptionPanel({
             result.captionVariants.map((v) => (typeof v?.caption === 'string' ? v.caption : '').trim()).filter(Boolean)
           );
         }
-        if (!parsed.length && result.caption) parsed = parseCaptionFallbackBlocks(result.caption);
+        if (!parsed.length && result.caption) {
+          // Guard: if result.caption is a raw JSON string (service parse failed),
+          // recover caption fields from it rather than displaying the JSON literal.
+          const recovered = parseVariants(result.caption);
+          if (recovered.length > 0 && recovered[0]?.caption) {
+            parsed = uniqueNonEmpty(
+              recovered.map((v) => String(v?.caption || '').trim()).filter(Boolean)
+            );
+          }
+          if (!parsed.length) parsed = parseCaptionFallbackBlocks(result.caption);
+        }
       }
       const fallbacks = buildCaptionFallbacks(input, platform, tone);
       const finalList = uniqueNonEmpty([...parsed, ...fallbacks])

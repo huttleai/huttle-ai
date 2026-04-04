@@ -39,6 +39,7 @@ import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../se
 import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
 import { getHashtagMaxForPlatform, getMinAcceptableHashtagCountForPlatform } from '../data/platformContentRules';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { extractField } from '../utils/parseAIResponse';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { checkAlgorithmAlignment } from '../data/algorithmSignals';
 import {
@@ -792,11 +793,14 @@ export default function FullPostBuilder() {
         return;
       }
       if (res.success) {
-        captionText = String(
-          res.captionVariants?.[0]?.caption
-          || res.caption
-          || ''
-        )
+        // res.captionVariants?.[0]?.caption is the happy path when the service parsed correctly.
+        // extractField guards the fallback: if res.caption is a raw JSON string (service parse
+        // failed and returned data.content verbatim), extract the .caption field from it rather
+        // than rendering the entire JSON array to the user. If res.caption is already plain text
+        // the JSON.parse inside extractField throws and returns the plain text as the fallback.
+        const variantCaption = res.captionVariants?.[0]?.caption ?? '';
+        const fallbackCaption = variantCaption || extractField(res.caption, 'caption', res.caption ?? '');
+        captionText = String(fallbackCaption || '')
           .trim()
           .replace(/^\d+\.\s+/, '');
       }
