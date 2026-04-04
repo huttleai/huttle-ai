@@ -6,6 +6,7 @@ import {
   useMemo,
 } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import {
   Check,
   Copy,
@@ -504,7 +505,9 @@ export default function AlgorithmChecker({
 
     const system = `You are an elite social media strategist specializing in ${nicheLine} content on ${platformLabel}. You analyze content with the precision of someone who has studied thousands of top-performing posts in this niche and knows exactly what the algorithm rewards right now.
 
-When you rewrite or expand copy, it must read like a real human wrote it in one sitting—natural rhythm, contractions where appropriate, and the same rough edges as strong organic posts. Never sound like generic AI or corporate marketing boilerplate.`;
+When you rewrite or expand copy, it must read like a real human wrote it in one sitting—natural rhythm, contractions where appropriate, and the same rough edges as strong organic posts. Never sound like generic AI or corporate marketing boilerplate.
+
+${HUMAN_WRITING_RULES}`;
 
     const userMsg = `Analyze this ${platformLabel} ${ctTitle} content for a ${nicheLine} brand targeting ${
       targetAudienceDisplay || 'a broad engaged audience'

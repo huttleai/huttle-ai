@@ -7,6 +7,7 @@ import { useContent } from '../context/ContentContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
 import { buildContentVaultPayload } from '../utils/contentVault';
@@ -142,7 +143,9 @@ export default function ContentRepurposer() {
 BRAND PROFILE:
 ${brandContext}
 
-IMPORTANT: All repurposed content must match the brand voice and appeal to the target audience. Maintain brand consistency across all formats.`
+IMPORTANT: All repurposed content must match the brand voice and appeal to the target audience. Maintain brand consistency across all formats.
+
+${HUMAN_WRITING_RULES}`
             },
             {
               role: 'user',

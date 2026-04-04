@@ -63,6 +63,7 @@ import {
   getVisualIdeaMocks 
 } from '../data/demo/demoMockData';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -111,7 +112,7 @@ function buildSystemPromptWithBrandBlock(basePrompt, brandData) {
   const brandBlock = buildCreatorBrandBlock(brandData, brandData);
   const fullPrompt = buildSystemPrompt(basePrompt, brandData);
   const parts = [storyContext, brandBlock, fullPrompt].filter(Boolean);
-  return parts.join('\n\n');
+  return parts.join('\n\n') + '\n' + HUMAN_WRITING_RULES;
 }
 
 const AI_POWER_BRAIN_BASE = `You are Huttle AI's AI Power Brain: a cross-platform social growth strategist,
@@ -3281,7 +3282,9 @@ RULES:
 - Heavily penalize phrases like "In today's world", "It's important to", "As a [niche] professional", "In conclusion", "delve into", "Moreover", and "Furthermore"
 - Do not evaluate content quality, grammar, or marketing effectiveness
 
-${buildPromptGuardrails()}`,
+${buildPromptGuardrails()}
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3353,7 +3356,9 @@ export async function autoImprovePhrase(fullContent, originalPhrase, brandData =
         role: 'system',
         content: `You rewrite the full sentence containing the flagged phrase so it sounds more natural, human, and brand-consistent. You may lightly smooth the neighboring sentence if needed, but do not rewrite the whole draft. Pass a clear "make this more human" instruction through your rewrite. Return ONLY the improved full content with the local edit applied — no explanation, no JSON.
 
-${buildPromptBrandSection(brandData)}`,
+${buildPromptBrandSection(brandData)}
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3427,7 +3432,9 @@ RULES:
 - Never set confidence to "High" — always "Low" or "Medium"
 - platformFitScore under 60 must include a better-fitting platform suggestion in platformFitNote
 - Base engagement prediction on content structure, not just topic
-- If trendContext is provided, use it for trendAlignment scoring`,
+- If trendContext is provided, use it for trendAlignment scoring
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3553,7 +3560,9 @@ RULES:
 - All ideas must be original and aligned with the brand voice
 - Never copy or closely paraphrase existing content
 - Use competitor patterns and momentum_signals when provided
-- Rank the content ideas from strongest opportunity to weakest opportunity`,
+- Rank the content ideas from strongest opportunity to weakest opportunity
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',

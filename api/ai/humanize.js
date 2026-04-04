@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 
 const _rawKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
@@ -139,7 +140,9 @@ Output rules:
 - Do not repeat labels
 - Do not explain your changes
 - Do not add headings, bullet points, or markdown unless clearly present in
-  the original`;
+  the original
+
+${HUMAN_WRITING_RULES}`;
 
 const MAX_TEXT_CHARS = 48000;
 

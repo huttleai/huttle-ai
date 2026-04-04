@@ -7,6 +7,7 @@
  */
 
 import { buildBrandContext, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { supabase } from '../config/supabase';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
@@ -182,7 +183,9 @@ You must return a valid JSON response with this exact structure:
     }
   ],
   "reasoning": "overall strategy explanation"
-}`;
+}
+
+${HUMAN_WRITING_RULES}`;
 
   const userPrompt = `Analyze and optimize posting times for this brand:
 

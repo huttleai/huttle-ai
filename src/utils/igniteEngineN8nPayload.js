@@ -6,6 +6,7 @@ import {
   getCaptionVisibleBeforeHint,
 } from '../data/platformContentRules.js';
 import { getBrandStoryContext } from './getBrandStoryContext.js';
+import { HUMAN_WRITING_RULES } from './humanWritingRules.js';
 
 /**
  * Canonical user_type for n8n + downstream: derived from profileType or userBrandType.
@@ -281,6 +282,8 @@ export function buildIgniteN8nPayload(input) {
       hashtag_isolation_rule ||
         'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.'
     ),
+
+    human_writing_rules: HUMAN_WRITING_RULES,
 
     format: normStr(content_type, 'Post'),
     postType: normStr(content_type, 'Post'),

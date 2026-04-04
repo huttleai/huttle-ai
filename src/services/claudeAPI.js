@@ -4,6 +4,7 @@ import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrand
 import { buildUserContextBlock } from '../utils/buildUserContext';
 import { getPlatform } from '../utils/platformGuidelines';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
@@ -81,7 +82,9 @@ Rules:
 Style rule:
 - Follow standard English capitalization.
 - Only capitalize the first word of a sentence and proper nouns (brands, clinic names, product names).
-- Treatment and procedure names such as "microneedling", "botox", "fillers", "chemical peel", and "CO2 laser" should be lowercase when used in the middle of a sentence, unless they are part of an official brand name.`,
+- Treatment and procedure names such as "microneedling", "botox", "fillers", "chemical peel", and "CO2 laser" should be lowercase when used in the middle of a sentence, unless they are part of an official brand name.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -159,7 +162,9 @@ export async function generateFullPostHooksWithClaude(
 
   const fullPostHooksUserCtx = buildUserContextBlock(brandData);
   const system = `${fullPostHooksUserCtx ? `${fullPostHooksUserCtx}\n\n` : ''}${buildCreatorBrandBlock(brandData, brandData) || ''}
-You write scroll-stopping social hooks. Output exactly as the user specifies.`.trim();
+You write scroll-stopping social hooks. Output exactly as the user specifies.
+
+${HUMAN_WRITING_RULES}`.trim();
 
   const hookRequirementInject = String(options.fullPostBuilderHookRequirement ?? '').trim();
 
@@ -243,7 +248,9 @@ export async function humanizeContentWithClaude(content, brandData = null, platf
   const messages = [
     {
       role: 'system',
-      content: `${brandBlock}You are an expert at making AI-generated content sound authentically human.`, // HUTTLE AI: brand context injected
+      content: `${brandBlock}You are an expert at making AI-generated content sound authentically human.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',

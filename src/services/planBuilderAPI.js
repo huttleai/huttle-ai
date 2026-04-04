@@ -18,6 +18,7 @@
  */
 
 import { supabase } from '../config/supabase';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 // N8N Webhook URL for Plan Builder (via serverless proxy to avoid CORS)
@@ -258,6 +259,7 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     conversionGoal: formData.conversionGoal ?? null,
     subNiche: formData.subNiche ?? null,
     followerCount: formData.followerCount ?? null,
+    human_writing_rules: HUMAN_WRITING_RULES,
   };
 
   if (import.meta.env.DEV) {

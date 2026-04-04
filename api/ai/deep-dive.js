@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 
 const PERPLEXITY_API_KEY =
   process.env.PERPLEXITY_API_KEY ||
@@ -187,7 +188,9 @@ function buildMessages({ topic, niche, platform, targetAudience, brandVoice, bra
   return [
     {
       role: 'system',
-      content: `${brandBlock}You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.`, // HUTTLE AI: brand context injected
+      content: `${brandBlock}You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',

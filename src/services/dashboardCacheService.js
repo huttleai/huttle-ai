@@ -3,6 +3,7 @@ import { API_TIMEOUTS } from '../config/apiConfig';
 import { normalizeNiche, buildCacheKey, buildDashboardForYouCacheKey } from '../utils/normalizeNiche';
 import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 // Ops: if Trending Now gets stuck on samples, run scripts/clean-poisoned-cache.sql
 
@@ -614,7 +615,9 @@ async function getAuthHeaders() {
   return headers;
 }
 
-const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.`;
+const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.
+
+${HUMAN_WRITING_RULES}`;
 
 function buildDashboardTrendingUserPrompt(platformLabel, nicheLabel, accountType) {
   return `Find the top 6 trending content topics RIGHT NOW on ${platformLabel} for the ${nicheLabel} niche. Focus on topics with real momentum in the last 7 days based on engagement data, hashtag velocity, and creator activity.
@@ -868,7 +871,9 @@ function buildHashtagMessages(context, platform) {
   return [
     {
       role: 'system',
-      content: 'You are a real-time hashtag and keyword researcher for social media. You have live web access. Only return hashtags or keywords you can verify are real and actively used right now. Never invent hashtags.',
+      content: `You are a real-time hashtag and keyword researcher for social media. You have live web access. Only return hashtags or keywords you can verify are real and actively used right now. Never invent hashtags.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -1478,7 +1483,9 @@ function buildAIInsightsMessages(context) {
   return [
     {
       role: 'system',
-      content: `${brandBlock}You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.`, // HUTTLE AI: brand context injected
+      content: `${brandBlock}You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
@@ -1657,7 +1664,9 @@ export async function fetchDashboardTrendingHashtags({
   const messages = [
     {
       role: 'system',
-      content: 'You are a social media hashtag researcher. Follow instructions exactly. Return only a JSON array, no markdown.',
+      content: `You are a social media hashtag researcher. Follow instructions exactly. Return only a JSON array, no markdown.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -1801,7 +1810,9 @@ export async function fetchDashboardForYouHashtags({
           messages: [
             {
               role: 'system',
-              content: 'You are a social media hashtag strategist. Follow the user instructions exactly. Return only a JSON array, no markdown or commentary.',
+              content: `You are a social media hashtag strategist. Follow the user instructions exactly. Return only a JSON array, no markdown or commentary.
+
+${HUMAN_WRITING_RULES}`,
             },
             {
               role: 'user',

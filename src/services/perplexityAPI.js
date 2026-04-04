@@ -28,6 +28,7 @@ import {
   getHashtagMaxForPlatform,
   getMinAcceptableHashtagCountForPlatform,
 } from '../data/platformContentRules.js';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -340,7 +341,9 @@ Given a niche and platform, you return concise, factual notes about:
 - Their approximate relative popularity and volume tiers (Popular / Medium / Niche)
 - Any clear signs of momentum (growing, stable, declining)
 You never fabricate precise post counts if the data is unclear.
-Prefer relative comparisons ("A is used far more than B") and rough ranges ("tens of thousands of posts") rather than fake precision.`
+Prefer relative comparisons ("A is used far more than B") and rough ranges ("tens of thousands of posts") rather than fake precision.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -399,7 +402,9 @@ Output:
 
 const PERPLEXITY_RESEARCH_ENGINE_SYSTEM = `You are a research engine collecting up-to-date social media data for strategists.
 Your job is to return concise, factual notes about patterns, not long essays.
-Do not fabricate precise metrics when unclear; prefer relative comparisons and ranges.`;
+Do not fabricate precise metrics when unclear; prefer relative comparisons and ranges.
+
+${HUMAN_WRITING_RULES}`;
 
 async function runToolResearch({
   userContent,
@@ -612,7 +617,9 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.'
+        content: `You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -705,7 +712,9 @@ export async function getKeywordsOfTheDay(brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.'
+        content: `You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -751,7 +760,9 @@ export async function analyzeCompetitors(brandData, competitorNames = []) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.'
+        content: `You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -799,7 +810,9 @@ export async function forecastTrends(brandData, timeframe = '7 days') {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.'
+        content: `You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -855,7 +868,9 @@ export async function getAudienceInsights(brandData, demographics = null, platfo
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: 'You are an audience research expert.'
+        content: `You are an audience research expert.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -922,7 +937,9 @@ export async function getTrendingHashtags(keyword, brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.'
+        content: `You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -968,7 +985,9 @@ export async function getCaptionExamples(topic, brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.'
+        content: `You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1015,7 +1034,9 @@ export async function getBestCTAPractices(platform, goal, brandData = null) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.'
+        content: `You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1061,7 +1082,9 @@ export async function getSocialMediaUpdates(months = 12) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
+        content: `You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1169,7 +1192,9 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.'
+        content: `You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1291,7 +1316,9 @@ export async function getTrendContextForPrediction(platform, brandData = null) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend analyst. Provide a brief summary of what content is currently trending on a specific platform in a given niche. Be concise and factual.'
+        content: `You are a trend analyst. Provide a brief summary of what content is currently trending on a specific platform in a given niche. Be concise and factual.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1369,7 +1396,9 @@ export async function generateFullPostHashtagsGrounded(
 
   const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
 You are a social discovery strategist. Use current public information about ${platformLabel} hashtag and search behavior (and cross-platform discovery only where it helps this post).
-Return ONLY valid JSON: a single array of exactly ${hashtagTarget} objects. No markdown, no commentary.`;
+Return ONLY valid JSON: a single array of exactly ${hashtagTarget} objects. No markdown, no commentary.
+
+${HUMAN_WRITING_RULES}`;
 
   const hashtagRulesInject = String(options.fullPostBuilderHashtagRules ?? '').trim();
 

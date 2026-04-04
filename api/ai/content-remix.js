@@ -10,6 +10,7 @@ import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -515,7 +516,9 @@ export default async function handler(req, res) {
         brandVoice,
         platforms: normalizedPlatforms,
       }
-    )}`;
+    )}
+
+${HUMAN_WRITING_RULES}`;
     const userPrompt = buildUserPrompt({
       originalContent: originalContent.trim(),
       requestedMode,

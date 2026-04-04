@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import {
   Zap,
   Sparkles,
@@ -1375,7 +1376,9 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
     body: JSON.stringify({
       temperature: 0.7,
       messages: [
-        { role: 'system', content: 'You are a content strategist. Return only valid JSON.' },
+        { role: 'system', content: `You are a content strategist. Return only valid JSON.
+
+${HUMAN_WRITING_RULES}` },
         { role: 'user', content: prompt }
       ]
     }),
