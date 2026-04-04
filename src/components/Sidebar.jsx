@@ -136,29 +136,29 @@ export default function Sidebar() {
     {
       section: 'MAIN',
       items: [
-        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', color: 'from-blue-500 to-cyan-500' },
-        { name: 'Content Vault', icon: FolderOpen, path: '/dashboard/library', color: 'from-amber-500 to-orange-500' },
+        { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', color: 'from-blue-500 to-cyan-500', preload: () => import('../pages/Dashboard') },
+        { name: 'Content Vault', icon: FolderOpen, path: '/dashboard/library', color: 'from-amber-500 to-orange-500', preload: () => import('../pages/ContentLibrary') },
       ],
     },
     {
       section: 'AI TOOLS',
       items: [
-        { name: 'Full Post Builder', icon: PenLine, path: '/dashboard/full-post-builder', color: 'from-teal-500 to-cyan-500' },
-        { name: 'AI Plan Builder', icon: Wand2, path: '/dashboard/plan-builder', color: 'from-violet-500 to-purple-500' },
-        { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools?tool=caption', color: 'from-yellow-500 to-orange-500' },
-        { name: 'Trend Lab', icon: Beaker, path: '/dashboard/trend-lab', color: 'from-pink-500 to-rose-500' },
-        { name: 'Niche Intel', icon: Search, path: '/dashboard/niche-intel', badge: 'Pro', color: 'from-indigo-500 to-blue-500' },
-        { name: 'Ignite Engine', icon: Flame, path: '/dashboard/ignite-engine', badge: 'Beta', color: 'from-orange-500 to-pink-500' },
-        { name: 'Content Remix Studio', icon: Repeat, path: '/dashboard/content-remix', color: 'from-teal-500 to-cyan-500' },
+        { name: 'Full Post Builder', icon: PenLine, path: '/dashboard/full-post-builder', color: 'from-teal-500 to-cyan-500', preload: () => import('../pages/FullPostBuilder') },
+        { name: 'AI Plan Builder', icon: Wand2, path: '/dashboard/plan-builder', color: 'from-violet-500 to-purple-500', preload: () => import('../pages/AIPlanBuilder') },
+        { name: 'AI Power Tools', icon: Zap, path: '/dashboard/ai-tools?tool=caption', color: 'from-yellow-500 to-orange-500', preload: () => import('../pages/AITools') },
+        { name: 'Trend Lab', icon: Beaker, path: '/dashboard/trend-lab', color: 'from-pink-500 to-rose-500', preload: () => import('../pages/TrendLab') },
+        { name: 'Niche Intel', icon: Search, path: '/dashboard/niche-intel', badge: 'Pro', color: 'from-indigo-500 to-blue-500', preload: () => import('../pages/NicheIntel') },
+        { name: 'Ignite Engine', icon: Flame, path: '/dashboard/ignite-engine', badge: 'Beta', color: 'from-orange-500 to-pink-500', preload: () => import('../pages/IgniteEngine') },
+        { name: 'Content Remix Studio', icon: Repeat, path: '/dashboard/content-remix', color: 'from-teal-500 to-cyan-500', preload: () => import('../pages/ContentRemix') },
       ],
     },
     {
       section: 'ACCOUNT',
       items: [
-        { name: 'Brand Profile', icon: UserCog, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500' },
-        { name: 'Social Updates', icon: Newspaper, path: '/dashboard/social-updates', color: 'from-orange-500 to-red-500' },
-        { name: 'Settings', icon: Settings, path: '/dashboard/settings', color: 'from-gray-500 to-slate-600' },
-        { name: 'Help', icon: HelpCircle, path: '/dashboard/help', color: 'from-blue-400 to-cyan-500' },
+        { name: 'Brand Profile', icon: UserCog, path: '/dashboard/brand-voice', color: 'from-blue-500 to-indigo-500', preload: () => import('../pages/BrandVoice') },
+        { name: 'Social Updates', icon: Newspaper, path: '/dashboard/social-updates', color: 'from-orange-500 to-red-500', preload: () => import('../pages/SocialUpdates') },
+        { name: 'Settings', icon: Settings, path: '/dashboard/settings', color: 'from-gray-500 to-slate-600', preload: () => import('../pages/Settings') },
+        { name: 'Help', icon: HelpCircle, path: '/dashboard/help', color: 'from-blue-400 to-cyan-500', preload: () => import('../pages/Help') },
       ],
     },
   ];
@@ -261,6 +261,7 @@ export default function Sidebar() {
                       }}
                       onMouseEnter={(e) => {
                         setHoveredItem(item.path);
+                        if (item.preload) item.preload();
                         if (isRail) {
                           const label = item.badge ? `${item.name} (${item.badge})` : item.name;
                           showRailTooltip(e, label);
