@@ -3,13 +3,41 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 
-const LandingPage = lazy(() => import('./LandingPage'));
-const DashboardManager = lazy(() => import('./dashboard/Dashboard'));
-const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
-const FoundersPage = lazy(() => import('./pages/FoundersPage'));
-const TermsOfService = lazy(() => import('./pages/TermsOfService'));
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
+const CHUNK_RELOAD_KEY = '_chunk_reload_at';
+const CHUNK_RELOAD_WINDOW_MS = 30_000;
+
+const lazyWithRetry = (factory) =>
+  lazy(() =>
+    factory().catch((err) => {
+      const isChunkError =
+        err?.name === 'ChunkLoadError' ||
+        (err?.message && (
+          err.message.includes('Failed to fetch dynamically imported module') ||
+          err.message.includes('Importing a module script failed') ||
+          err.message.includes('Unable to preload CSS')
+        ));
+
+      if (isChunkError) {
+        const lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+        const recentlyReloaded = Date.now() - lastReload < CHUNK_RELOAD_WINDOW_MS;
+        if (!recentlyReloaded) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+          window.location.reload();
+          return new Promise(() => {});
+        }
+      }
+
+      throw err;
+    })
+  );
+
+const LandingPage = lazyWithRetry(() => import('./LandingPage'));
+const DashboardManager = lazyWithRetry(() => import('./dashboard/Dashboard'));
+const PaymentSuccess = lazyWithRetry(() => import('./pages/PaymentSuccess'));
+const FoundersPage = lazyWithRetry(() => import('./pages/FoundersPage'));
+const TermsOfService = lazyWithRetry(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
+const RefundPolicy = lazyWithRetry(() => import('./pages/RefundPolicy'));
 
 /**
  * Smart login route: redirects authenticated users to /dashboard,
