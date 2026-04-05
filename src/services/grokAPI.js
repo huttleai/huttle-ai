@@ -992,6 +992,7 @@ AI POWER TOOLS — caption quality (non–Full Post Builder):
 
     if (fullPostBuilder) {
       const igTik = ['instagram', 'tiktok'].includes(String(platform).toLowerCase());
+      const isShortCaption = options.captionLength === 'short';
       userMessage += igTik
         ? `
 
@@ -1014,6 +1015,12 @@ IMPORTANT: Do NOT include any hashtags in the caption. Hashtags are handled sepa
 
 Platform caption constraints (Full Post Builder):
 ${captionHints}`;
+      }
+      if (isShortCaption) {
+        userMessage += `
+
+⚠️ STRICT SHORT CAPTION OVERRIDE — this overrides all length guidance above:
+Write EXACTLY 1–2 sentences. Stop writing after the second sentence. The entire caption body must be 2 sentences or fewer — this is a hard limit. Do NOT add bullet points, numbered lists, line breaks between ideas, or extra context. One punchy statement + one brief CTA is the ideal format. If you write more than 2 sentences you have failed this instruction.`;
       }
     }
 
