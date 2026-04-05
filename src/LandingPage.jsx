@@ -1053,6 +1053,58 @@ const PainPointsSection = () => {
 };
 
 // ============================================
+// VIDEO DEMO SECTION
+// ============================================
+
+const VideoDemoSection = () => {
+  return (
+    <section className="py-16 md:py-32 px-4 bg-white border-t border-slate-200/60">
+      <div className="container mx-auto max-w-4xl">
+        <motion.div
+          className="text-center mb-10 md:mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
+        >
+          <span className="inline-block px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-[#01bad2]/5 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4 border border-[#01bad2]/20">
+            See It In Action
+          </span>
+          <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tighter mb-4 leading-tight">
+            From blank page to a full content plan — in under 60 seconds.
+          </h2>
+          <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
+            Watch Huttle AI's AI Plan Builder turn your niche, goals, and platforms into a ready-to-execute content calendar. No guessing. No staring at a blank screen. Just your plan, built.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+            <video
+              src="/videos/plan-builder-demo.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls
+              className="w-full block"
+            />
+          </div>
+          <p className="text-center text-sm text-slate-400 font-medium mt-4">
+            Real product. Real output. No smoke and mirrors.
+          </p>
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
+// ============================================
 // FEATURE SHOWCASE SECTION
 // ============================================
 
@@ -1729,6 +1781,9 @@ export default function LandingPage() {
 
       {/* PAIN POINTS SECTION */}
       <PainPointsSection />
+
+      {/* VIDEO DEMO SECTION */}
+      <VideoDemoSection />
 
       {/* NICHE-SPECIFIC SECTION */}
       <NicheSpecificSection />
