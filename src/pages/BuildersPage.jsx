@@ -4,7 +4,7 @@ import { Check, ArrowRight, LogIn, ChevronDown, AlertCircle } from 'lucide-react
 import { createCheckoutSession, openStripeCheckoutTab } from '../services/stripeAPI';
 import { ParticleNetwork } from '../components/magicui/ParticleNetwork';
 
-const FOUNDERS_DEADLINE = '2026-04-13T23:59:00-05:00';
+const BUILDERS_DEADLINE = '2026-04-22T23:59:00-05:00';
 
 const FEATURES = [
   '800 AI generations/month',
@@ -15,7 +15,7 @@ const FEATURES = [
   'Content Remix Studio',
   'Full Post Builder',
   'All future features included',
-  'Founders pricing locked in forever',
+  'Builders pricing locked in for life',
   'Priority support',
 ];
 
@@ -25,8 +25,8 @@ const FAQS = [
     a: 'Your account is activated immediately. You will receive a welcome email from hello@huttleai.com — check your inbox and your spam folder. Click the link inside to create your password and access your dashboard.',
   },
   {
-    q: 'Is this really locked in forever?',
-    a: 'Yes. Your $199/year rate is guaranteed for as long as your account stays active. We will never charge you more.',
+    q: 'Is this really locked in?',
+    a: 'Yes. Your $249/year rate is guaranteed for as long as your account stays active.',
   },
   {
     q: 'What if I am not satisfied?',
@@ -129,7 +129,7 @@ function Countdown({ targetDate }) {
   }, [targetDate]);
 
   if (!time) {
-    return <p className="text-red-500 font-bold text-lg text-center">This offer has ended</p>;
+    return <p className="text-amber-600 font-bold text-lg text-center">This offer has ended</p>;
   }
 
   const units = [
@@ -160,7 +160,7 @@ function Countdown({ targetDate }) {
   );
 }
 
-function CTAButton({ isLoading, onClick, label = 'Claim My Founders Spot' }) {
+function CTAButton({ isLoading, onClick, label = 'Claim My Builders Spot' }) {
   return (
     <button
       type="button"
@@ -216,7 +216,7 @@ function FAQAccordion({ items }) {
   );
 }
 
-export default function FoundersPage() {
+export default function BuildersPage() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
 
@@ -225,13 +225,13 @@ export default function FoundersPage() {
     setCheckoutError(null);
     setIsCheckingOut(true);
     try {
-      const result = await createCheckoutSession('founder', 'annual', {
+      const result = await createCheckoutSession('builder', 'annual', {
         targetWindow: checkoutTab,
       });
       if (result.demo) {
         checkoutTab?.close();
         setCheckoutError(
-          'Checkout is not available yet. Configure VITE_STRIPE_PRICE_FOUNDER_ANNUAL to enable.'
+          'Checkout is not available yet. Configure VITE_STRIPE_PRICE_BUILDER_ANNUAL to enable.'
         );
         return;
       }
@@ -251,13 +251,13 @@ export default function FoundersPage() {
     }
   };
 
-  const daysAway = getDaysAway(FOUNDERS_DEADLINE);
+  const daysAway = getDaysAway(BUILDERS_DEADLINE);
   const daysLabel =
     daysAway === 0
-      ? 'April 13 is today.'
+      ? 'April 22 is today.'
       : daysAway === 1
-      ? 'April 13 is 1 day away.'
-      : `April 13 is ${daysAway} days away.`;
+      ? 'April 22 is 1 day away.'
+      : `April 22 is ${daysAway} days away.`;
 
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
@@ -309,9 +309,9 @@ export default function FoundersPage() {
 
         <div className="relative max-w-3xl mx-auto text-center">
           {/* Urgency badge */}
-          <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-full text-sm font-semibold mb-8">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
-            Founders Club · Closes April 13
+          <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-full text-sm font-semibold mb-8">
+            <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse flex-shrink-0" />
+            Builders Club · Closes April 22
           </div>
 
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 tracking-tighter leading-[1.05] mb-5 sm:mb-6">
@@ -323,11 +323,11 @@ export default function FoundersPage() {
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mb-10 sm:mb-12 font-medium leading-relaxed">
-            Lock in Huttle AI at $199/year — forever. After April 13th, this price is gone.
+            Lock in Huttle AI at $249/year — for life. After April 22nd, it's monthly only.
           </p>
 
           <div className="mb-10 sm:mb-12 flex justify-center">
-            <Countdown targetDate={FOUNDERS_DEADLINE} />
+            <Countdown targetDate={BUILDERS_DEADLINE} />
           </div>
 
           {checkoutError && (
@@ -368,7 +368,7 @@ export default function FoundersPage() {
       <section className="py-20 sm:py-24 px-4 bg-slate-50/80 border-y border-gray-100">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tighter text-center mb-12">
-            Everything in Pro — Locked In Forever
+            Everything in Pro — Locked In For Life
           </h2>
 
           <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mb-12">
@@ -423,10 +423,10 @@ export default function FoundersPage() {
           <div className="w-12 h-0.5 bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] mx-auto mb-6 rounded-full" />
 
           <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-5">
-            After April 13, This Price Is Gone Forever
+            After April 22, This Price Is Gone
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-10">
-            Founders Club is our founding member tier. Once it closes, the only path in is $249/year as a Builders member. There is no coupon, no workaround, no second chance at $199.
+            Builders Club closes April 22. After that, the only option is $35/month. Lock in $249/year now and never pay more.
           </p>
 
           {checkoutError && (
@@ -465,7 +465,7 @@ export default function FoundersPage() {
             {daysLabel}
           </h2>
           <p className="text-slate-600 font-medium text-base sm:text-lg mb-10">
-            Once it's gone, it's gone. No exceptions.
+            After April 22, monthly only. No exceptions.
           </p>
 
           <div className="flex flex-col items-center gap-3 mb-6">

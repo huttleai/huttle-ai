@@ -1,160 +1,173 @@
-import { useEffect, useRef, useContext } from 'react';
-import { Link } from 'react-router-dom';
-import { CheckCircle, Sparkles, Crown, Mail, ArrowRight } from 'lucide-react';
+import { useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { AuthContext } from '../context/AuthContext';
 import { clearSubscriptionCache } from '../context/SubscriptionContext';
-import confetti from 'canvas-confetti';
+
+function AnimatedCheckmark() {
+  return (
+    <>
+      <style>{`
+        @keyframes ps-circle-draw {
+          from { stroke-dashoffset: 166; opacity: 0; }
+          10% { opacity: 1; }
+          to { stroke-dashoffset: 0; opacity: 1; }
+        }
+        @keyframes ps-check-draw {
+          from { stroke-dashoffset: 50; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes ps-circle-bg {
+          from { opacity: 0; transform: scale(0.8); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .ps-circle-bg {
+          animation: ps-circle-bg 0.35s ease-out 0.1s both;
+        }
+        .ps-circle {
+          stroke-dasharray: 166;
+          stroke-dashoffset: 166;
+          animation: ps-circle-draw 0.65s cubic-bezier(0.65, 0, 0.45, 1) 0.15s both;
+        }
+        .ps-check {
+          stroke-dasharray: 50;
+          stroke-dashoffset: 50;
+          animation: ps-check-draw 0.35s cubic-bezier(0.65, 0, 0.45, 1) 0.8s both;
+        }
+      `}</style>
+      <div className="relative w-20 h-20 mx-auto mb-6">
+        <div className="ps-circle-bg absolute inset-0 rounded-full bg-green-50" />
+        <svg className="w-20 h-20 relative" viewBox="0 0 56 56" fill="none">
+          <circle
+            className="ps-circle"
+            cx="28"
+            cy="28"
+            r="26"
+            stroke="#22c55e"
+            strokeWidth="2.5"
+          />
+          <path
+            className="ps-check"
+            d="M17 28 L25 36 L39 20"
+            stroke="#22c55e"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+    </>
+  );
+}
 
 export default function PaymentSuccess() {
-  const hasConfettiFired = useRef(false);
+  const navigate = useNavigate();
   const authContext = useContext(AuthContext);
 
   useEffect(() => {
     clearSubscriptionCache();
   }, []);
 
-  // Mark payment as confirmed so ProtectedRoute allows access
   useEffect(() => {
     if (authContext?.user?.id) {
       localStorage.setItem(`payment_confirmed_${authContext.user.id}`, 'true');
     }
   }, [authContext?.user?.id]);
 
+  // Prevent escape from dismissing (non-dismissible modal) + fire confetti
   useEffect(() => {
-    // Only fire confetti once and respect reduced motion preferences
-    if (hasConfettiFired.current) return;
-    
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReducedMotion) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') e.preventDefault();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.body.style.overflow = 'hidden';
 
-    hasConfettiFired.current = true;
-
-    // Fire confetti with brand colors
-    const brandColors = ['#01bad2', '#2B8FC7', '#00ACC1', '#4DD0E1', '#ffffff'];
-    
-    // Initial burst
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: brandColors,
-      disableForReducedMotion: true,
-    });
-
-    // Secondary burst for extra celebration
     setTimeout(() => {
       confetti({
-        particleCount: 50,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0 },
-        colors: brandColors,
-        disableForReducedMotion: true,
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#0ea5e9', '#06b6d4', '#10b981', '#ffffff'],
       });
-      confetti({
-        particleCount: 50,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1 },
-        colors: brandColors,
-        disableForReducedMotion: true,
-      });
-    }, 250);
+    }, 300);
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.body.style.overflow = '';
+    };
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-huttle-50/30 to-white flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      {/* Subtle background pattern */}
-      <div className="fixed inset-0 pattern-dots opacity-30 pointer-events-none" />
-      
-      {/* Radial gradient accent */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-radial from-huttle-cyan/10 via-transparent to-transparent" />
+    <div className="min-h-screen relative overflow-hidden">
+
+      {/* ── BRANDED BACKGROUND ── */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50 to-cyan-50/40" />
+      <div
+        className="absolute inset-0 opacity-15"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(43,143,199,0.12) 1px, transparent 0)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+      <div className="absolute -top-1/3 -left-1/4 w-[600px] h-[600px] bg-[#01bad2]/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute -bottom-1/3 -right-1/4 w-[500px] h-[500px] bg-[#2B8FC7]/5 blur-[120px] rounded-full pointer-events-none" />
+
+      {/* Logo centered on background */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <img src="/huttle-logo.png" alt="Huttle AI" className="h-16 sm:h-20 w-auto opacity-10" />
       </div>
 
-      {/* Main Card */}
-      <div className="relative w-full max-w-lg">
-        <div className="card-elevated p-8 sm:p-10 text-center">
-          {/* Success Icon with animated ring */}
-          <div className="relative mx-auto w-20 h-20 mb-6 stagger-item" style={{ animationDelay: '0ms' }}>
-            {/* Animated ring pulse */}
-            <div className="absolute inset-0 rounded-full bg-huttle-cyan/20 animate-ring-expand" />
-            <div className="absolute inset-0 rounded-full bg-huttle-cyan/10 animate-ring-expand" style={{ animationDelay: '0.5s' }} />
-            
-            {/* Icon container */}
-            <div className="relative w-full h-full rounded-full bg-gradient-to-br from-huttle-cyan to-huttle-blue flex items-center justify-center shadow-lg">
-              <CheckCircle className="w-10 h-10 text-white" strokeWidth={2.5} />
-            </div>
-          </div>
+      {/* ── NON-DISMISSIBLE MODAL OVERLAY ── */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === 'Escape' && e.stopPropagation()}
+      >
+        <div
+          className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 sm:p-10 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Top accent bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]" />
 
-          {/* Founding Member Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200/50 mb-4 stagger-item" style={{ animationDelay: '50ms' }}>
-            <Crown className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-xs font-semibold text-amber-700">Founding Member</span>
-          </div>
+          {/* Animated checkmark */}
+          <AnimatedCheckmark />
 
-          {/* Header */}
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 stagger-item" style={{ animationDelay: '100ms' }}>
-            You're in! Welcome to Huttle AI.
+          {/* Heading */}
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-4 leading-tight">
+            You're In. Welcome to Huttle AI.
           </h1>
 
-          {/* Sub-header */}
-          <p className="text-lg text-huttle-cyan font-semibold mb-6 stagger-item" style={{ animationDelay: '150ms' }}>
-            Your Founding Member status is confirmed.
-          </p>
-
-          {/* Body Content */}
-          <div className="space-y-4 mb-8">
-            {/* Receipt notification */}
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100 text-left stagger-item" style={{ animationDelay: '200ms' }}>
-              <div className="w-8 h-8 rounded-lg bg-huttle-cyan/10 flex items-center justify-center flex-shrink-0">
-                <Mail className="w-4 h-4 text-huttle-cyan" />
-              </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                A receipt for your payment has been sent to your email.
-              </p>
-            </div>
-
-            {/* VIP access info */}
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-huttle-50/50 to-huttle-100/30 border border-huttle-200/30 text-left stagger-item" style={{ animationDelay: '250ms' }}>
-              <div className="w-8 h-8 rounded-lg bg-huttle-cyan/10 flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-4 h-4 text-huttle-cyan" />
-              </div>
-              <div className="text-sm text-gray-600 leading-relaxed">
-                <p>
-                  <span className="font-medium text-gray-900">Check your inbox (and spam folder).</span> You're officially on the inside. Look out for your login details and a few VIP sneak peeks we're sharing only with Founding Members before we go live.
-                </p>
-                <p className="text-xs text-gray-500 mt-2 italic">
-                  Tip: If you don't see our email, check your spam or junk folder and mark us as safe.
-                </p>
-              </div>
-            </div>
+          {/* Body */}
+          <div className="text-sm sm:text-base text-slate-600 leading-relaxed space-y-4 mb-8 text-center">
+            <p>We are setting up your account now.</p>
+            <p>
+              You will receive a welcome email from us within the next few minutes. Please check your inbox and your spam folder — it may land there on first send.
+            </p>
+            <p>
+              Click the link inside the email to create your password and access your dashboard.
+            </p>
+            <p>
+              If you do not see the email within 10 minutes, contact us at{' '}
+              <a href="mailto:hello@huttleai.com" className="text-[#01bad2] font-medium">
+                hello@huttleai.com
+              </a>{' '}
+              and we will get you sorted immediately.
+            </p>
           </div>
 
-          {/* CTA Button */}
-          <Link
-            to="/"
-            className="group w-full btn-primary py-4 text-base font-semibold stagger-item inline-flex"
-            style={{ animationDelay: '300ms' }}
+          {/* CTA button */}
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="w-full h-14 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold text-base shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/35 transition-shadow flex items-center justify-center gap-2"
           >
-            Return to Homepage
-            <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
-          </Link>
-
-          {/* Footer note */}
-          <p className="mt-6 text-xs text-gray-400 stagger-item" style={{ animationDelay: '350ms' }}>
-            Questions? Reach out to{' '}
-            <a href="mailto:support@huttleai.com" className="text-huttle-cyan hover:underline">
-              support@huttleai.com
-            </a>
-          </p>
+            Got It — Take Me to Huttle AI
+            <ArrowRight size={18} />
+          </button>
         </div>
-
-        {/* Decorative elements */}
-        <div className="absolute -top-4 -right-4 w-24 h-24 bg-huttle-cyan/5 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-huttle-blue/5 rounded-full blur-3xl pointer-events-none" />
       </div>
     </div>
   );
 }
-
