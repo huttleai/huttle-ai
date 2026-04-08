@@ -248,8 +248,10 @@ function deriveCreatorKind(source = {}) {
   if (raw.includes('solo')) return CREATOR_KIND.solo;
   if (raw.includes('brand')) return CREATOR_KIND.brand;
 
-  const pt = String(source.profileType || '').toLowerCase();
-  if (pt === 'creator') return CREATOR_KIND.solo;
+  // Backward/forward compatibility: profile_type was migrated from creator/business to solo_creator/brand_business.
+  const pt = String(source.profileType || source.profile_type || '').toLowerCase().trim();
+  if (pt === 'creator' || pt === 'solo_creator') return CREATOR_KIND.solo;
+  if (pt === 'brand' || pt === 'business' || pt === 'brand_business') return CREATOR_KIND.brand;
   return CREATOR_KIND.brand;
 }
 
