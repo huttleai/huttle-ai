@@ -17,6 +17,7 @@ const supabase = (supabaseUrl && supabaseServiceKey)
   : null;
 
 const N8N_WEBHOOK_URL = process.env.N8N_PLAN_BUILDER_WEBHOOK_URL || process.env.N8N_PLAN_BUILDER_WEBHOOK || process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
 export default async function handler(req, res) {
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -56,11 +57,13 @@ export default async function handler(req, res) {
     // 2. Get user's subscription tier
     const { data: subscription, error: _subError } = await supabase
       .from('subscriptions')
-      .select('tier')
+      .select('tier, status')
       .eq('user_id', userId)
       .maybeSingle();
 
-    const userTier = subscription?.tier || null;
+    const hasActiveSubscription = Boolean(subscription?.tier)
+      && ACTIVE_SUBSCRIPTION_STATUSES.has(subscription?.status);
+    const userTier = hasActiveSubscription ? subscription.tier : null;
 
     if (!userTier) {
       return res.status(403).json({
