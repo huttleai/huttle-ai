@@ -8,9 +8,9 @@ const FOUNDERS_DEADLINE = '2026-04-13T23:59:00-05:00';
 
 const FEATURES = [
   '800 AI generations/month',
-  'AI Plan Builder (20 plans/month)',
-  'Ignite Engine (60 blueprints/month)',
-  'Niche Intel (10 analyses/month)',
+  'AI Plan Builder',
+  'Ignite Engine',
+  'Niche Intel',
   'Trend Lab — Quick Scan and Deep Dive',
   'Content Remix Studio',
   'Full Post Builder',
@@ -339,7 +339,9 @@ export default function FoundersPage() {
 
           <CTAButton isLoading={isCheckingOut} onClick={handleCheckout} />
 
-          <p className="mt-4 text-xs sm:text-sm text-slate-500">
+          <p className="mt-3 text-sm text-slate-500 font-medium">14-day happiness guarantee</p>
+
+          <p className="mt-2 text-xs sm:text-sm text-slate-500">
             Secure checkout via Stripe · hello@huttleai.com
           </p>
         </div>
@@ -393,6 +395,7 @@ export default function FoundersPage() {
               </div>
             )}
             <CTAButton isLoading={isCheckingOut} onClick={handleCheckout} />
+            <p className="text-sm text-slate-500 font-medium">14-day happiness guarantee</p>
             <p className="text-xs sm:text-sm text-slate-500">Secure checkout via Stripe · hello@huttleai.com</p>
           </div>
         </div>
@@ -436,7 +439,8 @@ export default function FoundersPage() {
             </div>
           )}
           <CTAButton isLoading={isCheckingOut} onClick={handleCheckout} />
-          <p className="mt-4 text-xs sm:text-sm text-slate-500">Secure checkout via Stripe · hello@huttleai.com</p>
+          <p className="mt-3 text-sm text-slate-400 font-medium">14-day happiness guarantee</p>
+          <p className="mt-2 text-xs sm:text-sm text-slate-500">Secure checkout via Stripe · hello@huttleai.com</p>
         </div>
       </section>
 
