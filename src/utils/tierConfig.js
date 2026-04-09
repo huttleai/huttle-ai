@@ -1,4 +1,13 @@
 export const TIER_CONFIG = {
+  free: {
+    displayName: 'Free',
+    badgeLabel: 'Free',
+    badgeColor: 'gray',
+    priceLabel: '$0',
+    description: 'Get started with Huttle AI.',
+    isLocked: false,
+    canChangePlan: true,
+  },
   essentials: {
     displayName: 'Essentials',
     badgeLabel: 'Essentials',
@@ -38,5 +47,5 @@ export const TIER_CONFIG = {
 };
 
 export function getTierConfig(tier) {
-  return TIER_CONFIG[tier] ?? TIER_CONFIG['free'];
+  return TIER_CONFIG[tier] || TIER_CONFIG.free;
 }
