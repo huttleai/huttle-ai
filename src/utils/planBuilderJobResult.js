@@ -184,14 +184,9 @@ function normalizeContentMixFromSummary(mix) {
   if (!mix || typeof mix !== 'object') return {};
   const out = {};
   for (const [k, val] of Object.entries(mix)) {
-    const key = String(k).toLowerCase();
     const n = Number(val);
     if (!Number.isFinite(n) || n < 0) continue;
-    if (key.includes('educat')) out.educational = n;
-    else if (key.includes('entertain')) out.entertaining = n;
-    else if (key.includes('author')) out.authority = n;
-    else if (key.includes('promo')) out.promotional = n;
-    else if (key.includes('personal') || key.includes('bts')) out.personal = n;
+    out[String(k)] = n;
   }
   return out;
 }

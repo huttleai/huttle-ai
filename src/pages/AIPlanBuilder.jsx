@@ -1526,15 +1526,16 @@ export default function AIPlanBuilder() {
           overview?.strategy ||
           'Your content plan';
 
-        const mix = overview.contentMix && typeof overview.contentMix === 'object' ? overview.contentMix : {};
-        const mixEntries = [
-          ['Educational', mix.educational],
-          ['Entertaining', mix.entertaining],
-          ['Authority', mix.authority],
-          ['Promotional', mix.promotional],
-          ['Personal', mix.personal],
-        ].filter(([, val]) => Number(val) > 0);
-        const mixTotal = mixEntries.reduce((s, [, n]) => s + Number(n), 0) || 1;
+        const resolveContentMix = () => {
+          for (const src of [overview.contentMix, plan.summary?.contentMix]) {
+            if (!src) continue;
+            if (typeof src === 'object' && !Array.isArray(src)) return src;
+            if (typeof src === 'string') { try { return JSON.parse(src); } catch { /* skip */ } }
+          }
+          return {};
+        };
+        const mix = resolveContentMix();
+        const mixEntries = Object.entries(mix).filter(([, val]) => Number(val) > 0);
 
         const keyThemes = extractKeyThemesForDisplay(plan, []);
         const optimalMap = extractOptimalTimesMap(plan);
@@ -1688,7 +1689,7 @@ export default function AIPlanBuilder() {
                             <p key={label}>
                               <span>{MIX_DOT_EMOJI[label] || '⚪'}</span>{' '}
                               <span className="font-medium">{label}</span>{' '}
-                              <span className="text-gray-500">{Math.round((Number(val) / mixTotal) * 100)}%</span>
+                              <span className="text-gray-500">{Math.round(Number(val))}%</span>
                             </p>
                           ))}
                         </div>
@@ -1696,7 +1697,7 @@ export default function AIPlanBuilder() {
                           {mixEntries.map(([label, val]) => (
                             <div
                               key={label}
-                              style={{ width: `${Math.round((Number(val) / mixTotal) * 100)}%` }}
+                              style={{ width: `${Math.round(Number(val))}%` }}
                               className={MIX_BAR_COLOR[label] || 'bg-gray-300'}
                             />
                           ))}
