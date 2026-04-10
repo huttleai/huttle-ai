@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Facebook,
-  Globe,
   Instagram,
   Loader2,
   Sparkles,
@@ -105,7 +104,6 @@ const PLATFORM_OPTIONS = [
   { value: 'facebook', label: 'Facebook', icon: Facebook },
   { value: 'x', label: 'X (Twitter)', icon: Twitter },
   { value: 'youtube', label: 'YouTube', icon: Youtube },
-  { value: 'pinterest', label: 'Pinterest', icon: Globe },
 ];
 
 const POSTING_FREQUENCY_OPTIONS = [
@@ -967,18 +965,6 @@ export default function OnboardingQuiz({ onComplete }) {
                 )}
               </div>
 
-              {step === TOTAL_STEPS && (
-                <div className="mt-3 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => handleSubmit({ skipPosting: true })}
-                    disabled={isSaving}
-                    className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Skip for now
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
