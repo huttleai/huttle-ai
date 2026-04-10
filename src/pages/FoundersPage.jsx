@@ -5,6 +5,7 @@ import { createCheckoutSession, openStripeCheckoutTab } from '../services/stripe
 import { ParticleNetwork } from '../components/magicui/ParticleNetwork';
 
 const FOUNDERS_DEADLINE = '2026-04-13T23:59:00-05:00';
+const FOUNDERS_SPOTS_LEFT = 22;
 
 const FEATURES = [
   '800 AI generations/month',
@@ -330,6 +331,16 @@ export default function FoundersPage() {
             <Countdown targetDate={FOUNDERS_DEADLINE} />
           </div>
 
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-red-50 border border-red-200">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+              <span className="text-sm font-bold text-red-700">Only {FOUNDERS_SPOTS_LEFT} Spots Remaining</span>
+            </div>
+          </div>
+
           {checkoutError && (
             <div className="flex items-start gap-2 max-w-md mx-auto mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm text-left">
               <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
@@ -468,9 +479,19 @@ export default function FoundersPage() {
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 tracking-tighter mb-3">
             {daysLabel}
           </h2>
-          <p className="text-slate-600 font-medium text-base sm:text-lg mb-10">
+          <p className="text-slate-600 font-medium text-base sm:text-lg mb-8">
             Once it's gone, it's gone. No exceptions.
           </p>
+
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-red-50 border border-red-200">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+              <span className="text-sm font-bold text-red-700">Only {FOUNDERS_SPOTS_LEFT} Spots Remaining</span>
+            </div>
+          </div>
 
           <div className="flex flex-col items-center gap-3 mb-6">
             {checkoutError && (

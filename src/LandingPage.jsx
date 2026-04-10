@@ -29,7 +29,7 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const FOUNDING_SPOTS_LEFT = 28;
+const FOUNDING_SPOTS_LEFT = 22;
 const SITE_URL = "https://huttleai.com";
 const LOGO_URL = `${SITE_URL}/logo-512.png`;
 
@@ -1418,9 +1418,13 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto mb-4 md:mb-6">
             Join the creators who already have their content strategy handled. We built the platform we wish we had.
           </p>
-          <div className="inline-block p-1.5 rounded-2xl bg-amber-50 border border-amber-100 mb-8 md:mb-12">
-            <p className="px-4 py-2 text-xs md:text-sm text-amber-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining.
+          <div className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-red-50 border border-red-200 mb-8 md:mb-12">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            </span>
+            <p className="text-sm md:text-base text-red-700 font-bold">
+              Only {FOUNDING_SPOTS_LEFT} Founding Spots Remaining
             </p>
           </div>
           
@@ -1547,6 +1551,19 @@ export default function LandingPage() {
                 <p className="mt-5 md:mt-6 text-base md:text-lg lg:text-xl text-slate-500 max-w-md mx-auto md:mx-0 leading-relaxed font-medium">
                   Real-time trends, AI-written scripts, and viral predictions — on demand.
                 </p>
+              </BlurFade>
+
+              {/* SCARCITY BADGE */}
+              <BlurFade delay={0.8}>
+                <div className="flex items-center justify-center md:justify-start mt-5">
+                  <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-red-50 border border-red-200">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    </span>
+                    <span className="text-sm font-bold text-red-700">Only {FOUNDING_SPOTS_LEFT} Founding Spots Remaining</span>
+                  </div>
+                </div>
               </BlurFade>
             </div>
             
