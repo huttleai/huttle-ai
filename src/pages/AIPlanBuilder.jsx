@@ -69,6 +69,78 @@ const FOLLOWER_RANGE_OPTIONS = [
   { value: '50K+', label: 'Large (50K+)' },
 ];
 
+/**
+ * Default content-type distributions keyed by goal.
+ * Sent as `contentMixOverride` when the brand profile has no custom mix set,
+ * so Claude receives explicit guidance about what types of content to plan.
+ * `extraContext` (field #5) is forwarded alongside this so Claude can adapt
+ * when the user mentions a campaign, promo, or other special circumstance.
+ */
+const GOAL_CONTENT_MIX_HINTS = {
+  // ── Business goals ──────────────────────────────────────────────────────
+  'Drive foot traffic': {
+    'Behind the Scenes': 30,
+    'Product Spotlight': 25,
+    'Community & Local': 25,
+    'Social Proof': 20,
+  },
+  'Generate leads': {
+    'Educational': 35,
+    'Problem/Solution': 30,
+    'Social Proof': 25,
+    'Direct Offer': 10,
+  },
+  'Increase sales': {
+    'Product Spotlight': 30,
+    'Social Proof': 25,
+    'Promotional': 25,
+    'Educational': 20,
+  },
+  'Build brand awareness': {
+    'Educational': 30,
+    'Entertaining': 25,
+    'Behind the Scenes': 25,
+    'Community': 20,
+  },
+  'Grow online community': {
+    'Community': 35,
+    'Entertaining': 25,
+    'Educational': 25,
+    'Behind the Scenes': 15,
+  },
+  // ── Creator goals ────────────────────────────────────────────────────────
+  'Grow followers': {
+    'Educational': 35,
+    'Entertaining': 30,
+    'Behind the Scenes': 20,
+    'Personal': 15,
+  },
+  'Build niche authority': {
+    'Educational': 40,
+    'Authority': 30,
+    'Behind the Scenes': 15,
+    'Social Proof': 15,
+  },
+  'Land brand deals': {
+    'Authority': 30,
+    'Lifestyle': 25,
+    'Educational': 25,
+    'Social Proof': 20,
+  },
+  'Increase engagement': {
+    'Entertaining': 35,
+    'Personal': 25,
+    'Educational': 25,
+    'Behind the Scenes': 15,
+  },
+  'Grow to monetization': {
+    'Educational': 30,
+    'Social Proof': 25,
+    'Promotional': 25,
+    'Personal': 20,
+  },
+};
+
 const TONE_CHIP_LABELS = {
   bold: 'Bold',
   raw_authentic: 'Raw & Authentic',
@@ -327,6 +399,27 @@ const MIX_BAR_COLOR = {
   Promotional: 'bg-rose-400',
   Personal: 'bg-green-400',
 };
+
+const MIX_FALLBACK_EMOJIS = ['🔵', '🟡', '🟣', '🔴', '🟢', '🔶', '🟠', '🩵', '🩷', '⬜'];
+const MIX_FALLBACK_COLORS = [
+  'bg-blue-400', 'bg-amber-400', 'bg-purple-400', 'bg-rose-400', 'bg-green-400',
+  'bg-teal-400', 'bg-orange-400', 'bg-indigo-400', 'bg-pink-400', 'bg-cyan-400',
+];
+
+const MIX_LABEL_LOWERCASE = new Set(['and', 'or', 'the', 'of', 'in', 'a', 'an', 'to', 'for', 'with', 'at', 'by', 'from']);
+
+function formatContentMixLabel(raw) {
+  return String(raw)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(' ')
+    .map((word, i) => {
+      const lower = word.toLowerCase();
+      if (i > 0 && MIX_LABEL_LOWERCASE.has(lower)) return lower;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
 
 function PlanBuilderPostCard({ post, dayNum, dayLabel, userId, showToast }) {
   const [captionExpanded, setCaptionExpanded] = useState(false);
@@ -1081,7 +1174,7 @@ export default function AIPlanBuilder() {
         isLocalBusiness: brandProfile?.isLocalBusiness || false,
         city: brandProfile?.city || null,
         audienceLocationType: brandProfile?.audienceLocationType || 'local',
-        contentMixOverride: brandProfile?.contentMix || null,
+        contentMixOverride: brandProfile?.contentMix || GOAL_CONTENT_MIX_HINTS[selectedGoal] || null,
         audiencePainPoint: brandProfile?.audiencePainPoint || null,
         audienceActionTrigger: brandProfile?.audienceActionTrigger || null,
         toneChips: brandProfile?.toneChips || [],
@@ -1685,22 +1778,30 @@ export default function AIPlanBuilder() {
                           Content mix
                         </p>
                         <div className="space-y-1 text-xs text-gray-800">
-                          {mixEntries.map(([label, val]) => (
-                            <p key={label}>
-                              <span>{MIX_DOT_EMOJI[label] || '⚪'}</span>{' '}
-                              <span className="font-medium">{label}</span>{' '}
-                              <span className="text-gray-500">{Math.round(Number(val))}%</span>
-                            </p>
-                          ))}
+                          {mixEntries.map(([label, val], idx) => {
+                            const displayLabel = formatContentMixLabel(label);
+                            const emoji = MIX_DOT_EMOJI[displayLabel] ?? MIX_DOT_EMOJI[label] ?? MIX_FALLBACK_EMOJIS[idx % MIX_FALLBACK_EMOJIS.length];
+                            return (
+                              <p key={label}>
+                                <span>{emoji}</span>{' '}
+                                <span className="font-medium">{displayLabel}</span>{' '}
+                                <span className="text-gray-500">{Math.round(Number(val))}%</span>
+                              </p>
+                            );
+                          })}
                         </div>
                         <div className="flex rounded-full overflow-hidden h-2 w-full mt-3">
-                          {mixEntries.map(([label, val]) => (
-                            <div
-                              key={label}
-                              style={{ width: `${Math.round(Number(val))}%` }}
-                              className={MIX_BAR_COLOR[label] || 'bg-gray-300'}
-                            />
-                          ))}
+                          {mixEntries.map(([label, val], idx) => {
+                            const displayLabel = formatContentMixLabel(label);
+                            const barColor = MIX_BAR_COLOR[displayLabel] ?? MIX_BAR_COLOR[label] ?? MIX_FALLBACK_COLORS[idx % MIX_FALLBACK_COLORS.length];
+                            return (
+                              <div
+                                key={label}
+                                style={{ width: `${Math.round(Number(val))}%` }}
+                                className={barColor}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     )}
