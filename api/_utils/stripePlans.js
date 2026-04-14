@@ -1,8 +1,6 @@
 const LAUNCH_PRICE_IDS = [
   process.env.STRIPE_PRICE_FOUNDER_ANNUAL,
   process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL,
-  process.env.STRIPE_PRICE_BUILDERS_ANNUAL,
-  process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL,
   process.env.STRIPE_PRICE_BUILDER_ANNUAL,
   process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL,
 ].filter(Boolean);
@@ -44,8 +42,6 @@ export function getPlanFromPriceId(priceId) {
     [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
     [process.env.STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
     [process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
-    [process.env.STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
-    [process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
     [process.env.STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
     [process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
   };
@@ -73,8 +69,6 @@ export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
       annual:
         process.env.STRIPE_PRICE_BUILDER_ANNUAL ||
         process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL ||
-        process.env.STRIPE_PRICE_BUILDERS_ANNUAL ||
-        process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL ||
         null,
     },
   };

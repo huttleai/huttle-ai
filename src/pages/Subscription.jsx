@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Award, BadgeCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
-import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode } from '../services/stripeAPI';
+import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode, openStripeCheckoutTab } from '../services/stripeAPI';
 import { useSubscription, clearSubscriptionCache } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -216,10 +216,11 @@ export default function Subscription() {
   const isResolvingSubscription = subscriptionLoading && !subscription && !isSubscriptionDegraded;
 
   const handleCheckout = async (planId, billingCycle = 'annual') => {
+    const checkoutTab = openStripeCheckoutTab();
     setLoading(planId);
 
     try {
-      const result = await createCheckoutSession(planId, billingCycle);
+      const result = await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
 
       if (result.demo) {
         if (setDemoTier) {

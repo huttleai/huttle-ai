@@ -184,7 +184,7 @@ export const SUBSCRIPTION_PLANS = {
     monthlyPrice: null,
     annualPrice: 249,
     priceId: null,
-    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL || '',
+    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || '',
     features: {
       aiGenerations: 800,
       storageGB: 25,

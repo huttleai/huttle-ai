@@ -96,6 +96,7 @@ export default async function handler(req, res) {
     }
 
     const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
+    const isAnnualBilling = billingCycle === 'annual';
     const baseMetadata = {
       planId,
       billingCycle,
@@ -105,16 +106,16 @@ export default async function handler(req, res) {
 
     const subscriptionData = {
       metadata: baseMetadata,
-      ...(isLaunchPricingPlan
-        ? {}
-        : {
+      ...(!isLaunchPricingPlan && !isAnnualBilling
+        ? {
             trial_period_days: 7,
             trial_settings: {
               end_behavior: {
                 missing_payment_method: 'cancel',
               },
             },
-          }),
+          }
+        : {}),
     };
 
     // Create checkout session options
@@ -147,7 +148,9 @@ export default async function handler(req, res) {
             ? planId === 'founder'
               ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
               : 'Welcome to Builders Club. Your membership will be activated immediately after payment.'
-            : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',
+            : isAnnualBilling
+              ? 'Your annual subscription will begin immediately after payment.'
+              : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',
         },
       },
     };

@@ -1,11 +1,24 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, useInView, useScroll, useTransform } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowRight, LogIn } from 'lucide-react';
+import { createCheckoutSession, openStripeCheckoutTab } from '../../services/stripeAPI';
 
-export const StickyNav = ({ onOpenFoundersModal }) => {
+export const StickyNav = () => {
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleBuilderCheckout = async () => {
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutLoading(true);
+    try {
+      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   return (
     <motion.nav
       initial={{ opacity: 0, y: -20 }}
@@ -40,12 +53,13 @@ export const StickyNav = ({ onOpenFoundersModal }) => {
             <span className="hidden md:inline">Login</span>
           </Link>
           <button 
-            onClick={onOpenFoundersModal}
-            className="bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-full px-3.5 md:px-4 py-1.5 text-[11px] md:text-[13px] font-semibold transition-colors shadow-[0_0_24px_#01BAD220] flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap"
+            onClick={handleBuilderCheckout}
+            disabled={checkoutLoading}
+            className="bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-full px-3.5 md:px-4 py-1.5 text-[11px] md:text-[13px] font-semibold transition-colors shadow-[0_0_24px_#01BAD220] flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span className="md:hidden">Claim Spot</span>
-            <span className="hidden md:inline">Claim Founders Spot</span>
-            <ArrowRight size={14} className="hidden md:block" />
+            <span className="md:hidden">{checkoutLoading ? '…' : 'Join Builders'}</span>
+            <span className="hidden md:inline">{checkoutLoading ? 'Loading…' : 'Join Builders Club'}</span>
+            {!checkoutLoading && <ArrowRight size={14} className="hidden md:block" />}
           </button>
         </div>
       </div>

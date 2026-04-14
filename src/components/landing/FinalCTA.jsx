@@ -1,14 +1,24 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
+import { createCheckoutSession, openStripeCheckoutTab } from '../../services/stripeAPI';
 
-const FOUNDING_SPOTS_LEFT = 28;
-
-export const FinalCTA = ({ onOpenFoundersModal }) => {
+export const FinalCTA = () => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleBuilderCheckout = async () => {
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutLoading(true);
+    try {
+      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <section className="py-24 md:py-32 px-6 md:px-8 lg:px-12 relative overflow-hidden bg-[#0a0f14]">
@@ -45,18 +55,14 @@ export const FinalCTA = ({ onOpenFoundersModal }) => {
             Join the creators who already have their content strategy handled. We built the platform we wish we had.
           </p>
           
-          <div className="inline-block p-1.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md mb-10">
-            <p className="px-5 py-2.5 text-sm font-bold text-white tracking-wide">
-              Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining. Price increases March 15.
-            </p>
-          </div>
-          
           <button 
-            onClick={onOpenFoundersModal}
-            className="group flex items-center justify-center gap-2 bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-xl px-10 py-5 text-lg font-bold shadow-[0_0_24px_#01BAD220] transition-all hover:scale-105 active:scale-95"
+            onClick={handleBuilderCheckout}
+            disabled={checkoutLoading}
+            className="group flex items-center justify-center gap-2 bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-xl px-10 py-5 text-lg font-bold shadow-[0_0_24px_#01BAD220] transition-all hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Join the Founders Club Today
-            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            {checkoutLoading ? 'Loading…' : (
+              <>Join Builders Club<ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" /></>
+            )}
           </button>
           
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-10 text-sm font-medium text-slate-300">

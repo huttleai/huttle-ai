@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
@@ -35,28 +35,40 @@ const LOGO_URL = `${SITE_URL}/logo-512.png`;
 
 const FAQ_ITEMS = [
   {
-    question: "What do Founding Members get?",
-    answer: "Full Pro access at $199/yr locked forever. All our AI tools, all features — Ignite Engine, AI Plan Builder, Content Remix Studio, Content Vault, Trend Lab, AI Power Tools, and more. Cancel anytime with no questions asked."
+    question: "What happened to Founders Club?",
+    answer: "Founders Club was our launch offer and it's now closed. If you missed it, Builders Club is our current annual plan — it includes the same locked-in pricing philosophy and a 14-day happiness guarantee. Monthly plans are also now available starting at $15/month."
   },
   {
-    question: "What happens when the Founding Member offer ends?",
-    answer: "After the launch window closes, public pricing shifts to Essentials at $15/month (or $153/year) and Pro at $39/month (or $397.80/year). Founders and Builders keep their launch pricing while their subscriptions stay active."
+    question: "What is Builders Club?",
+    answer: "Builders Club is Huttle AI's annual membership at $249/year ($20.75/month equivalent). Your rate is locked in forever — it never goes up. It includes all Pro features, 800 AI generations/month, priority support, and a 14-day happiness guarantee. Builders Club closes April 22, 2026."
   },
   {
-    question: "Can we cancel anytime?",
-    answer: "Absolutely. Cancel from your account settings whenever you want. No hoops to jump through, no hidden fees, no awkward phone calls. Your access continues until the end of your billing period."
+    question: "Do I need a credit card to start the 7-day trial?",
+    answer: "Yes. A credit card is required to start the Essentials or Pro trial. You will not be charged anything if you cancel before the 7-day trial ends."
+  },
+  {
+    question: "When will I be charged?",
+    answer: "If you continue after your 7-day trial, your plan automatically begins billing at your selected monthly rate. We show the billing date clearly at checkout before you start."
+  },
+  {
+    question: "Can I cancel anytime?",
+    answer: "Yes. Monthly plans can be canceled at any time. Cancel before day 7 and you won't be charged. Cancel after billing starts and your access continues through the end of that billing period."
+  },
+  {
+    question: "What's the difference between Builders Club and the monthly plans?",
+    answer: "Monthly plans (Essentials at $15/mo, Pro at $39/mo) are the low-commitment way to start — try Huttle AI for 7 days before your card is billed. Builders Club is the annual option for users who are ready to commit. It locks in a lower rate forever and includes a 14-day happiness guarantee instead of a trial."
   },
   {
     question: "Is there a money-back guarantee?",
-    answer: "Yes. Founders Club and Builders Club include a 14-day happiness guarantee. If Huttle AI is not right for you, email support@huttleai.com within 14 days for a full refund."
+    answer: "Builders Club includes a 14-day happiness guarantee — if Huttle AI isn't the right fit, we'll refund you in full, no questions asked. Monthly plans are protected by the 7-day trial: cancel before day 7 and you are never charged."
   },
   {
     question: "What platforms does Huttle AI support?",
-    answer: "TikTok, Instagram, YouTube, X (Twitter), and Facebook. All our AI tools generate platform-optimized content — from scripts and captions to hashtags and posting times — tailored to each platform's algorithm."
+    answer: "Huttle AI helps you plan and create content for Instagram, TikTok, X (Twitter), Facebook, and YouTube (LinkedIn coming soon). You choose your active platforms when you set up your personalized Brand Profile."
   },
   {
-    question: "Is your payment secure?",
-    answer: "100%. All payments are processed through Stripe, the same infrastructure trusted by Amazon, Google, and Shopify. We never store your card information on our servers."
+    question: "Is my payment secure?",
+    answer: "Yes. All payments are processed securely through Stripe. We never store your full card details on our servers."
   },
 ];
 
@@ -486,7 +498,6 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Founders Club</h3>
-                <p className="text-sm font-medium text-amber-600">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</p>
               </div>
             </div>
 
@@ -1178,14 +1189,47 @@ const FAQSectionComponent = () => {
 // ============================================
 
 const PricingSection = ({ onOpenFoundersModal }) => {
+  const [isAnnual, setIsAnnual] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(null);
+
+  const essentialsMonthly = 15;
+  const proMonthly = 39;
+  const discount = 0.85;
+
+  const essentialsPrice = isAnnual
+    ? (essentialsMonthly * discount).toFixed(2)
+    : essentialsMonthly;
+  const proPrice = isAnnual
+    ? (proMonthly * discount).toFixed(2)
+    : proMonthly;
+
+  const handleCheckout = async (planId) => {
+    const billingCycle = planId === 'builder' ? 'annual' : isAnnual ? 'annual' : 'monthly';
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutLoading(planId);
+    try {
+      await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
+  // Dynamic countdown: closes April 22, 2026
+  const buildersClubDaysLeft = useMemo(() => {
+    const closeDate = new Date('2026-04-22T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.ceil((closeDate - today) / (1000 * 60 * 60 * 24));
+  }, []);
+
   return (
     <section id="pricing" className="py-16 md:py-32 px-4 bg-slate-50 relative overflow-hidden">
       <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/5 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto max-w-6xl relative z-10">
-        <motion.div 
-          className="text-center mb-10 md:mb-16"
+        <motion.div
+          className="text-center mb-10 md:mb-12"
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
@@ -1197,137 +1241,77 @@ const PricingSection = ({ onOpenFoundersModal }) => {
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
             Start creating. Pick your path.
           </h2>
-          <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto">
-            Huttle AI is currently paid-only. Founders Club is open now; Builders Club opens April 7. Both include full Pro feature access during the launch window.
+          <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto mb-8">
+            Every plan includes full access to all AI tools. The only question is how you want to pay.
           </p>
+
+          {/* Billing Toggle */}
+          <div className="inline-flex items-center gap-3 bg-white border border-slate-200 rounded-full px-2 py-1.5 shadow-sm">
+            <button
+              onClick={() => setIsAnnual(false)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                !isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setIsAnnual(true)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Annually
+              <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                Save 15%
+              </span>
+            </button>
+          </div>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-center max-w-5xl mx-auto">
 
-          {/* CARD 1: FOUNDING MEMBER (Primary) */}
-          <motion.div 
-            className="relative md:scale-105 md:z-10 order-1 md:order-2"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border-2 border-[#01bad2] shadow-2xl overflow-hidden">
-              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-r from-[#01bad2] to-[#2B8FC7] opacity-[0.03] blur-lg -z-10" />
-              
-              <div 
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-amber-200 badge-pulse"
-              >
-                🔥 BEST VALUE
-              </div>
-
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Founders Club</h3>
-              
-              <div className="mb-1">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl md:text-5xl font-black text-slate-900">
-                    $<NumberTicker value={199} startValue={398} duration={0.8} triggerOnView={true} />
-                  </span>
-                  <span className="text-sm md:text-base text-slate-500">/year</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">$16.58/mo equivalent</p>
-              </div>
-
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm text-slate-400 line-through">$397.80/yr</span>
-                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 50%</span>
-              </div>
-
-              <p className="text-sm text-slate-600 mb-4 font-medium">Lock in the lowest price we'll ever offer.</p>
-              
-              <div className="flex items-center gap-2 mb-5 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                <Users size={14} className="text-amber-600 flex-shrink-0" />
-                <span className="text-xs font-bold text-amber-600">Only {FOUNDING_SPOTS_LEFT} Founding Member spots remaining</span>
-              </div>
-
-              <ul className="space-y-2.5 mb-6">
-                {[
-                  'All Pro features forever',
-                  'Rate locked — never increases',
-                  '800 AI generations/month',
-                  'Ignite Engine & AI Plan Builder',
-                  'Content Remix Studio & Trend Lab',
-                  'AI Power Tools (captions, hooks, CTAs)',
-                  'Content Vault for all your creations',
-                ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
-                    <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-
-              <BorderBeamButton 
-                onClick={onOpenFoundersModal}
-                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20"
-                beamDuration={6}
-              >
-                Join the Founders Club
-                <ArrowRight size={16} className="ml-2" />
-              </BorderBeamButton>
-
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[11px] md:text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1.5">
-                  <LockKeyhole size={12} className="text-slate-400" />
-                  Secured by Stripe
-                </span>
-                <span className="hidden md:inline text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck size={12} className="text-slate-400" />
-                  14-day money-back guarantee
-                </span>
-                <span className="hidden md:inline text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Undo2 size={12} className="text-slate-400" />
-                  Cancel anytime
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* CARD 2: BUILDERS CLUB */}
-          <motion.div 
-            className="order-2 md:order-1"
+          {/* CARD 1: ESSENTIALS */}
+          <motion.div
+            className="order-2 md:order-1 h-full"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] opacity-90">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                UP NEXT
+            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
+              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
+                START HERE
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
-              
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Essentials</h3>
+
               <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-slate-900">$249</span>
-                  <span className="text-sm text-slate-500">/year</span>
+                  <span className="text-3xl md:text-4xl font-black text-slate-900">${essentialsPrice}</span>
+                  <span className="text-sm text-slate-500">/month</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">$20.75/mo equivalent</p>
+                {isAnnual && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Billed as ${(essentialsMonthly * discount * 12).toFixed(0)}/yr
+                  </p>
+                )}
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={12} className="text-green-600 flex-shrink-0" />
+                  <span>7-day trial</span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-sm text-slate-400 line-through">$397.80/yr</span>
-                <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">Save 37%</span>
-              </div>
+              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">Everything you need to hit the ground running.</p>
 
-              <p className="text-sm text-slate-600 mb-2">Launch pricing for creators who want Pro access at a lower annual rate.</p>
-              <p className="text-xs text-slate-500 mb-5 font-medium">Paid-only launch plan with full Pro feature access</p>
-
-              <ul className="space-y-2.5 mb-6">
+              <ul className="space-y-2.5 mb-6 flex-1">
                 {[
-                  'All Pro features forever',
-                  'Rate locked — never increases',
-                  '800 AI generations/month',
-                  'Everything in Founding Member',
-                  'Time-limited, not spot-limited',
+                  '200 AI generations/month',
+                  'All AI Power Tools',
+                  'AI Plan Builder',
+                  'Content Remix Studio',
+                  'Ignite Engine',
+                  '5GB Content Vault',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
@@ -1337,41 +1321,124 @@ const PricingSection = ({ onOpenFoundersModal }) => {
               </ul>
 
               <button
-                disabled
-                className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed"
+                onClick={() => handleCheckout('essentials')}
+                disabled={!!checkoutLoading}
+                className="w-full h-12 rounded-xl border-2 border-slate-200 text-slate-700 bg-transparent hover:border-slate-400 hover:text-slate-900 font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                After Founders Club Sells Out
+                {checkoutLoading === 'essentials' ? 'Loading…' : 'Start 7-Day Trial'}
               </button>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel before day 7 to avoid charges</p>
             </div>
           </motion.div>
 
-          {/* CARD 3: FUTURE PUBLIC PRICING */}
-          <motion.div 
-            className="order-3"
+          {/* CARD 2: PRO (HIGHLIGHTED - center) */}
+          <motion.div
+            className="relative md:scale-105 md:z-10 order-1 md:order-2 h-full"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border-2 border-[#01bad2] shadow-2xl overflow-hidden h-full flex flex-col">
+              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 opacity-50 -z-10" />
+
+              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-[#01bad2]/20">
+                <Zap size={11} className="fill-[#01bad2]" />
+                MOST POPULAR
+              </div>
+
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
+
+              <div className="mb-1">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl md:text-5xl font-black text-slate-900">${proPrice}</span>
+                  <span className="text-sm md:text-base text-slate-500">/month</span>
+                </div>
+                {isAnnual && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Billed as ${(proMonthly * discount * 12).toFixed(0)}/yr
+                  </p>
+                )}
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={12} className="text-green-600 flex-shrink-0" />
+                  <span>7-day trial</span>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">The complete toolkit for serious creators.</p>
+
+              <ul className="space-y-2.5 mb-6 flex-1">
+                {[
+                  '600 AI generations/month',
+                  'Everything in Essentials',
+                  '14-Day AI Plan Builder',
+                  'Full Trend Lab access',
+                  'Niche Intel',
+                  '25GB Content Vault',
+                ].map((feat, j) => (
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600 font-medium">
+                    <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
+                    {feat}
+                  </li>
+                ))}
+              </ul>
+
+              <BorderBeamButton
+                onClick={() => handleCheckout('pro')}
+                disabled={!!checkoutLoading}
+                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                beamDuration={6}
+              >
+                {checkoutLoading === 'pro' ? 'Loading…' : (
+                  <>Start 7-Day Trial<ArrowRight size={16} className="ml-2" /></>
+                )}
+              </BorderBeamButton>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel before day 7 to avoid charges</p>
+            </div>
+          </motion.div>
+
+          {/* CARD 3: BUILDERS CLUB */}
+          <motion.div
+            className="order-3 h-full"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                FULL PRICE
+            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
+              {buildersClubDaysLeft > 0 ? (
+                <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-red-200">
+                  ⏳ CLOSES IN {buildersClubDaysLeft} {buildersClubDaysLeft === 1 ? 'DAY' : 'DAYS'}
+                </div>
+              ) : (
+                <div className="h-7 mb-4" />
+              )}
+
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
+
+              <div className="mb-1">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl md:text-4xl font-black text-slate-900">$249</span>
+                  <span className="text-sm text-slate-500">/year</span>
+                </div>
+                <p className="text-xs font-semibold text-[#01bad2] mt-1">$20.75/mo equivalent</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">vs $39/mo on Pro — locked in forever</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={12} className="text-green-600 flex-shrink-0" />
+                  <span>14-day happiness guarantee</span>
+                </div>
               </div>
 
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Public Pricing</h3>
-              <p className="text-sm text-slate-500 mb-4">What everyone else pays after the launch window closes.</p>
+              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">Annual pass. Your rate never goes up.</p>
 
-              <div className="mb-5">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Pro</p>
-                <div className="text-2xl md:text-3xl font-black text-slate-900">$397.80<span className="text-sm font-medium text-slate-500">/year</span></div>
-              </div>
-
-              <ul className="space-y-2.5 mb-6">
+              <ul className="space-y-2.5 mb-6 flex-1">
                 {[
-                  '600 AI generations/month',
-                  'Founders save $198.80/yr vs this price',
-                  'Builders save $148.80/yr vs this price',
-                  'Available after the launch window closes',
+                  '800 AI generations/month',
+                  'All Pro features included',
+                  'Locked-in annual rate',
+                  'Early access to new features',
+                  'Priority support',
+                  'Content Vault',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
@@ -1380,13 +1447,23 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                 ))}
               </ul>
 
-              <button disabled className="w-full h-12 rounded-xl border border-slate-200 text-slate-400 bg-slate-50 font-medium text-sm cursor-not-allowed">
-                Price After Launch
+              <button
+                onClick={() => handleCheckout('builder')}
+                disabled={!!checkoutLoading}
+                className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {checkoutLoading === 'builder' ? 'Loading…' : 'Join Builders Club'}
               </button>
+              <p className="text-center text-[10px] text-slate-400 mt-3">$249/year — not a one-time payment</p>
             </div>
           </motion.div>
+
         </div>
 
+        {/* Section footnote */}
+        <p className="text-center text-[11px] text-slate-400 mt-10 max-w-xl mx-auto">
+          All plans require a credit card. You will not be charged during your 7-day trial. Builders Club is billed annually at $249/year.
+        </p>
       </div>
     </section>
   );
@@ -1396,7 +1473,19 @@ const PricingSection = ({ onOpenFoundersModal }) => {
 // FINAL CTA SECTION
 // ============================================
 
-const FinalCTASection = ({ onOpenFoundersModal }) => {
+const FinalCTASection = () => {
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleBuilderCheckout = async () => {
+    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutLoading(true);
+    try {
+      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   return (
     <section className="py-16 md:py-32 px-4 bg-white relative overflow-hidden border-t border-slate-200/60">
       <div className="absolute -top-1/3 -left-1/4 w-[600px] h-[600px] bg-[#01bad2]/5 blur-[120px] rounded-full pointer-events-none" />
@@ -1418,24 +1507,17 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
           <p className="text-base md:text-lg lg:text-xl text-slate-500 max-w-xl md:max-w-2xl mx-auto mb-4 md:mb-6">
             Join the creators who already have their content strategy handled. We built the platform we wish we had.
           </p>
-          <div className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-red-50 border border-red-200 mb-8 md:mb-12">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-            </span>
-            <p className="text-sm md:text-base text-red-700 font-bold">
-              Only {FOUNDING_SPOTS_LEFT} Founding Spots Remaining
-            </p>
-          </div>
           
           <div>
             <BorderBeamButton 
-              onClick={onOpenFoundersModal}
-              className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow"
+              onClick={handleBuilderCheckout}
+              disabled={checkoutLoading}
+              className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
               beamDuration={6}
             >
-              Join the Founders Club Today
-              <ArrowRight size={18} className="ml-2" />
+              {checkoutLoading ? 'Loading…' : (
+                <>Join Builders Club<ArrowRight size={18} className="ml-2" /></>
+              )}
             </BorderBeamButton>
           </div>
           
@@ -1456,6 +1538,17 @@ const FinalCTASection = ({ onOpenFoundersModal }) => {
 export default function LandingPage() {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
+  const [navCheckoutLoading, setNavCheckoutLoading] = useState(false);
+
+  const handleNavBuilderCheckout = async () => {
+    const checkoutTab = openStripeCheckoutTab();
+    setNavCheckoutLoading(true);
+    try {
+      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+    } finally {
+      setNavCheckoutLoading(false);
+    }
+  };
 
   useEffect(() => {
     document.title = "Huttle AI | The Ultimate AI Creative Director";
@@ -1498,13 +1591,15 @@ export default function LandingPage() {
             Features
           </button>
           <BorderBeamButton 
-            onClick={() => setIsFoundersModalOpen(true)} 
-            className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white shadow-md shadow-[#01bad2]/20"
+            onClick={handleNavBuilderCheckout}
+            disabled={navCheckoutLoading}
+            className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white shadow-md shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
             beamSize={100}
             beamDuration={4}
           >
-            Claim Founders Spot
-            <ArrowRight size={14} className="ml-1" />
+            {navCheckoutLoading ? 'Loading…' : (
+              <>Join Builders Club<ArrowRight size={14} className="ml-1" /></>
+            )}
           </BorderBeamButton>
           <Link
             to="/login"
@@ -1553,18 +1648,6 @@ export default function LandingPage() {
                 </p>
               </BlurFade>
 
-              {/* SCARCITY BADGE */}
-              <BlurFade delay={0.8}>
-                <div className="flex items-center justify-center md:justify-start mt-5">
-                  <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-red-50 border border-red-200">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                    </span>
-                    <span className="text-sm font-bold text-red-700">Only {FOUNDING_SPOTS_LEFT} Founding Spots Remaining</span>
-                  </div>
-                </div>
-              </BlurFade>
             </div>
             
             {/* RIGHT COLUMN - iPhone Mockup with Floating Cards */}
@@ -1821,9 +1904,7 @@ export default function LandingPage() {
       <FAQSectionComponent />
 
       {/* FINAL CTA SECTION */}
-      <FinalCTASection 
-        onOpenFoundersModal={() => setIsFoundersModalOpen(true)}
-      />
+      <FinalCTASection />
 
       {/* FOOTER */}
       <footer className="py-12 md:py-16 bg-white">
