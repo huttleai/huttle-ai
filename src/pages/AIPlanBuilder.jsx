@@ -38,7 +38,11 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
 import { sanitizeAIOutput } from '../utils/textHelpers';
 import { getCachedTrends } from '../services/dashboardCacheService';
-import { parsePlanBuilderDisplayResult, normalizeN8nAlternatePlanToV2 } from '../utils/planBuilderJobResult';
+import {
+  parsePlanBuilderDisplayResult,
+  normalizeN8nAlternatePlanToV2,
+  resolvePlanContentMix,
+} from '../utils/planBuilderJobResult';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -1619,15 +1623,10 @@ export default function AIPlanBuilder() {
           overview?.strategy ||
           'Your content plan';
 
-        const resolveContentMix = () => {
-          for (const src of [overview.contentMix, plan.summary?.contentMix]) {
-            if (!src) continue;
-            if (typeof src === 'object' && !Array.isArray(src)) return src;
-            if (typeof src === 'string') { try { return JSON.parse(src); } catch { /* skip */ } }
-          }
-          return {};
-        };
-        const mix = resolveContentMix();
+        const mix = resolvePlanContentMix(
+          overview.contentMix,
+          plan.summary?.contentMix
+        );
         const mixEntries = Object.entries(mix).filter(([, val]) => Number(val) > 0);
 
         const keyThemes = extractKeyThemesForDisplay(plan, []);
