@@ -191,6 +191,24 @@ function normalizeContentMixFromSummary(mix) {
   return out;
 }
 
+export function resolvePlanContentMix(...sources) {
+  for (const src of sources) {
+    if (!src) continue;
+    if (typeof src === 'object' && !Array.isArray(src)) return src;
+    if (typeof src === 'string') {
+      try {
+        const parsed = JSON.parse(src);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // Ignore malformed JSON and keep checking later sources.
+      }
+    }
+  }
+  return {};
+}
+
 function flattenHashtags(h) {
   if (!h) return [];
   if (Array.isArray(h)) return h.filter(Boolean);
