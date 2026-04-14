@@ -1,16 +1,21 @@
 /**
  * Stripe Webhook Handler
- * 
+ *
  * Handles Stripe webhook events to sync subscription status with your database.
- * Also adds Founders Club members to Mailchimp when they complete checkout.
- * 
+ * Routes new members to the correct Mailchimp audience based on their subscription tier:
+ *   - pro       â MAILCHIMP_PRO_AUDIENCE_ID       (Pro Members)
+ *   - essentials â MAILCHIMP_ESSENTIALS_AUDIENCE_ID (Essentials Members)
+ *   - builder   â MAILCHIMP_BUILDERS_AUDIENCE_ID   (Builders Club)
+ *
  * Required environment variables:
  * - STRIPE_SECRET_KEY: Your Stripe secret key
  * - STRIPE_WEBHOOK_SECRET: Your Stripe webhook signing secret
  * - SUPABASE_URL: Your Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Your Supabase service role key
- * - MAILCHIMP_FOUNDERS_API_KEY: Your Mailchimp API key (optional)
- * - MAILCHIMP_FOUNDERS_AUDIENCE_ID: Your Mailchimp Founders Club audience ID (optional)
+ * - MAILCHIMP_API_KEY: Your Mailchimp API key (optional â also accepts legacy MAILCHIMP_FOUNDERS_API_KEY)
+ * - MAILCHIMP_PRO_AUDIENCE_ID: Mailchimp audience ID for Pro Members (optional)
+ * - MAILCHIMP_ESSENTIALS_AUDIENCE_ID: Mailchimp audience ID for Essentials Members (optional)
+ * - MAILCHIMP_BUILDERS_AUDIENCE_ID: Mailchimp audience ID for Builders Club (optional)
  */
 
 import Stripe from 'stripe';
@@ -26,15 +31,14 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Log warnings for missing config (helps with debugging in Vercel logs)
 if (!STRIPE_SECRET_KEY) {
-  console.error('❌ CRITICAL: STRIPE_SECRET_KEY is not configured');
+  console.error('â CRITICAL: STRIPE_SECRET_KEY is not configured');
 }
 if (!STRIPE_WEBHOOK_SECRET) {
-  console.error('❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not configured');
+  console.error('â CRITICAL: STRIPE_WEBHOOK_SECRET is not configured');
 }
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ CRITICAL: Supabase credentials are not configured');
+  console.error('â CRITICAL: Supabase credentials are not configured');
 }
 
 // Initialize clients only if credentials are available
@@ -42,19 +46,33 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const endpointSecret = STRIPE_WEBHOOK_SECRET;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-// Mailchimp configuration (optional)
-const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
-const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
-const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_FOUNDERS_API_KEY.split('-')[1] || 'us22';
+// Mailchimp configuration
+// Accept new MAILCHIMP_API_KEY first; fall back to legacy MAILCHIMP_FOUNDERS_API_KEY for zero-downtime deploy.
+const MAILCHIMP_API_KEY = process.env.MAILCHIMP_API_KEY || process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
+const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_API_KEY.split('-')[1] || 'us22';
 
-// Disable body parsing - we need the raw body for webhook verification
+// Per-tier audience IDs â set each one in Vercel environment variables.
+const MAILCHIMP_AUDIENCE_IDS = {
+  pro:        process.env.MAILCHIMP_PRO_AUDIENCE_ID || '',
+  essentials: process.env.MAILCHIMP_ESSENTIALS_AUDIENCE_ID || '',
+  builder:    process.env.MAILCHIMP_BUILDERS_AUDIENCE_ID || '',
+};
+
+// Human-readable tier labels used in the TIER merge tag and Mailchimp tags.
+const TIER_LABELS = {
+  pro:        'Pro',
+  essentials: 'Essentials',
+  builder:    'Builders Club',
+};
+
+// Disable body parsing â we need the raw body for Stripe webhook signature verification.
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// Helper to get raw body
+// Helper to read the raw request body for Stripe signature verification.
 async function getRawBody(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -63,31 +81,46 @@ async function getRawBody(req) {
   return Buffer.concat(chunks);
 }
 
-// Add member to Mailchimp Founders Club
-async function addToFoundersClub(email, firstName = '', lastName = '') {
-  // Skip if Mailchimp is not configured
-  if (!MAILCHIMP_FOUNDERS_API_KEY || !MAILCHIMP_FOUNDERS_AUDIENCE_ID) {
-    console.warn('Mailchimp Founders Club not configured, skipping...');
+/**
+ * Add a new subscriber to the Mailchimp audience that matches their subscription tier.
+ * Passes email, first name, last name, and a TIER merge tag so Mailchimp automations
+ * can personalise messaging per tier.
+ *
+ * Silently skips (with a warning) if Mailchimp credentials or the audience ID for the
+ * given tier are not configured â so a missing env var never blocks checkout processing.
+ */
+async function addToMailchimpByTier(email, firstName = '', lastName = '', tier = '') {
+  const audienceId = MAILCHIMP_AUDIENCE_IDS[tier];
+  const tierLabel  = TIER_LABELS[tier] || tier;
+
+  if (!MAILCHIMP_API_KEY) {
+    console.warn('Mailchimp API key not configured, skipping audience add...');
+    return { success: false, skipped: true };
+  }
+
+  if (!audienceId) {
+    console.warn(`No Mailchimp audience ID configured for tier "${tier}", skipping...`);
     return { success: false, skipped: true };
   }
 
   try {
-    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_FOUNDERS_AUDIENCE_ID}/members`;
-    
+    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${audienceId}/members`;
+
     const memberData = {
       email_address: email,
       status: 'subscribed',
       merge_fields: {
         FNAME: firstName,
         LNAME: lastName,
+        TIER: tierLabel,
       },
-      tags: ['Founders Club', 'Stripe Checkout']
+      tags: [tierLabel, 'Stripe Checkout'],
     };
 
     const response = await fetch(mailchimpUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_FOUNDERS_API_KEY}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_API_KEY}`).toString('base64')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(memberData),
@@ -96,17 +129,18 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
     const data = await response.json();
 
     if (!response.ok) {
-      // Member already exists is not an error
+      // A 400 with title "Member Exists" is not an error â idempotent.
       if (data.title === 'Member Exists') {
         return { success: true, alreadyExists: true };
       }
-      console.error('Mailchimp error:', data);
+      console.error(`Mailchimp error (tier=${tier}):`, data);
       return { success: false, error: data.detail };
     }
 
+    logInfo('stripe_webhook.mailchimp_added', { email, tier, audienceId });
     return { success: true };
   } catch (error) {
-    console.error('Error adding to Founders Club:', error);
+    console.error(`Error adding to Mailchimp (tier=${tier}):`, error);
     return { success: false, error: error.message };
   }
 }
@@ -225,17 +259,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Validate required services are configured
   if (!stripe) {
-    console.error('❌ Stripe webhook called but STRIPE_SECRET_KEY is not configured');
+    console.error('â Stripe webhook called but STRIPE_SECRET_KEY is not configured');
     return res.status(500).json({ error: 'Payment service not configured' });
   }
   if (!endpointSecret) {
-    console.error('❌ Stripe webhook called but STRIPE_WEBHOOK_SECRET is not configured');
+    console.error('â Stripe webhook called but STRIPE_WEBHOOK_SECRET is not configured');
     return res.status(500).json({ error: 'Webhook verification not configured' });
   }
   if (!supabase) {
-    console.error('❌ Stripe webhook called but Supabase is not configured');
+    console.error('â Stripe webhook called but Supabase is not configured');
     return res.status(500).json({ error: 'Database service not configured' });
   }
 
@@ -259,10 +292,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ received: true, duplicate: true });
     }
 
-    // Handle the event
-    // Each case is wrapped in its own try/catch so that a processing error
-    // never causes a non-200 response. Stripe retries on non-200 responses,
-    // which would cause duplicate processing of already-handled events.
     switch (event.type) {
       case 'checkout.session.completed': {
         try {
@@ -272,7 +301,7 @@ export default async function handler(req, res) {
           const subscriptionId = session.subscription;
           const customerEmail = session.customer_email || session.customer_details?.email;
 
-          // Setup-mode sessions are payment method updates — sync new card and move on.
+          // Setup-mode sessions are payment method updates â sync new card and move on.
           if (session.mode === 'setup' && customerId && session.setup_intent) {
             try {
               const setupIntent = await stripe.setupIntents.retrieve(session.setup_intent);
@@ -305,7 +334,7 @@ export default async function handler(req, res) {
 
           if (!customerId) break;
 
-          // Resolve the Supabase user — prefer the user_id embedded in checkout
+          // Resolve the Supabase user â prefer the user_id embedded in checkout
           // metadata (most reliable), then fall back to email lookup.
           let userId = session.metadata?.supabase_user_id || null;
           let customerName = session.customer_details?.name || '';
@@ -349,16 +378,6 @@ export default async function handler(req, res) {
               const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
 
               try {
-                // Check the secure_account_email_sent guard before sending any
-                // account-setup email and mark it sent atomically. This prevents
-                // duplicate "Secure My Account" emails when Stripe retries the
-                // checkout.session.completed event or when the webhook processes
-                // multiple events for the same user.
-                // NOTE: The actual invite email is sent via Supabase admin
-                // (inviteUserByEmail) from an external tool, not from this webhook.
-                // This flag is the shared idempotency guard for that external sender.
-                // Supabase dashboard > Auth > URL Configuration > Redirect URLs must
-                // include https://huttleai.com/secure-account in the allowed list.
                 const { data: userRow, error: userFetchErr } = await supabase
                   .from('users')
                   .select('secure_account_email_sent')
@@ -371,8 +390,6 @@ export default async function handler(req, res) {
                   .from('users')
                   .update({
                     subscription_tier: plan,
-                    // Only set to true on the first checkout — mark that the invite
-                    // email should be (or already has been) sent exactly once.
                     ...(!alreadySentInvite && { secure_account_email_sent: false }),
                   })
                   .eq('id', userId);
@@ -397,8 +414,11 @@ export default async function handler(req, res) {
                 });
               }
 
-              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
-                await addToFoundersClub(customerEmail, firstName, lastName);
+              // Route new member to the correct Mailchimp audience by tier.
+              // Supported tiers: 'pro', 'essentials', 'builder'.
+              // 'founder' plan is retired â no audience ID will be found, call is a no-op.
+              if (plan === 'pro' || plan === 'essentials' || plan === 'builder') {
+                await addToMailchimpByTier(customerEmail, firstName, lastName, plan);
               }
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
@@ -426,7 +446,6 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          // Find user by Stripe customer ID
           const { data: profile, error: profileError } = await supabase
             .from('user_profile')
             .select('user_id')
@@ -487,8 +506,6 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (profile) {
-            // Reset tier to 'free' so paid-feature gates fail immediately.
-            // cancelled_at may not exist yet on older schemas — fall back gracefully.
             const deletionPayload = {
               tier: 'free',
               status: 'canceled',
@@ -522,7 +539,6 @@ export default async function handler(req, res) {
           const invoice = event.data.object;
           const customerId = invoice.customer;
 
-          // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
           const { data: profile } = await supabase
             .from('user_profile')
             .select('user_id')
@@ -544,9 +560,6 @@ export default async function handler(req, res) {
         break;
       }
 
-      // invoice.paid fires on every invoice that transitions to paid, including
-      // annual renewals. This is the canonical event for clearing past_due state
-      // and refreshing billing period dates after every successful renewal.
       case 'invoice.paid': {
         try {
           const invoice = event.data.object;
@@ -559,7 +572,6 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (profile && invoice.subscription) {
-            // Fetch the live subscription to get accurate period dates.
             let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
             let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
 
@@ -594,9 +606,6 @@ export default async function handler(req, res) {
         break;
       }
 
-      // invoice.payment_succeeded is a narrower event than invoice.paid — it only
-      // fires when a payment attempt succeeds (not for manual invoice-paid marks).
-      // Keep both for full coverage; period dates are refreshed here too.
       case 'invoice.payment_succeeded': {
         try {
           const invoice = event.data.object;
@@ -631,9 +640,6 @@ export default async function handler(req, res) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
-    // Best-effort idempotency mark. If the write fails (e.g. table not yet
-    // migrated), log a warning but still return 200 so Stripe does not retry
-    // an event we already processed successfully.
     const marked = await markEventProcessed(event.id, event.type);
     if (!marked) {
       logWarn('stripe_webhook.idempotency_mark_failed', { eventId: event.id, eventType: event.type });
@@ -641,13 +647,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true });
   } catch (error) {
-    // Only signature verification failures (400) and config errors (500) should
-    // reach here — those are returned above before any event processing begins.
-    // Any error that escapes the per-event try/catch is unexpected; log it and
-    // still return 200 so Stripe does not retry an event we may have partially
-    // processed.
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error — logged for review' });
+    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
   }
 }
-
