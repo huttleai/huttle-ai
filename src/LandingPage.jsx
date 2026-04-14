@@ -1438,7 +1438,6 @@ const PricingSection = ({ onOpenFoundersModal }) => {
                   'Locked-in annual rate',
                   'Early access to new features',
                   'Priority support',
-                  'Content Vault',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
                     <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
