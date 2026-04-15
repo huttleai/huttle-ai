@@ -64,6 +64,18 @@ export default function Help() {
     {
       question: 'Is my data secure and private?',
       answer: 'Yes, we take data security seriously. Your content and account information are encrypted and stored securely. We never share your data with third parties. Huttle AI never connects to your social media accounts. You can delete your account and all associated data at any time from Settings.'
+    },
+    {
+      question: 'Can Huttle AI guarantee my content will go viral or grow my following?',
+      answer: 'No — and we\'ll always be upfront about that. Huttle AI gives you a data-informed strategy, optimized structure, and platform-specific guidance, but results depend on factors outside anyone\'s control: platform algorithms, your audience, timing, and consistency. What we help you do is show up with the right content for the right audience — which is what builds real, long-term growth.'
+    },
+    {
+      question: 'How accurate is AI-generated content and analysis?',
+      answer: 'AI is a strong starting point, not a finished product. Suggestions, scripts, and analysis are based on current platform patterns and best practices — but algorithms change, niches vary, and AI can occasionally produce incomplete or off-brand output. Always review generated content before publishing. You know your audience better than any AI does.'
+    },
+    {
+      question: 'Why does some AI output not sound like me?',
+      answer: 'The more complete your Brand Voice profile, the more personalized your results will be. If output feels generic, revisit your Brand Voice page and add more detail about your tone, audience, and style. Every AI suggestion is meant to be edited and made your own — think of it as a first draft, not a final one.'
     }
   ];
 
