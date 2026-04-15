@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useContext } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, 
   Plus, 
@@ -20,7 +20,8 @@ import {
   Eye,
   Zap,
   Target,
-  Pencil
+  Pencil,
+  AlertTriangle,
 } from 'lucide-react';
 import { useContent } from '../context/ContentContext';
 import { useToast } from '../context/ToastContext';
@@ -777,6 +778,30 @@ export default function SmartCalendar() {
 
   return (
     <div className="flex-1 min-h-screen bg-transparent ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+      {/* Deprecation Banner */}
+      <div className="mb-6 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 p-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm">
+            <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              Smart Calendar has been discontinued.
+            </p>
+            <p className="mt-0.5 text-sm text-gray-600 leading-relaxed">
+              Your existing content and data are safe.{' '}
+              <Link
+                to="/dashboard"
+                className="font-medium text-huttle-primary underline-offset-2 hover:underline"
+              >
+                Visit the Dashboard
+              </Link>{' '}
+              to continue planning your content.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Header - Clean Style */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

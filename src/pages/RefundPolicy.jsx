@@ -33,7 +33,7 @@ export default function RefundPolicy() {
               <div>
                 <p className="mb-3 font-semibold text-slate-900">To request a refund:</p>
                 <ol className="ml-5 list-decimal space-y-2">
-                  <li>Email <a href="mailto:hello@huttleai.com" className="text-huttle-primary hover:underline">hello@huttleai.com</a> within 14 days of your purchase</li>
+                  <li>Email <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">support@huttleai.com</a> within 14 days of your purchase</li>
                   <li>Include your order number or the email address used at checkout</li>
                   <li>We will process your refund within 24 hours of approval</li>
                   <li>Funds typically appear within 5–10 business days depending on your bank or card issuer</li>
@@ -56,8 +56,8 @@ export default function RefundPolicy() {
               <p>
                 Annual plan refund requests for Essentials and Pro submitted within 30 days of
                 purchase will be reviewed on a case-by-case basis. To request a refund, email{' '}
-                <a href="mailto:hello@huttleai.com" className="text-huttle-primary hover:underline">
-                  hello@huttleai.com
+                <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+                  support@huttleai.com
                 </a>{' '}
                 with your account email and reason for the request.
               </p>
@@ -121,8 +121,8 @@ export default function RefundPolicy() {
             <h2 className="mb-4 text-xl font-bold text-slate-900">Questions?</h2>
             <p className="text-sm leading-relaxed text-slate-600">
               Email us at{' '}
-              <a href="mailto:hello@huttleai.com" className="text-huttle-primary hover:underline">
-                hello@huttleai.com
+              <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
+                support@huttleai.com
               </a>{' '}
               and we will get back to you within 24 hours.
             </p>
