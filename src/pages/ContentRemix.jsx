@@ -1118,6 +1118,10 @@ export default function ContentRemix() {
                 {copiedId === 'all' ? 'Copied All!' : 'Copy All Content'}
               </button>
             </div>
+
+            <p className="text-xs text-gray-400 text-center pt-1">
+              AI-assisted output. Final review recommended before publishing.
+            </p>
           </div>
         )}
 

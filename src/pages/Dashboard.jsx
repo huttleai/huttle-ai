@@ -1964,7 +1964,8 @@ export default function Dashboard() {
                 </span>
                 .
               </p>
-              <p className="text-gray-600 mb-6">You have full Pro access. Let&apos;s create some content.</p>
+              <p className="text-gray-600 mb-4">You have full Pro access. Let&apos;s create some content.</p>
+              <p className="text-xs text-gray-400 mb-6">Huttle AI gives you a strategic starting point — your creativity and consistency drive the results.</p>
               <button
                 onClick={() => setShowTrialWelcomeModal(false)}
                 className="btn-primary"

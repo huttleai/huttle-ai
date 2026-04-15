@@ -1902,6 +1902,10 @@ export default function AIPlanBuilder() {
                   );
                 })}
               </div>
+
+              <p className="text-xs text-gray-400 text-center pt-2">
+                AI-generated suggestions. Results may vary — review before publishing.
+              </p>
             </div>
 
             {/* Sticky Bottom Bar */}

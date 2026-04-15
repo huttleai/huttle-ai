@@ -1089,6 +1089,10 @@ adjustedScore must be 0, 0.5, or 1 only.`;
             )}
 
             <p className="text-[11px] text-gray-400">Signals last updated: {lastUpdated}</p>
+
+            <p className="text-xs text-gray-400">
+              AI-generated analysis. Platform algorithms change frequently — treat as guidance, not a guarantee.
+            </p>
           </Motion.div>
         )}
       </AnimatePresence>
