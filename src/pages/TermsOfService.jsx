@@ -82,8 +82,8 @@ const sections = [
       <>
         <p>Huttle AI currently offers the following subscription plans:</p>
         <ul className={listClassName}>
-          <li>Essentials: $15/month or $150/year</li>
-          <li>Pro: $39/month or $350/year</li>
+          <li>Essentials: $15/month or $153/year</li>
+          <li>Pro: $39/month or $398/year</li>
           <li>Builders Club: $249/year (available for a limited time)</li>
         </ul>
         <p>
@@ -144,18 +144,15 @@ const sections = [
     content: (
       <>
         <p>
-          Monthly subscriptions are not refundable for partial months or unused time. Cancelling a
-          monthly plan stops future billing only.
-        </p>
-        <p>
           Builders Club annual plan: Huttle AI offers a 14-day happiness guarantee. Refund requests
           submitted within 14 days of purchase will be honored in full, no questions asked. No refunds
           are available after the 14-day window.
         </p>
         <p>
-          Essentials and Pro annual plans: Refund requests submitted within 30 days of purchase will be
-          reviewed on a case-by-case basis. No refunds will be issued after 30 days from the purchase
-          date.
+          Essentials and Pro plans (monthly and annual): All sales are final after the seven-day free
+          trial period ends. No refunds are available for any Essentials or Pro subscription — monthly
+          or annual — once the trial has expired and a charge has been processed. Cancelling a monthly
+          plan stops future billing only; you retain access through the end of the current paid period.
         </p>
         <p>
           Grandfathered Founders Club members are subject to the same 14-day refund window that applied
