@@ -1,18 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 
 const PERPLEXITY_API_KEY =
-  process.env.PERPLEXITY_API_KEY ||
-  process.env.VITE_PERPLEXITY_API_KEY;
-// TODO: Move to server-side PERPLEXITY_API_KEY in Vercel dashboard for production security.
+  typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
+    ? process.env.PERPLEXITY_API_KEY.trim()
+    : null;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 const MODEL = 'sonar-pro';
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 function parseStructuredJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
@@ -200,11 +202,12 @@ ${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
 }
 
 async function getAuthenticatedUserId(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !supabase) return null;
+  if (!supabase) return null;
+
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) return null;
 
   try {
-    const token = authHeader.replace('Bearer ', '');
     const {
       data: { user },
       error,
@@ -231,6 +234,13 @@ export default async function handler(req, res) {
   if (!PERPLEXITY_API_KEY) {
     return res.status(500).json({
       error: 'Deep Dive is unavailable because the Perplexity API key is not configured.',
+    });
+  }
+
+  if (!supabase) {
+    console.error('[deep-dive] Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)');
+    return res.status(503).json({
+      error: 'Authentication service not configured on the server.',
     });
   }
 

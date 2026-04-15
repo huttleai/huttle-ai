@@ -5,7 +5,7 @@
  * All AI requests go through this proxy instead of exposing keys in client-side code.
  * 
  * Required environment variables:
- * - PERPLEXITY_API_KEY: Your Perplexity API key (NOT prefixed with VITE_)
+ * - PERPLEXITY_API_KEY: Your Perplexity API key (server-side only; do not use VITE_ vars)
  *
  * DEV NOTE — common failures:
  * - 401 from Perplexity: invalid PERPLEXITY_API_KEY → set in .env (see .env.example; server loads via dotenv in local-api-server).
@@ -15,13 +15,15 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 
 const PERPLEXITY_API_KEY =
-  process.env.PERPLEXITY_API_KEY ||
-  process.env.VITE_PERPLEXITY_API_KEY;
+  typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
+    ? process.env.PERPLEXITY_API_KEY.trim()
+    : null;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 /** Perplexity chat models — resolve only via {@link resolveModelFromRequest}; do not hardcode elsewhere in this file. */
@@ -136,9 +138,10 @@ function validateTrendingCacheWritePayload(cachePayload) {
 }
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user (more restrictive for Perplexity)
@@ -604,7 +607,7 @@ export default async function handler(req, res) {
     const requestedCache = req.body?.cache;
     const requireRealtime = Boolean(req.body?.requireRealtime);
 
-    // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
+    // If Perplexity key is missing, try Grok as a last resort (no Supabase auth on that path)
     if (!PERPLEXITY_API_KEY) {
       if (requestedCache?.key || requireRealtime) {
         logError('perplexity.missing_api_key_for_cached_dashboard_request');
@@ -640,14 +643,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
     }
 
+    if (!supabase) {
+      logError('perplexity.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
+      });
+    }
+
     // Authenticate user
     let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
+    const token = parseBearerToken(req.headers.authorization);
+
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (!error && user) {
         userId = user.id;
       }

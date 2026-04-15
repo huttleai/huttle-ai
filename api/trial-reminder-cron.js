@@ -1,10 +1,11 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const CRON_SECRET = process.env.CRON_SECRET;
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -19,7 +20,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'CRON_SECRET is not configured' });
   }
 
-  const providedSecret = req.headers['x-cron-secret'] || req.headers.authorization?.replace('Bearer ', '');
+  const providedSecret =
+    req.headers['x-cron-secret'] || parseBearerToken(req.headers.authorization);
   if (providedSecret !== CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }

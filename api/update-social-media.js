@@ -1,16 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 
 const PERPLEXITY_API_KEY =
-  process.env.PERPLEXITY_API_KEY ||
-  process.env.VITE_PERPLEXITY_API_KEY;
+  typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
+    ? process.env.PERPLEXITY_API_KEY.trim()
+    : null;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Validate required credentials
 if (!PERPLEXITY_API_KEY) {
-  console.error('❌ PERPLEXITY_API_KEY / VITE_PERPLEXITY_API_KEY is not configured');
+  console.error('❌ PERPLEXITY_API_KEY is not configured (server-side only)');
 }
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('❌ Supabase credentials are not configured');
@@ -32,7 +34,8 @@ export default async function handler(req, res) {
 
   // SECURITY: Verify cron secret for scheduled jobs
   // This prevents unauthorized access to this endpoint
-  const providedSecret = req.headers['x-cron-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+  const providedSecret =
+    req.headers['x-cron-secret'] || parseBearerToken(req.headers['authorization'] ?? req.headers.authorization);
   
   if (!CRON_SECRET) {
     console.error('❌ CRON_SECRET not configured - rejecting request for security');

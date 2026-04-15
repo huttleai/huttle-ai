@@ -47,7 +47,7 @@ if (STRIPE_SECRET_KEY) {
 }
 
 // Service role client for server-side user lookup (not the anon key)
-const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
 const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;

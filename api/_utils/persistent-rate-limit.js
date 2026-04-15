@@ -1,12 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import { logWarn } from './observability.js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
+/**
+ * When `increment_api_rate_limit` RPC is unavailable or `supabase` is not configured,
+ * limits fall back to this in-memory Map. On serverless (e.g. Vercel), each instance
+ * has its own Map — counters are not shared across cold starts or concurrent
+ * instances, so enforcement is weaker than the database-backed path.
+ */
 const fallbackStore = new Map();
 
 function fallbackRateLimit(userKey, maxRequests, windowSeconds) {
@@ -49,7 +55,13 @@ export async function checkPersistentRateLimit({
 
     if (error || !Array.isArray(data) || data.length === 0) {
       if (error) {
-        logWarn('rate_limit.rpc_failed', { route, userKey, error: error.message });
+        logWarn('rate_limit.rpc_failed', {
+          route,
+          userKey,
+          message: 'Supabase increment_api_rate_limit RPC failed; using in-memory fallback (not shared across serverless instances).',
+          error: error.message,
+          code: error.code,
+        });
       }
       return fallbackRateLimit(`${route}:${userKey}`, maxRequests, windowSeconds);
     }

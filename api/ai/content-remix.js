@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
@@ -43,9 +44,10 @@ function resolveUpstreamClaudeModel(requested) {
 
 const MODEL = resolveUpstreamClaudeModel('claude-sonnet-4-6-20250514');
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
@@ -421,13 +423,15 @@ function formatSectionsAsContent(sections) {
 }
 
 async function getAuthenticatedUserId(req) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !supabase) {
+  if (!supabase) {
     return null;
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return null;
+  }
+
   const { data: { user }, error } = await supabase.auth.getUser(token);
 
   if (error || !user) {
@@ -450,6 +454,13 @@ export default async function handler(req, res) {
     if (!ANTHROPIC_API_KEY) {
       logError('content_remix.missing_api_key');
       return res.status(503).json({ error: 'This feature is coming soon. Check back shortly.' });
+    }
+
+    if (!supabase) {
+      logError('content_remix.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
+      });
     }
 
     const authenticatedUserId = await getAuthenticatedUserId(req);

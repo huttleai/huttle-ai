@@ -18,7 +18,7 @@ const N8N_WEBHOOK_URL =
   process.env.VITE_N8N_IGNITE_ENGINE_WEBHOOK;
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
