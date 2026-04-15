@@ -117,10 +117,12 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                     Billed as ${(essentialsMonthly * discount * 12).toFixed(0)}/yr
                   </p>
                 )}
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>7-day free trial</span>
-                </div>
+                {!isAnnual && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                    <Check size={13} className="text-green-600 flex-shrink-0" />
+                    <span>7-day free trial</span>
+                  </div>
+                )}
               </div>
 
               <p className="text-sm text-zinc-600 mb-6 font-medium mt-3">
@@ -173,10 +175,12 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                     Billed as ${(proMonthly * discount * 12).toFixed(0)}/yr
                   </p>
                 )}
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>7-day free trial</span>
-                </div>
+                {!isAnnual && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                    <Check size={13} className="text-green-600 flex-shrink-0" />
+                    <span>7-day free trial</span>
+                  </div>
+                )}
               </div>
 
               <p className="text-sm text-zinc-600 mb-6 font-medium mt-3">

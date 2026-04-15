@@ -57,7 +57,7 @@ const FUTURE_PLANS = [
     monthlyPrice: 15,
     annualPrice: 153,
     description: 'Available after the launch window closes.',
-    features: ['150 AI generations/month', '5GB storage', 'Core AI tools and Trend Lab'],
+    features: ['200 AI generations/month', 'All AI Power Tools', 'Content Vault'],
   },
   {
     id: 'pro',
@@ -90,7 +90,7 @@ const PLAN_DETAILS = {
     title: 'Essentials',
     subtitle: 'Paid plan',
     annualLabel: '$15/month or $153/year',
-    summary: '150 AI generations per month, 5GB storage, and access to the core Huttle AI workflow.',
+    summary: '200 AI generations per month, 5GB storage, and access to the core Huttle AI workflow.',
     iconGradient: 'from-huttle-primary to-cyan-400',
     accentClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   },

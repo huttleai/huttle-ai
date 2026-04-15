@@ -145,14 +145,12 @@ export const SUBSCRIPTION_PLANS = {
     priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || '',
     features: {
-      aiGenerations: 150,
+      aiGenerations: 200,
       storageGB: 5,
       features: [
-        'All core Huttle AI tools',
-        '150 AI generations/month',
-        '5GB storage',
-        'AI Plan Builder',
-        'Full Trend Lab access',
+        'All AI Power Tools',
+        '200 AI generations/month',
+        'Content Vault',
         'Email Support'
       ]
     }

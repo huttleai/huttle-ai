@@ -160,7 +160,7 @@ export default function PaymentSuccess() {
           {/* CTA button */}
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate(authContext?.user?.id ? '/dashboard/subscription' : '/')}
             className="w-full h-14 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold text-base shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/35 transition-shadow flex items-center justify-center gap-2"
           >
             Got It — Take Me to Huttle AI

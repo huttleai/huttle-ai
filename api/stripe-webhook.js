@@ -43,8 +43,8 @@ const endpointSecret = STRIPE_WEBHOOK_SECRET;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 // Mailchimp configuration (optional)
-const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
-const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
+const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_CLUB_API_KEY || process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
+const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_CLUB_AUDIENCE_ID || process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
 const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_FOUNDERS_API_KEY.split('-')[1] || 'us22';
 
 // Disable body parsing - we need the raw body for webhook verification
@@ -397,7 +397,7 @@ export default async function handler(req, res) {
                 });
               }
 
-              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
+              if (plan === 'founder' || plan === 'builder') {
                 await addToFoundersClub(customerEmail, firstName, lastName);
               }
             } catch (subErr) {

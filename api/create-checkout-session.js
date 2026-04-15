@@ -97,9 +97,21 @@ export default async function handler(req, res) {
 
     const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
     const isAnnualBilling = billingCycle === 'annual';
+
+    const tierMetadataMap = {
+      [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: { tier: 'Essentials',    billingCycle: 'Monthly' },
+      [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL  || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]:  { tier: 'Essentials',    billingCycle: 'Annual'  },
+      [process.env.STRIPE_PRICE_PRO_MONTHLY        || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]:        { tier: 'Pro',           billingCycle: 'Monthly' },
+      [process.env.STRIPE_PRICE_PRO_ANNUAL         || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]:         { tier: 'Pro',           billingCycle: 'Annual'  },
+      [process.env.STRIPE_PRICE_BUILDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]:     { tier: 'Builders Club', billingCycle: 'Annual'  },
+      [process.env.STRIPE_PRICE_FOUNDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]:     { tier: 'Builders Club', billingCycle: 'Annual'  },
+    };
+    const tierInfo = tierMetadataMap[priceId] ?? { tier: 'Unknown', billingCycle: 'Unknown' };
+
     const baseMetadata = {
       planId,
       billingCycle,
+      ...tierInfo,
       source: planId === 'founder' ? 'founders_club' : planId === 'builder' ? 'builders_club' : 'app_checkout',
       ...(userId && { supabase_user_id: userId }),
     };
