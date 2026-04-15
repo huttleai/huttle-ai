@@ -18,6 +18,17 @@ export default function RefundPolicy() {
 
         <div className="space-y-10">
 
+          {/* ── Results Disclaimer ── */}
+          <section>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-600">
+              <p>
+                Huttle AI is a creative AI assistance tool. We do not guarantee specific social media
+                growth, engagement, or business results. Refund eligibility is based on access to the
+                platform and its features, not on content performance or outcomes.
+              </p>
+            </div>
+          </section>
+
           {/* ── Builders Club ── */}
           <section>
             <h2 className="mb-4 text-xl font-bold text-slate-900">

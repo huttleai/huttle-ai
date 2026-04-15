@@ -74,6 +74,14 @@ const sections = [
             Generate AI outputs in response to your prompts using third-party AI providers including
             xAI Grok, Perplexity AI, and Anthropic Claude
           </li>
+          <li>
+            Generate personalized AI content recommendations using information you provide — such as
+            your niche, goals, brand voice, and content preferences. This information may be
+            transmitted to third-party AI providers (xAI, Anthropic, Perplexity AI) solely for the
+            purpose of generating your content. We do not use your data to train AI models, and we
+            require our AI providers to handle your data in accordance with their respective privacy
+            policies.
+          </li>
           <li>Send transactional emails such as welcome messages, receipts, and subscription notices via Mailchimp</li>
           <li>Send product updates and feature announcements, subject to your marketing preferences</li>
           <li>Enforce our Terms of Service and Acceptable Use Policy</li>

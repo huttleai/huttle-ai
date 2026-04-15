@@ -1,4 +1,4 @@
-// Huttle AI — Terms of Service | Last updated: April 15, 2026
+// Huttle AI — Terms of Service | Last updated: April 15, 2026 (AI disclaimer added)
 
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -70,6 +70,50 @@ const sections = [
           <p>
             Huttle AI does not warrant that AI-generated content will be accurate, complete, current,
             non-infringing, or suitable for any particular purpose, campaign, audience, or platform.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
+    id: 'ai-generated-content-disclaimer',
+    title: 'AI-Generated Content Disclaimer',
+    content: (
+      <>
+        <p>
+          Huttle AI uses artificial intelligence to generate content suggestions, scripts, captions,
+          post plans, and strategic recommendations. All AI-generated content is provided for
+          informational and creative assistance purposes only. It does not constitute professional
+          marketing, legal, financial, or business advice.
+        </p>
+        <ul className={listClassName}>
+          <li>
+            Huttle AI does not guarantee that any AI-generated content will perform, go viral,
+            increase followers, drive sales, or achieve any specific result. Social media performance
+            depends on many factors outside our control, including platform algorithms, audience
+            behavior, timing, and content execution.
+          </li>
+          <li>
+            AI systems can produce inaccurate, incomplete, outdated, or contextually inappropriate
+            outputs. You are responsible for reviewing all AI-generated content before publishing or
+            acting on it.
+          </li>
+          <li>
+            By using Huttle AI, you acknowledge that you are the final decision-maker on all content
+            you publish, and Huttle AI bears no responsibility for outcomes resulting from content
+            generated or recommended by the platform.
+          </li>
+          <li>
+            Huttle AI&apos;s AI models are provided by third-party providers (including xAI,
+            Anthropic, and Perplexity AI). We do not control the underlying models and are not liable
+            for their outputs.
+          </li>
+        </ul>
+        <LegalCallout tone="yellow" title="No Results Guarantee">
+          <p>
+            Use of Huttle AI does not guarantee any marketing outcome, follower growth, engagement
+            rate, conversion result, or business result. All AI-generated content requires independent
+            human review and judgment before use.
           </p>
         </LegalCallout>
       </>
