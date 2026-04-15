@@ -1,4 +1,4 @@
-// Huttle AI — Terms of Service | Last updated: March 17, 2026
+// Huttle AI — Terms of Service | Last updated: April 15, 2026
 
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -84,18 +84,19 @@ const sections = [
         <ul className={listClassName}>
           <li>Essentials: $15/month or $150/year</li>
           <li>Pro: $39/month or $350/year</li>
-          <li>Founders Club: $199/year</li>
-          <li>Builders Club: $249/year</li>
+          <li>Builders Club: $249/year (available for a limited time)</li>
         </ul>
         <p>
           Unless otherwise stated, subscriptions are billed in advance on a recurring monthly or annual
-          basis. The seven-day free trial carries no charge during the trial period, but your
-          subscription will begin automatically when the trial ends unless you cancel before expiration.
+          basis. A seven-day free trial is available to new subscribers on Essentials and Pro plans. No
+          charge is applied during the trial period, but your subscription will begin automatically when
+          the trial ends unless you cancel before expiration.
         </p>
         <p>
           Monthly plans may be cancelled at any time, and access will continue through the end of the
-          then-current billing period. Annual plans are non-refundable after 30 days from the purchase
-          date, subject to the refund terms below.
+          then-current billing period. Annual subscriptions (Essentials and Pro) are non-refundable after
+          30 days from the purchase date, subject to the refund terms below. The Builders Club annual plan
+          carries a 14-day happiness guarantee, as described in the Refund Policy.
         </p>
         <p>
           Huttle AI may change pricing upon at least 30 days&apos; written notice to existing
@@ -108,9 +109,14 @@ const sections = [
         </p>
         <LegalCallout title="Grandfathered Pricing">
           <p>
-            Founders Club and Builders Club pricing is grandfathered for existing members, which means
-            the price paid by those active subscribers will not increase while their qualifying
-            subscription remains in good standing.
+            The Founders Club plan ($199/year) is no longer available for new purchase. Existing Founders
+            Club members are grandfathered — the price they locked in will not increase while their
+            qualifying subscription remains in good standing.
+          </p>
+          <p>
+            Builders Club pricing ($249/year) is likewise grandfathered for existing members once
+            enrolled. If the Builders Club window closes, existing subscribers retain their rate for the
+            life of their active subscription.
           </p>
         </LegalCallout>
       </>
@@ -142,12 +148,18 @@ const sections = [
           monthly plan stops future billing only.
         </p>
         <p>
-          Annual subscription refund requests submitted within 30 days of purchase will be reviewed on
-          a case-by-case basis. No refunds will be issued after 30 days from the purchase date.
+          Builders Club annual plan: Huttle AI offers a 14-day happiness guarantee. Refund requests
+          submitted within 14 days of purchase will be honored in full, no questions asked. No refunds
+          are available after the 14-day window.
         </p>
         <p>
-          Founders Club and Builders Club annual plans are eligible for refund requests only within 14
-          days of purchase.
+          Essentials and Pro annual plans: Refund requests submitted within 30 days of purchase will be
+          reviewed on a case-by-case basis. No refunds will be issued after 30 days from the purchase
+          date.
+        </p>
+        <p>
+          Grandfathered Founders Club members are subject to the same 14-day refund window that applied
+          at the time of their original purchase.
         </p>
         <p>
           To request a refund, email{' '}
@@ -390,8 +402,8 @@ const sections = [
           retention period is required by law or operational necessity.
         </p>
         <p>
-          Founders Club members who violate these Terms are not entitled to a refund of their annual
-          fee.
+          Subscribers who are terminated for violations of these Terms are not entitled to a refund of
+          any annual fee, regardless of plan type or grandfathered status.
         </p>
       </>
     ),
@@ -500,8 +512,8 @@ export default function TermsOfService() {
   return (
     <LegalPageLayout
       title="Terms of Service"
-      lastUpdated="March 17, 2026"
-      effectiveDate="March 17, 2026"
+      lastUpdated="April 15, 2026"
+      effectiveDate="April 15, 2026"
       intro="These Terms govern your access to and use of huttleai.com and the Huttle AI platform, including any services, content generation features, billing functionality, and related experiences offered by Huttle AI."
       sections={sections}
     >

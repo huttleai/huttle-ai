@@ -1,4 +1,4 @@
-// Huttle AI — Privacy Policy | Last updated: March 17, 2026
+// Huttle AI — Privacy Policy | Last updated: April 15, 2026
 
 import React from 'react';
 import LegalPageLayout, { LegalCallout } from '../components/legal/LegalPageLayout';
@@ -51,6 +51,10 @@ const sections = [
             <li>Stripe subscription status and billing history, excluding raw card data</li>
             <li>Supabase Auth OAuth login data if social sign-in is enabled in the future</li>
             <li>n8n workflow trigger events associated with your user ID</li>
+            <li>
+              Meta Pixel event data, including browser identifiers and page interaction signals, shared
+              with Meta Platforms, Inc. in connection with our use of the Meta Pixel on marketing pages
+            </li>
           </ul>
         </div>
       </>
@@ -188,6 +192,13 @@ const sections = [
             </a>
             )
           </li>
+          <li>
+            Meta Platforms, Inc. for marketing measurement and analytics via the Meta Pixel (
+            <a href="https://www.facebook.com/privacy/policy/" className="text-huttle-primary hover:underline">
+              facebook.com/privacy/policy
+            </a>
+            ). Browser and page-view data is shared with Meta when you visit our marketing pages.
+          </li>
           <li>Law enforcement, regulators, or government authorities when required by law</li>
           <li>
             Successor entities in connection with a merger, acquisition, financing, or sale of assets,
@@ -224,10 +235,32 @@ const sections = [
           <li>Session cookies are required for authentication and cannot be opted out of while using the service</li>
           <li>Local storage is used for preference settings, tour status, and other UI state that does not require sensitive personal data</li>
           <li>
-            Huttle AI currently relies on aggregate Supabase query logs rather than third-party analytics
-            SDKs such as Google Analytics, Mixpanel, or ad-tracking pixels
+            Huttle AI uses the Meta Pixel (Facebook Pixel), a tracking technology provided by Meta Platforms,
+            Inc., on our marketing pages. The Meta Pixel collects information about your browser, device, and
+            actions taken on our site (such as page views) and sends that information to Meta. We use this data
+            to understand how visitors interact with our site and to measure the effectiveness of our marketing.
+            Meta may use this information in accordance with its own data policy at{' '}
+            <a href="https://www.facebook.com/privacy/policy/" className="text-huttle-primary hover:underline">
+              facebook.com/privacy/policy
+            </a>
+            .
           </li>
-          <li>We do not serve advertising and do not use tracking pixels for ad targeting</li>
+          <li>
+            You can opt out of Meta&apos;s use of your data for advertising purposes via Meta&apos;s ad
+            settings at{' '}
+            <a href="https://www.facebook.com/ads/preferences" className="text-huttle-primary hover:underline">
+              facebook.com/ads/preferences
+            </a>
+            , or via the Digital Advertising Alliance opt-out tool at{' '}
+            <a href="https://optout.aboutads.info" className="text-huttle-primary hover:underline">
+              optout.aboutads.info
+            </a>
+            .
+          </li>
+          <li>
+            We do not currently use other third-party analytics SDKs such as Google Analytics or Mixpanel.
+            Internal product usage metrics are derived from aggregate Supabase query logs.
+          </li>
         </ul>
       </>
     ),
@@ -379,20 +412,22 @@ export default function PrivacyPolicy() {
   return (
     <LegalPageLayout
       title="Privacy Policy"
-      lastUpdated="March 17, 2026"
-      effectiveDate="March 17, 2026"
+      lastUpdated="April 15, 2026"
+      effectiveDate="April 15, 2026"
       intro='Huttle AI ("we", "us", and "our") is committed to protecting your privacy. This Privacy Policy explains what information we collect, how we use it, when we share it, and the rights and choices available to you.'
       sections={sections}
     >
       <LegalCallout title="Privacy At A Glance">
         <p>
-          We do not sell personal data, we rely on core service providers like Supabase, Stripe, and
-          Vercel to operate the platform, and AI prompts may be processed by third-party model
-          providers to deliver Huttle AI features.
+          We do not sell personal data. We rely on core service providers like Supabase, Stripe, and
+          Vercel to operate the platform, and AI prompts may be processed by third-party model providers
+          (xAI Grok, Perplexity AI, and Anthropic Claude) to deliver Huttle AI features.
         </p>
         <p>
-          If our service providers, analytics approach, or product workflows change over time, we may
-          update this Privacy Policy to reflect those changes before or when they take effect.
+          We use the Meta Pixel on our marketing pages to measure how visitors interact with our site.
+          Page-view signals are shared with Meta Platforms, Inc. under Meta&apos;s privacy policy. We do
+          not use this data to serve ads directly; Meta may use it in accordance with its own advertising
+          practices.
         </p>
       </LegalCallout>
     </LegalPageLayout>
