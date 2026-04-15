@@ -9,6 +9,8 @@ import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { PLAN_BUILDER_MONTHLY_BY_TIER } from './_utils/planBuilderLimits.js';
 
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
+
 // SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,7 +46,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Missing authorization header' });
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const bearerMatch = /^Bearer\s+(\S+)/i.exec(String(authHeader).trim());
+    const token = bearerMatch ? bearerMatch[1] : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Invalid authorization header' });
+    }
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -54,11 +60,19 @@ export default async function handler(req, res) {
     const userId = user.id;
 
     // 2. Get user's subscription tier
-    const { data: subscription, error: _subError } = await supabase
+    const { data: subscription, error: subLookupError } = await supabase
       .from('subscriptions')
-      .select('tier')
+      .select('tier, status')
       .eq('user_id', userId)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
+
+    if (subLookupError) {
+      console.error('[create-plan-builder-job] subscription lookup failed', { requestId, message: subLookupError.message });
+      return res.status(500).json({ error: 'Failed to verify subscription', requestId });
+    }
 
     const userTier = subscription?.tier || null;
 
@@ -75,14 +89,19 @@ export default async function handler(req, res) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { data: usageData, error: _usageError } = await supabase
+    const { count: usageCount, error: usageCountError } = await supabase
       .from('user_activity')
-      .select('id', { count: 'exact' })
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('feature', 'aiPlanBuilder')
       .gte('created_at', startOfMonth.toISOString());
 
-    const currentUsage = usageData?.length || 0;
+    if (usageCountError) {
+      console.error('[create-plan-builder-job] usage count failed', { requestId, message: usageCountError.message });
+      return res.status(500).json({ error: 'Failed to verify usage limits', requestId });
+    }
+
+    const currentUsage = usageCount ?? 0;
 
     const limit = PLAN_BUILDER_MONTHLY_BY_TIER[userTier];
     if (limit == null || limit <= 0) {

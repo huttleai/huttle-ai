@@ -91,13 +91,19 @@ export function selectBestStripeSubscription(subscriptions = []) {
   })[0];
 }
 
+/** @param {string|undefined} authHeader */
+export function parseBearerToken(authHeader) {
+  const bearerMatch =
+    typeof authHeader === 'string' ? /^Bearer\s+(\S+)/i.exec(authHeader.trim()) : null;
+  return bearerMatch ? bearerMatch[1] : null;
+}
+
 export async function authenticateBillingRequest(req, supabase) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
     return { error: 'Authentication required', statusCode: 401, user: null };
   }
 
-  const token = authHeader.replace('Bearer ', '');
   const {
     data: { user },
     error,

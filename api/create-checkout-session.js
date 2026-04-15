@@ -23,9 +23,10 @@ if (!process.env.STRIPE_SECRET_KEY) {
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 // Initialize Supabase client for user lookup
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -72,7 +73,11 @@ export default async function handler(req, res) {
     
     if (authHeader && supabase) {
       try {
-        const token = authHeader.replace('Bearer ', '');
+        const bearerMatch = /^Bearer\s+(\S+)/i.exec(String(authHeader).trim());
+        const token = bearerMatch ? bearerMatch[1] : null;
+        if (!token) {
+          throw new Error('Invalid Bearer token');
+        }
         const { data: { user }, error } = await supabase.auth.getUser(token);
         
         if (user && !error) {
@@ -80,11 +85,15 @@ export default async function handler(req, res) {
           customerEmail = user.email;
           
           // Check if user already has a Stripe customer ID
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('user_profile')
             .select('stripe_customer_id')
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle();
+          
+          if (profileError) {
+            console.warn('[create-checkout-session] user_profile lookup:', profileError.message);
+          }
           
           if (profile?.stripe_customer_id) {
             customerId = profile.stripe_customer_id;

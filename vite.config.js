@@ -22,8 +22,12 @@ function normalizeGrokModelIdForClient(modelId) {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const localApiPort = String(env.LOCAL_API_PORT || env.VITE_LOCAL_API_PORT || '3001').trim() || '3001'
-  const localApiHost = String(env.LOCAL_API_HOST || '127.0.0.1').trim() || '127.0.0.1'
+  // Prefer process.env so Playwright-spawned dev can set LOCAL_API_PORT without editing .env.
+  const localApiPort =
+    String(process.env.LOCAL_API_PORT || env.LOCAL_API_PORT || env.VITE_LOCAL_API_PORT || '3001').trim() ||
+    '3001'
+  const localApiHost =
+    String(process.env.LOCAL_API_HOST || env.LOCAL_API_HOST || '127.0.0.1').trim() || '127.0.0.1'
   // Keep client-baked ids aligned with api/ai/grok.js resolveGrokModelId() so a single
   // GROK_CHAT_MODEL / GROK_MODEL in .env works for both Vite and local-api-server.
   const fastModel = normalizeGrokModelIdForClient(
@@ -50,7 +54,12 @@ export default defineConfig(({ mode }) => {
       __GROK_REASONING_MODEL__: JSON.stringify(reasoningModel),
     },
     server: {
-      port: 5173,
+      // Playwright polls 127.0.0.1; default Vite "localhost" can be IPv6-only on some macOS setups.
+      host: process.env.PLAYWRIGHT_VITE_PORT?.trim() ? '127.0.0.1' : false,
+      // Playwright E2E can set PLAYWRIGHT_VITE_PORT when 5173 is already in use.
+      // strictPort avoids silent port drift (Playwright's webServer.url would never match).
+      port: Number(process.env.PLAYWRIGHT_VITE_PORT || 5173) || 5173,
+      strictPort: Boolean(process.env.PLAYWRIGHT_VITE_PORT?.trim()),
       hmr: {
         overlay: true
       },

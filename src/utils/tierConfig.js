@@ -2,7 +2,7 @@ export const TIER_CONFIG = {
   essentials: {
     displayName: 'Essentials',
     badgeLabel: 'Essentials',
-    badgeColor: 'blue',
+    badgeColor: 'teal-light',
     priceLabel: '$15/month',
     description: 'Everything you need to start creating consistently.',
     isLocked: false,
@@ -10,8 +10,8 @@ export const TIER_CONFIG = {
   },
   pro: {
     displayName: 'Pro',
-    badgeLabel: 'Pro Member',
-    badgeColor: 'purple',
+    badgeLabel: 'Pro',
+    badgeColor: 'teal',
     priceLabel: '$39/month',
     description: 'Unlimited power tools and advanced trend intelligence.',
     isLocked: false,
@@ -28,8 +28,8 @@ export const TIER_CONFIG = {
   },
   builder: {
     displayName: 'Builders Club',
-    badgeLabel: 'Builders Club',
-    badgeColor: 'silver',
+    badgeLabel: 'Builder',
+    badgeColor: 'teal',
     priceLabel: '$249/year — Price Locked In',
     description: "You're a Builders Club member. Your rate is locked in for as long as your plan stays active.",
     isLocked: true,

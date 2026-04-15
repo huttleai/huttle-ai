@@ -1,6 +1,6 @@
 /**
- * N8n Generator Proxy - Safe Mode (No Supabase)
- * 
+ * N8n Generator Proxy
+ *
  * Serverless function that proxies AI generation requests to n8n webhook.
  * Handles timeout and error responses.
  * 
@@ -13,10 +13,11 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
 
-// Initialize Supabase for auth verification
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+// Initialize Supabase for auth verification (both URL and service role required)
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 /**
  * Main handler function
@@ -34,24 +35,27 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Verify authentication
+  if (!supabase) {
+    console.error('[n8n-generator] Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)');
+    return res.status(500).json({ error: 'Authentication service not configured' });
+  }
+
   const authHeader = req.headers.authorization;
-  let verifiedUserId = null;
-  
-  if (authHeader && supabase) {
-    try {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (error || !user) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-      }
-      verifiedUserId = user.id;
-    } catch {
-      return res.status(401).json({ error: 'Authentication failed' });
-    }
-  } else if (supabase) {
-    // Auth is required when Supabase is configured
+  const bearerMatch = typeof authHeader === 'string' ? /^Bearer\s+(\S+)/i.exec(authHeader.trim()) : null;
+  const token = bearerMatch ? bearerMatch[1] : null;
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  let verifiedUserId = null;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    verifiedUserId = user.id;
+  } catch {
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 
   // Validate environment variables
@@ -77,10 +81,9 @@ export default async function handler(req, res) {
       additionalContext
     } = req.body;
 
-    // Use verified user ID from auth, fall back to body userId only if auth is not available
-    const authenticatedUserId = verifiedUserId || userId;
-    if (!authenticatedUserId) {
-      return res.status(400).json({ error: 'User ID is required' });
+    const authenticatedUserId = verifiedUserId;
+    if (userId && userId !== authenticatedUserId) {
+      return res.status(403).json({ error: 'User ID does not match session' });
     }
     if (!topic || !topic.trim()) {
       return res.status(400).json({ error: 'Topic is required' });

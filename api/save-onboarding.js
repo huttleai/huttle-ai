@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 import { handlePreflight, setCorsHeaders } from './_utils/cors.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -37,13 +38,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase service client is not configured' });
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const accessToken = parseBearerToken(req.headers.authorization);
+  if (!accessToken) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   try {
-    const accessToken = authHeader.replace('Bearer ', '');
     const {
       data: { user },
       error: authError,

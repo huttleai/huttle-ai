@@ -349,11 +349,14 @@ export function AuthProvider({ children }) {
         // state here would pass a new `user` object reference to every
         // downstream context (BrandContext, SubscriptionContext, etc.),
         // triggering full re-fetch cascades every ~55 minutes or on tab focus.
-        if (
-          event === 'TOKEN_REFRESHED' ||
-          event === 'USER_UPDATED' ||
-          event === 'MFA_CHALLENGE_VERIFIED'
-        ) {
+        if (event === 'USER_UPDATED') {
+          if (session?.user) {
+            setUser(session.user);
+          }
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED' || event === 'MFA_CHALLENGE_VERIFIED') {
           return;
         }
 
@@ -524,7 +527,11 @@ export function AuthProvider({ children }) {
     // Signal to GuidedTour that onboarding just completed — tour should trigger.
     // Use a user-scoped key so the tour only appears once per account.
     const tourSignalKey = user?.id ? `show_guided_tour:${user.id}` : 'show_guided_tour';
-    localStorage.setItem(tourSignalKey, 'pending');
+    try {
+      localStorage.setItem(tourSignalKey, 'pending');
+    } catch {
+      // Private mode / quota — tour can still rely on profile flags.
+    }
     writeCachedOnboardingCompletion(user.id, true);
     
     // First refresh the profile from database to get the complete data

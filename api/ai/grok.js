@@ -105,9 +105,10 @@ function setGrokCorsHeaders(res) {
 }
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per user
@@ -323,14 +324,25 @@ export default async function handler(req, res) {
       });
     }
 
+    if (!supabase) {
+      logError('grok.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: true,
+        code: 'AUTH_SERVICE_MISCONFIGURED',
+        message: 'Authentication service not configured on the server.',
+      });
+    }
+
     // Authenticate user
     let userId = null;
     const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
+    const bearerMatch =
+      typeof authHeader === 'string' ? /^Bearer\s+(\S+)/i.exec(authHeader.trim()) : null;
+    const token = bearerMatch ? bearerMatch[1] : null;
+
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (!error && user) {
         userId = user.id;
       }

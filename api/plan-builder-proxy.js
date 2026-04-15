@@ -18,6 +18,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 const N8N_WEBHOOK_URL =
@@ -26,9 +27,10 @@ const N8N_WEBHOOK_URL =
   process.env.VITE_N8N_PLAN_BUILDER_WEBHOOK;
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 /**
  * Validate UUID format
@@ -69,7 +71,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = parseBearerToken(authHeader);
+  if (!token) {
+    return res.status(401).json({ error: 'Invalid authorization header' });
+  }
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) {
     return res.status(401).json({ error: 'Invalid authentication' });

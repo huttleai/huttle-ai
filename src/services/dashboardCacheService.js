@@ -1427,49 +1427,6 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
   }
 }
 
-async function fetchAllPlatformWidgets(platforms, context, headers, options = {}) {
-  const results = [];
-
-  for (const [index, platform] of platforms.entries()) {
-
-    try {
-      const trendingResult = await fetchPerPlatformWidgetData('trending', platform, context, headers, options);
-      const hashtagResult = await fetchPerPlatformWidgetData('hashtags', platform, context, headers, options);
-
-      results.push({
-        platform,
-        trendingResult,
-        hashtagResult,
-      });
-    } catch (error) {
-      console.warn(`[Dashboard] Failed to load ${platform}, using fallback widgets:`, error);
-      results.push({
-        platform,
-        trendingResult: {
-          items: [],
-          fromCache: false,
-          fromYesterday: false,
-          generatedAt: null,
-          fallbackMessage: 'Trends are refreshing — check back in a few minutes.',
-        },
-        hashtagResult: {
-          items: [],
-          fromCache: false,
-          fromYesterday: false,
-          generatedAt: null,
-          fallbackMessage: 'Hashtags loading — refresh in a moment.',
-        },
-      });
-    }
-
-    if (index < platforms.length - 1) {
-      await sleep(800);
-    }
-  }
-
-  return results;
-}
-
 function buildAIInsightsMessages(context) {
   const platformLabels = context.selectedPlatforms.map(formatPlatformLabel);
   const brandBlock = buildCreatorBrandBlock(context.brandProfile, context.brandProfile); // HUTTLE AI: brand context injected

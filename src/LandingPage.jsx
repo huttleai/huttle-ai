@@ -1188,7 +1188,7 @@ const FAQSectionComponent = () => {
 // PRICING SECTION - 3-TIER PRICING LADDER
 // ============================================
 
-const PricingSection = ({ onOpenFoundersModal }) => {
+const PricingSection = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
@@ -1897,7 +1897,7 @@ export default function LandingPage() {
       <OrbitingPlatformsSection />
 
       {/* PRICING SECTION */}
-      <PricingSection onOpenFoundersModal={() => setIsFoundersModalOpen(true)} />
+      <PricingSection />
 
       {/* FAQ SECTION */}
       <FAQSectionComponent />

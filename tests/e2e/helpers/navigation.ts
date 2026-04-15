@@ -27,6 +27,23 @@ export async function gotoDashboard(page: Page, path = '/dashboard') {
   await waitForAppReady(page);
 }
 
+/**
+ * Most dashboard E2E specs assume dev auth bypass. If the login form is visible, the dev server
+ * was likely started without VITE_SKIP_AUTH=true (common when PW_REUSE_SERVER=1).
+ */
+export async function assertDevAuthBypassForDashboardE2E(page: Page) {
+  const loginEmail = page.getByTestId('email-input');
+  const visible = await loginEmail.isVisible().catch(() => false);
+  if (!visible) return;
+
+  throw new Error(
+    'Dashboard E2E expects a logged-in or bypassed session, but the login form is visible. ' +
+      'Start Vite with VITE_SKIP_AUTH=true (e.g. `VITE_SKIP_AUTH=true npm run dev`) before using ' +
+      'PW_REUSE_SERVER=1, or stop the process on port 5173 and let Playwright start the server. ' +
+      'See playwright.config.ts.',
+  );
+}
+
 export async function expectSidebar(page: Page) {
   await expect(page.getByTestId('sidebar')).toBeVisible();
   await expect(page.getByTestId('sidebar-link-dashboard')).toBeVisible();

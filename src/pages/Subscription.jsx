@@ -428,13 +428,11 @@ export default function Subscription() {
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         tierConfig.badgeColor === 'amber'
                           ? 'bg-amber-100 text-amber-700'
-                          : tierConfig.badgeColor === 'silver'
-                            ? 'bg-gray-100 text-gray-600'
-                            : tierConfig.badgeColor === 'purple'
-                              ? 'bg-purple-100 text-purple-700'
-                              : tierConfig.badgeColor === 'blue'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-gray-100 text-gray-700'
+                          : tierConfig.badgeColor === 'teal'
+                            ? 'bg-[#01BAD2]/15 text-[#008fa3]'
+                            : tierConfig.badgeColor === 'teal-light'
+                              ? 'bg-[#01BAD2]/10 text-[#00a8bf]'
+                              : 'bg-gray-100 text-gray-700'
                       }`}>
                         {tierConfig.badgeColor === 'amber' ? `⭐ ${tierConfig.badgeLabel}` : tierConfig.badgeLabel}
                       </span>
@@ -498,7 +496,7 @@ export default function Subscription() {
                       <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mt-4">
                         {tierConfig.badgeColor === 'amber'
                           ? '⭐ You\'re a Founding Member — your $199/year rate is locked in forever. Your plan cannot be changed.'
-                          : '🔒 You\'re a Builders Club member — your $249/year rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
+                          : '🔒 You\'re a Builder — your $249/year rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
                       </p>
                     )}
 

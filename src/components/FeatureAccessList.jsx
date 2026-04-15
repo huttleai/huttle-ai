@@ -158,7 +158,7 @@ export default function FeatureAccessList({ compact = false }) {
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold text-huttle-primary mb-2">Essentials</h3>
           <p className="text-3xl font-bold text-gray-900 mb-1">$15</p>
-          <p className="text-sm text-gray-600">150 AI generations/month</p>
+          <p className="text-sm text-gray-600">200 AI generations/month</p>
         </div>
         
         <ul className="space-y-3 mb-6">

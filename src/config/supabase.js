@@ -168,7 +168,7 @@ export const TIER_LIMITS = {
     scheduledPostsLimit: 0,
   },
   [TIERS.ESSENTIALS]: {
-    aiGenerations: 150,
+    aiGenerations: 200,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -344,16 +344,16 @@ export async function getRemainingUsage(userId, feature, userTier) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
     
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from(TABLES.ACTIVITY)
-      .select('*')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('feature', feature)
       .gte('created_at', startOfMonth.toISOString());
     
     if (error) throw error;
     
-    const used = data?.length || 0;
+    const used = count || 0;
     return Math.max(0, limit - used);
   } catch (error) {
     console.error('Error getting usage:', error);
@@ -578,14 +578,15 @@ export async function getUserTier(userId) {
       .select('tier, status')
       .eq('user_id', userId)
       .in('status', ['active', 'trialing', 'past_due'])
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     
     if (error) {
-      if (error.code === 'PGRST116') return { success: true, tier: null }; // No subscription
       throw error;
     }
     
-    return { success: true, tier: data.tier };
+    return { success: true, tier: data?.tier ?? null };
   } catch (error) {
     console.error('Error getting tier:', error);
     return { success: true, tier: null };

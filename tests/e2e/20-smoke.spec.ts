@@ -1,6 +1,6 @@
 import { test, expect } from './helpers/auth';
 import { attachStrictErrorCollector } from './helpers/console';
-import { gotoDashboard } from './helpers/navigation';
+import { assertDevAuthBypassForDashboardE2E, gotoDashboard } from './helpers/navigation';
 
 test.describe('Smoke', () => {
   test('critical path under 60s budget', async ({ page }) => {
@@ -10,6 +10,7 @@ test.describe('Smoke', () => {
     await expect(page.getByTestId('landing-hero')).toBeVisible();
 
     await gotoDashboard(page, '/dashboard');
+    await assertDevAuthBypassForDashboardE2E(page);
     await expect(page.getByTestId('dashboard-greeting')).toBeVisible();
     const g0 = await page.getByTestId('dashboard-greeting').innerText();
     await page.waitForTimeout(10000);

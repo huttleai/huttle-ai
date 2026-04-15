@@ -454,6 +454,8 @@ export function SubscriptionProvider({ children }) {
   const isFounder = userTier === TIERS.FOUNDER;
   const isBuilder = userTier === TIERS.BUILDER;
   const isAnnualFounder = isFounder || isBuilder;
+  const isPro = userTier === TIERS.PRO || userTier === TIERS.FOUNDER || userTier === TIERS.BUILDER;
+  const generationLimit = TIER_LIMITS[userTier]?.aiGenerations ?? 0;
   const isCancelScheduled = Boolean(subscription?.cancelAtPeriodEnd);
   const trialEndsAt = useMemo(
     () => (subscription?.trialEnd ? new Date(subscription.trialEnd) : null),
@@ -465,7 +467,8 @@ export function SubscriptionProvider({ children }) {
     const remainingMs = trialEndsAt.getTime() - Date.now();
     return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
   }, [trialEndsAt]);
-  const hasPaidAccess = Boolean(userTier) && ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
+  const hasPaidAccess =
+    Boolean(userTier && userTier !== TIERS.FREE) && ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
 
   const checkFeatureAccess = useCallback((feature) => {
     return hasFeatureAccess(userTier, feature) || canTierAccessFeature(feature, userTier);
@@ -590,6 +593,7 @@ export function SubscriptionProvider({ children }) {
 
   const value = useMemo(() => ({
     userTier,
+    tier: userTier,
     tierConfig: getTierConfig(userTier),
     userId,
     subscription,
@@ -599,6 +603,8 @@ export function SubscriptionProvider({ children }) {
     isFounder,
     isBuilder,
     isAnnualFounder,
+    isPro,
+    generationLimit,
     isCancelScheduled,
     trialEndsAt,
     trialDaysRemaining,
@@ -629,7 +635,7 @@ export function SubscriptionProvider({ children }) {
     setDemoTier,
   }), [
     userTier, userId, subscription, subscriptionStatus, isTrialing, isPastDue,
-    isFounder, isBuilder, isAnnualFounder, isCancelScheduled,
+    isFounder, isBuilder, isAnnualFounder, isPro, generationLimit, isCancelScheduled,
     trialEndsAt, trialDaysRemaining, hasPaidAccess, usage, loading, subscriptionReady,
     subscriptionError, isSubscriptionDegraded, checkFeatureAccess, getFeatureLimit,
     checkAndTrackUsage, refreshUsage, getAuthoritativeRemainingUsage,
