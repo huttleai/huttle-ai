@@ -986,22 +986,30 @@ export default function AIPlanBuilder() {
         }
       });
 
-    let pollIntervalId = null;
-    const pollStartId = window.setTimeout(() => {
-      pollIntervalId = window.setInterval(async () => {
-        if (resolved) return;
-        try {
-          const { data: job, error } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('id', jobId)
-            .maybeSingle();
+    // Bounded, capped-exponential polling fallback. Realtime
+    // (postgres_changes above) remains the primary path; this only
+    // recovers from a missed UPDATE event. Cadence mirrors the
+    // SubscriptionContext retry philosophy (small steps, capped).
+    // The 5-minute soft timeout below is the hard bound and is
+    // unchanged by this schedule.
+    const POLL_BACKOFF_MS = [2000, 3000, 5000, 8000, 13000];
+    const POLL_BACKOFF_CAP_MS = 15000;
+    const getNextPollDelay = (attempt) =>
+      POLL_BACKOFF_MS[attempt] ?? POLL_BACKOFF_CAP_MS;
 
-          if (error) {
-            return;
-          }
-          if (!job) return;
+    let pollTimerId = null;
+    let pollAttempt = 0;
 
+    const runPoll = async () => {
+      if (resolved) return;
+      try {
+        const { data: job, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', jobId)
+          .maybeSingle();
+
+        if (!error && job) {
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
             return;
@@ -1009,11 +1017,20 @@ export default function AIPlanBuilder() {
 
           if (isComplete(job)) {
             resolveJob(job);
+            return;
           }
-        } catch (e) {
-          console.error('[PlanBuilder] Poll error', e);
         }
-      }, 2000);
+      } catch (e) {
+        console.error('[PlanBuilder] Poll error', e);
+      }
+
+      if (resolved) return;
+      pollAttempt += 1;
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(pollAttempt));
+    };
+
+    const pollStartId = window.setTimeout(() => {
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(0));
     }, 2000);
 
     const softTimeoutId = window.setTimeout(() => {
@@ -1024,7 +1041,7 @@ export default function AIPlanBuilder() {
     return () => {
       supabase.removeChannel(channel);
       window.clearTimeout(pollStartId);
-      if (pollIntervalId != null) window.clearInterval(pollIntervalId);
+      if (pollTimerId != null) window.clearTimeout(pollTimerId);
       window.clearTimeout(softTimeoutId);
     };
   }, [currentJobId]);
