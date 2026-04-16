@@ -1010,6 +1010,8 @@ export default function AIPlanBuilder() {
           .eq('id', jobId)
           .maybeSingle();
 
+        // Must bail out after await: cleanup clears the next timer while this
+        // invocation is suspended, so chaining would otherwise continue forever.
         if (cancelled || resolved) return;
 
         if (!error && job) {
@@ -1035,11 +1037,12 @@ export default function AIPlanBuilder() {
     };
 
     const pollStartId = window.setTimeout(() => {
+      if (cancelled || resolved) return;
       pollTimerId = window.setTimeout(runPoll, getNextPollDelay(0));
     }, 2000);
 
     const softTimeoutId = window.setTimeout(() => {
-      if (resolved) return;
+      if (cancelled || resolved) return;
       // Differentiate "never picked up" (still queued after 5 min) from
       // "picked up but slow" (running or unknown). Only the queued
       // branch uses a new message; every other case preserves the
