@@ -1088,8 +1088,6 @@ export default function AIPlanBuilder() {
       return;
     }
 
-    await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
-
     setGenerationError(null);
     setIsGenerating(true);
     setGeneratedPlan(null);
@@ -1182,6 +1180,13 @@ export default function AIPlanBuilder() {
           );
           throw new Error('Failed to create job: invalid job id');
         }
+
+      // Charge credit only after we have a valid jobs.id UUID. If the
+      // DB insert failed above (createError/null jobId/invalid UUID),
+      // we've already thrown and the user is not charged. Every
+      // downstream failure (webhook, n8n crash, timeout) remains
+      // no-refund — this moves nothing except the charge boundary.
+      await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
       flushSync(() => {
         setCurrentJobId(jobId);
