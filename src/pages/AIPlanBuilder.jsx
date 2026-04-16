@@ -383,27 +383,19 @@ function formatFullPlan(plan, displayDays) {
   return lines.join('\n').trim();
 }
 
-const MIX_DOT_EMOJI = {
-  Educational: '🔵',
-  Entertaining: '🟡',
-  Authority: '🟣',
-  Promotional: '🔴',
-  Personal: '🟢',
-  Post: '⚪',
-};
-
-const MIX_BAR_COLOR = {
-  Educational: 'bg-blue-400',
-  Entertaining: 'bg-amber-400',
-  Authority: 'bg-purple-400',
-  Promotional: 'bg-rose-400',
-  Personal: 'bg-green-400',
-};
-
-const MIX_FALLBACK_EMOJIS = ['🔵', '🟡', '🟣', '🔴', '🟢', '🔶', '🟠', '🩵', '🩷', '⬜'];
-const MIX_FALLBACK_COLORS = [
-  'bg-blue-400', 'bg-amber-400', 'bg-purple-400', 'bg-rose-400', 'bg-green-400',
-  'bg-teal-400', 'bg-orange-400', 'bg-indigo-400', 'bg-pink-400', 'bg-cyan-400',
+// Soft, distinct index-based colors for content mix — always use by position so
+// no two entries ever share a color regardless of what labels the AI returns.
+const MIX_PALETTE = [
+  '#93C5FD', // soft blue
+  '#FCD34D', // soft amber
+  '#C4B5FD', // soft violet
+  '#6EE7B7', // soft emerald
+  '#FCA5A5', // soft rose
+  '#7DD3FC', // soft sky
+  '#FDB97D', // soft orange
+  '#A5B4FC', // soft indigo
+  '#86EFAC', // soft green
+  '#F0ABFC', // soft fuchsia
 ];
 
 const MIX_LABEL_LOWERCASE = new Set(['and', 'or', 'the', 'of', 'in', 'a', 'an', 'to', 'for', 'with', 'at', 'by', 'from']);
@@ -941,6 +933,7 @@ export default function AIPlanBuilder() {
     }
 
     let resolved = false;
+    let cancelled = false;
 
     const resolveJob = (job) => {
       if (resolved) return;
@@ -1009,13 +1002,15 @@ export default function AIPlanBuilder() {
     let pollAttempt = 0;
 
     const runPoll = async () => {
-      if (resolved) return;
+      if (resolved || cancelled) return;
       try {
         const { data: job, error } = await supabase
           .from('jobs')
           .select('*')
           .eq('id', jobId)
           .maybeSingle();
+
+        if (cancelled || resolved) return;
 
         if (!error && job) {
           latestStatus = job.status;
@@ -1034,7 +1029,7 @@ export default function AIPlanBuilder() {
         console.error('[PlanBuilder] Poll error', e);
       }
 
-      if (resolved) return;
+      if (resolved || cancelled) return;
       pollAttempt += 1;
       pollTimerId = window.setTimeout(runPoll, getNextPollDelay(pollAttempt));
     };
@@ -1058,6 +1053,7 @@ export default function AIPlanBuilder() {
     }, 300000);
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       window.clearTimeout(pollStartId);
       if (pollTimerId != null) window.clearTimeout(pollTimerId);
@@ -1821,10 +1817,13 @@ export default function AIPlanBuilder() {
                         <div className="space-y-1 text-xs text-gray-800">
                           {mixEntries.map(([label, val], idx) => {
                             const displayLabel = formatContentMixLabel(label);
-                            const emoji = MIX_DOT_EMOJI[displayLabel] ?? MIX_DOT_EMOJI[label] ?? MIX_FALLBACK_EMOJIS[idx % MIX_FALLBACK_EMOJIS.length];
+                            const color = MIX_PALETTE[idx % MIX_PALETTE.length];
                             return (
-                              <p key={label}>
-                                <span>{emoji}</span>{' '}
+                              <p key={label} className="flex items-center gap-1.5">
+                                <span
+                                  className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
                                 <span className="font-medium">{displayLabel}</span>{' '}
                                 <span className="text-gray-500">{Math.round(Number(val))}%</span>
                               </p>
@@ -1833,13 +1832,11 @@ export default function AIPlanBuilder() {
                         </div>
                         <div className="flex rounded-full overflow-hidden h-2 w-full mt-3">
                           {mixEntries.map(([label, val], idx) => {
-                            const displayLabel = formatContentMixLabel(label);
-                            const barColor = MIX_BAR_COLOR[displayLabel] ?? MIX_BAR_COLOR[label] ?? MIX_FALLBACK_COLORS[idx % MIX_FALLBACK_COLORS.length];
+                            const color = MIX_PALETTE[idx % MIX_PALETTE.length];
                             return (
                               <div
                                 key={label}
-                                style={{ width: `${Math.round(Number(val))}%` }}
-                                className={barColor}
+                                style={{ width: `${Math.round(Number(val))}%`, backgroundColor: color }}
                               />
                             );
                           })}
