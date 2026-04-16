@@ -954,6 +954,13 @@ export default function AIPlanBuilder() {
       handleJobFailedRef.current(error);
     };
 
+    // Tracks the most recent status we've observed for this job from
+    // either Realtime or the polling fallback. Used *only* by the
+    // 5-min soft timeout below to pick between a "never started"
+    // (queued) and "still generating" (running/unknown) message.
+    // Never influences isFailed/isComplete gating.
+    let latestStatus = null;
+
     const channel = supabase
       .channel(`plan-job-${jobId}`)
       .on(
@@ -969,6 +976,7 @@ export default function AIPlanBuilder() {
           console.log('[PlanBuilder] Realtime UPDATE:', job.status, 'progress:', job.progress, JSON.stringify(job));
 
           setJobStatus(job.status);
+          latestStatus = job.status;
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
@@ -1010,6 +1018,8 @@ export default function AIPlanBuilder() {
           .maybeSingle();
 
         if (!error && job) {
+          latestStatus = job.status;
+
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
             return;
@@ -1035,7 +1045,16 @@ export default function AIPlanBuilder() {
 
     const softTimeoutId = window.setTimeout(() => {
       if (resolved) return;
-      rejectJob('This is taking longer than expected. Your plan may still be generating — check back in a few minutes.');
+      // Differentiate "never picked up" (still queued after 5 min) from
+      // "picked up but slow" (running or unknown). Only the queued
+      // branch uses a new message; every other case preserves the
+      // existing string exactly, so UX regressions for already-running
+      // jobs are impossible by construction.
+      const stalledQueuedMessage =
+        "Your plan hasn't started yet — our queue is taking longer than usual. Please try again in a few minutes.";
+      const stalledRunningMessage =
+        'This is taking longer than expected. Your plan may still be generating — check back in a few minutes.';
+      rejectJob(latestStatus === 'queued' ? stalledQueuedMessage : stalledRunningMessage);
     }, 300000);
 
     return () => {
