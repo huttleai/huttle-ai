@@ -24,6 +24,7 @@ import { logError, logInfo, logWarn } from './_utils/observability.js';
 import { resolvePlanId } from './_utils/stripePlans.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 import { toIsoDate } from './_utils/billing.js';
+import { findAuthUserByEmail } from './_utils/authUsers.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -340,16 +341,22 @@ export default async function handler(req, res) {
           let customerName = session.customer_details?.name || '';
 
           if (!userId && customerEmail) {
-            const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
-              filter: `email.eq.${customerEmail}`,
-              page: 1,
-              perPage: 1,
+            const { userId: matchedUserId, error: userLookupError, exhausted } = await findAuthUserByEmail({
+              supabase,
+              email: customerEmail,
             });
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
               break;
             }
-            userId = userList?.users?.[0]?.id ?? null;
+            if (exhausted) {
+              logWarn('stripe_webhook.checkout_user_lookup_exhausted', {
+                eventId: event.id,
+                customerId,
+                customerEmail,
+              });
+            }
+            userId = matchedUserId;
           }
 
           if (!userId) {
