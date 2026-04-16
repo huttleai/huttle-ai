@@ -954,6 +954,13 @@ export default function AIPlanBuilder() {
       handleJobFailedRef.current(error);
     };
 
+    // Tracks the most recent status we've observed for this job from
+    // either Realtime or the polling fallback. Used *only* by the
+    // 5-min soft timeout below to pick between a "never started"
+    // (queued) and "still generating" (running/unknown) message.
+    // Never influences isFailed/isComplete gating.
+    let latestStatus = null;
+
     const channel = supabase
       .channel(`plan-job-${jobId}`)
       .on(
@@ -969,6 +976,7 @@ export default function AIPlanBuilder() {
           console.log('[PlanBuilder] Realtime UPDATE:', job.status, 'progress:', job.progress, JSON.stringify(job));
 
           setJobStatus(job.status);
+          latestStatus = job.status;
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
@@ -986,21 +994,31 @@ export default function AIPlanBuilder() {
         }
       });
 
-    let pollIntervalId = null;
-    const pollStartId = window.setTimeout(() => {
-      pollIntervalId = window.setInterval(async () => {
-        if (resolved) return;
-        try {
-          const { data: job, error } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('id', jobId)
-            .maybeSingle();
+    // Bounded, capped-exponential polling fallback. Realtime
+    // (postgres_changes above) remains the primary path; this only
+    // recovers from a missed UPDATE event. Cadence mirrors the
+    // SubscriptionContext retry philosophy (small steps, capped).
+    // The 5-minute soft timeout below is the hard bound and is
+    // unchanged by this schedule.
+    const POLL_BACKOFF_MS = [2000, 3000, 5000, 8000, 13000];
+    const POLL_BACKOFF_CAP_MS = 15000;
+    const getNextPollDelay = (attempt) =>
+      POLL_BACKOFF_MS[attempt] ?? POLL_BACKOFF_CAP_MS;
 
-          if (error) {
-            return;
-          }
-          if (!job) return;
+    let pollTimerId = null;
+    let pollAttempt = 0;
+
+    const runPoll = async () => {
+      if (resolved) return;
+      try {
+        const { data: job, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', jobId)
+          .maybeSingle();
+
+        if (!error && job) {
+          latestStatus = job.status;
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
@@ -1009,22 +1027,40 @@ export default function AIPlanBuilder() {
 
           if (isComplete(job)) {
             resolveJob(job);
+            return;
           }
-        } catch (e) {
-          console.error('[PlanBuilder] Poll error', e);
         }
-      }, 2000);
+      } catch (e) {
+        console.error('[PlanBuilder] Poll error', e);
+      }
+
+      if (resolved) return;
+      pollAttempt += 1;
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(pollAttempt));
+    };
+
+    const pollStartId = window.setTimeout(() => {
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(0));
     }, 2000);
 
     const softTimeoutId = window.setTimeout(() => {
       if (resolved) return;
-      rejectJob('This is taking longer than expected. Your plan may still be generating — check back in a few minutes.');
+      // Differentiate "never picked up" (still queued after 5 min) from
+      // "picked up but slow" (running or unknown). Only the queued
+      // branch uses a new message; every other case preserves the
+      // existing string exactly, so UX regressions for already-running
+      // jobs are impossible by construction.
+      const stalledQueuedMessage =
+        "Your plan hasn't started yet — our queue is taking longer than usual. Please try again in a few minutes.";
+      const stalledRunningMessage =
+        'This is taking longer than expected. Your plan may still be generating — check back in a few minutes.';
+      rejectJob(latestStatus === 'queued' ? stalledQueuedMessage : stalledRunningMessage);
     }, 300000);
 
     return () => {
       supabase.removeChannel(channel);
       window.clearTimeout(pollStartId);
-      if (pollIntervalId != null) window.clearInterval(pollIntervalId);
+      if (pollTimerId != null) window.clearTimeout(pollTimerId);
       window.clearTimeout(softTimeoutId);
     };
   }, [currentJobId]);
@@ -1051,8 +1087,6 @@ export default function AIPlanBuilder() {
       showToast("You've reached your monthly Plan Builder limit. Resets on the 1st.", 'warning');
       return;
     }
-
-    await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
     setGenerationError(null);
     setIsGenerating(true);
@@ -1146,6 +1180,13 @@ export default function AIPlanBuilder() {
           );
           throw new Error('Failed to create job: invalid job id');
         }
+
+      // Charge credit only after we have a valid jobs.id UUID. If the
+      // DB insert failed above (createError/null jobId/invalid UUID),
+      // we've already thrown and the user is not charged. Every
+      // downstream failure (webhook, n8n crash, timeout) remains
+      // no-refund — this moves nothing except the charge boundary.
+      await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
       flushSync(() => {
         setCurrentJobId(jobId);

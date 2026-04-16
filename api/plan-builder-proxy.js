@@ -20,6 +20,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { logInfo, logError } from './_utils/observability.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -82,7 +83,7 @@ export default async function handler(req, res) {
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
-    console.error('[plan-builder-proxy] N8N webhook URL not configured', { requestId });
+    logError('plan_builder_proxy.missing_webhook_url', { requestId });
     return res.status(500).json({ 
       error: 'Service not configured. Please try again later.',
       requestId
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
   } = body;
 
   if (!job_id) {
-    console.error('[plan-builder-proxy] Missing job_id in request body', { requestId });
+    logError('plan_builder_proxy.missing_job_id', { requestId, userId: user.id });
     return res.status(400).json({ 
       error: 'Missing required field: job_id',
       hint: 'The job_id must be a valid UUID format',
@@ -128,7 +129,7 @@ export default async function handler(req, res) {
   }
 
   if (!isValidUUID(job_id)) {
-    console.error('[plan-builder-proxy] Invalid job_id format:', job_id, { requestId });
+    logError('plan_builder_proxy.invalid_job_id', { requestId, userId: user.id, job_id });
     return res.status(400).json({ 
       error: 'Invalid job_id format. Must be a valid UUID.',
       received: job_id,
@@ -182,6 +183,15 @@ export default async function handler(req, res) {
       city: city ?? null,
     };
 
+    logInfo('plan_builder_proxy.n8n_outbound', {
+      requestId,
+      userId: user.id,
+      job_id,
+      timePeriod: n8nPayload.timePeriod,
+      platformFocus: n8nPayload.platformFocus,
+      profileType: n8nPayload.profileType,
+    });
+
     // Forward request to n8n webhook
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
@@ -196,7 +206,14 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details');
-      console.error('[plan-builder-proxy] n8n error response:', errorText, { requestId });
+      logError('plan_builder_proxy.n8n_http_error', {
+        requestId,
+        userId: user.id,
+        job_id,
+        status: response.status,
+        statusText: response.statusText,
+        snippet: String(errorText).slice(0, 400),
+      });
       return res.status(response.status).json({ 
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
@@ -207,6 +224,16 @@ export default async function handler(req, res) {
     // Parse response payload when available so malformed workflow responses surface clearly.
     const rawResponse = await response.text().catch(() => '');
     const parsedResponse = rawResponse ? safeJsonParse(rawResponse) : null;
+
+    logInfo('plan_builder_proxy.n8n_inbound', {
+      requestId,
+      userId: user.id,
+      job_id,
+      ok: response.ok,
+      status: response.status,
+      bytes: rawResponse.length,
+      parsed: parsedResponse != null,
+    });
 
     if (parsedResponse && parsedResponse.success === false) {
       return res.status(502).json({
@@ -224,10 +251,13 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[plan-builder-proxy] Error:', {
+    logError('plan_builder_proxy.handler_error', {
+      requestId,
+      userId: user?.id,
+      job_id,
       name: error.name,
       message: error.message,
-      stack: error.stack
+      stack: error.stack?.slice?.(0, 800),
     });
 
     // Handle timeout errors
