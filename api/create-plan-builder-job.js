@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { PLAN_BUILDER_MONTHLY_BY_TIER } from './_utils/planBuilderLimits.js';
+import { logInfo, logWarn, logError } from './_utils/observability.js';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
 
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
 
   // Validate services are configured
   if (!supabase) {
-    console.error('[create-plan-builder-job] Supabase not configured', { requestId });
+    logError('create_plan_builder_job.supabase_not_configured', { requestId });
     return res.status(500).json({ error: 'Service not configured', requestId });
   }
 
@@ -70,7 +71,11 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (subLookupError) {
-      console.error('[create-plan-builder-job] subscription lookup failed', { requestId, message: subLookupError.message });
+      logError('create_plan_builder_job.subscription_lookup_failed', {
+        requestId,
+        userId,
+        message: subLookupError.message,
+      });
       return res.status(500).json({ error: 'Failed to verify subscription', requestId });
     }
 
@@ -97,7 +102,11 @@ export default async function handler(req, res) {
       .gte('created_at', startOfMonth.toISOString());
 
     if (usageCountError) {
-      console.error('[create-plan-builder-job] usage count failed', { requestId, message: usageCountError.message });
+      logError('create_plan_builder_job.usage_count_failed', {
+        requestId,
+        userId,
+        message: usageCountError.message,
+      });
       return res.status(500).json({ error: 'Failed to verify usage limits', requestId });
     }
 
@@ -147,7 +156,12 @@ export default async function handler(req, res) {
       .single();
 
     if (jobError) {
-      console.error('Error creating job:', jobError);
+      logError('create_plan_builder_job.job_insert_failed', {
+        requestId,
+        userId,
+        message: jobError.message,
+        code: jobError.code,
+      });
       // SECURITY: Don't expose internal error details to client
       return res.status(500).json({ error: 'Failed to create job. Please try again.' });
     }
@@ -155,6 +169,14 @@ export default async function handler(req, res) {
     // 6. Call n8n webhook to start processing (non-blocking)
     if (N8N_WEBHOOK_URL) {
       try {
+        logInfo('create_plan_builder_job.n8n_outbound', {
+          requestId,
+          userId,
+          jobId: job.id,
+          period,
+          platforms,
+        });
+
         const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
@@ -165,19 +187,50 @@ export default async function handler(req, res) {
             user_id: userId,
             job_type: 'plan_builder',
             input: job.input
-          })
+          }),
+          // Bound the trigger call so a slow/hung n8n doesn't keep the
+          // Vercel function alive until the platform timeout (~300s).
+          // The job remains in 'queued' on abort — identical to the
+          // prior non-ok/throw branches below.
+          signal: AbortSignal.timeout(30000),
         });
 
         if (!n8nResponse.ok) {
-          console.error('n8n webhook failed:', await n8nResponse.text(), { requestId });
+          const errorText = await n8nResponse.text().catch(() => '');
+          logError('create_plan_builder_job.n8n_http_error', {
+            requestId,
+            userId,
+            jobId: job.id,
+            status: n8nResponse.status,
+            statusText: n8nResponse.statusText,
+            snippet: String(errorText).slice(0, 400),
+          });
           // Don't fail the request - n8n might pick it up via polling
+        } else {
+          logInfo('create_plan_builder_job.n8n_inbound', {
+            requestId,
+            userId,
+            jobId: job.id,
+            ok: true,
+            status: n8nResponse.status,
+          });
         }
       } catch (n8nError) {
-        console.error('Error calling n8n webhook:', n8nError, { requestId });
+        logError('create_plan_builder_job.n8n_fetch_failed', {
+          requestId,
+          userId,
+          jobId: job.id,
+          name: n8nError?.name,
+          message: n8nError?.message,
+        });
         // Don't fail the request - n8n might pick it up via polling
       }
     } else {
-      console.warn('N8N plan builder webhook not configured - job created but n8n webhook not called', { requestId });
+      logWarn('create_plan_builder_job.webhook_not_configured', {
+        requestId,
+        userId,
+        jobId: job.id,
+      });
     }
 
     // 7. Track the usage immediately (reserved slot)
@@ -194,7 +247,13 @@ export default async function handler(req, res) {
         }
       });
     if (usageTrackError) {
-      console.error('Failed to track AI Plan Builder usage:', usageTrackError, { requestId, jobId: job.id });
+      logError('create_plan_builder_job.usage_track_failed', {
+        requestId,
+        userId,
+        jobId: job.id,
+        message: usageTrackError.message,
+        code: usageTrackError.code,
+      });
     }
 
     // 8. Return job ID to frontend
@@ -208,7 +267,12 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Error in create-plan-builder-job:', error);
+    logError('create_plan_builder_job.handler_error', {
+      requestId,
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack?.slice?.(0, 800),
+    });
     // SECURITY: Don't expose internal error details to client
     return res.status(500).json({ 
       error: 'An unexpected error occurred. Please try again.',
