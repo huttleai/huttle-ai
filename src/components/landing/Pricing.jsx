@@ -114,7 +114,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${(essentialsMonthly * discount * 12).toFixed(0)}/yr
+                    Billed as ${Math.floor(essentialsMonthly * discount * 12)}/yr
                   </p>
                 )}
                 {!isAnnual && (
@@ -172,7 +172,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${(proMonthly * discount * 12).toFixed(0)}/yr
+                    Billed as ${Math.floor(proMonthly * discount * 12)}/yr
                   </p>
                 )}
                 {!isAnnual && (

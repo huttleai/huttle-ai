@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../context/AuthContext';
 import { clearSubscriptionCache } from '../context/SubscriptionContext';
+import { trackPixelEvent } from '../utils/metaPixel';
 
 function AnimatedCheckmark() {
   return (
@@ -67,6 +68,62 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     clearSubscriptionCache();
+  }, []);
+
+  // Fire Meta Pixel `Purchase` once per Stripe Checkout session. Guarded by
+  // sessionStorage so a page reload or re-mount does not duplicate the event.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    if (!sessionId) return;
+
+    const storageKey = `meta_pixel_purchase_fired_${sessionId}`;
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') return;
+    } catch {
+      // sessionStorage unavailable (private mode, etc.) — proceed without guard.
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/stripe-session-details?session_id=${encodeURIComponent(sessionId)}`,
+          { method: 'GET' }
+        );
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        const amountTotal = Number(data?.amount_total ?? 0);
+        const currency = String(data?.currency || 'usd').toUpperCase();
+        const tierName = data?.tier_name || 'Subscription';
+
+        if (amountTotal > 0) {
+          trackPixelEvent('Purchase', {
+            value: amountTotal / 100,
+            currency,
+            content_name: tierName,
+          });
+        }
+
+        try {
+          sessionStorage.setItem(storageKey, '1');
+        } catch {
+          // ignore
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn('[MetaPixel] Failed to load session details for Purchase event:', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

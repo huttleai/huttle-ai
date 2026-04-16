@@ -127,7 +127,7 @@ const sections = [
         <p>Huttle AI currently offers the following subscription plans:</p>
         <ul className={listClassName}>
           <li>Essentials: $15/month or $153/year</li>
-          <li>Pro: $39/month or $398/year</li>
+          <li>Pro: $39/month or $397/year</li>
           <li>Builders Club: $249/year (available for a limited time)</li>
         </ul>
         <p>

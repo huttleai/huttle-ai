@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../config/supabase';
+import { trackPixelEvent } from '../utils/metaPixel';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
@@ -251,6 +252,20 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
     }
     if (planId !== 'founder' && planId !== 'builder' && isDemoMode()) {
       return simulateDemoCheckout(planId);
+    }
+
+    // Fire Meta Pixel InitiateCheckout before redirecting to Stripe so the
+    // event is attributed to this user gesture on our domain (Stripe's hosted
+    // checkout lives on checkout.stripe.com and cannot run our Pixel).
+    const checkoutValue =
+      effectiveBillingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+    if (typeof checkoutValue === 'number' && Number.isFinite(checkoutValue)) {
+      trackPixelEvent('InitiateCheckout', {
+        value: checkoutValue,
+        currency: 'USD',
+        content_name: plan.name,
+        content_category: effectiveBillingCycle === 'annual' ? 'Annual' : 'Monthly',
+      });
     }
 
     // Call your backend API to create a checkout session

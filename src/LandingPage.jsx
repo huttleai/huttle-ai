@@ -1293,7 +1293,7 @@ const PricingSection = () => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${(essentialsMonthly * discount * 12).toFixed(0)}/yr
+                    Billed as ${Math.floor(essentialsMonthly * discount * 12)}/yr
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
@@ -1356,7 +1356,7 @@ const PricingSection = () => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${(proMonthly * discount * 12).toFixed(0)}/yr
+                    Billed as ${Math.floor(proMonthly * discount * 12)}/yr
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
@@ -1531,6 +1531,53 @@ const FinalCTASection = () => {
 };
 
 // ============================================
+// ANNOUNCEMENT BANNER (session-dismissable)
+// ============================================
+
+const ANNOUNCEMENT_BANNER_SESSION_KEY = 'huttleAnnouncementBannerDismissed';
+
+const AnnouncementBanner = ({ onDismiss }) => {
+  const handleSeeOffer = (e) => {
+    e.preventDefault();
+    document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  return (
+    <div
+      className="fixed top-0 left-0 right-0 z-[70] bg-[#01BAD2] text-white h-[52px] md:h-[44px]"
+      style={{ fontFamily: 'Figtree, Inter, system-ui, sans-serif' }}
+      role="region"
+      aria-label="Announcement"
+      data-testid="announcement-banner"
+    >
+      <div className="h-full w-full flex items-center gap-3 md:gap-5 px-3 md:px-6">
+        <p className="flex-1 min-w-0 text-white text-[13px] md:text-[14px] leading-snug text-center md:text-left" style={{ fontWeight: 500 }}>
+          Builders Club early access closes April 22. Limited membership, price locked for life.
+        </p>
+        <button
+          type="button"
+          onClick={handleSeeOffer}
+          className="shrink-0 text-white text-[13px] md:text-[14px] whitespace-nowrap hover:underline underline-offset-2 transition-opacity"
+          style={{ fontWeight: 500 }}
+          data-testid="announcement-banner-cta"
+        >
+          See Offer <span aria-hidden="true">→</span>
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss announcement"
+          className="shrink-0 p-1 rounded-full text-white hover:bg-white/15 transition-colors"
+          data-testid="announcement-banner-close"
+        >
+          <X size={16} className="text-white" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
 // MAIN LANDING PAGE
 // ============================================
 
@@ -1538,6 +1585,23 @@ export default function LandingPage() {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
   const [navCheckoutLoading, setNavCheckoutLoading] = useState(false);
+  const [bannerVisible, setBannerVisible] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      return sessionStorage.getItem(ANNOUNCEMENT_BANNER_SESSION_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleDismissBanner = () => {
+    try {
+      sessionStorage.setItem(ANNOUNCEMENT_BANNER_SESSION_KEY, '1');
+    } catch {
+      // Safari private mode etc. fall back to in-memory dismissal
+    }
+    setBannerVisible(false);
+  };
 
   const handleNavBuilderCheckout = async () => {
     const checkoutTab = openStripeCheckoutTab();
@@ -1574,9 +1638,15 @@ export default function LandingPage() {
         isOpen={isFoundersModalOpen} 
         onClose={() => setIsFoundersModalOpen(false)} 
       />
-      
+
+      {/* ANNOUNCEMENT BANNER */}
+      {bannerVisible && <AnnouncementBanner onDismiss={handleDismissBanner} />}
+
       {/* NAVBAR */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3" data-testid="landing-nav">
+      <nav
+        className={`fixed left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3 ${bannerVisible ? 'top-[52px] md:top-[44px]' : 'top-0'}`}
+        data-testid="landing-nav"
+      >
         <div 
           className="flex items-center gap-4 md:gap-8 rounded-full border border-slate-200/60 bg-white/80 backdrop-blur-xl px-4 md:px-8 py-3 md:py-3.5 shadow-lg shadow-slate-200/50 nav-fade-in"
         >
@@ -1612,7 +1682,10 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION */}
-      <section className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip overflow-y-visible" data-testid="landing-hero">
+      <section
+        className={`relative ${bannerVisible ? 'pt-[244px] sm:pt-[260px] md:pt-[268px] lg:pt-[252px]' : 'pt-48 sm:pt-52 md:pt-56 lg:pt-52'} pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip overflow-y-visible`}
+        data-testid="landing-hero"
+      >
         <HeroBackground />
         
         <div className="container mx-auto max-w-7xl relative z-10">
