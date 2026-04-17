@@ -1327,7 +1327,7 @@ const PricingSection = () => {
               >
                 {checkoutLoading === 'essentials' ? 'Loading…' : 'Start 7-Day Trial'}
               </button>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel before day 7 to avoid charges</p>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel anytime</p>
             </div>
           </motion.div>
 
@@ -1393,7 +1393,7 @@ const PricingSection = () => {
                   <>Start 7-Day Trial<ArrowRight size={16} className="ml-2" /></>
                 )}
               </BorderBeamButton>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel before day 7 to avoid charges</p>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel anytime</p>
             </div>
           </motion.div>
 
