@@ -13,6 +13,7 @@
 
 import Stripe from 'stripe';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { buildPublicSessionDetails } from './_utils/stripe-session-details.js';
 
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is not configured in environment variables');
@@ -44,20 +45,7 @@ export default async function handler(req, res) {
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    const amountTotal =
-      typeof session.amount_total === 'number' ? session.amount_total : 0;
-    const currency = session.currency || 'usd';
-    const customerEmail =
-      session.customer_details?.email || session.customer_email || null;
-    const tierName = session.metadata?.tier || null;
-
-    return res.status(200).json({
-      amount_total: amountTotal,
-      currency,
-      customer_email: customerEmail,
-      tier_name: tierName,
-    });
+    return res.status(200).json(buildPublicSessionDetails(session));
   } catch (error) {
     console.error('[stripe-session-details] Failed to retrieve session:', error.message);
     return res.status(500).json({ error: 'Failed to load session details' });

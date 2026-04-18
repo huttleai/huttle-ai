@@ -20,6 +20,7 @@
     "test:e2e:report": "playwright show-report",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:mobile": "playwright test --project=mobile",
+    "test:api": "node --test api/__tests__/*.test.mjs",
     "test:hooks-parser": "node scripts/verify-full-post-hooks-parser.mjs",
     "test:full-post-resilience": "node scripts/verify-full-post-resilience.mjs",
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",
