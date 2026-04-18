@@ -24,6 +24,7 @@ import { logError, logInfo, logWarn } from './_utils/observability.js';
 import { resolvePlanId } from './_utils/stripePlans.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 import { toIsoDate } from './_utils/billing.js';
+import { sendCancellationVoluntaryEmail } from './emails/send-cancellation-voluntary.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -142,6 +143,31 @@ async function addToMailchimpByTier(email, firstName = '', lastName = '', tier =
   } catch (error) {
     console.error(`Error adding to Mailchimp (tier=${tier}):`, error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Post a cancellation notification to Slack.
+ * Always called on customer.subscription.deleted, regardless of cancellation type.
+ * Requires SLACK_WEBHOOK_URL environment variable; silently skips if not configured.
+ */
+async function postCancellationToSlack({ email, plan, days, reason }) {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    logWarn('stripe_webhook.cancellation_slack_skipped', { reason: 'SLACK_WEBHOOK_URL not configured' });
+    return;
+  }
+
+  const text = `❌ Cancellation: ${email} cancelled ${plan} after ${days} days. Reason: ${reason}`;
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    logWarn('stripe_webhook.cancellation_slack_error', { status: response.status });
   }
 }
 
@@ -501,11 +527,12 @@ export default async function handler(req, res) {
 
           const { data: profile } = await supabase
             .from('user_profile')
-            .select('user_id')
+            .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
           if (profile) {
+            // ── Supabase subscription status update (do not modify) ──────────
             const deletionPayload = {
               tier: 'free',
               status: 'canceled',
@@ -526,6 +553,90 @@ export default async function handler(req, res) {
 
             if (delError) {
               logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+            }
+            // ── End Supabase update ───────────────────────────────────────────
+
+            // Fetch customer email for notifications
+            let userEmail = null;
+            const firstName = profile.first_name || 'there';
+
+            try {
+              const customer = await stripe.customers.retrieve(customerId);
+              userEmail = customer.deleted ? null : customer.email;
+            } catch (custErr) {
+              logWarn('stripe_webhook.subscription_deleted_customer_fetch_failed', {
+                eventId: event.id,
+                error: custErr.message,
+              });
+            }
+
+            // Resolve plan label and days subscribed for notifications
+            const priceId = subscription.items.data[0]?.price?.id;
+            const planId = resolvePlanId({
+              planId: subscription.metadata?.planId,
+              metadataPlanId: subscription.metadata?.plan,
+              priceId,
+            });
+            const planName = TIER_LABELS[planId] || planId || 'Pro';
+
+            const startedAt = subscription.start_date || subscription.created;
+            const endedAt = subscription.ended_at || Math.floor(Date.now() / 1000);
+            const daysSubscribed = Math.max(0, Math.floor((endedAt - startedAt) / 86400));
+
+            const cancellationReason = subscription.cancellation_details?.reason;
+
+            // Slack — always post regardless of cancellation type
+            const slackReason = cancellationReason === 'payment_failed'
+              ? 'payment_failed'
+              : cancellationReason === 'payment_disputed'
+              ? 'disputed'
+              : 'voluntary';
+
+            try {
+              await postCancellationToSlack({
+                email: userEmail || customerId,
+                plan: planName,
+                days: daysSubscribed,
+                reason: slackReason,
+              });
+            } catch (slackErr) {
+              logWarn('stripe_webhook.cancellation_slack_failed', {
+                eventId: event.id,
+                error: slackErr.message,
+              });
+            }
+
+            // Email — skip for involuntary cancellations (Stripe already sent retry notifications)
+            if (cancellationReason === 'payment_failed' || cancellationReason === 'payment_disputed') {
+              logInfo('stripe_webhook.cancellation_email_skipped', {
+                eventId: event.id,
+                userId: profile.user_id,
+                reason: cancellationReason,
+              });
+            } else if (userEmail) {
+              // "cancellation_requested" or null/unknown — treat as voluntary
+              try {
+                const accessEndDate = subscription.current_period_end
+                  ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : null;
+
+                await sendCancellationVoluntaryEmail({
+                  email: userEmail,
+                  firstName,
+                  planName,
+                  accessEndDate,
+                });
+              } catch (emailErr) {
+                logWarn('stripe_webhook.cancellation_email_failed', {
+                  eventId: event.id,
+                  userId: profile.user_id,
+                  error: emailErr.message,
+                });
+              }
             }
           }
         } catch (err) {
