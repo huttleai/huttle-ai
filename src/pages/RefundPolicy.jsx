@@ -82,13 +82,18 @@ export default function RefundPolicy() {
           {/* ── Essentials & Pro Monthly ── */}
           <section>
             <h2 className="mb-4 text-xl font-bold text-slate-900">
-              Essentials &amp; Pro (Monthly Plans)
+              Essentials &amp; Pro (Monthly Plans) — 7-Day Free Trial
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
-                Monthly plans are not eligible for refunds for partial months or unused time. You can
-                cancel at any time from your account settings and you will not be charged for the next
-                billing cycle. You retain access until the end of your current paid period.
+                Essentials and Pro monthly plans include a 7-day free trial. No charge is applied
+                during the trial period. If you do not cancel before the trial ends, your subscription
+                will begin automatically and you will be charged for the first billing period.
+              </p>
+              <p>
+                You can cancel at any time from your account settings. Cancellation stops future
+                charges; you retain access until the end of your current paid period. Monthly plans
+                are not eligible for refunds for partial months or unused time after the trial has ended.
               </p>
             </div>
           </section>
@@ -100,10 +105,10 @@ export default function RefundPolicy() {
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
-                New subscribers on Essentials and Pro plans may be eligible for a 7-day free trial. No
-                charge is applied during the trial period. If you cancel before the trial ends, you will
-                not be billed. If you do not cancel, your subscription will begin automatically at the
-                end of the trial and you will be charged for the first billing period.
+                New subscribers on Essentials and Pro plans start with a 7-day free trial. You will
+                not be charged during the trial. If you cancel before the 7 days are up, you will not
+                be billed. If you do not cancel, your paid subscription begins automatically at the end
+                of the trial period and your card will be charged.
               </p>
               <p>
                 Trial eligibility is determined by Huttle AI in its sole discretion and may be limited

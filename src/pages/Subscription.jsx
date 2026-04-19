@@ -595,11 +595,11 @@ export default function Subscription() {
               <div className="space-y-6">
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-                  <p className="text-sm text-gray-600">Founders Club and Builders Club include a 14-day money-back guarantee. If you cancel after that window, you keep access through the end of your paid annual term.</p>
+                  <p className="text-sm text-gray-600">Essentials and Pro plans include a 7-day free trial — you will not be charged until the trial ends. Founders Club and Builders Club include a 14-day money-back guarantee. If you cancel after the applicable window, you keep access through the end of your paid term.</p>
                 </div>
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
-                  <p className="text-sm text-gray-600">Yes. You can manage billing from this page — update your card, review invoices, and control cancellation timing for your membership.</p>
+                  <p className="text-sm text-gray-600">Yes. You can cancel at any time from this page. Cancellation stops future charges and you keep access until the end of your current billing period.</p>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Do AI generations roll over?</h3>
