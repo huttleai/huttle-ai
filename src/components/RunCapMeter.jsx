@@ -12,7 +12,7 @@ import useAIUsage from '../hooks/useAIUsage';
  *
  * Matches the Full Post Builder meter style exactly:
  *   ⚡  X/Y <featureLabel> this month   ●━━━━━━━━━━
- *   Each run uses N AI credits · <creditLabel>
+ *   Each run uses N credits
  *
  * Progress bar states:
  *   - <75% used   → teal/blue  (default)
@@ -32,15 +32,12 @@ import useAIUsage from '../hooks/useAIUsage';
  * @param {'essentials'|'pro'|'founder'|'builder'|string} props.tier
  *                                     User's current subscription tier.
  * @param {string} props.featureLabel  Short label, e.g. "Niche Intel runs".
- * @param {string} props.creditLabel   What the credits pay for, e.g.
- *                                     "Sonar Pro research + Grok analysis".
  * @param {string} [props.className]   Optional extra classes on the wrapper.
  */
 export default function RunCapMeter({
   featureKey,
   tier,
   featureLabel,
-  creditLabel,
   className = '',
 }) {
   const cap = FEATURE_RUN_CAPS[featureKey]?.[tier];
@@ -110,8 +107,7 @@ export default function RunCapMeter({
         )}
       </div>
       <p className="mt-1 text-xs text-gray-500">
-        Each run uses {creditsPerRun} AI credit{creditsPerRun === 1 ? '' : 's'}
-        {creditLabel ? <> &middot; {creditLabel}</> : null}
+        Each run uses {creditsPerRun} credit{creditsPerRun === 1 ? '' : 's'}
       </p>
     </div>
   );

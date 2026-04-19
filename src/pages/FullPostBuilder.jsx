@@ -1449,7 +1449,7 @@ export default function FullPostBuilder() {
               compact
             />
             <p className="mt-1 text-xs text-gray-500">
-              Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} AI credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
+              Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
             </p>
           </div>
           {import.meta.env.DEV && FPB_DEV_SMOKE_UI_ENABLED && (

@@ -578,7 +578,6 @@ export default function IgniteEngine() {
               featureKey="igniteEngine"
               tier={userTier}
               featureLabel="Ignite Engine runs"
-              creditLabel="Sonar Pro + Grok → Sonnet blueprint"
               className="mt-3"
             />
           )}

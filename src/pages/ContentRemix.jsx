@@ -647,7 +647,6 @@ export default function ContentRemix() {
             featureKey="contentRemix"
             tier={userTier}
             featureLabel="Content Remix runs"
-            creditLabel="Sonnet 4.6 primary · Grok fallback"
             className="mt-3"
           />
         </div>

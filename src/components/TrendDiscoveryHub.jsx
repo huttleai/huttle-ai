@@ -711,7 +711,6 @@ export default function TrendDiscoveryHub() {
                 featureKey="trendDeepDive"
                 tier={userTier}
                 featureLabel="Deep Dive runs"
-                creditLabel="Sonar Pro high context · 15–30 sec"
               />
             )}
           </div>

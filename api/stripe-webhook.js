@@ -483,43 +483,96 @@ export default async function handler(req, res) {
               const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
               console.log('[checkout.session.completed] subscription synced successfully', { eventId: event.id, userId, plan });
 
-              try {
-                const { data: userRow, error: userFetchErr } = await supabase
-                  .from('users')
-                  .select('secure_account_email_sent')
-                  .eq('id', userId)
-                  .maybeSingle();
+                try {
+                  const { data: userRow, error: userFetchErr } = await supabase
+                    .from('users')
+                    .select('secure_account_email_sent')
+                    .eq('id', userId)
+                    .maybeSingle();
 
-                const alreadySentInvite = userRow?.secure_account_email_sent === true;
+                  const alreadySentInvite = userRow?.secure_account_email_sent === true;
 
-                const { error: usersTierError } = await supabase
-                  .from('users')
-                  .update({
-                    subscription_tier: plan,
-                    ...(!alreadySentInvite && { secure_account_email_sent: false }),
-                  })
-                  .eq('id', userId);
-                if (usersTierError) {
+                  if (userFetchErr) {
+                    logError('stripe_webhook.users_invite_flag_fetch_failed', { eventId: event.id, userId, error: userFetchErr.message });
+                  }
+
+                  // Update subscription_tier only — secure_account_email_sent is handled separately below.
+                  const { error: usersTierError } = await supabase
+                    .from('users')
+                    .update({
+                      subscription_tier: plan,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', userId);
+                  if (usersTierError) {
+                    logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                      eventId: event.id,
+                      userId,
+                      context: 'checkout.session.completed',
+                      error: usersTierError.message,
+                    });
+                    console.error('[checkout.session.completed] users.subscription_tier sync failed', { eventId: event.id, userId, error: usersTierError.message });
+                  }
+
+                  // Bug 2 Fix: Send secure account invite email and flip flag to true only after
+                  // confirmed send. If the send fails, leave the flag as false so it is retried.
+                  if (!alreadySentInvite && customerEmail) {
+                    try {
+                      const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://huttleai.com';
+                      const resendApiKey = process.env.RESEND_API_KEY;
+
+                      if (resendApiKey) {
+                        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+                          type: 'recovery',
+                          email: customerEmail,
+                          options: { redirectTo: `${appUrl}/secure-account` },
+                        });
+
+                        if (linkError) {
+                          logError('stripe_webhook.secure_account_link_failed', { eventId: event.id, userId, error: linkError.message });
+                        } else if (linkData?.properties?.action_link) {
+                          const emailRes = await fetch('https://api.resend.com/emails', {
+                            method: 'POST',
+                            headers: {
+                              Authorization: `Bearer ${resendApiKey}`,
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              from: 'Huttle AI <hello@huttleai.com>',
+                              to: [customerEmail],
+                              subject: 'Secure your Huttle AI account',
+                              html: `<p>Hi ${firstName || 'there'},</p><p>Your Huttle AI subscription is active. Click below to set up your password and access your dashboard.</p><p><a href="${linkData.properties.action_link}" style="background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Secure My Account &rarr;</a></p><p style="color:#6b7280;font-size:14px;">This link expires in 24 hours. If you did not make this purchase, contact us at hello@huttleai.com.</p>`,
+                            }),
+                          });
+
+                          if (emailRes.ok) {
+                            console.log('[checkout.session.completed] secure_account_email sent, setting flag to true', { eventId: event.id, userId });
+                            const { error: flagError } = await supabase
+                              .from('users')
+                              .update({ secure_account_email_sent: true, updated_at: new Date().toISOString() })
+                              .eq('id', userId);
+                            if (flagError) {
+                              logError('stripe_webhook.secure_account_flag_update_failed', { eventId: event.id, userId, error: flagError.message });
+                            }
+                          } else {
+                            logError('stripe_webhook.secure_account_email_send_failed', { eventId: event.id, userId, status: emailRes.status });
+                          }
+                        }
+                      } else {
+                        logWarn('stripe_webhook.secure_account_email_skipped', { reason: 'RESEND_API_KEY not configured', eventId: event.id, userId });
+                      }
+                    } catch (secureEmailErr) {
+                      logError('stripe_webhook.secure_account_email_error', { eventId: event.id, userId, error: secureEmailErr.message });
+                    }
+                  }
+                } catch (usersTierErr) {
                   logError('stripe_webhook.users_subscription_tier_sync_failed', {
                     eventId: event.id,
                     userId,
                     context: 'checkout.session.completed',
-                    error: usersTierError.message,
+                    error: usersTierErr.message,
                   });
-                  console.error('[checkout.session.completed] users.subscription_tier sync failed', { eventId: event.id, userId, error: usersTierError.message });
                 }
-
-                if (userFetchErr) {
-                  logError('stripe_webhook.users_invite_flag_fetch_failed', { eventId: event.id, userId, error: userFetchErr.message });
-                }
-              } catch (usersTierErr) {
-                logError('stripe_webhook.users_subscription_tier_sync_failed', {
-                  eventId: event.id,
-                  userId,
-                  context: 'checkout.session.completed',
-                  error: usersTierErr.message,
-                });
-              }
 
               // Route new member to the correct Mailchimp audience by tier.
               // Supported tiers: 'pro', 'essentials', 'builder'.

@@ -309,6 +309,22 @@ export default function OnboardingQuiz({ onComplete }) {
         audienceStage: isSoloCreator ? formData.audience_stage : null,
       }));
 
+      // Bug 1 Fix: write onboarding_completed = true to public.users before redirect.
+      // Must fire before the navigate call. Non-fatal — a failure is logged but does not block.
+      try {
+        const { error: onboardingFlagError } = await supabase
+          .from('users')
+          .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
+        if (onboardingFlagError) {
+          console.error('[Onboarding] Failed to set onboarding_completed on users table:', onboardingFlagError);
+        } else {
+          console.log('[Onboarding] onboarding_completed = true written to users for:', user.id);
+        }
+      } catch (flagErr) {
+        console.error('[Onboarding] Error writing onboarding_completed flag:', flagErr);
+      }
+
       refreshBrandData?.();
       setIsSuccessState(true);
 

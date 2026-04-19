@@ -5,6 +5,40 @@ import { trackPixelEvent } from '../utils/metaPixel';
 export const AuthContext = createContext({});
 const AUTH_STATE_CACHE_KEY = 'huttle-auth-state-cache';
 
+// Onboarding gate cutoff: only users created on or after this date can be routed to /onboarding.
+// Anyone who signed up before this timestamp is treated as an existing user and never gated,
+// even if their has_completed_onboarding flag is false (legacy accounts predate that flag).
+const ONBOARDING_GATE_CUTOFF_ISO = '2026-04-19T00:00:00.000Z';
+const ONBOARDING_GATE_CUTOFF_MS = Date.parse(ONBOARDING_GATE_CUTOFF_ISO);
+
+function wasCreatedBeforeGateCutoff(currentUser) {
+  const createdAtIso = currentUser?.created_at;
+  if (!createdAtIso) return false;
+  const createdAtMs = Date.parse(createdAtIso);
+  if (Number.isNaN(createdAtMs)) return false;
+  return createdAtMs < ONBOARDING_GATE_CUTOFF_MS;
+}
+
+// Count-only existence check — RLS-scoped and uses `head: true` so no rows are transferred.
+// Any single row in user_activity means the user has used the app and must not be re-gated.
+async function hasAnyUserActivity(userId) {
+  if (!userId) return false;
+  try {
+    const { count, error } = await supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    if (error) {
+      console.warn('[Auth] user_activity count lookup failed:', error.message);
+      return false;
+    }
+    return (count ?? 0) > 0;
+  } catch (err) {
+    console.warn('[Auth] user_activity count lookup threw:', err?.message);
+    return false;
+  }
+}
+
 function getOnboardingCompletionKey(userId) {
   return `has_completed_onboarding:${userId}`;
 }
@@ -179,10 +213,15 @@ export function AuthProvider({ children }) {
         setNeedsOnboarding(false);
         writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: false });
       } else {
-        // Missing profile rows or incomplete profiles should always see onboarding.
+        // Only gate users who are brand new (created on/after the cutoff) AND have zero activity.
+        // If the account predates the cutoff OR has any recorded activity, never redirect to /onboarding.
+        const createdBeforeCutoff = wasCreatedBeforeGateCutoff(currentUser);
+        const hasActivity = createdBeforeCutoff ? false : await hasAnyUserActivity(userId);
+        const shouldGate = !createdBeforeCutoff && !hasActivity;
+
         setUserProfile(data || null);
-        setNeedsOnboarding(true);
-        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: true });
+        setNeedsOnboarding(shouldGate);
+        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: shouldGate });
       }
       setProfileChecked(true);
       profileCheckedRef.current = true;

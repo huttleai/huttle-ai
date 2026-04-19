@@ -722,7 +722,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
                 Algorithm Alignment scores how well your content matches each
                 platform's ranking signals. Layer 1 is instant rules; Layer 2
-                adds niche-aware semantic review via Claude.
+                adds niche-aware semantic review.
               </span>
             </span>
           </div>

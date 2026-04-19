@@ -1330,14 +1330,12 @@ export default function AIPlanBuilder() {
             featureKey="planBuilder7Day"
             tier={userTier}
             featureLabel="7-day plan builds"
-            creditLabel="Sonnet 4.6 via n8n · async content plan"
           />
           {canAccess14Day && (
             <RunCapMeter
               featureKey="planBuilder14Day"
               tier={userTier}
               featureLabel="14-day plan builds"
-              creditLabel="Sonnet 4.6 via n8n · extended strategy plan"
             />
           )}
         </div>

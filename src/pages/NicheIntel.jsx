@@ -390,7 +390,6 @@ export default function NicheIntel() {
             featureKey="nicheIntel"
             tier={userTier}
             featureLabel="Niche Intel runs"
-            creditLabel="Sonar Pro research + Grok analysis"
             className="mt-3"
           />
         </div>
