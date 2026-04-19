@@ -8,7 +8,6 @@ import { useToast } from '../context/ToastContext';
 import BillingManagementPanel from '../components/BillingManagementPanel';
 import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import FoundersMembershipCard from '../components/FoundersMembershipCard';
-import { supabase } from '../config/supabase';
 import { getTierConfig } from '../utils/tierConfig';
 
 const LAUNCH_PLANS = [
@@ -288,23 +287,10 @@ export default function Subscription() {
     setShowCancelModal(true);
   };
 
-  const confirmCancelSubscription = async (feedbackData) => {
+  const confirmCancelSubscription = async () => {
     setLoading('cancel');
 
     try {
-      if (feedbackData?.reason) {
-        const { error } = await supabase.from('cancellation_feedback').insert({
-          user_id: user.id,
-          subscription_tier: userTier,
-          cancellation_reason: feedbackData.reason,
-          custom_feedback: feedbackData.customFeedback || null,
-        });
-
-        if (error) {
-          console.error('Failed to save feedback:', error);
-        }
-      }
-
       const result = await cancelSubscription();
       if (!result.success) {
         addToast(result.error || 'Failed to cancel your subscription. Please try again.', 'error');
@@ -741,6 +727,8 @@ export default function Subscription() {
         currentTier={userTier}
         isLoading={loading === 'cancel'}
         renewalDate={subscription?.currentPeriodEnd}
+        userId={user?.id}
+        planName={getTierDisplayName(userTier)}
       />
     </div>
   );

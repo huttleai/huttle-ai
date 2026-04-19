@@ -5,6 +5,7 @@ import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import { SUBSCRIPTION_PLANS, cancelSubscription, createPaymentMethodUpdateSession } from '../services/stripeAPI';
 import { CardNetworkMark } from './CardNetworkMark';
 import UpdateCardModal from './UpdateCardModal';
+import CancelSubscriptionModal from './CancelSubscriptionModal';
 
 function formatDate(dateValue) {
   if (!dateValue) return 'Loading...';
@@ -86,6 +87,11 @@ export default function FoundersMembershipCard({
     } finally {
       setIsCancelling(false);
     }
+  };
+
+  const handleCancelModalClose = () => {
+    if (isCancelling) return;
+    setIsConfirmOpen(false);
   };
 
   const handleCardUpdated = (newPaymentMethod) => {
@@ -281,44 +287,16 @@ export default function FoundersMembershipCard({
         </div>
       </div>
 
-      {/* Cancel confirmation modal */}
-      {isConfirmOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-red-600">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Cancel {membershipName}?</h3>
-                <p className="mt-2 text-sm leading-6 text-gray-600">
-                  Are you sure? You&apos;ll keep access until {expiryDate}. This action cannot be undone.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setIsConfirmOpen(false)}
-                disabled={isCancelling}
-                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Keep My Membership
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelMembership}
-                disabled={isCancelling}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-              >
-                {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Yes, Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CancelSubscriptionModal
+        isOpen={isConfirmOpen}
+        onClose={handleCancelModalClose}
+        onConfirm={handleCancelMembership}
+        currentTier={tierKey}
+        isLoading={isCancelling}
+        renewalDate={subscription?.currentPeriodEnd}
+        userId={user?.id}
+        planName={membershipName}
+      />
 
       <UpdateCardModal
         isOpen={showUpdateCard}
