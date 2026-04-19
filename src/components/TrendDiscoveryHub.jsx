@@ -371,9 +371,9 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
-    // Check feature limit before proceeding
-    if (!quickScanUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Trend Pulse limit. Resets on the 1st.', 'warning');
+    const gate = await quickScanUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Trend Pulse limit.", 'warning');
       return;
     }
 
@@ -419,9 +419,9 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
-    // Check feature limit before proceeding
-    if (!deepDiveUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Deep Dive limit. Resets on the 1st.', 'warning');
+    const gate = await deepDiveUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Deep Dive limit.", 'warning');
       return;
     }
 
@@ -698,6 +698,9 @@ export default function TrendDiscoveryHub() {
               <AIUsageMeter
                 used={quickScanUsage.featureUsed}
                 limit={quickScanUsage.featureLimit}
+                poolUsed={quickScanUsage.overallUsed}
+                poolLimit={quickScanUsage.overallLimit}
+                creditsPerRun={quickScanUsage.creditsPerRun}
                 label="Trend Pulses this month"
                 compact
               />
@@ -706,6 +709,9 @@ export default function TrendDiscoveryHub() {
               <AIUsageMeter
                 used={deepDiveUsage.featureUsed}
                 limit={deepDiveUsage.featureLimit}
+                poolUsed={deepDiveUsage.overallUsed}
+                poolLimit={deepDiveUsage.overallLimit}
+                creditsPerRun={deepDiveUsage.creditsPerRun}
                 label="Deep Dives this month"
                 compact
               />

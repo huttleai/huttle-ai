@@ -101,7 +101,7 @@ huttle-ai/
 │   │   ├── ContentLibrary.jsx
 │   │   ├── AIPlanBuilder.jsx
 │   │   ├── TrendLab.jsx
-│   │   ├── ViralBlueprint.jsx
+│   │   ├── IgniteEngine.jsx
 │   │   ├── AITools.jsx
 │   │   └── ...
 │   ├── context/                  # React Context providers
@@ -924,7 +924,7 @@ const { data, error } = await Promise.race([
 - `src/pages/ContentLibrary.jsx` - Content library
 - `src/pages/AIPlanBuilder.jsx` - Plan builder
 - `src/pages/TrendLab.jsx` - Trend discovery
-- `src/pages/ViralBlueprint.jsx` - Viral blueprint generator
+- `src/pages/IgniteEngine.jsx` - Ignite Engine (renamed from ViralBlueprint)
 - `src/pages/AITools.jsx` - AI Power Tools
 - `src/pages/BrandVoice.jsx` - Brand voice setup
 - `src/pages/Subscription.jsx` - Subscription management

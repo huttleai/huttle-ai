@@ -359,8 +359,9 @@ export default function ContentRemix() {
       showToast('Please log in to use remix features', 'error');
       return;
     }
-    if (!remixUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Content Remix limit. Resets on the 1st.', 'warning');
+    const gate = await remixUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Content Remix limit.", 'warning');
       return;
     }
 
@@ -645,6 +646,9 @@ export default function ContentRemix() {
             <AIUsageMeter
               used={remixUsage.featureUsed}
               limit={remixUsage.featureLimit}
+              poolUsed={remixUsage.overallUsed}
+              poolLimit={remixUsage.overallLimit}
+              creditsPerRun={remixUsage.creditsPerRun}
               label="Remixes this month"
               compact
             />

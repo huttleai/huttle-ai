@@ -7,7 +7,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { PLAN_BUILDER_MONTHLY_BY_TIER } from './_utils/planBuilderLimits.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 import { logInfo, logWarn, logError } from './_utils/observability.js';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
@@ -88,8 +91,38 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. Check AI usage limits before accepting job
-    // Count user_activity rows for this feature in current month
+    // 3. Extract and validate input FIRST (the per-period tier gate below
+    //    needs to know whether this is a 7-day or 14-day request before we
+    //    even run the usage count query).
+    const { goal, period, platforms, niche, brandVoiceId } = req.body;
+
+    if (!goal || !period || !platforms || platforms.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields: goal, period, and platforms are required' });
+    }
+
+    // 3a. 14-day tier gate — Essentials cannot request 14-day plans.
+    //     Matches creditConfig.PLAN_BUILDER_14DAY_TIERS on the client.
+    const isFourteenDay = Number(period) === 14;
+    if (isFourteenDay && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      logWarn('create_plan_builder_job.tier_restricted_14day', {
+        requestId,
+        userId,
+        userTier,
+      });
+      return res.status(403).json({
+        error: 'tier_restricted',
+        message: '14-day plans require Pro or above.',
+      });
+    }
+
+    // 3b. Per-period monthly run cap check.
+    const { featureKey, cap } = resolvePlanBuilderCap(period, userTier);
+    if (cap == null || cap <= 0) {
+      return res.status(403).json({
+        error: 'Plan Builder not available for this subscription tier.',
+      });
+    }
+
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -98,7 +131,7 @@ export default async function handler(req, res) {
       .from('user_activity')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('feature', 'aiPlanBuilder')
+      .eq('feature', featureKey)
       .gte('created_at', startOfMonth.toISOString());
 
     if (usageCountError) {
@@ -112,27 +145,14 @@ export default async function handler(req, res) {
 
     const currentUsage = usageCount ?? 0;
 
-    const limit = PLAN_BUILDER_MONTHLY_BY_TIER[userTier];
-    if (limit == null || limit <= 0) {
-      return res.status(403).json({
-        error: 'Plan Builder not available for this subscription tier.',
-      });
-    }
-
-    if (currentUsage >= limit) {
+    if (currentUsage >= cap) {
+      const periodLabel = isFourteenDay ? '14-day' : '7-day';
       return res.status(429).json({
         error: 'AI usage limit reached',
-        message: `You've reached your monthly limit of ${limit} AI Plan generations. This allowance resets on the 1st of each month.`,
+        message: `You've reached your monthly limit of ${cap} ${periodLabel} plan generations. This allowance resets on the 1st of each month.`,
         currentUsage,
-        limit,
+        limit: cap,
       });
-    }
-
-    // 4. Extract and validate input from request
-    const { goal, period, platforms, niche, brandVoiceId } = req.body;
-
-    if (!goal || !period || !platforms || platforms.length === 0) {
-      return res.status(400).json({ error: 'Missing required fields: goal, period, and platforms are required' });
     }
 
     // 5. Create job record in Supabase
@@ -233,18 +253,24 @@ export default async function handler(req, res) {
       });
     }
 
-    // 7. Track the usage immediately (reserved slot)
+    // 7. Track the usage immediately (reserved slot).
+    //    NOTE: the client's useAIUsage hook also writes credit rows when the
+    //    job is queued. This server row is the authoritative RUN COUNTER
+    //    consulted by the pre-flight cap check above; it uses the same
+    //    per-period featureKey so 7-day and 14-day counts stay separate.
     const { error: usageTrackError } = await supabase
       .from('user_activity')
       .insert({
         user_id: userId,
-        feature: 'aiPlanBuilder',
+        feature: featureKey,
         metadata: {
+          type: 'run_counter',
           job_id: job.id,
           goal,
           period,
-          platforms
-        }
+          platforms,
+          source: 'create-plan-builder-job',
+        },
       });
     if (usageTrackError) {
       logError('create_plan_builder_job.usage_track_failed', {

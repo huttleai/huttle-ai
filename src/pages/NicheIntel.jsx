@@ -52,7 +52,16 @@ export default function NicheIntel() {
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
-  const { featureUsed, featureLimit, trackFeatureUsage, canGenerate } = useAIUsage('nicheIntel');
+  const {
+    featureUsed,
+    featureLimit,
+    overallUsed,
+    overallLimit,
+    creditsPerRun,
+    trackFeatureUsage,
+    checkCanGenerate,
+    canGenerate,
+  } = useAIUsage('nicheIntel');
 
   const [nicheQuery, setNicheQuery] = useState('');
   const [platform, setPlatform] = useState('instagram');
@@ -146,8 +155,9 @@ export default function NicheIntel() {
   }, [loading, loadingPhase, loadingDetailIndex, researchStatusList]);
 
   const handleAnalyze = async () => {
-    if (!canGenerate) {
-      addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
+    const gate = await checkCanGenerate();
+    if (!gate.allowed) {
+      addToast(gate.message || "You've reached your monthly Niche Intel limit.", 'warning');
       return;
     }
 
@@ -385,6 +395,9 @@ export default function NicheIntel() {
             <AIUsageMeter
               used={featureUsed}
               limit={featureLimit}
+              poolUsed={overallUsed}
+              poolLimit={overallLimit}
+              creditsPerRun={creditsPerRun}
               label="Analyses this month"
               compact
             />

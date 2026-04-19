@@ -20,6 +20,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  TIER_CREDIT_POOLS,
+  FEATURE_CREDIT_COSTS,
+  FEATURE_RUN_CAPS,
+  DASHBOARD_GENERATION_SOURCE,
+  getStartOfMonthISO,
+} from './creditConfig.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -139,13 +146,21 @@ export function getTierAccessLevel(userTier) {
   return null;
 }
 
-/** Full Post Builder: credits deducted from monthly AI pool per completed wizard run (charged at hook generation). */
-export const FULL_POST_BUILDER_CREDITS_PER_RUN = 4;
+/**
+ * Full Post Builder: credits deducted from monthly AI pool per completed wizard run
+ * (charged at hook generation). Sourced from FEATURE_CREDIT_COSTS — do not edit the
+ * number here; edit src/config/creditConfig.js.
+ */
+export const FULL_POST_BUILDER_CREDITS_PER_RUN = FEATURE_CREDIT_COSTS.fullPostBuilderRuns;
 
-// Tier limits based on Huttle AI's paid-only plans.
+/**
+ * Tier limits — numeric caps are sourced from creditConfig.js (single source of
+ * truth). The per-feature numbers below are the monthly RUN caps, not credits.
+ * Access booleans live here since they control UI visibility, not metered usage.
+ */
 export const TIER_LIMITS = {
   [TIERS.FREE]: {
-    aiGenerations: 0,
+    aiGenerations: TIER_CREDIT_POOLS.free,
     captionGenerator: false,
     hashtagGenerator: false,
     hookBuilder: false,
@@ -156,7 +171,7 @@ export const TIER_LIMITS = {
     huttleAgent: false,
     trendForecaster: false,
     trendLab: false,
-    igniteEngine: 0, // HUTTLE AI: updated 3
+    igniteEngine: 0,
     fullPostBuilder: false,
     fullPostBuilderRuns: 0,
     humanizerScore: false,
@@ -168,66 +183,70 @@ export const TIER_LIMITS = {
     scheduledPostsLimit: 0,
   },
   [TIERS.ESSENTIALS]: {
-    aiGenerations: 200,
+    aiGenerations: TIER_CREDIT_POOLS.essentials,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
     ctaSuggester: true,
     qualityScorer: true,
     visualBrainstormer: true,
-    contentRepurposer: false, // Pro only
-    huttleAgent: false, // Pro only
-    trendForecaster: false, // Pro only
-    trendLab: true, // Full access
-    igniteEngine: 15, // HUTTLE AI: updated 3
+    contentRepurposer: false,
+    huttleAgent: false,
+    trendForecaster: false,
+    trendLab: true,
+    igniteEngine: FEATURE_RUN_CAPS.igniteEngine.essentials,
     fullPostBuilder: true,
-    fullPostBuilderRuns: 12,
+    fullPostBuilderRuns: FEATURE_RUN_CAPS.fullPostBuilderRuns.essentials,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
-    nicheIntel: 0, // Pro+ only
-    aiPlanBuilderDays: 14, // 7 or 14 days
-    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
-    storageLimit: 5 * 1024 * 1024 * 1024, // 5GB in bytes
+    nicheIntel: FEATURE_RUN_CAPS.nicheIntel.essentials,
+    aiPlanBuilderDays: 7, // 14-day plans are Pro+ only
+    /** 7-day Plan Builder cap (Essentials cannot use 14-day at all — see creditConfig). */
+    planBuilder: FEATURE_RUN_CAPS.planBuilder7Day.essentials,
+    planBuilder7Day: FEATURE_RUN_CAPS.planBuilder7Day.essentials,
+    planBuilder14Day: FEATURE_RUN_CAPS.planBuilder14Day.essentials,
+    storageLimit: 5 * 1024 * 1024 * 1024,
     scheduledPostsLimit: 50,
   },
   [TIERS.PRO]: {
-    aiGenerations: 600,
-    // Per-feature monthly limits
+    aiGenerations: TIER_CREDIT_POOLS.pro,
     trendQuickScan: 200,
-    trendDeepDive: 50,
-    contentRemix: 75,
-    igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
+    trendDeepDive: FEATURE_RUN_CAPS.trendDeepDive.pro,
+    contentRemix: FEATURE_RUN_CAPS.contentRemix.pro,
+    igniteEngine: FEATURE_RUN_CAPS.igniteEngine.pro,
+    planBuilder: FEATURE_RUN_CAPS.planBuilder7Day.pro + FEATURE_RUN_CAPS.planBuilder14Day.pro,
+    planBuilder7Day: FEATURE_RUN_CAPS.planBuilder7Day.pro,
+    planBuilder14Day: FEATURE_RUN_CAPS.planBuilder14Day.pro,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
     ctaSuggester: true,
     qualityScorer: true,
     visualBrainstormer: true,
-    contentRepurposer: true, // Pro feature
-    huttleAgent: true, // Pro feature
-    trendForecaster: true, // Pro feature
-    trendLab: true, // Full access
+    contentRepurposer: true,
+    huttleAgent: true,
+    trendForecaster: true,
+    trendLab: true,
     fullPostBuilder: true,
-    fullPostBuilderRuns: 40,
+    fullPostBuilderRuns: FEATURE_RUN_CAPS.fullPostBuilderRuns.pro,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
-    nicheIntel: 5, // 5 analyses/month
-    aiPlanBuilderDays: 14, // 7 or 14 days
-    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
-    scheduledPostsLimit: -1, // Unlimited
+    nicheIntel: FEATURE_RUN_CAPS.nicheIntel.pro,
+    aiPlanBuilderDays: 14,
+    storageLimit: 25 * 1024 * 1024 * 1024,
+    scheduledPostsLimit: -1,
   },
-  // Founders Club: launch pricing with Pro feature access.
   [TIERS.FOUNDER]: {
-    aiGenerations: 800,
-    // Per-feature monthly limits
+    aiGenerations: TIER_CREDIT_POOLS.founder,
     trendQuickScan: 200,
-    trendDeepDive: 50,
-    contentRemix: 75,
-    igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
+    trendDeepDive: FEATURE_RUN_CAPS.trendDeepDive.founder,
+    contentRemix: FEATURE_RUN_CAPS.contentRemix.founder,
+    igniteEngine: FEATURE_RUN_CAPS.igniteEngine.founder,
+    planBuilder: FEATURE_RUN_CAPS.planBuilder7Day.founder + FEATURE_RUN_CAPS.planBuilder14Day.founder,
+    planBuilder7Day: FEATURE_RUN_CAPS.planBuilder7Day.founder,
+    planBuilder14Day: FEATURE_RUN_CAPS.planBuilder14Day.founder,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -239,23 +258,24 @@ export const TIER_LIMITS = {
     trendForecaster: true,
     trendLab: true,
     fullPostBuilder: true,
-    fullPostBuilderRuns: 40,
+    fullPostBuilderRuns: FEATURE_RUN_CAPS.fullPostBuilderRuns.founder,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
-    nicheIntel: 10, // 10 analyses/month
+    nicheIntel: FEATURE_RUN_CAPS.nicheIntel.founder,
     aiPlanBuilderDays: 14,
-    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
-    scheduledPostsLimit: -1, // Unlimited
+    storageLimit: 25 * 1024 * 1024 * 1024,
+    scheduledPostsLimit: -1,
   },
-  // Builders Club: launch pricing with Pro feature access.
   [TIERS.BUILDER]: {
-    aiGenerations: 800,
+    aiGenerations: TIER_CREDIT_POOLS.builder,
     trendQuickScan: 200,
-    trendDeepDive: 50,
-    contentRemix: 75,
-    igniteEngine: 60, // HUTTLE AI: updated 3
-    planBuilder: 20, // mirrored in api/_utils/planBuilderLimits.js for create-plan-builder-job
+    trendDeepDive: FEATURE_RUN_CAPS.trendDeepDive.builder,
+    contentRemix: FEATURE_RUN_CAPS.contentRemix.builder,
+    igniteEngine: FEATURE_RUN_CAPS.igniteEngine.builder,
+    planBuilder: FEATURE_RUN_CAPS.planBuilder7Day.builder + FEATURE_RUN_CAPS.planBuilder14Day.builder,
+    planBuilder7Day: FEATURE_RUN_CAPS.planBuilder7Day.builder,
+    planBuilder14Day: FEATURE_RUN_CAPS.planBuilder14Day.builder,
     captionGenerator: true,
     hashtagGenerator: true,
     hookBuilder: true,
@@ -267,13 +287,13 @@ export const TIER_LIMITS = {
     trendForecaster: true,
     trendLab: true,
     fullPostBuilder: true,
-    fullPostBuilderRuns: 40,
+    fullPostBuilderRuns: FEATURE_RUN_CAPS.fullPostBuilderRuns.builder,
     humanizerScore: true,
     performancePrediction: true,
     algorithmChecker: true,
-    nicheIntel: 10,
+    nicheIntel: FEATURE_RUN_CAPS.nicheIntel.builder,
     aiPlanBuilderDays: 14,
-    storageLimit: 25 * 1024 * 1024 * 1024, // 25GB in bytes
+    storageLimit: 25 * 1024 * 1024 * 1024,
     scheduledPostsLimit: -1,
   },
 };
@@ -392,25 +412,28 @@ export async function getFeatureUsageCount(userId, feature) {
 
 /**
  * Get overall AI generations used this billing cycle (all features combined).
+ * Dashboard auto-generation rows (metadata.source = 'dashboard_daily_generation')
+ * are EXCLUDED so they never deduct from the user's monthly pool.
+ *
  * @param {string} userId
  * @returns {Promise<number>}
  */
 export async function getOverallAIUsageCount(userId) {
   try {
-    // KNOWN EDGE: local start-of-month vs UTC `created_at` — same caveat as getFeatureUsageCount; keep rollover logic aligned.
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
     // Only count 'aiGenerations' rows to avoid double-counting.
-    // Each feature usage creates a feature-specific row + an 'aiGenerations' row.
-    // If we counted ALL rows, we'd double the actual usage.
+    // Each feature usage creates a feature-specific run-counter row + aiGenerations credit rows.
     const { count, error } = await supabase
       .from(TABLES.ACTIVITY)
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('feature', 'aiGenerations')
-      .gte('created_at', startOfMonth.toISOString());
+      // Exclude dashboard auto-generation rows (creditConfig.DASHBOARD_GENERATION_SOURCE).
+      // NOTE: a plain `.neq()` on a JSON path also excludes NULL rows; we OR in `is.null`
+      // so feature rows without a `source` key (the majority) still count.
+      .or(
+        `metadata->>source.is.null,metadata->>source.neq.${DASHBOARD_GENERATION_SOURCE}`
+      )
+      .gte('created_at', getStartOfMonthISO());
 
     if (error) throw error;
     return count || 0;

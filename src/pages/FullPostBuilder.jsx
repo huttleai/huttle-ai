@@ -248,7 +248,15 @@ export default function FullPostBuilder() {
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
   const { addToast } = useToast();
-  const { featureUsed, featureLimit, trackFeatureUsage } = useAIUsage('fullPostBuilderRuns');
+  const {
+    featureUsed,
+    featureLimit,
+    overallUsed,
+    overallLimit,
+    creditsPerRun,
+    trackFeatureUsage,
+    checkCanGenerate,
+  } = useAIUsage('fullPostBuilderRuns');
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -601,6 +609,11 @@ export default function FullPostBuilder() {
 
       const chargeOnceIfNeeded = async () => {
         if (hooksRunPaidRef.current) return true;
+        const gate = await checkCanGenerate();
+        if (!gate.allowed) {
+          addToast(gate.message || 'AI limit reached', 'warning');
+          return false;
+        }
         const usage = await trackFeatureUsage({
           step: 'hooks',
           overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
@@ -1429,6 +1442,9 @@ export default function FullPostBuilder() {
             <AIUsageMeter
               used={featureUsed}
               limit={featureLimit}
+              poolUsed={overallUsed}
+              poolLimit={overallLimit}
+              creditsPerRun={creditsPerRun}
               label="Full Post runs this month"
               compact
             />

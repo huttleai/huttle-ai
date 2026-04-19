@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { isComingSoonFeature } from '../config/creditConfig';
 
 /**
  * Trend Lab Page - Feature Separation
@@ -190,8 +191,18 @@ export default function TrendLab() {
           ))}
         </div>
 
-        {/* Trend Forecaster Card - Paid Tiers Only */}
-        <div className="trend-card bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl shadow-sm border border-gray-300 overflow-hidden hover:shadow-lg transition-all relative">
+        {/* Trend Forecaster Card — disabled until launch, driven by COMING_SOON_FEATURES. */}
+        {(() => {
+          const isComingSoon = isComingSoonFeature('trendForecaster');
+          return (
+        <div
+          className={`trend-card rounded-xl shadow-sm border overflow-hidden transition-all relative ${
+            isComingSoon
+              ? 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300 opacity-80 cursor-not-allowed'
+              : 'bg-white border-gray-200 hover:shadow-lg'
+          }`}
+          aria-disabled={isComingSoon}
+        >
           <div className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-4 flex-1">
@@ -201,31 +212,40 @@ export default function TrendLab() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-lg font-bold text-gray-900">Trend Forecaster</h3>
-                    <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded">
-                      COMING SOON
-                    </span>
+                    {isComingSoon && (
+                      <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded">
+                        COMING SOON
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-700 mb-4">
-                    Trend Forecaster is launching soon. You will get a 7-day outlook for rising trends in {brandData?.niche || 'your niche'} with velocity predictions and actionable post ideas.
+                    {isComingSoon
+                      ? `Trend Forecaster is launching soon. You will get a 7-day outlook for rising trends in ${brandData?.niche || 'your niche'} with velocity predictions and actionable post ideas.`
+                      : `A 7-day outlook for rising trends in ${brandData?.niche || 'your niche'}.`}
                   </p>
                   <div className="space-y-3">
                     <div className="bg-white/60 rounded-lg p-4 border border-gray-300">
                       <p className="text-sm text-gray-600 italic">
                         {`"${brandData?.niche || 'your niche'} trends surge next week: 3 post ideas ready"`}
                       </p>
-                      <p className="text-xs text-gray-500 mt-2">Preview of what you'll get</p>
+                      <p className="text-xs text-gray-500 mt-2">Preview of what you&apos;ll get</p>
                     </div>
                     <button
-                      disabled
-                      className="flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-500 rounded-lg cursor-not-allowed font-semibold"
+                      disabled={isComingSoon}
+                      aria-disabled={isComingSoon}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
+                        isComingSoon
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-huttle-primary text-white hover:bg-huttle-primary-dark'
+                      }`}
                     >
                       <Calendar className="w-5 h-5" />
-                      Coming Soon
+                      {isComingSoon ? 'Coming Soon' : 'Generate Forecast'}
                     </button>
                   </div>
                 </div>
               </div>
-              {trendForecast && checkFeatureAccess('trendForecasts') && (
+              {!isComingSoon && trendForecast && checkFeatureAccess('trendForecasts') && (
                 <button
                   onClick={() => toggleCard('trendForecaster')}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-all"
@@ -240,7 +260,7 @@ export default function TrendLab() {
             </div>
 
             {/* Trend Forecast Content */}
-            {trendForecast && !collapsedCards.trendForecaster && checkFeatureAccess('trendForecasts') && (
+            {!isComingSoon && trendForecast && !collapsedCards.trendForecaster && checkFeatureAccess('trendForecasts') && (
               <div className="space-y-6 mt-6 pt-6 border-t border-huttle-200 animate-fadeIn">
                 <AIDisclaimerFooter 
                   phraseIndex={0} 
@@ -338,6 +358,8 @@ export default function TrendLab() {
             )}
           </div>
         </div>
+          );
+        })()}
 
       </div>
 

@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Clock,
   X,
+  Lock,
+  Sparkles,
 } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -753,7 +755,9 @@ export default function AIPlanBuilder() {
   const { showToast } = useToast();
   const { brandProfile, brandFetchComplete, isCreator } = useBrand();
   const { getTierDisplayName, userTier } = useSubscription();
-  const planUsage = useAIUsage('planBuilder');
+  // selectedPeriod is declared below — we switch the tracked feature key
+  // dynamically so 7-day vs 14-day runs are counted under the correct cap.
+  // (Hook is re-called each render; featureName change triggers a usage refresh.)
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
 
@@ -765,6 +769,10 @@ export default function AIPlanBuilder() {
     setSelectedGoal(CONTENT_GOALS[0]);
   }, [brandFetchComplete, isCreator]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedPeriod, setSelectedPeriod] = useState(7);
+  const planFeatureKey = selectedPeriod === 14 ? 'planBuilder14Day' : 'planBuilder7Day';
+  const planUsage = useAIUsage(planFeatureKey);
+  const canAccess14Day = ['pro', 'founder', 'builder'].includes(userTier);
+  const [show14DayUpgrade, setShow14DayUpgrade] = useState(false);
   const [postingFreqMode, setPostingFreqMode] = useState('5');
   const [postingFreqCustom, setPostingFreqCustom] = useState(5);
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
@@ -1082,8 +1090,15 @@ export default function AIPlanBuilder() {
       return;
     }
 
-    if (!planUsage.canGenerate) {
-      showToast("You've reached your monthly Plan Builder limit. Resets on the 1st.", 'warning');
+    // Server-side enforcement (FIX 6) also rejects this, but fail fast in UI.
+    if (selectedPeriod === 14 && !canAccess14Day) {
+      showToast('14-day plans require Pro or above. Upgrade to unlock.', 'warning');
+      return;
+    }
+
+    const gate = await planUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Plan Builder limit.", 'warning');
       return;
     }
 
@@ -1180,12 +1195,22 @@ export default function AIPlanBuilder() {
           throw new Error('Failed to create job: invalid job id');
         }
 
-      // Charge credit only after we have a valid jobs.id UUID. If the
+      // Charge credits only after we have a valid jobs.id UUID. If the
       // DB insert failed above (createError/null jobId/invalid UUID),
       // we've already thrown and the user is not charged. Every
       // downstream failure (webhook, n8n crash, timeout) remains
       // no-refund — this moves nothing except the charge boundary.
-      await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
+      //
+      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
+      // handler writes the authoritative run-counter row under the same
+      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
+      // would double-count against the monthly cap.
+      await planUsage.trackFeatureUsage({
+        incrementFeatureCounter: false,
+        platforms: selectedPlatforms,
+        goal: selectedGoal,
+        period: selectedPeriod,
+      });
 
       flushSync(() => {
         setCurrentJobId(jobId);
@@ -1374,18 +1399,57 @@ export default function AIPlanBuilder() {
                     Time Period
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {[7, 14].map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={() => setSelectedPeriod(d)}
-                        className={`${pillBase} px-4 py-2 min-w-[100px] flex-1 sm:flex-none ${selectedPeriod === d ? pillActive : pillInactive}`}
-                      >
-                        {d} Days
-                      </button>
-                    ))}
+                    {[7, 14].map((d) => {
+                      const locked = d === 14 && !canAccess14Day;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          disabled={isGenerating}
+                          onClick={() => {
+                            if (locked) {
+                              setShow14DayUpgrade(true);
+                              return;
+                            }
+                            setShow14DayUpgrade(false);
+                            setSelectedPeriod(d);
+                          }}
+                          aria-disabled={locked}
+                          className={`${pillBase} relative px-4 py-2 min-w-[100px] flex-1 sm:flex-none ${
+                            locked
+                              ? 'border border-gray-200 bg-gray-50 text-gray-400 opacity-70 hover:bg-gray-50'
+                              : selectedPeriod === d
+                                ? pillActive
+                                : pillInactive
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            {locked && <Lock className="h-3.5 w-3.5" />}
+                            {d} Days
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {show14DayUpgrade && !canAccess14Day && (
+                    <div className="mt-2 rounded-lg border border-huttle-primary/30 bg-huttle-primary/5 p-3">
+                      <div className="flex items-start gap-2">
+                        <Sparkles className="h-4 w-4 mt-0.5 text-huttle-primary flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">14-Day Plans — Pro &amp; Builders Club</p>
+                          <p className="mt-0.5 text-xs text-gray-600">
+                            Plan two full weeks of content at once. Upgrade to unlock.
+                          </p>
+                          <Link
+                            to="/billing"
+                            className="mt-2 inline-flex items-center gap-1 rounded-md bg-huttle-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-huttle-primary-dark"
+                          >
+                            Upgrade Now
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">

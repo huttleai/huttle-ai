@@ -292,15 +292,19 @@ export default function IgniteEngine() {
 
   const handleGenerate = async () => {
     if (!hasAccess) { setShowUpgradeModal(true); return; }
-    if (isAtLimit || !blueprintUsage.canGenerate) {
-      showToast("You've reached your monthly brief limit. Resets on the 1st.", 'warning');
+    if (!isFormValid) { showToast('Please fill in all required fields', 'warning'); return; }
+
+    // Pre-flight: enforce both run cap and credit pool from creditConfig.js.
+    const gate = await blueprintUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly brief limit.", 'warning');
       return;
     }
-    if (!isFormValid) { showToast('Please fill in all required fields', 'warning'); return; }
 
     setIsGenerating(true);
     setParseError(false);
     setBriefGenerationError('');
+    // overallCredits auto-derived from FEATURE_CREDIT_COSTS.igniteEngine (3).
     await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
 
     let scriptPolishGen = 0;
@@ -573,6 +577,9 @@ export default function IgniteEngine() {
                 <AIUsageMeter
                   used={blueprintUsage.featureUsed}
                   limit={blueprintUsage.featureLimit}
+                  poolUsed={blueprintUsage.overallUsed}
+                  poolLimit={blueprintUsage.overallLimit}
+                  creditsPerRun={blueprintUsage.creditsPerRun}
                   label="Briefs this month"
                   compact
                 />
