@@ -10,7 +10,7 @@ import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
 import PlatformSelector from '../components/PlatformSelector';
 import UpgradeModal from '../components/UpgradeModal';
-import AIUsageMeter from '../components/AIUsageMeter';
+import RunCapMeter from '../components/RunCapMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
@@ -49,15 +49,10 @@ const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
 export default function NicheIntel() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { checkFeatureAccess } = useSubscription();
+  const { checkFeatureAccess, userTier } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const {
-    featureUsed,
-    featureLimit,
-    overallUsed,
-    overallLimit,
-    creditsPerRun,
     trackFeatureUsage,
     checkCanGenerate,
     canGenerate,
@@ -391,17 +386,13 @@ export default function NicheIntel() {
               <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
             </div>
           </div>
-          <div className="mt-3">
-            <AIUsageMeter
-              used={featureUsed}
-              limit={featureLimit}
-              poolUsed={overallUsed}
-              poolLimit={overallLimit}
-              creditsPerRun={creditsPerRun}
-              label="Analyses this month"
-              compact
-            />
-          </div>
+          <RunCapMeter
+            featureKey="nicheIntel"
+            tier={userTier}
+            featureLabel="Niche Intel runs"
+            creditLabel="Sonar Pro research + Grok analysis"
+            className="mt-3"
+          />
         </div>
 
         {/* Input Panel */}

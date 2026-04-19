@@ -14,6 +14,7 @@ import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
 import useAIUsage from '../hooks/useAIUsage';
 import AIUsageMeter from './AIUsageMeter';
+import RunCapMeter from './RunCapMeter';
 import { getPlatformIcon } from './SocialIcons';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
@@ -111,7 +112,7 @@ export default function TrendDiscoveryHub() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { getFeatureLimit } = useSubscription();
+  const { getFeatureLimit, userTier } = useSubscription();
   const quickScanUsage = useAIUsage('trendQuickScan');
   const deepDiveUsage = useAIUsage('trendDeepDive');
   
@@ -706,14 +707,11 @@ export default function TrendDiscoveryHub() {
               />
             )}
             {activeMode === 'deepDive' && (
-              <AIUsageMeter
-                used={deepDiveUsage.featureUsed}
-                limit={deepDiveUsage.featureLimit}
-                poolUsed={deepDiveUsage.overallUsed}
-                poolLimit={deepDiveUsage.overallLimit}
-                creditsPerRun={deepDiveUsage.creditsPerRun}
-                label="Deep Dives this month"
-                compact
+              <RunCapMeter
+                featureKey="trendDeepDive"
+                tier={userTier}
+                featureLabel="Deep Dive runs"
+                creditLabel="Sonar Pro high context · 15–30 sec"
               />
             )}
           </div>

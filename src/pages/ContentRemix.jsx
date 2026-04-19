@@ -10,7 +10,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
-import AIUsageMeter from '../components/AIUsageMeter';
+import RunCapMeter from '../components/RunCapMeter';
+import { useSubscription } from '../context/SubscriptionContext';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
@@ -120,6 +121,7 @@ export default function ContentRemix() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
+  const { userTier } = useSubscription();
   const remixUsage = useAIUsage('contentRemix');
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -641,18 +643,13 @@ export default function ContentRemix() {
               </p>
             </div>
           </div>
-          {/* Per-feature usage meter */}
-          <div className="mt-3">
-            <AIUsageMeter
-              used={remixUsage.featureUsed}
-              limit={remixUsage.featureLimit}
-              poolUsed={remixUsage.overallUsed}
-              poolLimit={remixUsage.overallLimit}
-              creditsPerRun={remixUsage.creditsPerRun}
-              label="Remixes this month"
-              compact
-            />
-          </div>
+          <RunCapMeter
+            featureKey="contentRemix"
+            tier={userTier}
+            featureLabel="Content Remix runs"
+            creditLabel="Sonnet 4.6 primary · Grok fallback"
+            className="mt-3"
+          />
         </div>
 
         {/* Step Progress — compact on mobile */}

@@ -20,6 +20,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { createJobDirectly, triggerN8nWebhook } from '../services/planBuilderAPI';
 import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
+import RunCapMeter from '../components/RunCapMeter';
 import { AuthContext } from '../context/AuthContext';
 import {
   InstagramIconMono,
@@ -1323,6 +1324,22 @@ export default function AIPlanBuilder() {
                 : 'Generate your content strategy'}
             </p>
           </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          <RunCapMeter
+            featureKey="planBuilder7Day"
+            tier={userTier}
+            featureLabel="7-day plan builds"
+            creditLabel="Sonnet 4.6 via n8n · async content plan"
+          />
+          {canAccess14Day && (
+            <RunCapMeter
+              featureKey="planBuilder14Day"
+              tier={userTier}
+              featureLabel="14-day plan builds"
+              creditLabel="Sonnet 4.6 via n8n · extended strategy plan"
+            />
+          )}
         </div>
       </div>
 

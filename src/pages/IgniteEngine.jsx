@@ -44,7 +44,7 @@ import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
-import AIUsageMeter from '../components/AIUsageMeter';
+import RunCapMeter from '../components/RunCapMeter';
 import {
   getSectionsForType,
   getBlueprintLabel,
@@ -572,20 +572,16 @@ export default function IgniteEngine() {
                 </p>
               </div>
             </div>
-            {hasAccess && (
-              <div className="w-full shrink-0 sm:w-auto sm:min-w-[200px]">
-                <AIUsageMeter
-                  used={blueprintUsage.featureUsed}
-                  limit={blueprintUsage.featureLimit}
-                  poolUsed={blueprintUsage.overallUsed}
-                  poolLimit={blueprintUsage.overallLimit}
-                  creditsPerRun={blueprintUsage.creditsPerRun}
-                  label="Briefs this month"
-                  compact
-                />
-              </div>
-            )}
           </div>
+          {hasAccess && (
+            <RunCapMeter
+              featureKey="igniteEngine"
+              tier={userTier}
+              featureLabel="Ignite Engine runs"
+              creditLabel="Sonar Pro + Grok → Sonnet blueprint"
+              className="mt-3"
+            />
+          )}
         </div>
 
         {/* ─── INPUT FORM ─────────────────────────────────────── */}
