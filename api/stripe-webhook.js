@@ -226,6 +226,47 @@ async function updateSubscriptionRecord({
     priceId,
   });
 
+  // Cross-user safety check: refuse to overwrite another user's subscription
+  // row if this customer_id or subscription_id is already bound to a different
+  // user_id in our database. This prevents a misconfigured or corrupted
+  // customer mapping from silently hijacking another account's billing state.
+  const { data: existingBySubId } = await supabase
+    .from('subscriptions')
+    .select('user_id, stripe_customer_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .maybeSingle();
+
+  if (existingBySubId && existingBySubId.user_id && existingBySubId.user_id !== userId) {
+    logError('stripe_webhook.cross_user_subscription_conflict', {
+      incomingUserId: userId,
+      existingUserId: existingBySubId.user_id,
+      subscriptionId: subscription.id,
+      customerId,
+    });
+    throw new Error(
+      `Stripe subscription ${subscription.id} is already bound to a different user — aborting sync.`
+    );
+  }
+
+  const { data: existingByCustomerId } = await supabase
+    .from('subscriptions')
+    .select('user_id')
+    .eq('stripe_customer_id', customerId)
+    .neq('user_id', userId)
+    .maybeSingle();
+
+  if (existingByCustomerId?.user_id) {
+    logError('stripe_webhook.cross_user_customer_conflict', {
+      incomingUserId: userId,
+      existingUserId: existingByCustomerId.user_id,
+      customerId,
+      subscriptionId: subscription.id,
+    });
+    throw new Error(
+      `Stripe customer ${customerId} is already bound to user ${existingByCustomerId.user_id} — refusing to rebind to ${userId}.`
+    );
+  }
+
   const payload = {
     user_id: userId,
     stripe_subscription_id: subscription.id,
@@ -483,23 +524,76 @@ export default async function handler(req, res) {
             break;
           }
 
-          if (profile) {
+          // Fallback: if user_profile has no mapping yet (e.g. row was never
+          // backfilled), trust the subscription.metadata.supabase_user_id that
+          // the create-checkout-session endpoint stamped when it was created.
+          // The Stripe customer's own metadata is a last-resort tiebreaker.
+          let resolvedUserId = profile?.user_id || null;
+          if (!resolvedUserId) {
+            const metadataUserId = subscription.metadata?.supabase_user_id || null;
+            if (metadataUserId) {
+              resolvedUserId = metadataUserId;
+              logInfo('stripe_webhook.subscription_user_from_metadata', {
+                eventId: event.id,
+                customerId,
+                userId: metadataUserId,
+              });
+            } else {
+              try {
+                const customer = await stripe.customers.retrieve(customerId);
+                if (!customer.deleted && customer.metadata?.supabase_user_id) {
+                  resolvedUserId = customer.metadata.supabase_user_id;
+                  logInfo('stripe_webhook.subscription_user_from_customer_metadata', {
+                    eventId: event.id,
+                    customerId,
+                    userId: resolvedUserId,
+                  });
+                }
+              } catch (custErr) {
+                logWarn('stripe_webhook.customer_metadata_lookup_failed', {
+                  eventId: event.id,
+                  customerId,
+                  error: custErr.message,
+                });
+              }
+            }
+          }
+
+          if (resolvedUserId) {
             const tier = await updateSubscriptionRecord({
-              userId: profile.user_id,
+              userId: resolvedUserId,
               customerId,
               subscription,
             });
+
+            // Backfill user_profile mapping once we know the user — future
+            // webhooks will then resolve via the fast path above.
+            if (!profile) {
+              try {
+                await supabase.from('user_profile').upsert({
+                  user_id: resolvedUserId,
+                  stripe_customer_id: customerId,
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: 'user_id' });
+              } catch (backfillErr) {
+                logWarn('stripe_webhook.user_profile_backfill_failed', {
+                  eventId: event.id,
+                  userId: resolvedUserId,
+                  error: backfillErr.message,
+                });
+              }
+            }
 
             if (event.type === 'customer.subscription.updated') {
               try {
                 const { error: usersTierError } = await supabase
                   .from('users')
                   .update({ subscription_tier: tier })
-                  .eq('id', profile.user_id);
+                  .eq('id', resolvedUserId);
                 if (usersTierError) {
                   logError('stripe_webhook.users_subscription_tier_sync_failed', {
                     eventId: event.id,
-                    userId: profile.user_id,
+                    userId: resolvedUserId,
                     context: 'customer.subscription.updated',
                     error: usersTierError.message,
                   });
@@ -507,12 +601,18 @@ export default async function handler(req, res) {
               } catch (usersTierErr) {
                 logError('stripe_webhook.users_subscription_tier_sync_failed', {
                   eventId: event.id,
-                  userId: profile.user_id,
+                  userId: resolvedUserId,
                   context: 'customer.subscription.updated',
                   error: usersTierErr.message,
                 });
               }
             }
+          } else {
+            logWarn('stripe_webhook.subscription_updated_no_user_found', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });

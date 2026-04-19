@@ -42,9 +42,13 @@ export default function FoundersMembershipCard({
   const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Builders Club';
   const expiryDate = formatDate(subscription?.currentPeriodEnd);
   const startDate = formatDate(subscription?.currentPeriodStart);
-  const planBenefits = isFounder
-    ? SUBSCRIPTION_PLANS.FOUNDER.features.features
-    : SUBSCRIPTION_PLANS.BUILDER.features.features;
+  // Null-safe plan-benefits lookup. Even if SUBSCRIPTION_PLANS shape changes
+  // or the tier resolves to something unexpected (e.g. a degraded/null
+  // subscription), we render an empty list instead of throwing in the render path.
+  const planConfig = isFounder ? SUBSCRIPTION_PLANS?.FOUNDER : SUBSCRIPTION_PLANS?.BUILDER;
+  const planBenefits = Array.isArray(planConfig?.features?.features)
+    ? planConfig.features.features
+    : [];
   const pricingLabel = isFounder
     ? '$199/year — locked in for life'
     : '$249/year — locked while active';
@@ -207,7 +211,7 @@ export default function FoundersMembershipCard({
         </div>
 
         {/* Invoices section */}
-        {invoices.length > 0 && (
+        {Array.isArray(invoices) && invoices.length > 0 && (
           <div className="border-t border-gray-100 px-6 py-5 md:px-8">
             <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-gray-400 mb-3">Recent Invoices</h3>
             <div className="space-y-2">
@@ -251,7 +255,7 @@ export default function FoundersMembershipCard({
         )}
 
         {/* Footer actions */}
-        <div className="border-t border-gray-100 px-6 py-4 md:px-8 flex items-center justify-between">
+        <div className="border-t border-gray-100 px-6 py-4 md:px-8 flex flex-wrap items-center justify-between gap-3">
           {isCancellationScheduled ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
               Cancellation scheduled — access until {expiryDate}

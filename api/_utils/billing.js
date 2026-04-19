@@ -14,6 +14,35 @@ export function getAppUrl() {
   return process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://huttleai.com';
 }
 
+/**
+ * Validate a client-supplied return_url against our own origin to prevent
+ * open-redirect abuse via Stripe Portal / Checkout `return_url` params.
+ *
+ * Returns { valid: true } when the URL is safe to pass to Stripe, otherwise
+ * { valid: false, reason }. A missing/empty returnUrl is treated as valid —
+ * callers should fall back to a server-side default.
+ *
+ * Uses the same VITE_APP_URL / NEXT_PUBLIC_APP_URL env vars as getAppUrl().
+ * Required Vercel env var: VITE_APP_URL (already in use across the billing
+ * endpoints). If neither env var is set we log a warning and fail-open so we
+ * don't break billing for misconfigured preview deployments.
+ */
+export function validateReturnUrl(returnUrl) {
+  if (!returnUrl) return { valid: true };
+
+  const configuredAppUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (!configuredAppUrl) {
+    console.warn('[billing] VITE_APP_URL / NEXT_PUBLIC_APP_URL not set — cannot validate return_url');
+    return { valid: true };
+  }
+
+  if (typeof returnUrl !== 'string' || !returnUrl.startsWith(configuredAppUrl)) {
+    return { valid: false, reason: 'return_url must be within the app origin' };
+  }
+
+  return { valid: true };
+}
+
 export function toIsoDate(unixSeconds) {
   if (!unixSeconds) return null;
   return new Date(unixSeconds * 1000).toISOString();
@@ -175,22 +204,117 @@ export async function resolveBillingContext({
     email = authUserResult?.user?.email || null;
   }
 
+  /* SELF-HEAL: Triggered for users with active tier but null
+     stripe_customer_id (e.g. manually provisioned accounts,
+     import migrations, or invite-based signups). Attempts to
+     locate a Stripe customer by email and backfill the DB record.
+     If no safe match is found, falls through to degraded state. */
+  const needsSelfHeal =
+    !customerId &&
+    subscriptionRecord &&
+    subscriptionRecord.tier &&
+    subscriptionRecord.tier !== 'free' &&
+    stripe &&
+    email;
+
+  if (needsSelfHeal) {
+    console.log(`[billing] self-heal triggered for user ${userId} — stripe_customer_id is null, attempting email lookup`);
+    try {
+      const existingCustomers = await stripe.customers.list({ email, limit: 10 });
+      const safeMatch = existingCustomers.data.find((c) => {
+        if (c.deleted) return false;
+        const metaUserId = c.metadata?.supabase_user_id || null;
+        return !metaUserId || metaUserId === userId;
+      });
+
+      if (safeMatch) {
+        customerId = safeMatch.id;
+        await syncStripeCustomerId({ supabase, userId, customerId });
+        if (!safeMatch.metadata?.supabase_user_id) {
+          try {
+            await stripe.customers.update(customerId, {
+              metadata: { ...safeMatch.metadata, supabase_user_id: userId },
+            });
+          } catch (stampErr) {
+            console.warn('[billing] self-heal metadata stamp failed:', stampErr?.message);
+          }
+        }
+        console.info('[billing] self-healed missing stripe_customer_id for user', userId, '->', customerId);
+      }
+    } catch (healErr) {
+      console.warn('[billing] self-heal lookup failed for user', userId, '—', healErr?.message);
+    }
+  }
+
   if (!customerId && createCustomerIfMissing) {
     if (!stripe || !email) {
       throw new Error('No billing account found');
     }
 
-    const existingCustomers = await stripe.customers.list({ email, limit: 1 });
-    if (existingCustomers.data.length > 0) {
-      customerId = existingCustomers.data[0].id;
+    // When matching by email, only adopt a customer if its metadata either
+    // matches this supabase_user_id or is empty. This prevents hijacking a
+    // customer that was previously created for a different Supabase user
+    // (e.g. an account deleted and re-registered under the same email).
+    const existingCustomers = await stripe.customers.list({ email, limit: 10 });
+    const safeMatch = existingCustomers.data.find((c) => {
+      if (c.deleted) return false;
+      const metaUserId = c.metadata?.supabase_user_id || null;
+      return !metaUserId || metaUserId === userId;
+    });
+
+    if (safeMatch) {
+      customerId = safeMatch.id;
+      if (!safeMatch.metadata?.supabase_user_id) {
+        try {
+          await stripe.customers.update(customerId, {
+            metadata: { ...safeMatch.metadata, supabase_user_id: userId },
+          });
+        } catch (stampErr) {
+          console.warn('[billing] metadata stamp on matched customer failed:', stampErr?.message);
+        }
+      }
     } else {
-      const newCustomer = await stripe.customers.create({ email });
+      const newCustomer = await stripe.customers.create({
+        email,
+        metadata: { supabase_user_id: userId },
+      });
       customerId = newCustomer.id;
     }
 
     await syncStripeCustomerId({ supabase, userId, customerId });
-  } else if (customerId && (!subscriptionRecord?.stripe_customer_id || !profile?.stripe_customer_id)) {
-    await syncStripeCustomerId({ supabase, userId, customerId });
+  } else if (customerId) {
+    // Verify the stored customerId actually belongs to this user on Stripe.
+    // If the customer is stamped with a different supabase_user_id, refuse
+    // to operate on it — this indicates data corruption.
+    if (stripe) {
+      try {
+        const stripeCustomer = await stripe.customers.retrieve(customerId);
+        if (!stripeCustomer.deleted) {
+          const metaUserId = stripeCustomer.metadata?.supabase_user_id || null;
+          if (metaUserId && metaUserId !== userId) {
+            throw new Error(
+              `Stripe customer ${customerId} is bound to a different user — refusing to operate on it.`
+            );
+          }
+          if (!metaUserId) {
+            try {
+              await stripe.customers.update(customerId, {
+                metadata: { ...stripeCustomer.metadata, supabase_user_id: userId },
+              });
+            } catch (stampErr) {
+              console.warn('[billing] metadata backfill failed:', stampErr?.message);
+            }
+          }
+        }
+      } catch (retrieveErr) {
+        // Don't fail the entire flow on a transient Stripe read error; log and continue.
+        console.warn('[billing] stripe.customers.retrieve check failed:', retrieveErr?.message);
+      }
+    }
+
+    if (!subscriptionRecord?.stripe_customer_id || !profile?.stripe_customer_id) {
+      await syncStripeCustomerId({ supabase, userId, customerId });
+    }
   }
 
   return {

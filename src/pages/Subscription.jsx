@@ -135,6 +135,7 @@ export default function Subscription() {
     hasPaidAccess,
     getTierDisplayName,
     loading: subscriptionLoading,
+    subscriptionReady,
     subscriptionError,
     isSubscriptionDegraded,
   } = useSubscription();
@@ -146,6 +147,10 @@ export default function Subscription() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [billingData, setBillingData] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  // Inline banner flag for an HTTP 409 from /api/create-checkout-session
+  // (billing account conflict — stripe_customer_id belongs to another auth
+  // user). A toast auto-dismisses; this must stay visible on the page.
+  const [hasCheckoutConflict, setHasCheckoutConflict] = useState(false);
   const checkoutResetTimeoutRef = useRef(null);
 
   const demoMode = isDemoMode() || contextDemoMode;
@@ -170,11 +175,17 @@ export default function Subscription() {
     }
   }, []);
 
+  // Trigger a subscription refresh only when we truly haven't resolved yet.
+  // Depending on `subscriptionLoading` here creates an infinite loop for users
+  // whose subscription legitimately resolves to null (free tier or degraded
+  // state): loading flips true→false while subscription stays null, re-firing
+  // this effect on every render. The provider already polls every 60s, so we
+  // gate strictly on `subscriptionReady` to avoid re-entering once resolved.
   useEffect(() => {
-    if (user?.id && !subscription && !subscriptionLoading) {
+    if (user?.id && !subscriptionReady && !subscriptionLoading) {
       void refreshSubscription();
     }
-  }, [user?.id, refreshSubscription, subscription, subscriptionLoading]);
+  }, [user?.id, refreshSubscription, subscriptionReady, subscriptionLoading]);
 
   useEffect(() => {
     if (user?.id && hasPaidAccess) {
@@ -218,6 +229,7 @@ export default function Subscription() {
   const handleCheckout = async (planId, billingCycle = 'annual') => {
     const checkoutTab = openStripeCheckoutTab();
     setLoading(planId);
+    setHasCheckoutConflict(false);
 
     try {
       const result = await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
@@ -238,7 +250,20 @@ export default function Subscription() {
       }
 
       if (!result.success) {
-        addToast(result.error || 'Failed to start checkout. Please try again.', 'error');
+        // HTTP 409 from /api/create-checkout-session: a stripe_customer_id in
+        // our DB belongs to a different Supabase auth user. Do NOT redirect to
+        // Stripe or retry — show a sticky inline banner so the user can reach
+        // support. stripeAPI.createCheckoutSession surfaces the backend body
+        // verbatim as `result.error`, so we match on its stable prefix.
+        const errorMessage = result.error || '';
+        if (/billing account conflict/i.test(errorMessage)) {
+          setHasCheckoutConflict(true);
+          if (checkoutTab && !checkoutTab.closed) {
+            try { checkoutTab.close(); } catch { /* ignore */ }
+          }
+        } else {
+          addToast(errorMessage || 'Failed to start checkout. Please try again.', 'error');
+        }
         setLoading(null);
         return;
       }
@@ -308,7 +333,37 @@ export default function Subscription() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8" data-testid="subscription-page">
-      <div className="max-w-6xl mx-auto pt-6 md:pt-0">
+      <div className="w-full max-w-5xl mx-auto pt-6 md:pt-0">
+        {/* Billing conflict banner (HTTP 409 from /api/create-checkout-session).
+            Sticks until the user retries or dismisses — matches the
+            degraded-state red banner style used in the free-user view below. */}
+        {hasCheckoutConflict && (
+          <div
+            role="alert"
+            data-testid="checkout-conflict-banner"
+            className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-900">Billing account conflict</p>
+              <p className="text-sm text-red-700">
+                There&apos;s a billing account conflict on this account. Please contact support at{' '}
+                <a href="mailto:support@huttleai.com" className="underline font-semibold">
+                  support@huttleai.com
+                </a>
+                .
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHasCheckoutConflict(false)}
+              className="text-sm font-semibold text-red-900 hover:text-red-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Past due banner */}
         {isPastDue && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
@@ -356,7 +411,7 @@ export default function Subscription() {
 
         {/* Loading state */}
         {isResolvingSubscription ? (
-          <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 md:p-8 shadow-sm">
             <div className="flex items-start gap-3">
               <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-huttle-primary flex-shrink-0" />
               <div>
@@ -369,7 +424,7 @@ export default function Subscription() {
           </div>
         ) : hasPaidAccess ? (
           /* ===== PAID USER VIEW ===== */
-          <div className="max-w-4xl mx-auto space-y-8">
+          <div className="w-full space-y-6 md:space-y-8">
             {/* Degraded banner */}
             {isSubscriptionDegraded && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
@@ -555,9 +610,9 @@ export default function Subscription() {
           </div>
         ) : (
           /* ===== FREE/UNPAID USER VIEW (Plan Selection) ===== */
-          <div className="space-y-12">
+          <div className="w-full space-y-10 md:space-y-12">
             {isSubscriptionDegraded && (
-              <div className="max-w-5xl mx-auto rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-semibold text-red-900">We couldn&apos;t load your subscription status</p>
@@ -581,7 +636,7 @@ export default function Subscription() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {LAUNCH_PLANS.map((plan) => (
                 <div key={plan.id} className="relative bg-white rounded-2xl border border-gray-200 p-6 lg:p-8 shadow-sm flex flex-col">
                   <div className="flex items-center justify-between mb-5">
@@ -635,7 +690,7 @@ export default function Subscription() {
             </div>
 
             {/* Future plans */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm max-w-5xl mx-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <CreditCard className="w-6 h-6 text-huttle-primary" />
                 <div>
