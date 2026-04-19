@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { authenticateBillingRequest, getAppUrl, resolveBillingContext } from './_utils/billing.js';
+import { authenticateBillingRequest, getAppUrl, resolveBillingContext, validateReturnUrl } from './_utils/billing.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -37,6 +37,17 @@ export default async function handler(req, res) {
     }
 
     const { return_url: returnUrl } = req.body ?? {};
+
+    // SECURITY: prevent open-redirect via Stripe cancel_url. Validate AFTER
+    // authentication so unauthenticated probes can't enumerate behavior.
+    const returnUrlCheck = validateReturnUrl(returnUrl);
+    if (!returnUrlCheck.valid) {
+      return res.status(400).json({
+        error: 'Invalid return URL',
+        code: 'INVALID_RETURN_URL',
+      });
+    }
+
     const { customerId } = await resolveBillingContext({
       supabase,
       stripe,

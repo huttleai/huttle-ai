@@ -13,6 +13,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { isLaunchPlan } from './_utils/stripePlans.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 
 // Validate Stripe key exists
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -65,43 +66,75 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get user from Authorization header if available
+    // SECURITY: Authentication is REQUIRED. Previously this endpoint accepted
+    // unauthenticated calls and let the webhook guess the user via email,
+    // which could attach the subscription to the wrong Supabase user when the
+    // same email ever mapped to multiple auth records. We now always bind
+    // checkout to the authenticated user_id so Stripe metadata is the source
+    // of truth downstream.
+    if (!supabase) {
+      console.error('[create-checkout-session] Supabase service role client not configured');
+      return res.status(500).json({ error: 'Authentication service not configured' });
+    }
+
+    const authResult = await authenticateBillingRequest(req, supabase);
+    if (authResult.error || !authResult.user) {
+      return res.status(authResult.statusCode || 401).json({
+        error: authResult.error || 'Authentication required to start checkout',
+      });
+    }
+
+    const userId = authResult.user.id;
+    const customerEmail = authResult.user.email || null;
     let customerId = null;
-    let customerEmail = null;
-    let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      try {
-        const bearerMatch = /^Bearer\s+(\S+)/i.exec(String(authHeader).trim());
-        const token = bearerMatch ? bearerMatch[1] : null;
-        if (!token) {
-          throw new Error('Invalid Bearer token');
-        }
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        
-        if (user && !error) {
-          userId = user.id;
-          customerEmail = user.email;
-          
-          // Check if user already has a Stripe customer ID
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profile')
-            .select('stripe_customer_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          
-          if (profileError) {
-            console.warn('[create-checkout-session] user_profile lookup:', profileError.message);
-          }
-          
-          if (profile?.stripe_customer_id) {
-            customerId = profile.stripe_customer_id;
-          }
-        }
-      } catch (e) {
-        console.warn('Could not get user from auth header:', e.message);
+
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profile')
+        .select('stripe_customer_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn('[create-checkout-session] user_profile lookup:', profileError.message);
       }
+
+      if (profile?.stripe_customer_id) {
+        // Verify the customer still exists in Stripe and, if it carries
+        // supabase_user_id metadata, that it matches this authenticated user.
+        try {
+          const existingCustomer = await stripe.customers.retrieve(profile.stripe_customer_id);
+          if (!existingCustomer.deleted) {
+            const metadataUserId = existingCustomer.metadata?.supabase_user_id || null;
+            if (metadataUserId && metadataUserId !== userId) {
+              console.error('[create-checkout-session] cross-user customer mismatch', {
+                userId,
+                customerId: profile.stripe_customer_id,
+                metadataUserId,
+              });
+              return res.status(409).json({
+                error: 'Billing account conflict detected. Please contact support@huttleai.com',
+              });
+            }
+            customerId = profile.stripe_customer_id;
+            // Opportunistically stamp the customer with the user_id so future
+            // matches are deterministic even if email collisions occur.
+            if (!metadataUserId) {
+              try {
+                await stripe.customers.update(customerId, {
+                  metadata: { ...existingCustomer.metadata, supabase_user_id: userId },
+                });
+              } catch (stampErr) {
+                console.warn('[create-checkout-session] metadata stamp failed:', stampErr.message);
+              }
+            }
+          }
+        } catch (retrieveErr) {
+          console.warn('[create-checkout-session] stripe.customers.retrieve failed:', retrieveErr.message);
+        }
+      }
+    } catch (lookupErr) {
+      console.warn('[create-checkout-session] customer resolve error:', lookupErr.message);
     }
 
     const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });

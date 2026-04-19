@@ -60,9 +60,10 @@ export default function BillingManagementPanel({
 
   const normalizedTier = normalizeTier(userTier || subscription?.tier || subscription?.plan);
   const isFounderTier = normalizedTier === 'founder' || normalizedTier === 'builder';
-  const currentSubscription = summary?.subscription || subscription;
+  const currentSubscription = summary?.subscription || subscription || null;
   const paymentMethod = paymentMethodOverride || summary?.paymentMethod || null;
-  const visibleInvoices = compact ? invoices.slice(0, 3) : invoices;
+  const safeInvoices = Array.isArray(invoices) ? invoices : [];
+  const visibleInvoices = compact ? safeInvoices.slice(0, 3) : safeInvoices;
 
   const loadBillingData = useCallback(async ({ silent = false } = {}) => {
     if (silent) {
