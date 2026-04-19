@@ -175,6 +175,9 @@ export default async function handler(req, res) {
     // Create checkout session options
     const sessionOptions = {
       mode: 'subscription',
+      // Binds the authenticated Supabase user UUID to the Stripe session at
+      // the platform level — more reliable than metadata for webhook user resolution.
+      client_reference_id: userId,
       payment_method_types: ['card'],
       payment_method_collection: 'always',
       line_items: [

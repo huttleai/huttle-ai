@@ -368,6 +368,17 @@ export default async function handler(req, res) {
           const subscriptionId = session.subscription;
           const customerEmail = session.customer_email || session.customer_details?.email;
 
+          console.log('[checkout.session.completed] received', {
+            eventId: event.id,
+            sessionId: session.id,
+            mode: session.mode,
+            customerId,
+            subscriptionId,
+            hasClientReferenceId: Boolean(session.client_reference_id),
+            hasMetadataUserId: Boolean(session.metadata?.supabase_user_id),
+            customerEmail,
+          });
+
           // Setup-mode sessions are payment method updates â sync new card and move on.
           if (session.mode === 'setup' && customerId && session.setup_intent) {
             try {
@@ -401,12 +412,28 @@ export default async function handler(req, res) {
 
           if (!customerId) break;
 
-          // Resolve the Supabase user â prefer the user_id embedded in checkout
-          // metadata (most reliable), then fall back to email lookup.
-          let userId = session.metadata?.supabase_user_id || null;
+          // Resolve the Supabase user. Priority order:
+          // 1. client_reference_id — dedicated Stripe field set at session creation (most reliable)
+          // 2. session.metadata.supabase_user_id — stamped in metadata as a belt-and-suspenders backup
+          // 3. Email lookup — last resort for sessions created before client_reference_id was added
+          let userId = session.client_reference_id || session.metadata?.supabase_user_id || null;
           let customerName = session.customer_details?.name || '';
 
+          console.log('[checkout.session.completed] user resolution', {
+            eventId: event.id,
+            sessionId: session.id,
+            customerId,
+            subscriptionId,
+            source: session.client_reference_id
+              ? 'client_reference_id'
+              : session.metadata?.supabase_user_id
+              ? 'metadata'
+              : 'email_fallback',
+            userId,
+          });
+
           if (!userId && customerEmail) {
+            console.log('[checkout.session.completed] falling back to email lookup', { eventId: event.id, customerEmail });
             const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
               filter: `email.eq.${customerEmail}`,
               page: 1,
@@ -414,13 +441,21 @@ export default async function handler(req, res) {
             });
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
+              console.error('[checkout.session.completed] email lookup failed — cannot proceed', { eventId: event.id, error: userLookupError.message });
               break;
             }
             userId = userList?.users?.[0]?.id ?? null;
+            console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
           }
 
           if (!userId) {
             logWarn('stripe_webhook.checkout_no_user_found', { eventId: event.id, customerId, customerEmail });
+            console.error('[checkout.session.completed] FAILED: could not resolve Supabase user', {
+              eventId: event.id,
+              customerId,
+              customerEmail,
+              clientReferenceId: session.client_reference_id,
+            });
             break;
           }
 
@@ -429,6 +464,7 @@ export default async function handler(req, res) {
           const lastName = nameParts.slice(1).join(' ') || '';
 
           // Backfill the stripe_customer_id on user_profile for future lookups.
+          console.log('[checkout.session.completed] backfilling user_profile', { eventId: event.id, userId, customerId });
           try {
             await supabase.from('user_profile').upsert({
               user_id: userId,
@@ -437,12 +473,15 @@ export default async function handler(req, res) {
             }, { onConflict: 'user_id' });
           } catch (profileErr) {
             logError('stripe_webhook.checkout_profile_upsert_failed', { eventId: event.id, userId, error: profileErr.message });
+            console.error('[checkout.session.completed] user_profile upsert failed', { eventId: event.id, userId, error: profileErr.message });
           }
 
           if (subscriptionId) {
+            console.log('[checkout.session.completed] syncing subscription record', { eventId: event.id, userId, subscriptionId });
             try {
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
               const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
+              console.log('[checkout.session.completed] subscription synced successfully', { eventId: event.id, userId, plan });
 
               try {
                 const { data: userRow, error: userFetchErr } = await supabase
@@ -467,6 +506,7 @@ export default async function handler(req, res) {
                     context: 'checkout.session.completed',
                     error: usersTierError.message,
                   });
+                  console.error('[checkout.session.completed] users.subscription_tier sync failed', { eventId: event.id, userId, error: usersTierError.message });
                 }
 
                 if (userFetchErr) {
@@ -489,10 +529,14 @@ export default async function handler(req, res) {
               }
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
             }
+          } else {
+            console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
           }
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
+          console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
         }
         break;
       }
