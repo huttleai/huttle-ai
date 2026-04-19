@@ -711,6 +711,7 @@ export default function TrendDiscoveryHub() {
                 featureKey="trendDeepDive"
                 tier={userTier}
                 featureLabel="Deep Dive runs"
+                compact
               />
             )}
           </div>

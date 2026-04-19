@@ -377,20 +377,30 @@ export default function NicheIntel() {
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="pt-6 md:pt-0 mb-6 md:mb-8">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+          <div className="flex items-start justify-between gap-3 md:gap-4">
+            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+                <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
+                <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
-              <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
-            </div>
+            <RunCapMeter
+              featureKey="nicheIntel"
+              tier={userTier}
+              featureLabel="Niche Intel runs"
+              compact
+              className="hidden sm:inline-flex flex-shrink-0 mt-2"
+            />
           </div>
           <RunCapMeter
             featureKey="nicheIntel"
             tier={userTier}
             featureLabel="Niche Intel runs"
-            className="mt-3"
+            compact
+            className="sm:hidden mt-2"
           />
         </div>
 

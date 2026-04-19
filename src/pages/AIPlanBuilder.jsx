@@ -1310,32 +1310,52 @@ export default function AIPlanBuilder() {
   return (
     <div className="flex-1 min-h-screen bg-gray-50 font-plan-body text-[#0C1220] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12 max-w-full overflow-x-hidden">
       <div className="pt-6 md:pt-0 mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
-        <div className="flex items-center gap-3 md:gap-4 py-2">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm">
-            <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
+        <div className="flex items-start justify-between gap-3 md:gap-4 py-2">
+          <div className="flex items-center gap-3 md:gap-4 min-w-0">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm flex-shrink-0">
+              <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-plan-display font-bold text-[#0C1220]">
+                AI Plan Builder
+              </h1>
+              <p className="text-sm md:text-base text-gray-500 font-plan-body">
+                {isCreator
+                  ? 'Plan content that grows your personal brand'
+                  : 'Generate your content strategy'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-plan-display font-bold text-[#0C1220]">
-              AI Plan Builder
-            </h1>
-            <p className="text-sm md:text-base text-gray-500 font-plan-body">
-              {isCreator
-                ? 'Plan content that grows your personal brand'
-                : 'Generate your content strategy'}
-            </p>
+          <div className="hidden sm:flex flex-col items-end gap-1 flex-shrink-0 mt-2">
+            <RunCapMeter
+              featureKey="planBuilder7Day"
+              tier={userTier}
+              featureLabel="7-day plans"
+              compact
+            />
+            {canAccess14Day && (
+              <RunCapMeter
+                featureKey="planBuilder14Day"
+                tier={userTier}
+                featureLabel="14-day plans"
+                compact
+              />
+            )}
           </div>
         </div>
-        <div className="mt-3 space-y-2">
+        <div className="sm:hidden mt-2 flex flex-col gap-1">
           <RunCapMeter
             featureKey="planBuilder7Day"
             tier={userTier}
-            featureLabel="7-day plan builds"
+            featureLabel="7-day plans"
+            compact
           />
           {canAccess14Day && (
             <RunCapMeter
               featureKey="planBuilder14Day"
               tier={userTier}
-              featureLabel="14-day plan builds"
+              featureLabel="14-day plans"
+              compact
             />
           )}
         </div>

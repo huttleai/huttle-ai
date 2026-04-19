@@ -553,7 +553,7 @@ export default function IgniteEngine() {
 
         {/* Header — extra top spacing on mobile below fixed top bar */}
         <div className="pt-6 md:pt-0 mb-4 md:mb-6 lg:mb-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3 md:gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 md:gap-4">
             <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 md:h-12 md:w-12 lg:h-14 lg:w-14">
                 <Flame className="h-5 w-5 text-huttle-primary md:h-6 md:w-6 lg:h-7 lg:w-7" />
@@ -572,15 +572,16 @@ export default function IgniteEngine() {
                 </p>
               </div>
             </div>
+            {hasAccess && (
+              <RunCapMeter
+                featureKey="igniteEngine"
+                tier={userTier}
+                featureLabel="Ignite Engine runs"
+                compact
+                className="flex-shrink-0 sm:mt-2"
+              />
+            )}
           </div>
-          {hasAccess && (
-            <RunCapMeter
-              featureKey="igniteEngine"
-              tier={userTier}
-              featureLabel="Ignite Engine runs"
-              className="mt-3"
-            />
-          )}
         </div>
 
         {/* ─── INPUT FORM ─────────────────────────────────────── */}

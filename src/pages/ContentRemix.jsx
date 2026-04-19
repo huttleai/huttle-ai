@@ -630,24 +630,34 @@ export default function ContentRemix() {
       <div className="relative z-10 max-w-3xl mx-auto">
         {/* Header */}
         <div className="pt-6 md:pt-0 mb-6 md:mb-8">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Shuffle className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+          <div className="flex items-start justify-between gap-3 md:gap-4">
+            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+                <Shuffle className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+                  Content Remix Studio
+                </h1>
+                <p className="text-sm md:text-base text-gray-500">
+                  Transform your text content into fresh posts for every platform
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
-                Content Remix Studio
-              </h1>
-              <p className="text-sm md:text-base text-gray-500">
-                Transform your text content into fresh posts for every platform
-              </p>
-            </div>
+            <RunCapMeter
+              featureKey="contentRemix"
+              tier={userTier}
+              featureLabel="Content Remix runs"
+              compact
+              className="hidden sm:inline-flex flex-shrink-0 mt-2"
+            />
           </div>
           <RunCapMeter
             featureKey="contentRemix"
             tier={userTier}
             featureLabel="Content Remix runs"
-            className="mt-3"
+            compact
+            className="sm:hidden mt-2"
           />
         </div>
 
