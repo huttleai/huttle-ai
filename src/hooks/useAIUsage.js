@@ -192,6 +192,14 @@ export default function useAIUsage(featureName = null) {
       const currentOverall = await getOverallAIUsageCount(user.id);
       if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
+        // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
+        try {
+          fetch('/api/emails/send-usage-alert-trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id }),
+          }).catch(() => {}); // fire-and-forget; never block the UI
+        } catch (_) {}
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
