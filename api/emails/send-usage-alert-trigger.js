@@ -7,6 +7,12 @@ const supabase = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
+function parseBearerToken(authHeader) {
+  const bearerMatch =
+    typeof authHeader === 'string' ? /^Bearer\s+(\S+)/i.exec(authHeader.trim()) : null;
+  return bearerMatch ? bearerMatch[1] : null;
+}
+
 /**
  * POST /api/emails/send-usage-alert-trigger
  *
@@ -28,12 +34,28 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const {
+    data: { user: authenticatedUser },
+    error: authError,
+  } = await supabase.auth.getUser(token);
+
+  if (authError || !authenticatedUser?.id) {
+    return res.status(401).json({ error: 'Invalid authentication token' });
+  }
+
+  const { userId: requestedUserId } = req.body || {};
+  if (requestedUserId && requestedUserId !== authenticatedUser.id) {
+    return res.status(403).json({ error: 'Forbidden: userId does not match authenticated user' });
   }
 
   try {
+    const userId = authenticatedUser.id;
+
     // ── Idempotency check ──────────────────────────────────────────────────
     // Only send once per billing cycle (calendar month).
     const startOfMonth = new Date();
