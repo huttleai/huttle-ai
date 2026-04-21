@@ -32,7 +32,9 @@ export default async function handler(req, res) {
 
   try {
     const now = new Date();
-    const reminderWindowEnd = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+    // Query window covers trials ending within the next 73 hours.
+    // maybeSendTrialReminder gates sends to exactly 3 days or 1 day remaining.
+    const reminderWindowEnd = new Date(now.getTime() + 73 * 60 * 60 * 1000);
 
     const { data: subscriptions, error } = await supabase
       .from('subscriptions')

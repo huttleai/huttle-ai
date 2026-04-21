@@ -25,6 +25,10 @@ import { resolvePlanId } from './_utils/stripePlans.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 import { toIsoDate } from './_utils/billing.js';
 import { sendCancellationVoluntaryEmail } from './emails/send-cancellation-voluntary.js';
+import { sendTrialStartedEmail } from './emails/send-trial-started.js';
+import { sendTrialExpiredEmail } from './emails/send-trial-expired.js';
+import { sendSubscriptionConfirmedEmail } from './emails/send-subscription-confirmed.js';
+import { sendPaymentFailedEmail } from './emails/send-payment-failed.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -704,6 +708,82 @@ export default async function handler(req, res) {
                 });
               }
             }
+
+            // ── Transactional emails ─────────────────────────────────────────
+            // Fetch customer email and profile for email sends
+            try {
+              const customerObj = await stripe.customers.retrieve(customerId);
+              const customerEmail = customerObj.deleted ? null : customerObj.email;
+              const { data: emailProfile } = await supabase
+                .from('user_profile')
+                .select('first_name')
+                .eq('user_id', resolvedUserId)
+                .maybeSingle();
+              const firstName = emailProfile?.first_name || '';
+              const previousStatus = event.data.previous_attributes?.status;
+              const currentStatus = subscription.status;
+              const planName = TIER_LABELS[tier] || tier || 'Pro';
+
+              if (customerEmail) {
+                // Email 2: Trial Started — subscription.created with status trialing
+                if (event.type === 'customer.subscription.created' && currentStatus === 'trialing') {
+                  try {
+                    const trialEndDate = subscription.trial_end
+                      ? new Date(subscription.trial_end * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : '';
+                    await sendTrialStartedEmail({ email: customerEmail, firstName, planName, trialEndDate });
+                    logInfo('stripe_webhook.trial_started_email_sent', { eventId: event.id, userId: resolvedUserId });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.trial_started_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+
+                // Email 4: Trial Expired — trial ended without converting (status went from trialing to something non-active)
+                if (
+                  event.type === 'customer.subscription.updated' &&
+                  previousStatus === 'trialing' &&
+                  currentStatus !== 'active'
+                ) {
+                  try {
+                    await sendTrialExpiredEmail({ email: customerEmail, firstName, planName });
+                    logInfo('stripe_webhook.trial_expired_email_sent', { eventId: event.id, userId: resolvedUserId });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.trial_expired_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+
+                // Emails 5a/5b/5c: Subscription Confirmed — trial converted or new paid sub
+                if (
+                  event.type === 'customer.subscription.updated' &&
+                  currentStatus === 'active' &&
+                  (previousStatus === 'trialing' || previousStatus === 'incomplete')
+                ) {
+                  try {
+                    const nextBillingDate = subscription.current_period_end
+                      ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : '';
+                    const priceData = subscription.items.data[0]?.price;
+                    const rawAmount = priceData?.unit_amount ? `$${(priceData.unit_amount / 100).toFixed(0)}` : '';
+                    const billingInterval = priceData?.recurring?.interval || 'month';
+                    await sendSubscriptionConfirmedEmail({
+                      email: customerEmail,
+                      firstName,
+                      tier,
+                      nextBillingDate,
+                      amount: rawAmount,
+                      billingInterval,
+                    });
+                    logInfo('stripe_webhook.subscription_confirmed_email_sent', { eventId: event.id, userId: resolvedUserId, tier });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.subscription_confirmed_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+              }
+            } catch (emailFetchErr) {
+              logWarn('stripe_webhook.email_fetch_failed', { eventId: event.id, error: emailFetchErr.message });
+            }
+            // ── End transactional emails ─────────────────────────────────────
+
           } else {
             logWarn('stripe_webhook.subscription_updated_no_user_found', {
               eventId: event.id,
@@ -849,7 +929,7 @@ export default async function handler(req, res) {
 
           const { data: profile } = await supabase
             .from('user_profile')
-            .select('user_id')
+            .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
@@ -861,6 +941,30 @@ export default async function handler(req, res) {
                 updated_at: new Date().toISOString(),
               })
               .eq('user_id', profile.user_id);
+
+            // Email 8: Payment Failed — only on the first attempt; Stripe handles retries 2+
+            if (invoice.attempt_count === 1) {
+              try {
+                const customer = await stripe.customers.retrieve(customerId);
+                const customerEmail = customer.deleted ? null : customer.email;
+                if (customerEmail) {
+                  const { data: subRow } = await supabase
+                    .from('subscriptions')
+                    .select('tier')
+                    .eq('user_id', profile.user_id)
+                    .maybeSingle();
+                  const planName = TIER_LABELS[subRow?.tier] || subRow?.tier || 'Pro';
+                  await sendPaymentFailedEmail({
+                    email: customerEmail,
+                    firstName: profile.first_name || '',
+                    planName,
+                  });
+                  logInfo('stripe_webhook.payment_failed_email_sent', { eventId: event.id, userId: profile.user_id });
+                }
+              } catch (emailErr) {
+                logWarn('stripe_webhook.payment_failed_email_error', { eventId: event.id, error: emailErr.message });
+              }
+            }
           }
         } catch (err) {
           logError('stripe_webhook.invoice_payment_failed_error', { eventId: event.id, error: err.message });
