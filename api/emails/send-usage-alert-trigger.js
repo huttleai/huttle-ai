@@ -20,7 +20,8 @@ function parseBearerToken(authHeader) {
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Auth: Authorization Bearer <access_token> (required)
+ * Body: { userId?: string } (optional; if provided, must match the authenticated user)
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
