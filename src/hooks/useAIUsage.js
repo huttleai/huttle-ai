@@ -5,6 +5,7 @@ import {
   getFeatureUsageCount,
   getOverallAIUsageCount,
   trackUsage,
+  supabase,
   TIER_LIMITS,
 } from '../config/supabase';
 import {
@@ -194,11 +195,18 @@ export default function useAIUsage(featureName = null) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
         try {
-          fetch('/api/emails/send-usage-alert-trigger', {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
+          if (accessToken) {
+            fetch('/api/emails/send-usage-alert-trigger', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
             body: JSON.stringify({ userId: user.id }),
-          }).catch(() => {}); // fire-and-forget; never block the UI
+            }).catch(() => {}); // fire-and-forget; never block the UI
+          }
         } catch (_) {}
         return { allowed: false, reason: 'pool_exhausted' };
       }
