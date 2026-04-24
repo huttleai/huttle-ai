@@ -115,7 +115,7 @@ export async function maybeSendTrialReminder({ stripe, supabase, subscription })
     return { skipped: true, reason: 'recipient_not_found' };
   }
 
-  const reminderType = reminderWindow.daysRemaining === 2 ? 'trial_2_days' : 'trial_1_day';
+  const reminderType = reminderWindow.daysRemaining === 3 ? 'trial_3_days' : 'trial_1_day';
   const alreadySent = await hasSentTrialReminder(supabase, {
     userId: recipient.userId,
     subscriptionId: subscription.id,
