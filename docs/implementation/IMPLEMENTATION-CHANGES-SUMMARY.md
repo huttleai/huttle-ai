@@ -157,14 +157,14 @@ All requested changes have been successfully implemented across the application.
   - Delete/disconnect warning actions
 - No inappropriate red colors found
 
-## 7. Removed "30-day money back guarantee"
+## 7. Removed promotional refund guarantee copy
 
 ### ✅ Updated UpgradeModal component
 - **File**: `src/components/UpgradeModal.jsx`
-- Changed footer text from "30-day money-back guarantee • Cancel anytime" to just "Cancel anytime"
+- Changed footer text to keep cancellation messaging only
 
 ### ✅ Verified no other instances
-- Searched entire codebase for "30-day", "30 day", "money-back", "guarantee"
+- Searched entire codebase for promotional refund guarantee language
 - Only appropriate uses found (AI disclaimer context: "not guarantees")
 - No promotional guarantee text remains
 

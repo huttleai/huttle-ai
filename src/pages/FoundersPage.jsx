@@ -50,8 +50,7 @@ export default function FoundersPage() {
           {/* Body copy */}
           <p className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-lg mx-auto mb-10">
             If you followed a Founders link, that pricing window has ended. But you can still get
-            full access to Huttle AI through our current plans: Builders Club (our limited time
-            offer) or Essentials and Pro monthly plans with a 7-day trial.
+            full access to Huttle AI through Essentials and Pro plans with a 7-day free trial.
           </p>
 
           {/* Primary CTA */}
@@ -66,7 +65,7 @@ export default function FoundersPage() {
 
             {/* Secondary muted line */}
             <p className="text-sm text-slate-400 font-medium">
-              Builders Club closes April 22 · Monthly plans start at $15/month
+              Plans start at $15/month with a 7-day free trial
             </p>
           </div>
         </div>

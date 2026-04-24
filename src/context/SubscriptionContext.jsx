@@ -543,7 +543,7 @@ export function SubscriptionProvider({ children }) {
       [TIERS.FREE]: 'Free',
       [TIERS.ESSENTIALS]: 'Essentials',
       [TIERS.PRO]: 'Pro',
-      [TIERS.BUILDER]: 'Builders Club',
+      [TIERS.BUILDER]: 'Legacy Annual',
       [TIERS.FOUNDER]: 'Founders Club',
     };
     return names[tier] || 'No Active Plan';

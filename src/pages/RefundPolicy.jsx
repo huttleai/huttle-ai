@@ -29,35 +29,6 @@ export default function RefundPolicy() {
             </div>
           </section>
 
-          {/* ── Builders Club ── */}
-          <section>
-            <h2 className="mb-4 text-xl font-bold text-slate-900">
-              Builders Club (Annual Plan) — 14-Day Happiness Guarantee
-            </h2>
-            <div className="space-y-4 text-sm leading-relaxed text-slate-600">
-              <p>
-                Builders Club members are covered by our 14-day happiness guarantee. If you are not
-                satisfied with Huttle AI for any reason within 14 days of your purchase date, contact
-                us and we will issue a full refund — no questions asked.
-              </p>
-
-              <div>
-                <p className="mb-3 font-semibold text-slate-900">To request a refund:</p>
-                <ol className="ml-5 list-decimal space-y-2">
-                  <li>Email <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">support@huttleai.com</a> within 14 days of your purchase</li>
-                  <li>Include your order number or the email address used at checkout</li>
-                  <li>We will process your refund within 24 hours of approval</li>
-                  <li>Funds typically appear within 5–10 business days depending on your bank or card issuer</li>
-                </ol>
-              </div>
-
-              <p>
-                After 14 days from the purchase date, Builders Club annual plans are non-refundable.
-                You retain full access to the platform for the remainder of your paid year.
-              </p>
-            </div>
-          </section>
-
           {/* ── Essentials & Pro Annual ── */}
           <section>
             <h2 className="mb-4 text-xl font-bold text-slate-900">
@@ -125,9 +96,7 @@ export default function RefundPolicy() {
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
                 The Founders Club plan is no longer available for new purchase. Existing Founders Club
-                members are grandfathered at their original rate. Refund eligibility for Founders Club
-                was subject to a 14-day window from the original purchase date. That window has now
-                passed for all Founders Club members. Ongoing renewals are non-refundable.
+                members are grandfathered at their original rate. Ongoing renewals are non-refundable.
               </p>
             </div>
           </section>

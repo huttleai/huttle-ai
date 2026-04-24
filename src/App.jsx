@@ -8,7 +8,6 @@ const LandingPage = lazy(() => import('./LandingPage'));
 const DashboardManager = lazy(() => import('./dashboard/Dashboard'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
 const FoundersPage = lazy(() => import('./pages/FoundersPage'));
-const BuildersPage = lazy(() => import('./pages/BuildersPage'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
@@ -55,9 +54,6 @@ function App() {
         
         {/* Founders Club Landing Page */}
         <Route path="/founders" element={<FoundersPage />} />
-        
-        {/* Builders Club Landing Page */}
-        <Route path="/builders" element={<BuildersPage />} />
         
         {/* Legal Pages (public, no auth) */}
         <Route path="/terms" element={<TermsOfService />} />

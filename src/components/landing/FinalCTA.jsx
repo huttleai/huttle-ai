@@ -10,11 +10,11 @@ export const FinalCTA = () => {
   const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  const handleBuilderCheckout = async () => {
+  const handleProCheckout = async () => {
     const checkoutTab = openStripeCheckoutTab();
     setCheckoutLoading(true);
     try {
-      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
     } finally {
       setCheckoutLoading(false);
     }
@@ -56,19 +56,19 @@ export const FinalCTA = () => {
           </p>
           
           <button 
-            onClick={handleBuilderCheckout}
+            onClick={handleProCheckout}
             disabled={checkoutLoading}
             className="group flex items-center justify-center gap-2 bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-xl px-10 py-5 text-lg font-bold shadow-[0_0_24px_#01BAD220] transition-all hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {checkoutLoading ? 'Loading…' : (
-              <>Join Builders Club<ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" /></>
+              <>Start 7-Day Free Trial<ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" /></>
             )}
           </button>
           
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-10 text-sm font-medium text-slate-300">
             <span className="flex items-center gap-2">
               <div className="bg-[#01BAD2]/20 rounded-full p-1"><Check size={14} className="text-[#01BAD2]" /></div> 
-              14-day money-back guarantee
+              7-day free trial
             </span>
             <span className="flex items-center gap-2">
               <div className="bg-[#01BAD2]/20 rounded-full p-1"><Check size={14} className="text-[#01BAD2]" /></div> 

@@ -36,7 +36,7 @@ export default function AIFeatureLock({ used, limit }) {
           <ul className="text-sm space-y-1 opacity-90">
             <li>• Essentials: 200 AI generations/month</li>
             <li>• Pro: 600 AI generations/month</li>
-            <li>• Founders/Builders: 800 AI generations/month</li>
+            <li>• Founders: 800 AI generations/month</li>
             <li>• Advanced AI features and higher storage limits</li>
             <li>• Priority support on Pro-tier plans</li>
           </ul>

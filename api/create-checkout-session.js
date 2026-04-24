@@ -145,8 +145,8 @@ export default async function handler(req, res) {
       [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL  || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]:  { tier: 'Essentials',    billingCycle: 'Annual'  },
       [process.env.STRIPE_PRICE_PRO_MONTHLY        || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]:        { tier: 'Pro',           billingCycle: 'Monthly' },
       [process.env.STRIPE_PRICE_PRO_ANNUAL         || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]:         { tier: 'Pro',           billingCycle: 'Annual'  },
-      [process.env.STRIPE_PRICE_BUILDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]:     { tier: 'Builders Club', billingCycle: 'Annual'  },
-      [process.env.STRIPE_PRICE_FOUNDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]:     { tier: 'Builders Club', billingCycle: 'Annual'  },
+      [process.env.STRIPE_PRICE_BUILDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]:     { tier: 'Legacy Annual', billingCycle: 'Annual'  },
+      [process.env.STRIPE_PRICE_FOUNDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]:     { tier: 'Founders Club',  billingCycle: 'Annual'  },
     };
     const tierInfo = tierMetadataMap[priceId] ?? { tier: 'Unknown', billingCycle: 'Unknown' };
 
@@ -204,7 +204,7 @@ export default async function handler(req, res) {
           message: isLaunchPricingPlan
             ? planId === 'founder'
               ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
-              : 'Welcome to Builders Club. Your membership will be activated immediately after payment.'
+              : 'Your legacy annual membership will be activated immediately after payment.'
             : isAnnualBilling
               ? 'Your annual subscription will begin immediately after payment.'
               : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',

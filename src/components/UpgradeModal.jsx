@@ -183,7 +183,7 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
 
             {/* Footer */}
             <p className="text-xs text-center text-gray-500 mt-4">
-              Current launch pricing includes Founders Club and Builders Club.
+              Essentials and Pro include a 7-day free trial.
             </p>
           </div>
         </div>

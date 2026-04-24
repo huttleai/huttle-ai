@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
@@ -29,18 +29,13 @@ import { FeatureShowcase } from "./components/magicui/FeatureShowcase";
 // ANIMATION VARIANTS & CONFIGS (simplified)
 // ============================================
 
-const FOUNDING_SPOTS_LEFT = 22;
 const SITE_URL = "https://huttleai.com";
 const LOGO_URL = `${SITE_URL}/logo-512.png`;
 
 const FAQ_ITEMS = [
   {
     question: "What happened to Founders Club?",
-    answer: "Founders Club was our launch offer and it's now closed. If you missed it, Builders Club is our current annual plan — it includes the same locked-in pricing philosophy and a 14-day happiness guarantee. Monthly plans are also now available starting at $15/month."
-  },
-  {
-    question: "What is Builders Club?",
-    answer: "Builders Club is Huttle AI's annual membership at $249/year ($20.75/month equivalent). Your rate is locked in forever — it never goes up. It includes all Pro features, 800 AI generations/month, priority support, and a 14-day happiness guarantee. Builders Club closes April 22, 2026."
+    answer: "Founders Club was our launch offer and it's now closed. Monthly plans are now available starting at $15/month with a 7-day free trial."
   },
   {
     question: "Do I need a credit card to start the 7-day trial?",
@@ -55,12 +50,12 @@ const FAQ_ITEMS = [
     answer: "Yes. Monthly plans can be canceled at any time. Cancel before day 7 and you won't be charged. Cancel after billing starts and your access continues through the end of that billing period."
   },
   {
-    question: "What's the difference between Builders Club and the monthly plans?",
-    answer: "Monthly plans (Essentials at $15/mo, Pro at $39/mo) are the low-commitment way to start — try Huttle AI for 7 days before your card is billed. Builders Club is the annual option for users who are ready to commit. It locks in a lower rate forever and includes a 14-day happiness guarantee instead of a trial."
+    question: "What's the difference between Essentials and Pro?",
+    answer: "Essentials gives you the core Huttle AI workflow with 200 AI generations per month. Pro adds higher limits, Niche Intel, Full Trend Lab access, and more advanced planning tools. Both plans include a 7-day free trial."
   },
   {
-    question: "Is there a money-back guarantee?",
-    answer: "Builders Club includes a 14-day happiness guarantee — if Huttle AI isn't the right fit, we'll refund you in full, no questions asked. Monthly plans are protected by the 7-day trial: cancel before day 7 and you are never charged."
+    question: "Is there a free trial?",
+    answer: "Yes. Essentials and Pro include a 7-day free trial. Cancel before the trial ends and you will not be charged."
   },
   {
     question: "What platforms does Huttle AI support?",
@@ -507,7 +502,7 @@ const FoundersClubModal = ({ isOpen, onClose }) => {
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "14-Day Money-Back Guarantee", desc: "" },
+                { title: "7-Day Free Trial", desc: "Start Essentials or Pro and cancel before day 7 to avoid being charged" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
@@ -1204,7 +1199,7 @@ const PricingSection = () => {
     : proMonthly;
 
   const handleCheckout = async (planId) => {
-    const billingCycle = planId === 'builder' ? 'annual' : isAnnual ? 'annual' : 'monthly';
+    const billingCycle = isAnnual ? 'annual' : 'monthly';
     const checkoutTab = openStripeCheckoutTab();
     setCheckoutLoading(planId);
     try {
@@ -1213,14 +1208,6 @@ const PricingSection = () => {
       setCheckoutLoading(null);
     }
   };
-
-  // Dynamic countdown: closes April 22, 2026
-  const buildersClubDaysLeft = useMemo(() => {
-    const closeDate = new Date('2026-04-22T00:00:00');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return Math.ceil((closeDate - today) / (1000 * 60 * 60 * 24));
-  }, []);
 
   return (
     <section id="pricing" className="py-16 md:py-32 px-4 bg-slate-50 relative overflow-hidden">
@@ -1269,7 +1256,7 @@ const PricingSection = () => {
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-center max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-center max-w-4xl mx-auto">
 
           {/* CARD 1: ESSENTIALS */}
           <motion.div
@@ -1397,71 +1384,11 @@ const PricingSection = () => {
             </div>
           </motion.div>
 
-          {/* CARD 3: BUILDERS CLUB */}
-          <motion.div
-            className="order-3 h-full"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
-              {buildersClubDaysLeft > 0 ? (
-                <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-red-200">
-                  ⏳ CLOSES IN {buildersClubDaysLeft} {buildersClubDaysLeft === 1 ? 'DAY' : 'DAYS'}
-                </div>
-              ) : (
-                <div className="h-7 mb-4" />
-              )}
-
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Builders Club</h3>
-
-              <div className="mb-1">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-slate-900">$249</span>
-                  <span className="text-sm text-slate-500">/year</span>
-                </div>
-                <p className="text-xs font-semibold text-[#01bad2] mt-1">$20.75/mo equivalent</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">vs $39/mo on Pro — locked in forever</p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={12} className="text-green-600 flex-shrink-0" />
-                  <span>14-day happiness guarantee</span>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">Annual pass. Your rate never goes up.</p>
-
-              <ul className="space-y-2.5 mb-6 flex-1">
-                {[
-                  '800 AI generations/month',
-                  'All Pro features included',
-                  'Locked-in annual rate',
-                  'Early access to new features',
-                  'Priority support',
-                ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
-                    <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCheckout('builder')}
-                disabled={!!checkoutLoading}
-                className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {checkoutLoading === 'builder' ? 'Loading…' : 'Join Builders Club'}
-              </button>
-              <p className="text-center text-[10px] text-slate-400 mt-3">$249/year — not a one-time payment</p>
-            </div>
-          </motion.div>
-
         </div>
 
         {/* Section footnote */}
         <p className="text-center text-[11px] text-slate-400 mt-10 max-w-xl mx-auto">
-          All plans require a credit card. You will not be charged during your 7-day trial. Builders Club is billed annually at $249/year.
+          All plans require a credit card. You will not be charged during your 7-day free trial.
         </p>
       </div>
     </section>
@@ -1475,11 +1402,11 @@ const PricingSection = () => {
 const FinalCTASection = () => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  const handleBuilderCheckout = async () => {
+  const handleProCheckout = async () => {
     const checkoutTab = openStripeCheckoutTab();
     setCheckoutLoading(true);
     try {
-      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
     } finally {
       setCheckoutLoading(false);
     }
@@ -1509,71 +1436,24 @@ const FinalCTASection = () => {
           
           <div>
             <BorderBeamButton 
-              onClick={handleBuilderCheckout}
+              onClick={handleProCheckout}
               disabled={checkoutLoading}
               className="px-8 md:px-10 h-14 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-base md:text-lg shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
               beamDuration={6}
             >
               {checkoutLoading ? 'Loading…' : (
-                <>Join Builders Club<ArrowRight size={18} className="ml-2" /></>
+                <>Start 7-Day Free Trial<ArrowRight size={18} className="ml-2" /></>
               )}
             </BorderBeamButton>
           </div>
           
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-6 md:mt-8 text-xs md:text-sm text-slate-500 font-medium">
-            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 14-day money-back guarantee</span>
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 7-day free trial</span>
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Cancel anytime</span>
           </div>
         </motion.div>
       </div>
     </section>
-  );
-};
-
-// ============================================
-// ANNOUNCEMENT BANNER (session-dismissable)
-// ============================================
-
-const ANNOUNCEMENT_BANNER_SESSION_KEY = 'huttleAnnouncementBannerDismissed';
-
-const AnnouncementBanner = ({ onDismiss }) => {
-  const handleSeeOffer = (e) => {
-    e.preventDefault();
-    document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  return (
-    <div
-      className="fixed top-0 left-0 right-0 z-[70] bg-[#01BAD2] text-white h-[52px] md:h-[44px]"
-      style={{ fontFamily: 'Figtree, Inter, system-ui, sans-serif' }}
-      role="region"
-      aria-label="Announcement"
-      data-testid="announcement-banner"
-    >
-      <div className="h-full w-full flex items-center gap-3 md:gap-5 px-3 md:px-6">
-        <p className="flex-1 min-w-0 text-white text-[13px] md:text-[14px] leading-snug text-center md:text-left" style={{ fontWeight: 500 }}>
-          Builders Club early access closes April 22. Limited membership, price locked for life.
-        </p>
-        <button
-          type="button"
-          onClick={handleSeeOffer}
-          className="shrink-0 text-white text-[13px] md:text-[14px] whitespace-nowrap hover:underline underline-offset-2 transition-opacity"
-          style={{ fontWeight: 500 }}
-          data-testid="announcement-banner-cta"
-        >
-          See Offer <span aria-hidden="true">→</span>
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss announcement"
-          className="shrink-0 p-1 rounded-full text-white hover:bg-white/15 transition-colors"
-          data-testid="announcement-banner-close"
-        >
-          <X size={16} className="text-white" />
-        </button>
-      </div>
-    </div>
   );
 };
 
@@ -1585,29 +1465,12 @@ export default function LandingPage() {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
   const [navCheckoutLoading, setNavCheckoutLoading] = useState(false);
-  const [bannerVisible, setBannerVisible] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    try {
-      return sessionStorage.getItem(ANNOUNCEMENT_BANNER_SESSION_KEY) !== '1';
-    } catch {
-      return true;
-    }
-  });
 
-  const handleDismissBanner = () => {
-    try {
-      sessionStorage.setItem(ANNOUNCEMENT_BANNER_SESSION_KEY, '1');
-    } catch {
-      // Safari private mode etc. fall back to in-memory dismissal
-    }
-    setBannerVisible(false);
-  };
-
-  const handleNavBuilderCheckout = async () => {
+  const handleNavProCheckout = async () => {
     const checkoutTab = openStripeCheckoutTab();
     setNavCheckoutLoading(true);
     try {
-      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
     } finally {
       setNavCheckoutLoading(false);
     }
@@ -1622,7 +1485,7 @@ export default function LandingPage() {
       metaDescription.name = "description";
       document.head.appendChild(metaDescription);
     }
-    metaDescription.content = "Huttle AI is currently paid-only with Founders Club (open now) and Builders Club launch pricing from April 7, followed by Essentials and Pro public plans.";
+    metaDescription.content = "Huttle AI helps creators plan and create platform-ready content with real-time trends, AI-written scripts, and viral predictions. Start Essentials or Pro with a 7-day free trial.";
   }, []);
 
   return (
@@ -1639,12 +1502,9 @@ export default function LandingPage() {
         onClose={() => setIsFoundersModalOpen(false)} 
       />
 
-      {/* ANNOUNCEMENT BANNER */}
-      {bannerVisible && <AnnouncementBanner onDismiss={handleDismissBanner} />}
-
       {/* NAVBAR */}
       <nav
-        className={`fixed left-0 right-0 z-50 flex justify-center px-4 pt-2 md:pt-3 ${bannerVisible ? 'top-[52px] md:top-[44px]' : 'top-0'}`}
+        className="fixed left-0 right-0 top-0 z-50 flex justify-center px-4 pt-2 md:pt-3"
         data-testid="landing-nav"
       >
         <div 
@@ -1660,14 +1520,14 @@ export default function LandingPage() {
             Features
           </button>
           <BorderBeamButton 
-            onClick={handleNavBuilderCheckout}
+            onClick={handleNavProCheckout}
             disabled={navCheckoutLoading}
             className="rounded-full px-4 md:px-7 py-2 md:py-3 text-xs md:text-sm font-bold text-white shadow-md shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
             beamSize={100}
             beamDuration={4}
           >
             {navCheckoutLoading ? 'Loading…' : (
-              <>Join Builders Club<ArrowRight size={14} className="ml-1" /></>
+              <>Start Free Trial<ArrowRight size={14} className="ml-1" /></>
             )}
           </BorderBeamButton>
           <Link
@@ -1683,7 +1543,7 @@ export default function LandingPage() {
 
       {/* HERO SECTION */}
       <section
-        className={`relative ${bannerVisible ? 'pt-[244px] sm:pt-[260px] md:pt-[268px] lg:pt-[252px]' : 'pt-48 sm:pt-52 md:pt-56 lg:pt-52'} pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip overflow-y-visible`}
+        className="relative pt-48 sm:pt-52 md:pt-56 lg:pt-52 pb-8 md:pb-12 lg:pb-16 px-4 sm:px-6 overflow-x-clip overflow-y-visible"
         data-testid="landing-hero"
       >
         <HeroBackground />

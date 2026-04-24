@@ -1471,7 +1471,7 @@ export default function AIPlanBuilder() {
                       <div className="flex items-start gap-2">
                         <Sparkles className="h-4 w-4 mt-0.5 text-huttle-primary flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900">14-Day Plans — Pro &amp; Builders Club</p>
+                          <p className="text-sm font-semibold text-gray-900">14-Day Plans — Pro</p>
                           <p className="mt-0.5 text-xs text-gray-600">
                             Plan two full weeks of content at once. Upgrade to unlock.
                           </p>

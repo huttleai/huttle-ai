@@ -9,11 +9,11 @@ import { createCheckoutSession, openStripeCheckoutTab } from '../../services/str
 export const StickyNav = () => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  const handleBuilderCheckout = async () => {
+  const handleProCheckout = async () => {
     const checkoutTab = openStripeCheckoutTab();
     setCheckoutLoading(true);
     try {
-      await createCheckoutSession('builder', 'annual', { targetWindow: checkoutTab });
+      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
     } finally {
       setCheckoutLoading(false);
     }
@@ -53,12 +53,12 @@ export const StickyNav = () => {
             <span className="hidden md:inline">Login</span>
           </Link>
           <button 
-            onClick={handleBuilderCheckout}
+            onClick={handleProCheckout}
             disabled={checkoutLoading}
             className="bg-[#01BAD2] hover:bg-[#019db3] text-white rounded-full px-3.5 md:px-4 py-1.5 text-[11px] md:text-[13px] font-semibold transition-colors shadow-[0_0_24px_#01BAD220] flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span className="md:hidden">{checkoutLoading ? '…' : 'Join Builders'}</span>
-            <span className="hidden md:inline">{checkoutLoading ? 'Loading…' : 'Join Builders Club'}</span>
+            <span className="md:hidden">{checkoutLoading ? '…' : 'Start Trial'}</span>
+            <span className="hidden md:inline">{checkoutLoading ? 'Loading…' : 'Start Free Trial'}</span>
             {!checkoutLoading && <ArrowRight size={14} className="hidden md:block" />}
           </button>
         </div>

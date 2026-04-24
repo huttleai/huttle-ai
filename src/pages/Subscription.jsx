@@ -10,61 +10,22 @@ import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import FoundersMembershipCard from '../components/FoundersMembershipCard';
 import { getTierConfig } from '../utils/tierConfig';
 
-const LAUNCH_PLANS = [
-  {
-    id: 'founder',
-    name: 'Founders Club',
-    badge: 'Best value',
-    annualPrice: 199,
-    monthlyEquivalent: '16.58',
-    description: 'The lowest price we will ever offer.',
-    features: [
-      'All Pro features',
-      '800 AI generations/month',
-      '25GB storage',
-      'Priority support',
-      'Founders rate locked forever',
-      '14-day money-back guarantee',
-    ],
-    gradient: 'from-huttle-primary to-cyan-500',
-    tier: 'founder',
-  },
-  {
-    id: 'builder',
-    name: 'Builders Club',
-    badge: 'Launch pricing',
-    annualPrice: 249,
-    monthlyEquivalent: '20.75',
-    description: 'Launch-only pricing with the same Pro feature access.',
-    features: [
-      'All Pro features',
-      '800 AI generations/month',
-      '25GB storage',
-      'Priority support',
-      'Builders rate locked while active',
-      '14-day money-back guarantee',
-    ],
-    gradient: 'from-sky-500 to-cyan-500',
-    tier: 'builder',
-  },
-];
-
-const FUTURE_PLANS = [
+const CURRENT_PLANS = [
   {
     id: 'essentials',
     name: 'Essentials',
     monthlyPrice: 15,
     annualPrice: 153,
-    description: 'Available after the launch window closes.',
-    features: ['200 AI generations/month', 'All AI Power Tools', 'Content Vault'],
+    description: 'Core tools for planning and creating content consistently.',
+    features: ['7-day free trial', '200 AI generations/month', 'All AI Power Tools', 'Content Vault'],
   },
   {
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 39,
     annualPrice: 397.8,
-    description: 'Available after the launch window closes.',
-    features: ['600 AI generations/month', '25GB storage', 'Full Pro feature set'],
+    description: 'Higher limits and the complete toolkit for serious creators.',
+    features: ['7-day free trial', '600 AI generations/month', '25GB storage', 'Full Pro feature set'],
   },
 ];
 
@@ -78,10 +39,10 @@ const PLAN_DETAILS = {
     accentClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   },
   builder: {
-    title: 'Builders Club',
-    subtitle: 'Launch member',
+    title: 'Legacy Annual',
+    subtitle: 'Legacy member',
     annualLabel: '$249/year while active',
-    summary: 'Builders get full Pro access with the same launch feature set and an early pricing lock while the plan stays active.',
+    summary: 'Legacy annual members keep their original plan terms while the plan stays active.',
     iconGradient: 'from-sky-500 to-cyan-500',
     accentClasses: 'border-sky-200 bg-sky-50 text-sky-700',
   },
@@ -388,7 +349,6 @@ export default function Subscription() {
               className="text-sm px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-medium focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
               <option value={TIERS.FOUNDER}>Founders Club</option>
-              <option value={TIERS.BUILDER}>Builders Club</option>
               <option value={TIERS.ESSENTIALS}>Essentials</option>
               <option value={TIERS.PRO}>Pro</option>
             </select>
@@ -446,7 +406,7 @@ export default function Subscription() {
               </div>
             </div>
 
-            {/* Founder/Builder special card */}
+            {/* Legacy annual special card */}
             {isAnnualFounder ? (
               <FoundersMembershipCard
                 subscription={subscription}
@@ -537,7 +497,7 @@ export default function Subscription() {
                       <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mt-4">
                         {tierConfig.badgeColor === 'amber'
                           ? '⭐ You\'re a Founding Member — your $199/year rate is locked in forever. Your plan cannot be changed.'
-                          : '🔒 You\'re a Builder — your $249/year rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
+                          : 'Your legacy annual rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
                       </p>
                     )}
 
@@ -581,7 +541,7 @@ export default function Subscription() {
               <div className="space-y-6">
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-                  <p className="text-sm text-gray-600">Essentials and Pro plans include a 7-day free trial — you will not be charged until the trial ends. Founders Club and Builders Club include a 14-day money-back guarantee. If you cancel after the applicable window, you keep access through the end of your paid term.</p>
+                  <p className="text-sm text-gray-600">Essentials and Pro plans include a 7-day free trial. You will not be charged until the trial ends. If you cancel after your paid subscription begins, you keep access through the end of your paid term.</p>
                 </div>
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
@@ -617,24 +577,20 @@ export default function Subscription() {
                 <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Choose Your Launch Plan</h1>
-                <p className="text-base text-gray-600">Huttle AI is currently paid-only. Both clubs include full Pro feature access.</p>
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Choose Your Plan</h1>
+                <p className="text-base text-gray-600">Essentials and Pro include a 7-day free trial.</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {LAUNCH_PLANS.map((plan) => (
+              {CURRENT_PLANS.map((plan) => (
                 <div key={plan.id} className="relative bg-white rounded-2xl border border-gray-200 p-6 lg:p-8 shadow-sm flex flex-col">
                   <div className="flex items-center justify-between mb-5">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                      plan.id === 'founder'
-                        ? 'bg-huttle-primary text-white'
-                        : 'bg-sky-50 text-sky-700 border border-sky-200'
-                    }`}>
-                      {plan.badge}
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-huttle-primary text-white">
+                      7-day free trial
                     </span>
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center shadow-lg`}>
-                      {plan.id === 'founder' ? <Award className="w-6 h-6 text-white" /> : <Users className="w-6 h-6 text-white" />}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-500 flex items-center justify-center shadow-lg">
+                      {plan.id === 'pro' ? <Award className="w-6 h-6 text-white" /> : <Users className="w-6 h-6 text-white" />}
                     </div>
                   </div>
 
@@ -643,9 +599,10 @@ export default function Subscription() {
 
                   <div className="mb-6">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-display font-bold text-gray-900">{formatMoney(plan.annualPrice)}</span>
-                      <span className="text-gray-500 font-medium">/year</span>
+                      <span className="text-4xl font-display font-bold text-gray-900">{formatMoney(plan.monthlyPrice)}</span>
+                      <span className="text-gray-500 font-medium">/month</span>
                     </div>
+                    <p className="text-sm text-green-700 font-medium mt-1">{formatMoney(plan.annualPrice)}/year with 15% annual savings</p>
                   </div>
 
                   <ul className="space-y-3 mb-6 flex-grow">
@@ -658,7 +615,7 @@ export default function Subscription() {
                   </ul>
 
                   <button
-                    onClick={() => handleCheckout(plan.id, 'annual')}
+                    onClick={() => handleCheckout(plan.id, 'monthly')}
                     disabled={loading !== null}
                     className="w-full py-3 rounded-xl font-semibold bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] disabled:opacity-50 transition-all"
                   >
@@ -668,41 +625,11 @@ export default function Subscription() {
                         Processing...
                       </span>
                     ) : (
-                      `Choose ${plan.name}`
+                      'Start 7-Day Free Trial'
                     )}
                   </button>
                 </div>
               ))}
-            </div>
-
-            {/* Future plans */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <CreditCard className="w-6 h-6 text-huttle-primary" />
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Future Public Pricing</h2>
-                  <p className="text-sm text-gray-600">After Founders and Builders close, these plans become available.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {FUTURE_PLANS.map((plan) => (
-                  <div key={plan.id} className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{plan.description}</p>
-                    <p className="text-sm font-semibold text-gray-900">{formatMoney(plan.monthlyPrice)}/month</p>
-                    <p className="text-sm text-green-700 font-medium mb-4">{formatMoney(plan.annualPrice)}/year with 15% annual savings</p>
-                    <ul className="space-y-2">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-sm text-gray-600">
-                          <Check className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-6 text-gray-500">

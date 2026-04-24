@@ -128,7 +128,6 @@ const sections = [
         <ul className={listClassName}>
           <li>Essentials: $15/month or $153/year</li>
           <li>Pro: $39/month or $397/year</li>
-          <li>Builders Club: $249/year (available for a limited time)</li>
         </ul>
         <p>
           Unless otherwise stated, subscriptions are billed in advance on a recurring monthly or annual
@@ -139,8 +138,7 @@ const sections = [
         <p>
           Monthly plans may be cancelled at any time, and access will continue through the end of the
           then-current billing period. Annual subscriptions (Essentials and Pro) are non-refundable after
-          30 days from the purchase date, subject to the refund terms below. The Builders Club annual plan
-          carries a 14-day happiness guarantee, as described in the Refund Policy.
+          30 days from the purchase date, subject to the refund terms below.
         </p>
         <p>
           Huttle AI may change pricing upon at least 30 days&apos; written notice to existing
@@ -156,11 +154,6 @@ const sections = [
             The Founders Club plan ($199/year) is no longer available for new purchase. Existing Founders
             Club members are grandfathered — the price they locked in will not increase while their
             qualifying subscription remains in good standing.
-          </p>
-          <p>
-            Builders Club pricing ($249/year) is likewise grandfathered for existing members once
-            enrolled. If the Builders Club window closes, existing subscribers retain their rate for the
-            life of their active subscription.
           </p>
         </LegalCallout>
       </>
@@ -188,19 +181,10 @@ const sections = [
     content: (
       <>
         <p>
-          Builders Club annual plan: Huttle AI offers a 14-day happiness guarantee. Refund requests
-          submitted within 14 days of purchase will be honored in full, no questions asked. No refunds
-          are available after the 14-day window.
-        </p>
-        <p>
           Essentials and Pro plans (monthly and annual): All sales are final after the seven-day free
           trial period ends. No refunds are available for any Essentials or Pro subscription — monthly
           or annual — once the trial has expired and a charge has been processed. Cancelling a monthly
           plan stops future billing only; you retain access through the end of the current paid period.
-        </p>
-        <p>
-          Grandfathered Founders Club members are subject to the same 14-day refund window that applied
-          at the time of their original purchase.
         </p>
         <p>
           To request a refund, email{' '}

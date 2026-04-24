@@ -12,7 +12,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
   const handleCheckout = async (planId) => {
-    const billingCycle = planId === 'builder' ? 'annual' : isAnnual ? 'annual' : 'monthly';
+    const billingCycle = isAnnual ? 'annual' : 'monthly';
     const checkoutTab = openStripeCheckoutTab();
     setCheckoutLoading(planId);
     try {
@@ -98,7 +98,7 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
           variants={containerVariants}
           initial="hidden"
           animate={isInView ? "show" : "hidden"}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center max-w-5xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center max-w-4xl mx-auto"
         >
           {/* COLUMN 1: ESSENTIALS */}
           <motion.div variants={cardVariants} className="h-full">
@@ -211,59 +211,6 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
             </div>
           </motion.div>
 
-          {/* COLUMN 3: BUILDERS CLUB */}
-          <motion.div variants={cardVariants} className="h-full">
-            <div className="relative rounded-3xl bg-white p-8 border border-zinc-200 shadow-xl h-full flex flex-col">
-              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-xs font-bold uppercase tracking-wide mb-6 border border-red-200">
-                ⏳ CLOSES IN 7 DAYS
-              </div>
-
-              <h3 className="text-xl font-bold text-zinc-900 mb-2">Builders Club</h3>
-
-              <div className="mb-2">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-zinc-900">$249</span>
-                  <span className="text-slate-500 font-medium">/year</span>
-                </div>
-                <p className="text-sm font-semibold text-[#01BAD2] mt-1">
-                  $20.75/mo equivalent
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">vs $39/mo on Pro — lock it in forever</p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>14-day happiness guarantee</span>
-                </div>
-              </div>
-
-              <p className="text-sm text-zinc-600 mb-6 font-medium mt-3">
-                Annual pass. Price never increases.
-              </p>
-
-              <ul className="space-y-3 mb-8 flex-1">
-                {[
-                  '800 AI generations/month',
-                  'All Pro features included',
-                  'Locked-in annual rate',
-                  'Priority support',
-                  'Content Vault',
-                ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-3 text-sm text-zinc-600">
-                    <Check size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCheckout('builder')}
-                disabled={!!checkoutLoading}
-                className="w-full h-12 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {checkoutLoading === 'builder' ? 'Loading…' : 'Join Builders Club'}
-              </button>
-              <p className="text-center text-xs text-slate-400 mt-3">$249/year — not a one-time payment</p>
-            </div>
-          </motion.div>
         </motion.div>
       </div>
     </section>

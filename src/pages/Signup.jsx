@@ -316,9 +316,9 @@ export default function Signup() {
           {/* Welcome Text */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Create your account</h2>
-            <p className="text-gray-500 text-sm">Choose Founders Club or Builders Club after signup</p>
+            <p className="text-gray-500 text-sm">Choose Essentials or Pro after signup</p>
             <p className="text-gray-400 text-xs mt-2">
-              Huttle AI is currently paid-only. Create your account, then pick the launch plan that fits you.
+              Start with a 7-day free trial, then keep the plan that fits you.
             </p>
           </div>
 

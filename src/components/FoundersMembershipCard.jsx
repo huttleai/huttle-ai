@@ -39,8 +39,8 @@ export default function FoundersMembershipCard({
 
   const tierKey = normalizeTier(subscription?.tier || subscription?.plan);
   const isFounder = tierKey === 'founder';
-  const membershipName = isFounder ? 'Founders Club' : 'Builders Club';
-  const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Builders Club';
+  const membershipName = isFounder ? 'Founders Club' : 'Legacy Annual';
+  const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Legacy Annual';
   const expiryDate = formatDate(subscription?.currentPeriodEnd);
   const startDate = formatDate(subscription?.currentPeriodStart);
   // Null-safe plan-benefits lookup. Even if SUBSCRIPTION_PLANS shape changes
@@ -189,7 +189,7 @@ export default function FoundersMembershipCard({
                   <p className="mt-1 text-sm text-gray-600">
                     {isFounder
                       ? 'Your Founders rate stays locked for life, even as Huttle AI evolves.'
-                      : 'Your Builders rate stays locked while your membership remains active.'}
+                      : 'Your legacy annual rate stays locked while your membership remains active.'}
                   </p>
                 </div>
               </div>

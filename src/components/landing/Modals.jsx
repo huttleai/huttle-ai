@@ -266,7 +266,7 @@ export const FoundersClubModal = ({ isOpen, onClose }) => {
                 { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
                 { title: "All Pro Features", desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" },
                 { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "14-Day Money-Back Guarantee", desc: "Not satisfied? Email hello@huttleai.com within 14 days for a full refund" },
+                { title: "7-Day Free Trial", desc: "Start Essentials or Pro and cancel before day 7 to avoid being charged" },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="mt-0.5 p-0.5 rounded-full bg-green-100 text-green-600 flex-shrink-0">

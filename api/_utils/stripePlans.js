@@ -96,7 +96,7 @@ export function getPlanDisplayName(planId) {
   const labels = {
     essentials: 'Essentials',
     pro: 'Pro',
-    builder: 'Builders Club',
+    builder: 'Legacy Annual',
     founder: 'Founders Club',
   };
 

@@ -14,7 +14,6 @@ Set these in the Vercel project before deploying live billing:
 - `VITE_STRIPE_PRICE_PRO_MONTHLY=price_...` live price ID
 - `VITE_STRIPE_PRICE_PRO_ANNUAL=price_...` live price ID
 - `VITE_STRIPE_PRICE_FOUNDER_ANNUAL=price_...` live price ID if Founders is still sold
-- `VITE_STRIPE_PRICE_BUILDER_ANNUAL=price_...` or `VITE_STRIPE_PRICE_BUILDERS_ANNUAL=price_...` live price ID if Builders is still sold
 - `VITE_APP_URL=https://huttleai.com` or your live production domain
 
 Recommended:

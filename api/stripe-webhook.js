@@ -5,7 +5,7 @@
  * Routes new members to the correct Mailchimp audience based on their subscription tier:
  *   - pro       â MAILCHIMP_PRO_AUDIENCE_ID       (Pro Members)
  *   - essentials â MAILCHIMP_ESSENTIALS_AUDIENCE_ID (Essentials Members)
- *   - builder   â MAILCHIMP_BUILDERS_AUDIENCE_ID   (Builders Club)
+ *   - builder   â MAILCHIMP_BUILDERS_AUDIENCE_ID   (Legacy Annual)
  *
  * Required environment variables:
  * - STRIPE_SECRET_KEY: Your Stripe secret key
@@ -15,7 +15,7 @@
  * - MAILCHIMP_API_KEY: Your Mailchimp API key (optional â also accepts legacy MAILCHIMP_FOUNDERS_API_KEY)
  * - MAILCHIMP_PRO_AUDIENCE_ID: Mailchimp audience ID for Pro Members (optional)
  * - MAILCHIMP_ESSENTIALS_AUDIENCE_ID: Mailchimp audience ID for Essentials Members (optional)
- * - MAILCHIMP_BUILDERS_AUDIENCE_ID: Mailchimp audience ID for Builders Club (optional)
+ * - MAILCHIMP_BUILDERS_AUDIENCE_ID: Mailchimp audience ID for legacy annual members (optional)
  */
 
 import Stripe from 'stripe';
@@ -63,7 +63,7 @@ const MAILCHIMP_AUDIENCE_IDS = {
 const TIER_LABELS = {
   pro:        'Pro',
   essentials: 'Essentials',
-  builder:    'Builders Club',
+  builder:    'Legacy Annual',
 };
 
 // Disable body parsing â we need the raw body for Stripe webhook signature verification.

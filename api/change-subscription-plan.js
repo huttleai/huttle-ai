@@ -134,7 +134,7 @@ export default async function handler(req, res) {
 
     const currentPlanId = getStripeSubscriptionPlan(stripeSubscription);
     if (!['essentials', 'pro'].includes(currentPlanId)) {
-      return res.status(403).json({ error: 'Founders Club and Builders Club memberships cannot switch to monthly plans' });
+      return res.status(403).json({ error: 'Legacy annual memberships cannot switch to monthly plans' });
     }
 
     const currentPriceId = stripeSubscription.items.data[0]?.price?.id;
