@@ -57,6 +57,13 @@ export function buildUserContext(profile) {
           ? 'Mix of local and online audience'
           : 'Online audience';
 
+    let bookingContext = '';
+    if (primaryGoal === 'drive_appointments' || primaryGoal === 'book_consultations') {
+      bookingContext = primaryGoal === 'drive_appointments'
+        ? `This account's primary goal is filling their appointment calendar. Every hook, caption, and CTA must have a clear booking endpoint. Urgency is specific ("2 spots left this week") not vague. CTAs are direct and frictionless.`
+        : `This account's primary goal is booking discovery calls and consultations. Hooks lead with client outcomes or relatable problems. CTAs are warm and invitational ("DM READY to chat", "Let's see if we're a good fit"). Never pressure — always invite.`;
+    }
+
     return [
       `USER TYPE: Business owner / Brand`,
       `Business name: ${businessName}`,
@@ -74,6 +81,7 @@ export function buildUserContext(profile) {
       `seasonal menu items, customer moments, and reasons to visit.`,
       `Always ask: "Would a real ${niche} owner actually post this`,
       `on their business account?" If not, generate something different.`,
+      ...(bookingContext ? ['', `BOOKING CONTEXT: ${bookingContext}`] : []),
     ].join('\n');
   }
 

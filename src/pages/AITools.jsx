@@ -1610,11 +1610,12 @@ export default function AITools() {
               {/* Goal Selection */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Goal</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'engagement', icon: MessageCircle, label: 'Drive Engagement', desc: 'Comments, shares, saves' },
                     { id: 'sales', icon: DollarSign, label: 'Drive Sales', desc: 'Purchases, sign-ups, downloads' },
-                    { id: 'dms', icon: Mail, label: 'Drive DMs/Leads', desc: 'Direct messages, inquiries' }
+                    { id: 'dms', icon: Mail, label: 'Drive DMs/Leads', desc: 'Direct messages, inquiries' },
+                    { id: 'book_appointment', icon: Target, label: 'Book Appointment / Consultation', desc: 'Calendar bookings, discovery calls' }
                   ].map((goal) => (
                     <button
                       key={goal.id}

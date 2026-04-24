@@ -51,6 +51,8 @@ import {
 
 const BUSINESS_GOALS = [
   'Drive foot traffic',
+  'Drive Appointments',
+  'Book Consultations',
   'Generate leads',
   'Increase sales',
   'Build brand awareness',
@@ -86,6 +88,18 @@ const GOAL_CONTENT_MIX_HINTS = {
     'Product Spotlight': 25,
     'Community & Local': 25,
     'Social Proof': 20,
+  },
+  'Drive Appointments': {
+    'Social Proof': 30,
+    'Educational': 25,
+    'Behind the Scenes': 25,
+    'Direct Offer': 20,
+  },
+  'Book Consultations': {
+    'Educational': 35,
+    'Problem/Solution': 30,
+    'Social Proof': 25,
+    'Personal': 10,
   },
   'Generate leads': {
     'Educational': 35,

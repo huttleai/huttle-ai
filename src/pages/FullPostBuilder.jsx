@@ -104,6 +104,7 @@ const GOALS = [
   { id: 'followers', label: 'Grow followers' },
   { id: 'engagement', label: 'Drive engagement' },
   { id: 'leads', label: 'Generate leads' },
+  { id: 'book_appointment', label: 'Drive Appointments' },
   { id: 'sales', label: 'Make a sale' },
 ];
 
@@ -113,6 +114,7 @@ function resolveClaudeHookGoalLabel(goalId, fallbackLabel) {
     followers: 'Build a follower base of people who match your ideal client',
     engagement: 'Educate skeptical beginners and drive comments, saves, and shares',
     leads: 'Book consultations and capture qualified leads',
+    book_appointment: 'Drive appointment bookings with a clear, frictionless booking CTA — specific availability, platform-native next step (DM, profile link, call)',
     sales: 'Sell treatment packages and convert interest into bookings',
   };
   return map[goalId] || fallbackLabel;

@@ -57,6 +57,10 @@ const EXACT_MAPPINGS = {
   'monetize': 'Monetize Content',
   'boost_engagement': 'Boost Engagement',
   'grow_following': 'Grow My Following',
+  'drive_appointments': 'Drive Appointments',
+  'book_consultations': 'Book Consultations',
+  'book_appointment': 'Book an Appointment',
+  'schedule_consultation': 'Schedule a Consultation',
   
   // Creator focuses
   'lifestyle': 'Lifestyle & Daily Life',

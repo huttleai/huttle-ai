@@ -222,6 +222,18 @@ export function buildIgniteN8nPayload(input) {
 
     business_primary_goal: businessPrimaryGoal,
     businessPrimaryGoal,
+    booking_context:
+      businessPrimaryGoal === 'drive_appointments'
+        ? `This account's primary goal is filling their appointment calendar. Every hook, caption, and CTA must have a clear booking endpoint. Urgency is specific ("2 spots left this week") not vague. CTAs are direct and frictionless.`
+        : businessPrimaryGoal === 'book_consultations'
+          ? `This account's primary goal is booking discovery calls and consultations. Hooks lead with client outcomes or relatable problems. CTAs are warm and invitational ("DM READY to chat", "Let's see if we're a good fit"). Never pressure — always invite.`
+          : '',
+    bookingContext:
+      businessPrimaryGoal === 'drive_appointments'
+        ? `This account's primary goal is filling their appointment calendar. Every hook, caption, and CTA must have a clear booking endpoint. Urgency is specific ("2 spots left this week") not vague. CTAs are direct and frictionless.`
+        : businessPrimaryGoal === 'book_consultations'
+          ? `This account's primary goal is booking discovery calls and consultations. Hooks lead with client outcomes or relatable problems. CTAs are warm and invitational ("DM READY to chat", "Let's see if we're a good fit"). Never pressure — always invite.`
+          : '',
     creator_monetization_path: creatorMonetizationPath,
     creatorMonetizationPath,
     is_local_business: isLocal,

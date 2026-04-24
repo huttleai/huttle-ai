@@ -55,6 +55,8 @@ const BRAND_GOALS = [
   { value: 'build_community', label: 'Build community' },
   { value: 'educate_audience', label: 'Educate audience' },
   { value: 'generate_leads', label: 'Generate leads' },
+  { value: 'drive_appointments', label: 'Drive Appointments', icon: '📅' },
+  { value: 'book_consultations', label: 'Book Consultations', icon: '🤝' },
 ];
 
 const CREATOR_GOALS = [
@@ -63,6 +65,8 @@ const CREATOR_GOALS = [
   { value: 'build_community', label: 'Build community' },
   { value: 'share_story', label: 'Share my story' },
   { value: 'monetize', label: 'Monetize content' },
+  { value: 'drive_appointments', label: 'Drive Appointments', icon: '📅' },
+  { value: 'book_consultations', label: 'Book Consultations', icon: '🤝' },
 ];
 
 const AUDIENCE_ACTION_OPTIONS = [
@@ -126,7 +130,8 @@ const BUSINESS_TYPE_OPTIONS = [
 ];
 
 const CONVERSION_GOAL_OPTIONS = [
-  { value: 'book_appointment', label: 'Book an appointment' },
+  { value: 'book_appointment', label: 'Book an Appointment' },
+  { value: 'schedule_consultation', label: 'Schedule a Consultation' },
   { value: 'dm_us', label: 'DM us' },
   { value: 'visit_website', label: 'Visit website' },
   { value: 'buy_now', label: 'Buy now' },
@@ -206,6 +211,8 @@ const AUDIENCE_STAGE_OPTIONS = [
 const BUSINESS_PRIMARY_GOAL_OPTIONS = [
   { value: 'drive_sales', label: 'Drive Sales' },
   { value: 'increase_foot_traffic', label: 'Increase Foot Traffic' },
+  { value: 'drive_appointments', label: 'Drive Appointments' },
+  { value: 'book_consultations', label: 'Book Consultations' },
   { value: 'build_community', label: 'Build Community' },
   { value: 'grow_online_presence', label: 'Grow Online Presence' },
   { value: 'build_brand_awareness', label: 'Build Brand Awareness' },

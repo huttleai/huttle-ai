@@ -910,9 +910,20 @@ export async function generateCaption(contentData, brandData, options = {}) {
     const contentGoalLabel =
       contentGoal === 'sales'
         ? 'Drive sales / conversions'
-        : contentGoal === 'dms' || contentGoal === 'leads'
-          ? 'Drive DMs and leads'
-          : 'Drive engagement (saves, comments, shares)';
+        : contentGoal === 'book_appointment' || contentGoal === 'Drive Appointments' || contentGoal === 'drive_appointments'
+          ? 'Drive appointment bookings'
+          : contentGoal === 'dms' || contentGoal === 'leads'
+            ? 'Drive DMs and leads'
+            : 'Drive engagement (saves, comments, shares)';
+
+    let goalInstruction = '';
+    const isBookingGoal =
+      contentGoal === 'book_appointment' ||
+      contentGoal === 'Drive Appointments' ||
+      contentGoal === 'drive_appointments';
+    if (isBookingGoal) {
+      goalInstruction = `\nGOAL: Drive appointment bookings. Every output must end with a clear, frictionless booking CTA. Use platform-specific next steps: Instagram = "DM us to book" or "Check our profile to schedule". Facebook = "Call or message us". TikTok = "Profile link to book". Urgency must be specific: "We have 3 openings left this week" not "Limited time only". This business's revenue depends on booked appointments — never generate a post that doesn't have a booking pathway.\n`;
+    }
 
     const variantTarget = isSingleCaptionMode ? 1 : 4;
     const hashtagRequirementLine = fullPostBuilder
@@ -945,7 +956,7 @@ Generate captions for this context:
 - Post idea / keywords: ${contentData.topic}
 - Desired LENGTH: ${contentData.length || 'medium'} (short ≈ tight 1–2 short paragraphs; medium = standard feed caption; long = richer arc but stay within the character limit)
 - Desired TONE: ${promptProfile.tone}
-- Primary GOAL: ${contentGoalLabel}
+- Primary GOAL: ${contentGoalLabel}${goalInstruction}
 - Creator type: ${creatorPromptGuidance.label}
 - Audience: ${promptProfile.targetAudience}
 - Niche: ${promptProfile.niche}
@@ -1832,7 +1843,8 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     'engagement': 'Drive Engagement (comments, shares, saves)',
     'sales': 'Drive Sales/Conversions (purchases, sign-ups, downloads)',
     'leads': 'Generate leads',
-    'dms': 'Drive DMs/Leads (direct messages, inquiries)'
+    'dms': 'Drive DMs/Leads (direct messages, inquiries)',
+    'book_appointment': 'Book Appointment / Consultation (calendar bookings, discovery calls)'
   };
 
   // Demo mode
@@ -1875,9 +1887,21 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const primaryGoalModel =
       goalType === 'sales'
         ? 'sales'
-        : goalType === 'dms' || goalType === 'leads'
+        : goalType === 'dms' || goalType === 'leads' || goalType === 'book_appointment' || goalType === 'Book Appointment / Consultation'
           ? 'dms_leads'
           : 'engagement';
+
+    let ctaInstruction = '';
+    if (goalType === 'book_appointment' || goalType === 'Book Appointment / Consultation') {
+      ctaInstruction = `
+Generate 5 CTAs that drive the viewer to book an appointment or consultation. Rules:
+- Each CTA must name a specific frictionless next action (DM, profile link, call, text)
+- At least 2 CTAs must anchor urgency to real availability: "We have 3 spots open this week" not "Book now before it's too late"
+- At least 1 CTA must use warm consultation language: "Let's see if we're a good fit — DM the word READY"
+- Platform-specific: Instagram uses DM or profile link. Facebook can use call or message. TikTok uses profile link only.
+- Never write "Learn more", "Click the link", or "Sign up". Every CTA must name the exact action.
+`;
+    }
 
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'ctas',
@@ -1915,6 +1939,8 @@ Goal bias:
 - Engagement / followers → low-friction saves, shares, comments; keyword comments.
 - Sales → benefit + urgency without spam; clear next step to buy or sign up.
 - DMs / leads → conversational DM prompts and lead-magnet framing.
+- Book appointment / consultation → specific availability, frictionless next action (DM, profile link, call), warm invitational language.
+${ctaInstruction}
 
 Return ONLY JSON:
 {

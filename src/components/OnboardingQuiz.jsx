@@ -71,6 +71,8 @@ const CONTENT_FOCUS_PILLARS_OPTIONS = [
 const BUSINESS_GOAL_OPTIONS = [
   { value: 'drive_sales', label: 'Drive more sales' },
   { value: 'increase_foot_traffic', label: 'Increase foot traffic' },
+  { value: 'drive_appointments', label: 'Drive Appointments', description: 'Get more bookings and fill your calendar' },
+  { value: 'book_consultations', label: 'Book Consultations', description: 'Turn followers into discovery calls and consults' },
   { value: 'build_community', label: 'Build a loyal community' },
   { value: 'grow_online_presence', label: 'Grow my online presence' },
   { value: 'build_brand_awareness', label: 'Build brand awareness' },
