@@ -104,12 +104,24 @@ export default async function handler(req, res) {
 
     // Release any pending subscription schedule (e.g. a queued downgrade)
     // before setting cancel_at_period_end, otherwise Stripe will reject the update.
+    // Wrapped separately so a failed schedule release (e.g. past_due subscriptions)
+    // does not block the cancellation itself.
     const scheduleId = typeof stripeSubscription.schedule === 'string'
       ? stripeSubscription.schedule
       : stripeSubscription.schedule?.id || null;
 
     if (scheduleId) {
-      await stripe.subscriptionSchedules.release(scheduleId);
+      try {
+        await stripe.subscriptionSchedules.release(scheduleId);
+      } catch (scheduleErr) {
+        console.warn('[cancel-subscription] schedule release failed — proceeding with cancellation:', {
+          scheduleId,
+          subscriptionStatus: stripeSubscription.status,
+          code: scheduleErr?.code,
+          message: scheduleErr?.message,
+          raw: scheduleErr?.raw,
+        });
+      }
     }
 
     const cancelledSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
@@ -144,7 +156,14 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, access_until: accessUntil });
   } catch (err) {
-    console.error('Cancel subscription error:', err);
+    console.error('[cancel-subscription] unhandled error:', {
+      message: err.message,
+      type: err.type,
+      code: err.code,
+      statusCode: err.statusCode,
+      raw: err.raw,
+      stack: err.stack,
+    });
     return res.status(500).json({
       error: err.message || 'Failed to cancel subscription. Please try again.',
       message: 'If this problem persists, contact support@huttleai.com',

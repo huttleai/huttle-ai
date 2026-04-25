@@ -70,6 +70,20 @@ const TIER_LABELS = {
   builder:    'Legacy Annual',
 };
 
+function normaliseStatus(stripeStatus) {
+  const map = {
+    active: 'active',
+    canceled: 'cancelled',
+    cancelled: 'cancelled',
+    past_due: 'past_due',
+    unpaid: 'unpaid',
+    incomplete: 'incomplete',
+    incomplete_expired: 'incomplete_expired',
+    trialing: 'trialing',
+  };
+  return map[stripeStatus] ?? stripeStatus;
+}
+
 // Disable body parsing â we need the raw body for Stripe webhook signature verification.
 export const config = {
   api: {
@@ -175,6 +189,32 @@ async function postCancellationToSlack({ email, plan, days, reason }) {
   }
 }
 
+/**
+ * Post a payment failure notification to the Slack SLACK_WEBHOOK_ERRORS channel.
+ * This is distinct from the Resend transactional email sent to the customer.
+ * Silently skips if SLACK_WEBHOOK_ERRORS is not configured.
+ */
+async function postPaymentFailedToSlack({ email, tier, amountDue, timestamp }) {
+  const webhookUrl = process.env.SLACK_WEBHOOK_ERRORS;
+  if (!webhookUrl) {
+    logWarn('stripe_webhook.payment_failed_slack_skipped', { reason: 'SLACK_WEBHOOK_ERRORS not configured' });
+    return;
+  }
+
+  const amountFormatted = amountDue != null ? `$${(amountDue / 100).toFixed(2)}` : 'unknown';
+  const text = `⚠️ Payment Failed: ${email} | tier: ${tier || 'unknown'} | amount: ${amountFormatted} | ${timestamp}`;
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    logWarn('stripe_webhook.payment_failed_slack_post_error', { status: response.status });
+  }
+}
+
 async function hasProcessedEvent(eventId) {
   if (!eventId || !supabase) return false;
 
@@ -224,6 +264,7 @@ async function updateSubscriptionRecord({
   customerName = null,
 }) {
   const priceId = subscription.items.data[0]?.price?.id;
+  const status = normaliseStatus(subscription.status);
   const plan = resolvePlanId({
     planId: subscription.metadata?.planId,
     metadataPlanId: subscription.metadata?.plan,
@@ -276,7 +317,7 @@ async function updateSubscriptionRecord({
     stripe_subscription_id: subscription.id,
     stripe_customer_id: customerId,
     tier: plan,
-    status: subscription.status,
+    status,
     current_period_start: toIsoDate(subscription.current_period_start),
     current_period_end: toIsoDate(subscription.current_period_end),
     trial_start: subscription.trial_start ? toIsoDate(subscription.trial_start) : null,
@@ -791,6 +832,54 @@ export default async function handler(req, res) {
               subscriptionId: subscription.id,
             });
           }
+
+          // Targeted status + period sync by stripe_subscription_id.
+          // Runs for customer.subscription.updated regardless of whether user resolution
+          // succeeded above, so past_due / unpaid transitions are never silently dropped.
+          // Applies status normalisation (e.g. 'canceled' -> 'cancelled') before writing.
+          if (event.type === 'customer.subscription.updated') {
+            try {
+              const stripeSubId = subscription.id;
+              const { data: existingSub } = await supabase
+                .from('subscriptions')
+                .select('stripe_subscription_id')
+                .eq('stripe_subscription_id', stripeSubId)
+                .maybeSingle();
+
+              if (!existingSub) {
+                console.warn(`[customer.subscription.updated] No subscriptions row for stripe_subscription_id=${stripeSubId} — possible orphaned record`);
+              } else {
+                const mappedStatus = normaliseStatus(subscription.status);
+                const { error: statusSyncError } = await supabase
+                  .from('subscriptions')
+                  .update({
+                    status: mappedStatus,
+                    current_period_start: toIsoDate(subscription.current_period_start),
+                    current_period_end: toIsoDate(subscription.current_period_end),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('stripe_subscription_id', stripeSubId);
+
+                if (statusSyncError) {
+                  logError('stripe_webhook.subscription_status_sync_failed', {
+                    eventId: event.id,
+                    subscriptionId: stripeSubId,
+                    mappedStatus,
+                    error: statusSyncError.message,
+                  });
+                } else {
+                  logInfo('stripe_webhook.subscription_status_synced', {
+                    eventId: event.id,
+                    subscriptionId: stripeSubId,
+                    stripeStatus: subscription.status,
+                    mappedStatus,
+                  });
+                }
+              }
+            } catch (syncErr) {
+              logError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
+            }
+          }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
         }
@@ -812,7 +901,7 @@ export default async function handler(req, res) {
             // ── Supabase subscription status update (do not modify) ──────────
             const deletionPayload = {
               tier: 'free',
-              status: 'canceled',
+              status: normaliseStatus(subscription.status || 'canceled'),
               cancel_at_period_end: false,
               updated_at: new Date().toISOString(),
               cancelled_at: new Date().toISOString(),
@@ -926,6 +1015,21 @@ export default async function handler(req, res) {
         try {
           const invoice = event.data.object;
           const customerId = invoice.customer;
+          const stripeSubId = invoice.subscription;
+
+          // Defensive null check: confirm the subscription row exists before updating.
+          // Warns on orphaned records so we can catch data-integrity issues early.
+          if (stripeSubId) {
+            const { data: existingSub } = await supabase
+              .from('subscriptions')
+              .select('stripe_subscription_id')
+              .eq('stripe_subscription_id', stripeSubId)
+              .maybeSingle();
+
+            if (!existingSub) {
+              console.warn(`[invoice.payment_failed] No subscriptions row for stripe_subscription_id=${stripeSubId} — orphaned record`);
+            }
+          }
 
           const { data: profile } = await supabase
             .from('user_profile')
@@ -941,6 +1045,25 @@ export default async function handler(req, res) {
                 updated_at: new Date().toISOString(),
               })
               .eq('user_id', profile.user_id);
+
+            // Slack alert to SLACK_WEBHOOK_ERRORS — distinct from the Resend customer email below
+            try {
+              const slackCustomer = await stripe.customers.retrieve(customerId);
+              const slackEmail = slackCustomer.deleted ? customerId : (slackCustomer.email || customerId);
+              const { data: slackSubRow } = await supabase
+                .from('subscriptions')
+                .select('tier')
+                .eq('user_id', profile.user_id)
+                .maybeSingle();
+              await postPaymentFailedToSlack({
+                email: slackEmail,
+                tier: slackSubRow?.tier || 'unknown',
+                amountDue: invoice.amount_due,
+                timestamp: new Date().toISOString(),
+              });
+            } catch (slackErr) {
+              logWarn('stripe_webhook.payment_failed_slack_error', { eventId: event.id, error: slackErr.message });
+            }
 
             // Email 8: Payment Failed — only on the first attempt; Stripe handles retries 2+
             if (invoice.attempt_count === 1) {

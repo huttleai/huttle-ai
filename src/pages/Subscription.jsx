@@ -255,27 +255,27 @@ export default function Subscription() {
       const result = await cancelSubscription();
       if (!result.success) {
         addToast(result.error || 'Failed to cancel your subscription. Please try again.', 'error');
+        return { success: false, error: result.error };
       } else {
-        setShowCancelModal(false);
         addToast(
           `Your subscription has been cancelled. You'll keep access until ${formatDate(result.accessUntil || subscription?.currentPeriodEnd)}.`,
           'success'
         );
         clearSubscriptionCache();
-        await refreshSubscription();
+        try {
+          await refreshSubscription();
+        } catch (refreshError) {
+          console.error('Subscription refresh after cancellation failed:', refreshError);
+        }
+        return { success: true };
       }
     } catch (error) {
       console.error('Cancel subscription error:', error);
       addToast('Something went wrong. Please try again.', 'error');
+      return { success: false, error: error.message };
     } finally {
       setLoading(null);
     }
-  };
-
-  const handleDowngrade = async (planId) => {
-    setShowCancelModal(false);
-    const billingCycle = planId === 'founder' || planId === 'builder' ? 'annual' : 'monthly';
-    await handleCheckout(planId, billingCycle);
   };
 
   return (
@@ -650,7 +650,6 @@ export default function Subscription() {
         isOpen={showCancelModal}
         onClose={() => setShowCancelModal(false)}
         onConfirm={confirmCancelSubscription}
-        onDowngrade={handleDowngrade}
         currentTier={userTier}
         isLoading={loading === 'cancel'}
         renewalDate={subscription?.currentPeriodEnd}

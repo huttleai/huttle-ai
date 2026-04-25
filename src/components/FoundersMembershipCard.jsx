@@ -60,7 +60,7 @@ export default function FoundersMembershipCard({
   const handleCancelMembership = async () => {
     if (!user?.id) {
       addToast('Please sign in again to manage your membership.', 'error');
-      return;
+      return { success: false, error: 'Please sign in again to manage your membership.' };
     }
 
     setIsCancelling(true);
@@ -71,7 +71,6 @@ export default function FoundersMembershipCard({
         throw new Error(result.error || 'Could not cancel your membership.');
       }
 
-      setIsConfirmOpen(false);
       addToast(
         `Your membership has been cancelled. You'll keep access until ${formatDate(result.accessUntil || subscription?.currentPeriodEnd)}.`,
         'success'
@@ -79,11 +78,17 @@ export default function FoundersMembershipCard({
 
       if (typeof onCancelled === 'function') {
         clearSubscriptionCache();
-        await onCancelled();
+        try {
+          await onCancelled();
+        } catch (refreshError) {
+          console.error('Founders membership refresh after cancellation failed:', refreshError);
+        }
       }
+      return { success: true };
     } catch (error) {
       console.error('Founders membership cancellation error:', error);
       addToast(error.message || 'Something went wrong. Please try again.', 'error');
+      return { success: false, error: error.message };
     } finally {
       setIsCancelling(false);
     }

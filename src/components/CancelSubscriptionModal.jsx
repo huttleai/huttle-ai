@@ -32,7 +32,6 @@ export default function CancelSubscriptionModal({
   isOpen,
   onClose,
   onConfirm,
-  onDowngrade,
   currentTier,
   isLoading = false,
   renewalDate = null,
@@ -85,33 +84,49 @@ export default function CancelSubscriptionModal({
   };
 
   const handleFinalConfirm = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    setErrors({});
 
-    const feedbackPayload = {
-      user_id: userId,
-      plan_name: planName || currentTier,
-      reason,
-      reason_other: reason === 'other' ? (reasonOther.trim() || null) : null,
-      what_would_stay: whatWouldStay.trim() || null,
-      recommend_likelihood: recommendLikelihood || null,
-      additional_feedback: additionalFeedback.trim() || null,
-    };
+    let cancellationResult;
+    try {
+      cancellationResult = await onConfirm();
+    } catch (err) {
+      console.error('Cancellation error:', err);
+      setErrors({ submit: 'Something went wrong cancelling your subscription. Please try again.' });
+      setIsSubmitting(false);
+      return;
+    }
 
+    if (cancellationResult?.success !== true) {
+      setErrors({
+        submit: cancellationResult?.error || 'Something went wrong cancelling your subscription. Please try again.',
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Feedback is only submitted after a successful cancellation response.
     try {
       await fetch('/api/submit-cancellation-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(feedbackPayload),
+        body: JSON.stringify({
+          user_id: userId,
+          plan_name: planName || currentTier,
+          reason,
+          reason_other: reason === 'other' ? (reasonOther.trim() || null) : null,
+          what_would_stay: whatWouldStay.trim() || null,
+          recommend_likelihood: recommendLikelihood || null,
+          additional_feedback: additionalFeedback.trim() || null,
+        }),
       });
     } catch (err) {
       console.error('Feedback submission error (non-blocking):', err);
     }
 
-    try {
-      await onConfirm();
-    } finally {
-      setIsSubmitting(false);
-    }
+    resetState();
+    onClose();
   };
 
   return (
@@ -331,6 +346,13 @@ export default function CancelSubscriptionModal({
                   </p>
                 </div>
               </div>
+
+              {errors.submit && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  {errors.submit}
+                </p>
+              )}
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end pt-1">
                 <button

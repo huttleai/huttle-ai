@@ -46,6 +46,19 @@ export default async function handler(req, res) {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: existingFeedback } = await supabase
+    .from('cancellation_feedback')
+    .select('id')
+    .eq('user_id', user_id)
+    .gte('created_at', twentyFourHoursAgo)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingFeedback) {
+    return res.status(200).json({ success: true, duplicate: true });
+  }
+
   const { error: insertError } = await supabase.from('cancellation_feedback').insert({
     user_id,
     subscription_tier: plan_name || null,
