@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { supabase } from '../config/supabase';
 import { useSubscription } from '../context/SubscriptionContext';
 import {
   getFeatureUsageCount,
@@ -192,11 +193,19 @@ export default function useAIUsage(featureName = null) {
       const currentOverall = await getOverallAIUsageCount(user.id);
       if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
-        // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
+        // Fire the usage-alert-100 email server-side. It is idempotent per billing cycle.
         try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const headers = { 'Content-Type': 'application/json' };
+          if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+          }
+
           fetch('/api/emails/send-usage-alert-trigger', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
         } catch (_) {}
