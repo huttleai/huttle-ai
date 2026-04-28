@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -45,6 +46,15 @@ export default async function handler(req, res) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode).json({ error: authResult.error });
+  }
+
+  if (authResult.user.id !== user_id) {
+    return res.status(403).json({ error: 'You can only submit cancellation feedback for your own account' });
+  }
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
