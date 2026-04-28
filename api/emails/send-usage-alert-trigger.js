@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { authenticateBillingRequest } from '../_utils/billing.js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -15,6 +16,7 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * exactly once per billing cycle per user.
  *
  * Body: { userId: string }
+ * Requires: Authorization: Bearer <Supabase access token>
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -34,6 +36,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    const authResult = await authenticateBillingRequest(req, supabase);
+    if (authResult.error || !authResult.user) {
+      return res.status(authResult.statusCode).json({ error: authResult.error });
+    }
+
+    if (authResult.user.id !== userId) {
+      return res.status(403).json({ error: 'You can only trigger usage alerts for your own account' });
+    }
+
     // ── Idempotency check ──────────────────────────────────────────────────
     // Only send once per billing cycle (calendar month).
     const startOfMonth = new Date();
