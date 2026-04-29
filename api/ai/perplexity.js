@@ -607,7 +607,55 @@ export default async function handler(req, res) {
     const requestedCache = req.body?.cache;
     const requireRealtime = Boolean(req.body?.requireRealtime);
 
-    // If Perplexity key is missing, try Grok as a last resort (no Supabase auth on that path)
+    // Authenticate user
+    const token = parseBearerToken(req.headers.authorization);
+    if (!token) {
+      return res.status(401).json({
+        error: 'Authentication required to use AI features. Please log in.',
+      });
+    }
+
+    if (!supabase) {
+      logError('perplexity.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
+      });
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    const userId = authError || !user ? null : user.id;
+
+    // SECURITY: Require authentication for AI API access
+    // This prevents unauthorized usage of expensive AI API credits
+    if (!userId) {
+      return res.status(401).json({ 
+        error: 'Authentication required to use AI features. Please log in.' 
+      });
+    }
+
+    // Check rate limit
+    const rateLimit = await checkPersistentRateLimit({
+      userKey: userId,
+      route: 'perplexity',
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowSeconds: RATE_LIMIT_WINDOW / 1000,
+    });
+    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
+    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
+    
+    if (!rateLimit.allowed) {
+      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded. Please wait before making more requests.',
+        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
+      });
+    }
+
+    // If Perplexity key is missing, try Grok as a last resort. Auth + rate-limit
+    // checks must run first so fallback cannot bypass usage controls.
     if (!PERPLEXITY_API_KEY) {
       if (requestedCache?.key || requireRealtime) {
         logError('perplexity.missing_api_key_for_cached_dashboard_request');
@@ -640,51 +688,11 @@ export default async function handler(req, res) {
         return res.status(502).json({ error: 'AI service error. Please try again.' });
       }
       const grokData = await grokRes.json();
-      return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
-    }
-
-    if (!supabase) {
-      logError('perplexity.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
-      return res.status(503).json({
-        error: 'Authentication service not configured on the server.',
-      });
-    }
-
-    // Authenticate user
-    let userId = null;
-    const token = parseBearerToken(req.headers.authorization);
-
-    if (token) {
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-
-      if (!error && user) {
-        userId = user.id;
-      }
-    }
-
-    // SECURITY: Require authentication for AI API access
-    // This prevents unauthorized usage of expensive AI API credits
-    if (!userId) {
-      return res.status(401).json({ 
-        error: 'Authentication required to use AI features. Please log in.' 
-      });
-    }
-
-    // Check rate limit
-    const rateLimit = await checkPersistentRateLimit({
-      userKey: userId,
-      route: 'perplexity',
-      maxRequests: RATE_LIMIT_MAX_REQUESTS,
-      windowSeconds: RATE_LIMIT_WINDOW / 1000,
-    });
-    res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetAt);
-    
-    if (!rateLimit.allowed) {
-      logInfo('perplexity.rate_limited', { userId, remaining: rateLimit.remaining });
-      return res.status(429).json({ 
-        error: 'Rate limit exceeded. Please wait before making more requests.',
-        retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
+      return res.status(200).json({
+        success: true,
+        content: grokData.choices?.[0]?.message?.content || '',
+        citations: [],
+        usage: grokData.usage,
       });
     }
 
