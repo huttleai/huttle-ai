@@ -14,6 +14,52 @@ const USER_PROFILE_SELECT =
 
 const QUERY_TIMEOUT_MS = 5000;
 
+function getBrandCacheKey(userId) {
+  return userId ? `brandData:${userId}` : null;
+}
+
+function clearLegacyBrandCache() {
+  try {
+    localStorage.removeItem('brandData');
+  } catch {
+    // ignore storage access failures
+  }
+}
+
+function clearBrandCacheForUser(userId) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage access failures
+  }
+}
+
+function readBrandCacheForUser(userId) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeBrandCacheForUser(userId, data) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // ignore storage access failures
+  }
+}
+
 function createEmptyBrandData() {
   return {
     firstName: '',
@@ -149,14 +195,15 @@ export function BrandProvider({ children }) {
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     prevUserIdRef.current = userId;
+    clearLegacyBrandCache();
 
     if (prevId && userId && prevId !== userId) {
-      localStorage.removeItem('brandData');
+      clearBrandCacheForUser(prevId);
       setBrandData(createEmptyBrandData());
       setHasExplicitBrandType(false);
       setBrandFetchComplete(false);
     } else if (!userId && prevId) {
-      localStorage.removeItem('brandData');
+      clearBrandCacheForUser(prevId);
       setBrandData(createEmptyBrandData());
       setHasExplicitBrandType(false);
       setBrandFetchComplete(true);
@@ -167,13 +214,10 @@ export function BrandProvider({ children }) {
     let isActive = true;
 
     const applyLocalBrandFallback = () => {
-      const savedBrand = localStorage.getItem('brandData');
-      if (!savedBrand || !isActive) return;
-
-      try {
-        setBrandData(JSON.parse(savedBrand));
-      } catch (error) {
-        console.warn('[Brand] Could not parse cached brand data:', error.message);
+      if (!user?.id || !isActive) return;
+      const cachedBrand = readBrandCacheForUser(user.id);
+      if (cachedBrand) {
+        setBrandData(cachedBrand);
       }
     };
 
@@ -185,13 +229,11 @@ export function BrandProvider({ children }) {
     /** After a failed profile fetch/insert, prefer cached brand data so the UI is not wiped. */
     const applyFetchFailureFallback = () => {
       if (!isActive) return;
-      const savedBrand = localStorage.getItem('brandData');
-      if (savedBrand) {
-        try {
-          setBrandData(JSON.parse(savedBrand));
+      if (user?.id) {
+        const cachedBrand = readBrandCacheForUser(user.id);
+        if (cachedBrand) {
+          setBrandData(cachedBrand);
           return;
-        } catch (e) {
-          console.warn('[Brand] Could not parse cached brand data after fetch failure:', e.message);
         }
       }
       applyEmptyBrandFallback();
@@ -323,7 +365,7 @@ export function BrandProvider({ children }) {
             setBrandData(mergedData);
             setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
           }
-          localStorage.setItem('brandData', JSON.stringify(mergedData));
+          writeBrandCacheForUser(user.id, mergedData);
         } else {
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
@@ -338,7 +380,7 @@ export function BrandProvider({ children }) {
           if (isActive && userPreferences) {
             setBrandData((current) => {
               const merged = mergePreferencesIntoBrandData(current, userPreferences);
-              localStorage.setItem('brandData', JSON.stringify(merged));
+              writeBrandCacheForUser(user.id, merged);
               return merged;
             });
             setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
@@ -371,7 +413,7 @@ export function BrandProvider({ children }) {
     setBrandData(updated);
     brandDataRef.current = updated;
 
-    localStorage.setItem('brandData', JSON.stringify(updated));
+    writeBrandCacheForUser(user?.id, updated);
 
     if (user?.id) {
       try {
@@ -476,7 +518,8 @@ export function BrandProvider({ children }) {
   const resetBrandData = useCallback(async () => {
     const resetData = createEmptyBrandData();
     setBrandData(resetData);
-    localStorage.removeItem('brandData');
+    clearLegacyBrandCache();
+    clearBrandCacheForUser(user?.id);
 
     if (user?.id) {
       try {
