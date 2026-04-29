@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -14,7 +15,8 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Auth: Authorization: Bearer <Supabase access token>
+ * Body: { userId?: string } // optional consistency hint only
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -28,12 +30,30 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
-  }
-
   try {
+    const accessToken = parseBearerToken(req.headers.authorization);
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    const requestedUserId =
+      typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+
+    if (requestedUserId && requestedUserId !== user.id) {
+      return res.status(403).json({ error: 'Forbidden: user mismatch' });
+    }
+
+    const userId = user.id;
+
     // ── Idempotency check ──────────────────────────────────────────────────
     // Only send once per billing cycle (calendar month).
     const startOfMonth = new Date();
