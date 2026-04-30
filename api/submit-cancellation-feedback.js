@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -22,20 +23,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const {
-    user_id,
-    plan_name,
-    reason,
-    reason_other,
-    what_would_stay,
-    recommend_likelihood,
-    additional_feedback,
-  } = req.body ?? {};
-
-  if (!user_id || !reason) {
-    return res.status(400).json({ error: 'Missing required fields: user_id, reason' });
-  }
-
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -46,11 +33,36 @@ export default async function handler(req, res) {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode).json({ error: authResult.error });
+  }
+
+  const {
+    user_id,
+    plan_name,
+    reason,
+    reason_other,
+    what_would_stay,
+    recommend_likelihood,
+    additional_feedback,
+  } = req.body ?? {};
+
+  if (user_id && user_id !== authResult.user.id) {
+    return res.status(403).json({ error: 'You can only submit cancellation feedback for your own account' });
+  }
+
+  if (!reason) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
+  }
+
+  const authenticatedUserId = authResult.user.id;
+
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
     .from('cancellation_feedback')
     .select('id')
-    .eq('user_id', user_id)
+    .eq('user_id', authenticatedUserId)
     .gte('created_at', twentyFourHoursAgo)
     .limit(1)
     .maybeSingle();
@@ -60,7 +72,7 @@ export default async function handler(req, res) {
   }
 
   const { error: insertError } = await supabase.from('cancellation_feedback').insert({
-    user_id,
+    user_id: authenticatedUserId,
     subscription_tier: plan_name || null,
     cancellation_reason: reason,
     reason_other: reason === 'other' ? (reason_other || null) : null,
