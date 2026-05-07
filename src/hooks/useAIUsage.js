@@ -209,7 +209,9 @@ export default function useAIUsage(featureName = null) {
             headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          return { allowed: false, reason: 'pool_exhausted' };
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
