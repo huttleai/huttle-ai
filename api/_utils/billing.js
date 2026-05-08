@@ -145,6 +145,39 @@ export async function authenticateBillingRequest(req, supabase) {
   return { error: null, statusCode: 200, user };
 }
 
+export async function resolveAuthenticatedUserId({
+  req,
+  supabase,
+  requestedUserId = null,
+  mismatchError = 'You can only manage your own account',
+}) {
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return {
+      error: authResult.error,
+      statusCode: authResult.statusCode,
+      user: null,
+      userId: null,
+    };
+  }
+
+  if (requestedUserId && requestedUserId !== authResult.user.id) {
+    return {
+      error: mismatchError,
+      statusCode: 403,
+      user: authResult.user,
+      userId: null,
+    };
+  }
+
+  return {
+    error: null,
+    statusCode: 200,
+    user: authResult.user,
+    userId: authResult.user.id,
+  };
+}
+
 export async function syncStripeCustomerId({ supabase, userId, customerId }) {
   if (!supabase || !userId || !customerId) return;
 

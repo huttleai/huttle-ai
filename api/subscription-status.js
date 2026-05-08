@@ -171,11 +171,7 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
+    if (!stripeSubscription) {
       // If Stripe has no active subscription, return what Supabase knows.
       // This keeps the billing UI functional even when Stripe data is unavailable.
       if (subscriptionRecord) {
@@ -215,6 +211,48 @@ export default async function handler(req, res) {
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
+      });
+    }
+
+    if (subStatus === 'incomplete_expired' || subStatus === 'unpaid') {
+      // Stripe is authoritative when it has a live terminal/non-collectible
+      // status. Do not fall back to a stale active Supabase row here, or the
+      // client can keep paid access after Stripe has stopped the subscription.
+      const normalizedFromStripe = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord,
+      });
+
+      if (!normalizedFromStripe) {
+        return res.status(200).json({
+          subscription: null,
+          plan: null,
+          status: subStatus,
+          currentPeriodEnd: null,
+          trialEnd: null,
+        });
+      }
+
+      const {
+        customerId: _cid,
+        stripeSubscriptionId: _sid,
+        id: _id,
+        ...safeSubscription
+      } = normalizedFromStripe;
+
+      return res.status(200).json({
+        subscription: safeSubscription,
+        plan: normalizedFromStripe.plan ?? null,
+        tier: normalizedFromStripe.tier ?? null,
+        status: normalizedFromStripe.status ?? subStatus,
+        currentPeriodStart: normalizedFromStripe.currentPeriodStart ?? null,
+        currentPeriodEnd: normalizedFromStripe.currentPeriodEnd ?? null,
+        trialStart: normalizedFromStripe.trialStart ?? null,
+        trialEnd: normalizedFromStripe.trialEnd ?? null,
+        billingCycle: normalizedFromStripe.billingCycle ?? null,
+        cancelAtPeriodEnd: normalizedFromStripe.cancelAtPeriodEnd ?? false,
+        cancelledAt: normalizedFromStripe.cancelledAt ?? null,
+        upcomingPlanChange: normalizedFromStripe.upcomingPlanChange ?? null,
       });
     }
 
