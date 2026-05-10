@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -32,8 +33,8 @@ export default async function handler(req, res) {
     additional_feedback,
   } = req.body ?? {};
 
-  if (!user_id || !reason) {
-    return res.status(400).json({ error: 'Missing required fields: user_id, reason' });
+  if (!reason) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -45,22 +46,36 @@ export default async function handler(req, res) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error) {
+    return res.status(authResult.statusCode).json({ error: authResult.error });
+  }
+
+  const authenticatedUserId = authResult.user.id;
+  if (user_id && user_id !== authenticatedUserId) {
+    return res.status(403).json({ error: 'Authenticated user does not match request user' });
+  }
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: existingFeedback } = await supabase
+  const { data: existingFeedback, error: existingFeedbackError } = await supabase
     .from('cancellation_feedback')
     .select('id')
-    .eq('user_id', user_id)
+    .eq('user_id', authenticatedUserId)
     .gte('created_at', twentyFourHoursAgo)
     .limit(1)
     .maybeSingle();
+
+  if (existingFeedbackError && existingFeedbackError.code !== 'PGRST116') {
+    console.error('Cancellation feedback duplicate check error:', existingFeedbackError);
+    return res.status(500).json({ error: 'Failed to check feedback history' });
+  }
 
   if (existingFeedback) {
     return res.status(200).json({ success: true, duplicate: true });
   }
 
   const { error: insertError } = await supabase.from('cancellation_feedback').insert({
-    user_id,
+    user_id: authenticatedUserId,
     subscription_tier: plan_name || null,
     cancellation_reason: reason,
     reason_other: reason === 'other' ? (reason_other || null) : null,
