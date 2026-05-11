@@ -292,11 +292,14 @@ export function SubscriptionProvider({ children }) {
 
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
+      const hasAuthoritativeStripeResult = Boolean(stripeResult.success);
+      const nextStatus = hasAuthoritativeStripeResult
+        ? (stripeSubscription?.status || stripeResult.status || 'inactive')
+        : (databaseSubscription?.status || stripeResult.status || 'inactive');
       const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
       const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
       const nextTier = hasActiveSubscription
-        ? (databaseTier || resolvedStripeTier || TIERS.FREE)
+        ? (resolvedStripeTier || databaseTier || TIERS.FREE)
         : TIERS.FREE;
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
       // the server-side API endpoints resolve them from the authenticated user_id.
@@ -312,9 +315,9 @@ export function SubscriptionProvider({ children }) {
             billingCycle: stripeSubscription.billingCycle ?? null,
             upcomingPlanChange: stripeSubscription.upcomingPlanChange ?? null,
             user_id: databaseSubscription?.user_id ?? userId,
-            plan: databaseTier || stripeSubscription.plan || null,
-            tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
-            status: databaseSubscription?.status || stripeSubscription.status,
+            plan: resolvedStripeTier || databaseTier || stripeSubscription.plan || null,
+            tier: resolvedStripeTier || databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
+            status: nextStatus,
           }
         : (databaseSubscription
           ? {
