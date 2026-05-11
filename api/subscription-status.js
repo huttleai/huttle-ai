@@ -170,14 +170,9 @@ export default async function handler(req, res) {
       console.error('[subscription-status] Stripe lookup failed:', stripeErr?.message ?? stripeErr);
     }
 
-    const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
-      // If Stripe has no active subscription, return what Supabase knows.
-      // This keeps the billing UI functional even when Stripe data is unavailable.
+    if (!stripeSubscription) {
+      // If Stripe data is unavailable, return what Supabase knows.
+      // When Stripe does return a subscription, its status is authoritative below.
       if (subscriptionRecord) {
         const normalizedFromRecord = buildSubscriptionPayload({
           stripeSubscription: null,
