@@ -24,6 +24,7 @@ import { logError, logInfo, logWarn } from './_utils/observability.js';
 import { resolvePlanId } from './_utils/stripePlans.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 import { toIsoDate } from './_utils/billing.js';
+import { findAuthUserByEmail } from './_utils/authUsers.js';
 import { sendCancellationVoluntaryEmail } from './emails/send-cancellation-voluntary.js';
 import { sendTrialStartedEmail } from './emails/send-trial-started.js';
 import { sendTrialExpiredEmail } from './emails/send-trial-expired.js';
@@ -479,17 +480,20 @@ export default async function handler(req, res) {
 
           if (!userId && customerEmail) {
             console.log('[checkout.session.completed] falling back to email lookup', { eventId: event.id, customerEmail });
-            const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
-              filter: `email.eq.${customerEmail}`,
-              page: 1,
-              perPage: 1,
-            });
+            const {
+              user: matchedUser,
+              error: userLookupError,
+              exhausted,
+            } = await findAuthUserByEmail({ supabase, email: customerEmail });
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
               console.error('[checkout.session.completed] email lookup failed — cannot proceed', { eventId: event.id, error: userLookupError.message });
-              break;
+              throw new Error(userLookupError.message || 'Failed to resolve checkout user by email');
             }
-            userId = userList?.users?.[0]?.id ?? null;
+            userId = matchedUser?.id ?? null;
+            if (!userId && exhausted) {
+              logWarn('stripe_webhook.checkout_user_lookup_exhausted', { eventId: event.id, customerId, customerEmail });
+            }
             console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
           }
 
@@ -501,7 +505,7 @@ export default async function handler(req, res) {
               customerEmail,
               clientReferenceId: session.client_reference_id,
             });
-            break;
+            throw new Error('Could not resolve Supabase user for checkout session');
           }
 
           const nameParts = customerName.split(' ');
@@ -628,6 +632,7 @@ export default async function handler(req, res) {
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
               console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              throw subErr;
             }
           } else {
             console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
@@ -635,6 +640,7 @@ export default async function handler(req, res) {
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
           console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1183,6 +1189,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
+    return res.status(500).json({ error: 'Internal processing error' });
   }
 }
