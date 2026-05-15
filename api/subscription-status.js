@@ -51,6 +51,7 @@ const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL |
 const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const STRIPE_NO_ACCESS_STATUSES = new Set(['canceled', 'cancelled', 'unpaid', 'incomplete', 'incomplete_expired']);
 
 export default async function handler(req, res) {
   try {
@@ -171,13 +172,9 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
-      // If Stripe has no active subscription, return what Supabase knows.
-      // This keeps the billing UI functional even when Stripe data is unavailable.
+    if (!stripeSubscription) {
+      // If Stripe data is unavailable, return what Supabase knows.
+      // This keeps the billing UI functional during transient Stripe failures.
       if (subscriptionRecord) {
         const normalizedFromRecord = buildSubscriptionPayload({
           stripeSubscription: null,
@@ -213,6 +210,46 @@ export default async function handler(req, res) {
         subscription: null,
         plan: null,
         status: 'inactive',
+        currentPeriodEnd: null,
+        trialEnd: null,
+      });
+    }
+
+    if (STRIPE_NO_ACCESS_STATUSES.has(subStatus)) {
+      const normalizedInactiveSubscription = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord,
+      });
+
+      if (normalizedInactiveSubscription) {
+        const {
+          customerId: _cid,
+          stripeSubscriptionId: _sid,
+          id: _id,
+          ...safeSubscription
+        } = normalizedInactiveSubscription;
+
+        return res.status(200).json({
+          subscription: safeSubscription,
+          plan: null,
+          tier: null,
+          status: subStatus,
+          currentPeriodStart: normalizedInactiveSubscription.currentPeriodStart ?? null,
+          currentPeriodEnd: normalizedInactiveSubscription.currentPeriodEnd ?? null,
+          trialStart: normalizedInactiveSubscription.trialStart ?? null,
+          trialEnd: normalizedInactiveSubscription.trialEnd ?? null,
+          billingCycle: normalizedInactiveSubscription.billingCycle ?? null,
+          cancelAtPeriodEnd: normalizedInactiveSubscription.cancelAtPeriodEnd ?? false,
+          cancelledAt: normalizedInactiveSubscription.cancelledAt ?? null,
+          upcomingPlanChange: normalizedInactiveSubscription.upcomingPlanChange ?? null,
+        });
+      }
+
+      return res.status(200).json({
+        subscription: null,
+        plan: null,
+        tier: null,
+        status: subStatus,
         currentPeriodEnd: null,
         trialEnd: null,
       });

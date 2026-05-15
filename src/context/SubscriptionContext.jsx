@@ -17,6 +17,7 @@ export function clearSubscriptionCache() {
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
 const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const STRIPE_NO_ACCESS_STATUSES = new Set(['canceled', 'cancelled', 'unpaid', 'incomplete', 'incomplete_expired']);
 const MAX_SUBSCRIPTION_RETRIES = 3;
 const SUBSCRIPTION_INITIAL_RETRY_DELAY_MS = 1000;
 const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
@@ -291,11 +292,18 @@ export function SubscriptionProvider({ children }) {
       }
 
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
+      const stripeAuthoritativeStatus =
+        stripeResult.success ? (stripeSubscription?.status || stripeResult.status || null) : null;
+      const hasNoAccessStripeStatus = STRIPE_NO_ACCESS_STATUSES.has(stripeAuthoritativeStatus);
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
+      const nextStatus = hasNoAccessStripeStatus
+        ? stripeAuthoritativeStatus
+        : databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
       const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
       const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
-      const nextTier = hasActiveSubscription
+      const nextTier = hasNoAccessStripeStatus
+        ? TIERS.FREE
+        : hasActiveSubscription
         ? (databaseTier || resolvedStripeTier || TIERS.FREE)
         : TIERS.FREE;
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
@@ -314,7 +322,9 @@ export function SubscriptionProvider({ children }) {
             user_id: databaseSubscription?.user_id ?? userId,
             plan: databaseTier || stripeSubscription.plan || null,
             tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
-            status: databaseSubscription?.status || stripeSubscription.status,
+            status: hasNoAccessStripeStatus
+              ? stripeAuthoritativeStatus
+              : databaseSubscription?.status || stripeSubscription.status,
           }
         : (databaseSubscription
           ? {
