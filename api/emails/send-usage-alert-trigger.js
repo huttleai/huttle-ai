@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
+import { authenticateBillingRequest } from '../_utils/billing.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,7 +15,7 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Body: { userId?: string } optional legacy echo of the authenticated user.
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -28,9 +29,21 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult?.error || !authResult?.user) {
+    const statusCode =
+      typeof authResult?.statusCode === 'number' &&
+      authResult.statusCode >= 400 &&
+      authResult.statusCode < 600
+        ? authResult.statusCode
+        : 401;
+    return res.status(statusCode).json({ error: authResult?.error ?? 'Authentication required' });
+  }
+
+  const { userId: requestedUserId } = req.body || {};
+  const userId = authResult.user.id;
+  if (requestedUserId && requestedUserId !== userId) {
+    return res.status(403).json({ error: 'You can only trigger usage alerts for your own account' });
   }
 
   try {
@@ -112,7 +125,7 @@ export default async function handler(req, res) {
       created_at: new Date().toISOString(),
     });
 
-    return res.status(200).json({ sent: true, email, planName, creditResetDate, daysUntilReset });
+    return res.status(200).json({ sent: true, planName, creditResetDate, daysUntilReset });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
     return res.status(500).json({ error: err.message });
