@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { authenticateBillingRequest } from '../_utils/billing.js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -14,7 +15,8 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Body: { userId?: string }
+ * Auth: Authorization: Bearer <Supabase access token>
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -29,8 +31,14 @@ export default async function handler(req, res) {
   }
 
   const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode).json({ error: authResult.error });
+  }
+
+  const authenticatedUserId = authResult.user.id;
+  if (userId && userId !== authenticatedUserId) {
+    return res.status(403).json({ error: 'You can only trigger your own usage alert' });
   }
 
   try {
@@ -43,7 +51,7 @@ export default async function handler(req, res) {
     const { count: alreadySent } = await supabase
       .from('user_activity')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
+      .eq('user_id', authenticatedUserId)
       .eq('feature', 'usageAlert100')
       .gte('created_at', startOfMonth.toISOString());
 
@@ -55,10 +63,10 @@ export default async function handler(req, res) {
     const { data: profile } = await supabase
       .from('user_profile')
       .select('first_name, stripe_customer_id')
-      .eq('user_id', userId)
+      .eq('user_id', authenticatedUserId)
       .maybeSingle();
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const { data: authUser } = await supabase.auth.admin.getUserById(authenticatedUserId);
     const email = authUser?.user?.email;
 
     if (!email) {
@@ -68,7 +76,7 @@ export default async function handler(req, res) {
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('tier, current_period_end')
-      .eq('user_id', userId)
+      .eq('user_id', authenticatedUserId)
       .maybeSingle();
 
     // ── Build template variables ───────────────────────────────────────────
@@ -106,15 +114,15 @@ export default async function handler(req, res) {
 
     // ── Mark as sent so we don't fire again this cycle ────────────────────
     await supabase.from('user_activity').insert({
-      user_id: userId,
+      user_id: authenticatedUserId,
       feature: 'usageAlert100',
       metadata: { planName, creditResetDate, daysUntilReset },
       created_at: new Date().toISOString(),
     });
 
-    return res.status(200).json({ sent: true, email, planName, creditResetDate, daysUntilReset });
+    return res.status(200).json({ sent: true, planName, creditResetDate, daysUntilReset });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Failed to send usage alert' });
   }
 }
