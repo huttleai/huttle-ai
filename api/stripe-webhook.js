@@ -487,7 +487,7 @@ export default async function handler(req, res) {
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
               console.error('[checkout.session.completed] email lookup failed — cannot proceed', { eventId: event.id, error: userLookupError.message });
-              break;
+              throw new Error(`Checkout user lookup failed: ${userLookupError.message}`);
             }
             userId = userList?.users?.[0]?.id ?? null;
             console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
@@ -501,7 +501,7 @@ export default async function handler(req, res) {
               customerEmail,
               clientReferenceId: session.client_reference_id,
             });
-            break;
+            throw new Error('Checkout session could not be linked to a Supabase user');
           }
 
           const nameParts = customerName.split(' ');
@@ -628,6 +628,7 @@ export default async function handler(req, res) {
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
               console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              throw subErr;
             }
           } else {
             console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
@@ -635,6 +636,7 @@ export default async function handler(req, res) {
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
           console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -663,7 +665,7 @@ export default async function handler(req, res) {
 
           if (profileError && profileError.code !== 'PGRST116') {
             logError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
-            break;
+            throw new Error(`Subscription profile lookup failed: ${profileError.message}`);
           }
 
           // Fallback: if user_profile has no mapping yet (e.g. row was never
@@ -867,6 +869,7 @@ export default async function handler(req, res) {
                     mappedStatus,
                     error: statusSyncError.message,
                   });
+                  throw new Error(`Subscription status sync failed: ${statusSyncError.message}`);
                 } else {
                   logInfo('stripe_webhook.subscription_status_synced', {
                     eventId: event.id,
@@ -878,10 +881,12 @@ export default async function handler(req, res) {
               }
             } catch (syncErr) {
               logError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
+              throw syncErr;
             }
           }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1183,6 +1188,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
+    return res.status(500).json({ error: 'Internal processing error - Stripe should retry this event' });
   }
 }
