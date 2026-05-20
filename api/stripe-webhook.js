@@ -385,6 +385,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    let criticalProcessingError = null;
+    const markCriticalProcessingError = (code, details = {}) => {
+      criticalProcessingError = code;
+      logError(code, details);
+    };
+
     const rawBody = await getRawBody(req);
     const sig = req.headers['stripe-signature'];
 
@@ -626,14 +632,14 @@ export default async function handler(req, res) {
                 await addToMailchimpByTier(customerEmail, firstName, lastName, plan);
               }
             } catch (subErr) {
-              logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              markCriticalProcessingError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
               console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
             }
           } else {
             console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
           }
         } catch (err) {
-          logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
+          markCriticalProcessingError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
           console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
         }
         break;
@@ -662,7 +668,7 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (profileError && profileError.code !== 'PGRST116') {
-            logError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
+            markCriticalProcessingError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
             break;
           }
 
@@ -861,7 +867,7 @@ export default async function handler(req, res) {
                   .eq('stripe_subscription_id', stripeSubId);
 
                 if (statusSyncError) {
-                  logError('stripe_webhook.subscription_status_sync_failed', {
+                  markCriticalProcessingError('stripe_webhook.subscription_status_sync_failed', {
                     eventId: event.id,
                     subscriptionId: stripeSubId,
                     mappedStatus,
@@ -877,11 +883,11 @@ export default async function handler(req, res) {
                 }
               }
             } catch (syncErr) {
-              logError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
+              markCriticalProcessingError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
             }
           }
         } catch (err) {
-          logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
+          markCriticalProcessingError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
         }
         break;
       }
@@ -891,13 +897,81 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('user_profile')
             .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
-          if (profile) {
+          if (profileError && profileError.code !== 'PGRST116') {
+            markCriticalProcessingError('stripe_webhook.subscription_deleted_profile_lookup_failed', {
+              eventId: event.id,
+              customerId,
+              error: profileError.message,
+            });
+            break;
+          }
+
+          let resolvedUserId = profile?.user_id || null;
+          let firstName = profile?.first_name || 'there';
+
+          if (!resolvedUserId && subscription.metadata?.supabase_user_id) {
+            resolvedUserId = subscription.metadata.supabase_user_id;
+            logInfo('stripe_webhook.subscription_deleted_user_from_metadata', {
+              eventId: event.id,
+              customerId,
+              userId: resolvedUserId,
+            });
+          }
+
+          if (!resolvedUserId) {
+            try {
+              const customer = await stripe.customers.retrieve(customerId);
+              if (!customer.deleted && customer.metadata?.supabase_user_id) {
+                resolvedUserId = customer.metadata.supabase_user_id;
+                logInfo('stripe_webhook.subscription_deleted_user_from_customer_metadata', {
+                  eventId: event.id,
+                  customerId,
+                  userId: resolvedUserId,
+                });
+              }
+            } catch (custErr) {
+              logWarn('stripe_webhook.subscription_deleted_customer_metadata_lookup_failed', {
+                eventId: event.id,
+                customerId,
+                error: custErr.message,
+              });
+            }
+          }
+
+          if (!resolvedUserId) {
+            const { data: subscriptionRecord, error: subLookupError } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_subscription_id', subscription.id)
+              .maybeSingle();
+
+            if (subLookupError && subLookupError.code !== 'PGRST116') {
+              markCriticalProcessingError('stripe_webhook.subscription_deleted_record_lookup_failed', {
+                eventId: event.id,
+                subscriptionId: subscription.id,
+                error: subLookupError.message,
+              });
+              break;
+            }
+
+            if (subscriptionRecord?.user_id) {
+              resolvedUserId = subscriptionRecord.user_id;
+              logInfo('stripe_webhook.subscription_deleted_user_from_subscription_record', {
+                eventId: event.id,
+                customerId,
+                subscriptionId: subscription.id,
+                userId: resolvedUserId,
+              });
+            }
+          }
+
+          if (resolvedUserId) {
             // ── Supabase subscription status update (do not modify) ──────────
             const deletionPayload = {
               tier: 'free',
@@ -910,21 +984,20 @@ export default async function handler(req, res) {
             let { error: delError } = await supabase
               .from('subscriptions')
               .update(deletionPayload)
-              .eq('user_id', profile.user_id);
+              .eq('user_id', resolvedUserId);
 
             if (delError?.message?.toLowerCase().includes('cancelled_at')) {
               const { cancelled_at: _ca, ...fallback } = deletionPayload;
-              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
+              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', resolvedUserId)).error;
             }
 
             if (delError) {
-              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+              markCriticalProcessingError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: resolvedUserId, error: delError.message });
             }
             // ── End Supabase update ───────────────────────────────────────────
 
             // Fetch customer email for notifications
             let userEmail = null;
-            const firstName = profile.first_name || 'there';
 
             try {
               const customer = await stripe.customers.retrieve(customerId);
@@ -976,7 +1049,7 @@ export default async function handler(req, res) {
             if (cancellationReason === 'payment_failed' || cancellationReason === 'payment_disputed') {
               logInfo('stripe_webhook.cancellation_email_skipped', {
                 eventId: event.id,
-                userId: profile.user_id,
+                userId: resolvedUserId,
                 reason: cancellationReason,
               });
             } else if (userEmail) {
@@ -999,14 +1072,20 @@ export default async function handler(req, res) {
               } catch (emailErr) {
                 logWarn('stripe_webhook.cancellation_email_failed', {
                   eventId: event.id,
-                  userId: profile.user_id,
+                  userId: resolvedUserId,
                   error: emailErr.message,
                 });
               }
             }
+          } else {
+            markCriticalProcessingError('stripe_webhook.subscription_deleted_no_user_found', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
-          logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
+          markCriticalProcessingError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
         }
         break;
       }
@@ -1175,6 +1254,15 @@ export default async function handler(req, res) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
+    if (criticalProcessingError) {
+      logWarn('stripe_webhook.processing_failed_not_marked_processed', {
+        eventId: event.id,
+        eventType: event.type,
+        criticalProcessingError,
+      });
+      return res.status(500).json({ error: 'Webhook processing failed' });
+    }
+
     const marked = await markEventProcessed(event.id, event.type);
     if (!marked) {
       logWarn('stripe_webhook.idempotency_mark_failed', { eventId: event.id, eventType: event.type });
@@ -1183,6 +1271,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
+    return res.status(500).json({ error: 'Internal processing error' });
   }
 }
