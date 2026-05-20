@@ -1216,12 +1216,9 @@ export default function AIPlanBuilder() {
       // downstream failure (webhook, n8n crash, timeout) remains
       // no-refund — this moves nothing except the charge boundary.
       //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
-      // handler writes the authoritative run-counter row under the same
-      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
-      // would double-count against the monthly cap.
+      // The live flow creates jobs directly, so this client-side tracking writes
+      // the run-counter row that monthly Plan Builder caps read.
       await planUsage.trackFeatureUsage({
-        incrementFeatureCounter: false,
         platforms: selectedPlatforms,
         goal: selectedGoal,
         period: selectedPeriod,
