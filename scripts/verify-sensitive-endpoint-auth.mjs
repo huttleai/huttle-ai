@@ -20,7 +20,7 @@ assert(
 );
 assert(
   usageEndpoint.indexOf('authenticateBillingRequest(req, supabase)') <
-    usageEndpoint.indexOf('sendUsageAlert100Email'),
+    usageEndpoint.indexOf('await sendUsageAlert100Email'),
   'usage alert trigger must authenticate before sending email'
 );
 assert(
