@@ -897,7 +897,31 @@ export default async function handler(req, res) {
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
-          if (profile) {
+          let resolvedUser = profile || null;
+          if (!resolvedUser && subscription.id) {
+            const { data: subscriptionRecord, error: subscriptionLookupError } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_subscription_id', subscription.id)
+              .limit(1)
+              .maybeSingle();
+
+            if (subscriptionLookupError) {
+              logWarn('stripe_webhook.subscription_deleted_lookup_by_subscription_failed', {
+                eventId: event.id,
+                subscriptionId: subscription.id,
+                error: subscriptionLookupError.message,
+              });
+            } else if (subscriptionRecord?.user_id) {
+              resolvedUser = { user_id: subscriptionRecord.user_id, first_name: '' };
+            }
+          }
+
+          if (!resolvedUser && subscription.metadata?.supabase_user_id) {
+            resolvedUser = { user_id: subscription.metadata.supabase_user_id, first_name: '' };
+          }
+
+          if (resolvedUser) {
             // ── Supabase subscription status update (do not modify) ──────────
             const deletionPayload = {
               tier: 'free',
@@ -910,21 +934,21 @@ export default async function handler(req, res) {
             let { error: delError } = await supabase
               .from('subscriptions')
               .update(deletionPayload)
-              .eq('user_id', profile.user_id);
+              .eq('user_id', resolvedUser.user_id);
 
             if (delError?.message?.toLowerCase().includes('cancelled_at')) {
               const { cancelled_at: _ca, ...fallback } = deletionPayload;
-              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
+              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', resolvedUser.user_id)).error;
             }
 
             if (delError) {
-              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: resolvedUser.user_id, error: delError.message });
             }
             // ── End Supabase update ───────────────────────────────────────────
 
             // Fetch customer email for notifications
             let userEmail = null;
-            const firstName = profile.first_name || 'there';
+            const firstName = resolvedUser.first_name || 'there';
 
             try {
               const customer = await stripe.customers.retrieve(customerId);
@@ -976,7 +1000,7 @@ export default async function handler(req, res) {
             if (cancellationReason === 'payment_failed' || cancellationReason === 'payment_disputed') {
               logInfo('stripe_webhook.cancellation_email_skipped', {
                 eventId: event.id,
-                userId: profile.user_id,
+                userId: resolvedUser.user_id,
                 reason: cancellationReason,
               });
             } else if (userEmail) {
@@ -999,11 +1023,17 @@ export default async function handler(req, res) {
               } catch (emailErr) {
                 logWarn('stripe_webhook.cancellation_email_failed', {
                   eventId: event.id,
-                  userId: profile.user_id,
+                  userId: resolvedUser.user_id,
                   error: emailErr.message,
                 });
               }
             }
+          } else {
+            logWarn('stripe_webhook.subscription_deleted_no_user_found', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
