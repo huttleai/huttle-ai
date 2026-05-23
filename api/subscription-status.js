@@ -51,6 +51,7 @@ const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL |
 const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const TERMINAL_NON_ACCESS_STRIPE_STATUSES = new Set(['incomplete_expired', 'unpaid']);
 
 export default async function handler(req, res) {
   try {
@@ -171,10 +172,37 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
+    if (stripeSubscription && TERMINAL_NON_ACCESS_STRIPE_STATUSES.has(subStatus)) {
+      const normalizedSubscription = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord,
+      });
+      const {
+        customerId: _cid,
+        stripeSubscriptionId: _sid,
+        id: _id,
+        ...safeSubscription
+      } = normalizedSubscription || {};
+
+      return res.status(200).json({
+        subscription: normalizedSubscription ? safeSubscription : null,
+        plan: null,
+        tier: 'free',
+        status: subStatus,
+        currentPeriodStart: normalizedSubscription?.currentPeriodStart ?? null,
+        currentPeriodEnd: normalizedSubscription?.currentPeriodEnd ?? null,
+        trialStart: null,
+        trialEnd: null,
+        billingCycle: normalizedSubscription?.billingCycle ?? null,
+        cancelAtPeriodEnd: false,
+        cancelledAt: normalizedSubscription?.cancelledAt ?? null,
+        upcomingPlanChange: null,
+      });
+    }
+
     if (
       !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
+      TERMINAL_NON_ACCESS_STRIPE_STATUSES.has(subStatus)
     ) {
       // If Stripe has no active subscription, return what Supabase knows.
       // This keeps the billing UI functional even when Stripe data is unavailable.
