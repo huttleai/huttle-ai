@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { parseBearerToken } from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -22,20 +23,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const {
-    user_id,
-    plan_name,
-    reason,
-    reason_other,
-    what_would_stay,
-    recommend_likelihood,
-    additional_feedback,
-  } = req.body ?? {};
-
-  if (!user_id || !reason) {
-    return res.status(400).json({ error: 'Missing required fields: user_id, reason' });
-  }
-
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -45,6 +32,36 @@ export default async function handler(req, res) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid authentication token' });
+  }
+
+  const {
+    user_id: requestedUserId,
+    plan_name,
+    reason,
+    reason_other,
+    what_would_stay,
+    recommend_likelihood,
+    additional_feedback,
+  } = req.body ?? {};
+
+  if (!reason) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
+  }
+
+  if (requestedUserId && requestedUserId !== user.id) {
+    return res.status(403).json({ error: 'You can only submit feedback for your own account' });
+  }
+
+  const user_id = user.id;
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
