@@ -1216,16 +1216,24 @@ export default function AIPlanBuilder() {
       // downstream failure (webhook, n8n crash, timeout) remains
       // no-refund — this moves nothing except the charge boundary.
       //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
-      // handler writes the authoritative run-counter row under the same
-      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
-      // would double-count against the monthly cap.
-      await planUsage.trackFeatureUsage({
+      // `incrementFeatureCounter: false` — the server proxy that triggers n8n
+      // reserves the authoritative run-counter row under the same featureKey
+      // (planBuilder7Day / planBuilder14Day). Writing one here too would
+      // double-count against the monthly cap.
+      const usageResult = await planUsage.trackFeatureUsage({
         incrementFeatureCounter: false,
         platforms: selectedPlatforms,
         goal: selectedGoal,
         period: selectedPeriod,
       });
+
+      if (!usageResult?.allowed) {
+        throw new Error(
+          usageResult?.reason === 'pool_exhausted'
+            ? 'You do not have enough credits left for this plan.'
+            : 'You have reached your Plan Builder limit for this month.'
+        );
+      }
 
       flushSync(() => {
         setCurrentJobId(jobId);

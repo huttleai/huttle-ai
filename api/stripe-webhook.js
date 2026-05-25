@@ -891,11 +891,78 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          const { data: profile } = await supabase
+          let { data: profile } = await supabase
             .from('user_profile')
             .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
+
+          if (!profile) {
+            const { data: subscriptionRow } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_subscription_id', subscription.id)
+              .maybeSingle();
+
+            if (subscriptionRow?.user_id) {
+              profile = { user_id: subscriptionRow.user_id, first_name: '' };
+              logInfo('stripe_webhook.subscription_deleted_user_from_subscription_id', {
+                eventId: event.id,
+                customerId,
+                subscriptionId: subscription.id,
+                userId: subscriptionRow.user_id,
+              });
+            }
+          }
+
+          if (!profile) {
+            const { data: subscriptionRow } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_customer_id', customerId)
+              .maybeSingle();
+
+            if (subscriptionRow?.user_id) {
+              profile = { user_id: subscriptionRow.user_id, first_name: '' };
+              logInfo('stripe_webhook.subscription_deleted_user_from_customer_id', {
+                eventId: event.id,
+                customerId,
+                subscriptionId: subscription.id,
+                userId: subscriptionRow.user_id,
+              });
+            }
+          }
+
+          if (!profile && subscription.metadata?.supabase_user_id) {
+            profile = { user_id: subscription.metadata.supabase_user_id, first_name: '' };
+            logInfo('stripe_webhook.subscription_deleted_user_from_metadata', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+              userId: profile.user_id,
+            });
+          }
+
+          if (!profile) {
+            try {
+              const customer = await stripe.customers.retrieve(customerId);
+              if (!customer.deleted && customer.metadata?.supabase_user_id) {
+                profile = { user_id: customer.metadata.supabase_user_id, first_name: '' };
+                logInfo('stripe_webhook.subscription_deleted_user_from_customer_metadata', {
+                  eventId: event.id,
+                  customerId,
+                  subscriptionId: subscription.id,
+                  userId: profile.user_id,
+                });
+              }
+            } catch (custErr) {
+              logWarn('stripe_webhook.subscription_deleted_customer_metadata_lookup_failed', {
+                eventId: event.id,
+                customerId,
+                error: custErr.message,
+              });
+            }
+          }
 
           if (profile) {
             // ── Supabase subscription status update (do not modify) ──────────
@@ -1004,6 +1071,12 @@ export default async function handler(req, res) {
                 });
               }
             }
+          } else {
+            logWarn('stripe_webhook.subscription_deleted_no_user_found', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });

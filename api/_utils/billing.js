@@ -292,9 +292,11 @@ export async function resolveBillingContext({
         if (!stripeCustomer.deleted) {
           const metaUserId = stripeCustomer.metadata?.supabase_user_id || null;
           if (metaUserId && metaUserId !== userId) {
-            throw new Error(
+            const conflictError = new Error(
               `Stripe customer ${customerId} is bound to a different user — refusing to operate on it.`
             );
+            conflictError.code = 'STRIPE_CUSTOMER_USER_MISMATCH';
+            throw conflictError;
           }
           if (!metaUserId) {
             try {
@@ -307,6 +309,9 @@ export async function resolveBillingContext({
           }
         }
       } catch (retrieveErr) {
+        if (retrieveErr?.code === 'STRIPE_CUSTOMER_USER_MISMATCH') {
+          throw retrieveErr;
+        }
         // Don't fail the entire flow on a transient Stripe read error; log and continue.
         console.warn('[billing] stripe.customers.retrieve check failed:', retrieveErr?.message);
       }
