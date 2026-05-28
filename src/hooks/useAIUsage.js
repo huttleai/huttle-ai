@@ -5,6 +5,7 @@ import {
   getFeatureUsageCount,
   getOverallAIUsageCount,
   trackUsage,
+  supabase,
   TIER_LIMITS,
 } from '../config/supabase';
 import {
@@ -98,6 +99,29 @@ export default function useAIUsage(featureName = null) {
       mountedRef.current = false;
     };
   }, [refreshUsage]);
+
+  const triggerUsageAlert = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      fetch('/api/emails/send-usage-alert-trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {});
+    } catch (_) {
+      // Never block generation or limit messaging on alert delivery.
+    }
+  }, [user?.id]);
 
   /**
    * Pre-flight check. Call this BEFORE firing any API request — if it returns
@@ -193,13 +217,7 @@ export default function useAIUsage(featureName = null) {
       if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
-        try {
-          fetch('/api/emails/send-usage-alert-trigger', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-          }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        void triggerUsageAlert();
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
@@ -240,6 +258,10 @@ export default function useAIUsage(featureName = null) {
         });
       }
 
+      if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits >= overallLimit) {
+        void triggerUsageAlert();
+      }
+
       if (mountedRef.current) {
         setOverallUsed((prev) => prev + overallCredits);
         if (incrementFeatureCounter && featureName && numericFeatureLimit !== null) {
@@ -249,7 +271,7 @@ export default function useAIUsage(featureName = null) {
 
       return { allowed: true, creditsLogged: overallCredits };
     },
-    [user?.id, featureName, numericFeatureLimit, overallLimit, creditsPerRun]
+    [user?.id, featureName, numericFeatureLimit, overallLimit, creditsPerRun, triggerUsageAlert]
   );
 
   return {
