@@ -118,7 +118,7 @@ export default function useAIUsage(featureName = null) {
         },
         body: JSON.stringify({ userId: user.id }),
       }).catch(() => {});
-    } catch (_) {
+    } catch {
       // Never block generation or limit messaging on alert delivery.
     }
   }, [user?.id]);
