@@ -17,6 +17,7 @@ export function clearSubscriptionCache() {
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
 const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const TERMINAL_STRIPE_STATUSES = new Set(['canceled', 'cancelled', 'unpaid', 'incomplete_expired']);
 const MAX_SUBSCRIPTION_RETRIES = 3;
 const SUBSCRIPTION_INITIAL_RETRY_DELAY_MS = 1000;
 const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
@@ -292,12 +293,21 @@ export function SubscriptionProvider({ children }) {
 
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
+      const stripeStatus = stripeSubscription?.status || stripeResult.status || null;
+      const hasTerminalStripeStatus = Boolean(stripeStatus && TERMINAL_STRIPE_STATUSES.has(stripeStatus));
+      const nextStatus = hasTerminalStripeStatus
+        ? stripeStatus
+        : databaseSubscription?.status || stripeStatus || 'inactive';
       const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
-      const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
+      const resolvedStripeTier = normalizeTier(
+        stripeSubscription?.plan || stripeSubscription?.tier || stripeResult.plan || stripeResult.tier
+      );
       const nextTier = hasActiveSubscription
         ? (databaseTier || resolvedStripeTier || TIERS.FREE)
         : TIERS.FREE;
+      const resolvedSubscriptionTier = hasTerminalStripeStatus
+        ? TIERS.FREE
+        : (databaseTier || resolvedStripeTier || null);
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
       // the server-side API endpoints resolve them from the authenticated user_id.
       const nextSubscription = stripeSubscription
@@ -312,9 +322,9 @@ export function SubscriptionProvider({ children }) {
             billingCycle: stripeSubscription.billingCycle ?? null,
             upcomingPlanChange: stripeSubscription.upcomingPlanChange ?? null,
             user_id: databaseSubscription?.user_id ?? userId,
-            plan: databaseTier || stripeSubscription.plan || null,
-            tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
-            status: databaseSubscription?.status || stripeSubscription.status,
+            plan: resolvedSubscriptionTier,
+            tier: resolvedSubscriptionTier,
+            status: nextStatus,
           }
         : (databaseSubscription
           ? {
@@ -327,9 +337,9 @@ export function SubscriptionProvider({ children }) {
               cancelledAt: databaseSubscription.cancelled_at ?? null,
               billingCycle: null,
               upcomingPlanChange: null,
-              plan: databaseTier,
-              tier: databaseTier,
-              status: databaseSubscription.status,
+              plan: resolvedSubscriptionTier,
+              tier: resolvedSubscriptionTier,
+              status: nextStatus,
             }
           : null);
       const usingSafeFallback = Boolean(stripeResult?.degraded && !databaseSubscription && !stripeSubscription);

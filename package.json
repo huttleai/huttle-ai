@@ -23,6 +23,7 @@
     "test:hooks-parser": "node scripts/verify-full-post-hooks-parser.mjs",
     "test:full-post-resilience": "node scripts/verify-full-post-resilience.mjs",
     "test:sensitive-endpoint-auth": "node scripts/verify-sensitive-endpoint-auth.mjs",
+    "test:billing-terminal-guards": "node scripts/verify-billing-terminal-status-guards.mjs",
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",
     "dev:grok-models": "node scripts/dev-grok-models-verify.mjs",
     "qa:ai-tools": "node scripts/ai-tools-qa.mjs",
