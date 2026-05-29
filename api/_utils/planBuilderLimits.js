@@ -23,6 +23,18 @@ export const PLAN_BUILDER_14DAY_MONTHLY_BY_TIER = {
   builder: 5,
 };
 
+export const PLAN_BUILDER_CREDITS_BY_PERIOD = {
+  7: 3,
+  14: 5,
+};
+
+export const PLAN_BUILDER_CREDIT_POOLS_BY_TIER = {
+  essentials: 200,
+  pro: 600,
+  founder: 800,
+  builder: 800,
+};
+
 /** Tiers that can access 14-day plans at all. */
 export const PLAN_BUILDER_14DAY_ALLOWED_TIERS = ['pro', 'founder', 'builder'];
 
@@ -58,4 +70,12 @@ export function resolvePlanBuilderCap(period, tier) {
     featureKey: 'planBuilder7Day',
     cap: PLAN_BUILDER_7DAY_MONTHLY_BY_TIER[tier] ?? 0,
   };
+}
+
+export function resolvePlanBuilderCreditCost(period) {
+  return Number(period) === 14 ? PLAN_BUILDER_CREDITS_BY_PERIOD[14] : PLAN_BUILDER_CREDITS_BY_PERIOD[7];
+}
+
+export function resolvePlanBuilderCreditPool(tier) {
+  return PLAN_BUILDER_CREDIT_POOLS_BY_TIER[tier] ?? 0;
 }

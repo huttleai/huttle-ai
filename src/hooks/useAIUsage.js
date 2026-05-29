@@ -4,6 +4,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import {
   getFeatureUsageCount,
   getOverallAIUsageCount,
+  supabase,
   trackUsage,
   TIER_LIMITS,
 } from '../config/supabase';
@@ -62,7 +63,8 @@ export default function useAIUsage(featureName = null) {
   // Credit cost per run (used to default trackFeatureUsage's overallCredits).
   const creditsPerRun = featureName ? getFeatureCreditCost(featureName) : 0;
 
-  const isOverallLimitReached = overallLimit > 0 && overallUsed >= overallLimit;
+  const isOverallLimitReached =
+    creditsPerRun > 0 && (overallLimit <= 0 || overallUsed >= overallLimit);
   const isFeatureLimitReached =
     numericFeatureLimit !== null && numericFeatureLimit > 0 && featureUsed >= numericFeatureLimit;
   // Zero-cost features bypass the overall pool gate entirely.
@@ -150,6 +152,16 @@ export default function useAIUsage(featureName = null) {
     const poolLimit = overallLimit;
     const remaining = Math.max(0, poolLimit - creditsUsed);
 
+    if (poolLimit <= 0) {
+      return {
+        allowed: false,
+        reason: 'subscription_required',
+        message: 'Choose a plan to use this feature.',
+        remaining: 0,
+        required: creditsRequired,
+      };
+    }
+
     if (poolLimit > 0 && remaining < creditsRequired) {
       return {
         allowed: false,
@@ -190,14 +202,23 @@ export default function useAIUsage(featureName = null) {
 
       // Race-condition guard: re-read both counts before writing any row.
       const currentOverall = await getOverallAIUsageCount(user.id);
+      if (overallLimit <= 0 && overallCredits > 0) {
+        if (mountedRef.current) setOverallUsed(currentOverall);
+        return { allowed: false, reason: 'subscription_required' };
+      }
+
       if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
         try {
+          const { data: { session } } = await supabase.auth.getSession();
           fetch('/api/emails/send-usage-alert-trigger', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
+            body: JSON.stringify({}),
           }).catch(() => {}); // fire-and-forget; never block the UI
         } catch (_) {}
         return { allowed: false, reason: 'pool_exhausted' };
