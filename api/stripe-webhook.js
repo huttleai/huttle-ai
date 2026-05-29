@@ -891,11 +891,48 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          const { data: profile } = await supabase
+          const { data: profileByCustomer, error: profileLookupError } = await supabase
             .from('user_profile')
             .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
+
+          if (profileLookupError && profileLookupError.code !== 'PGRST116') {
+            logError('stripe_webhook.subscription_deleted_profile_lookup_failed', {
+              eventId: event.id,
+              customerId,
+              error: profileLookupError.message,
+            });
+          }
+
+          let profile = profileByCustomer;
+          if (!profile) {
+            const fallbackFilters = [
+              subscription.id ? `stripe_subscription_id.eq.${subscription.id}` : null,
+              customerId ? `stripe_customer_id.eq.${customerId}` : null,
+            ].filter(Boolean);
+
+            if (fallbackFilters.length > 0) {
+              const { data: subscriptionRecord, error: subscriptionLookupError } = await supabase
+                .from('subscriptions')
+                .select('user_id')
+                .or(fallbackFilters.join(','))
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (subscriptionLookupError && subscriptionLookupError.code !== 'PGRST116') {
+                logError('stripe_webhook.subscription_deleted_subscription_lookup_failed', {
+                  eventId: event.id,
+                  customerId,
+                  subscriptionId: subscription.id,
+                  error: subscriptionLookupError.message,
+                });
+              } else if (subscriptionRecord?.user_id) {
+                profile = { user_id: subscriptionRecord.user_id, first_name: null };
+              }
+            }
+          }
 
           if (profile) {
             // ── Supabase subscription status update (do not modify) ──────────
@@ -1004,6 +1041,12 @@ export default async function handler(req, res) {
                 });
               }
             }
+          } else {
+            logError('stripe_webhook.subscription_deleted_user_not_resolved', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
