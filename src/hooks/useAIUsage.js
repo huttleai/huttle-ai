@@ -220,7 +220,9 @@ export default function useAIUsage(featureName = null) {
             },
             body: JSON.stringify({}),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          // Usage alert email is best-effort and must never block generation UI.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
