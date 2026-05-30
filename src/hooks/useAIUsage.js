@@ -201,7 +201,9 @@ export default function useAIUsage(featureName = null) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          // Usage alerts are best-effort and must never block generation.
+        }
         return {
           allowed: false,
           reason: 'pool_exhausted',
