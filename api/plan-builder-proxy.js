@@ -21,6 +21,10 @@ import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -32,6 +36,20 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
+const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
+const PLAN_BUILDER_CREDITS_BY_FEATURE = {
+  planBuilder7Day: 3,
+  planBuilder14Day: 5,
+};
+const TIER_CREDIT_POOLS = {
+  builder: 800,
+  founder: 800,
+  pro: 600,
+  essentials: 200,
+  free: 0,
+};
 
 /**
  * Validate UUID format
@@ -47,6 +65,111 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function getStartOfMonthISO() {
+  const date = new Date();
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+async function getActiveSubscription(userId) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('tier, status')
+    .eq('user_id', userId)
+    .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return { subscription: data, error };
+}
+
+async function getMonthlyUsageCount({ userId, feature }) {
+  const { count, error } = await supabase
+    .from('user_activity')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('feature', feature)
+    .gte('created_at', getStartOfMonthISO());
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function getMonthlyCreditUsage(userId) {
+  const { count, error } = await supabase
+    .from('user_activity')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('feature', 'aiGenerations')
+    .or(`metadata->>source.is.null,metadata->>source.neq.${DASHBOARD_GENERATION_SOURCE}`)
+    .gte('created_at', getStartOfMonthISO());
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function hasPlanBuilderReservation({ userId, jobId, featureKey }) {
+  const { count, error } = await supabase
+    .from('user_activity')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('feature', featureKey)
+    .contains('metadata', { job_id: jobId });
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+async function reservePlanBuilderUsage({
+  userId,
+  jobId,
+  featureKey,
+  creditCost,
+  goal,
+  period,
+  platformFocus,
+}) {
+  const timestamp = new Date().toISOString();
+  const rows = [
+    {
+      user_id: userId,
+      feature: featureKey,
+      metadata: {
+        type: 'run_counter',
+        job_id: jobId,
+        goal,
+        period,
+        platforms: platformFocus,
+        source: 'plan-builder-proxy',
+      },
+      created_at: timestamp,
+    },
+  ];
+
+  for (let i = 0; i < creditCost; i += 1) {
+    rows.push({
+      user_id: userId,
+      feature: 'aiGenerations',
+      metadata: {
+        sourceFeature: featureKey,
+        job_id: jobId,
+        goal,
+        period,
+        platforms: platformFocus,
+        creditIndex: i,
+        overallCredits: creditCost,
+        source: 'plan-builder-proxy',
+      },
+      created_at: timestamp,
+    });
+  }
+
+  const { error } = await supabase.from('user_activity').insert(rows);
+  if (error) throw error;
 }
 
 /**
@@ -182,6 +305,135 @@ export default async function handler(req, res) {
       contentMixOverride: contentMixOverride ?? null,
       city: city ?? null,
     };
+
+    const { data: job, error: jobLookupError } = await supabase
+      .from('jobs')
+      .select('id, user_id, type')
+      .eq('id', job_id)
+      .maybeSingle();
+
+    if (jobLookupError) {
+      logError('plan_builder_proxy.job_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: jobLookupError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify job ownership', requestId });
+    }
+
+    if (!job) {
+      return res.status(404).json({ error: 'Plan Builder job not found', requestId });
+    }
+
+    if (job.user_id !== user.id) {
+      logError('plan_builder_proxy.job_owner_mismatch', {
+        requestId,
+        userId: user.id,
+        job_id,
+        jobOwner: job.user_id,
+      });
+      return res.status(403).json({ error: 'You do not have access to this job', requestId });
+    }
+
+    if (job.type !== 'plan_builder') {
+      return res.status(400).json({ error: 'Invalid job type for Plan Builder', requestId });
+    }
+
+    const { subscription, error: subscriptionError } = await getActiveSubscription(user.id);
+    if (subscriptionError) {
+      logError('plan_builder_proxy.subscription_lookup_failed', {
+        requestId,
+        userId: user.id,
+        message: subscriptionError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify subscription', requestId });
+    }
+
+    const userTier = subscription?.tier || null;
+    if (!userTier) {
+      return res.status(403).json({
+        error: 'Active subscription required',
+        message: 'Choose a plan to use AI Plan Builder.',
+        requestId,
+      });
+    }
+
+    const isFourteenDay = Number(n8nPayload.timePeriod) === 14;
+    if (isFourteenDay && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      return res.status(403).json({
+        error: 'tier_restricted',
+        message: '14-day plans require Pro or above.',
+        requestId,
+      });
+    }
+
+    const { featureKey, cap } = resolvePlanBuilderCap(n8nPayload.timePeriod, userTier);
+    const creditCost = PLAN_BUILDER_CREDITS_BY_FEATURE[featureKey] ?? 0;
+    const existingReservation = await hasPlanBuilderReservation({
+      userId: user.id,
+      jobId: job_id,
+      featureKey,
+    });
+
+    if (!existingReservation) {
+      const [runsThisMonth, creditsUsed] = await Promise.all([
+        getMonthlyUsageCount({ userId: user.id, feature: featureKey }),
+        getMonthlyCreditUsage(user.id),
+      ]);
+      const poolLimit = TIER_CREDIT_POOLS[userTier] ?? 0;
+      const remainingCredits = Math.max(0, poolLimit - creditsUsed);
+
+      if (cap == null || cap <= 0) {
+        return res.status(403).json({
+          error: 'Plan Builder not available for this subscription tier.',
+          requestId,
+        });
+      }
+
+      if (runsThisMonth >= cap) {
+        const periodLabel = isFourteenDay ? '14-day' : '7-day';
+        return res.status(429).json({
+          error: 'AI usage limit reached',
+          message: `You've reached your monthly limit of ${cap} ${periodLabel} plan generations. This allowance resets on the 1st of each month.`,
+          currentUsage: runsThisMonth,
+          limit: cap,
+          requestId,
+        });
+      }
+
+      if (poolLimit <= 0 || remainingCredits < creditCost) {
+        return res.status(429).json({
+          error: 'AI credit limit reached',
+          message: `This feature uses ${creditCost} credits. You have ${remainingCredits} credits left this month.`,
+          remaining: remainingCredits,
+          required: creditCost,
+          requestId,
+        });
+      }
+
+      try {
+        await reservePlanBuilderUsage({
+          userId: user.id,
+          jobId: job_id,
+          featureKey,
+          creditCost,
+          goal: n8nPayload.contentGoal,
+          period: n8nPayload.timePeriod,
+          platformFocus: n8nPayload.platformFocus,
+        });
+      } catch (reservationError) {
+        logError('plan_builder_proxy.usage_reservation_failed', {
+          requestId,
+          userId: user.id,
+          job_id,
+          featureKey,
+          message: reservationError.message,
+          code: reservationError.code,
+        });
+        return res.status(500).json({ error: 'Failed to reserve usage', requestId });
+      }
+    }
 
     logInfo('plan_builder_proxy.n8n_outbound', {
       requestId,

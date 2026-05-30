@@ -312,13 +312,23 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
       // If not OK, get error details
       const errorText = await response.text().catch(() => 'No error details');
+      const errorPayload = safeJsonParse(errorText);
+      const errorMessage =
+        errorPayload?.message ||
+        errorPayload?.error ||
+        'Unable to generate your plan right now. Please try again.';
       console.warn(`[PlanBuilder] n8n webhook returned status ${response.status}, attempt ${attempt + 1}`);
       console.warn(`[PlanBuilder] Error response:`, errorText.substring(0, 200));
       
       // If it's a client error (4xx), don't retry
       if (response.status >= 400 && response.status < 500) {
         console.error(`[PlanBuilder] Client error (${response.status}), stopping retries`);
-        return { success: false, error: 'Unable to generate your plan right now. Please try again.' };
+        return {
+          success: false,
+          error: errorMessage,
+          status: response.status,
+          terminal: true,
+        };
       }
     } catch (err) {
       console.error(`[PlanBuilder] ====== FETCH ERROR (Attempt ${attempt + 1}) ======`);

@@ -1210,24 +1210,16 @@ export default function AIPlanBuilder() {
           throw new Error('Failed to create job: invalid job id');
         }
 
-      // Reserve the run cap and credits before n8n starts. This direct-job path
-      // does not call `create-plan-builder-job`, so the client must write the
-      // per-period run-counter row used by Plan Builder caps.
-      const usageResult = await planUsage.trackFeatureUsage({
-        platforms: selectedPlatforms,
-        goal: selectedGoal,
-        period: selectedPeriod,
-      });
-      if (!usageResult.allowed) {
-        throw new Error(usageResult.message || "You've reached your monthly Plan Builder limit.");
-      }
-
       flushSync(() => {
         setCurrentJobId(jobId);
       });
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: user?.user_metadata?.first_name });
-      const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
+      const {
+        success: webhookSuccess,
+        error: webhookError,
+        terminal: webhookTerminal,
+      } = await triggerN8nWebhook(jobId, {
         contentGoal: selectedGoal,
         timePeriod: String(selectedPeriod),
         postingFrequency: resolvedPostingFrequency,
@@ -1262,6 +1254,15 @@ export default function AIPlanBuilder() {
 
       if (!webhookSuccess) {
         console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);
+        if (webhookTerminal) {
+          const failMsg = webhookError || 'Plan generation could not start. Please try again later.';
+          setGenerationError(failMsg);
+          showToast(failMsg, 'error');
+          setIsGenerating(false);
+          setCurrentJobId(null);
+          return;
+        }
+
         try {
           const { generateContentPlan } = await import('../services/grokAPI');
           const grokResult = await generateContentPlan(
@@ -1295,6 +1296,7 @@ export default function AIPlanBuilder() {
       }
 
       showToast('Your AI plan is being generated...', 'info');
+      await planUsage.refreshUsage();
     } catch (error) {
       console.error('handleGeneratePlan error:', error);
       setIsGenerating(false);

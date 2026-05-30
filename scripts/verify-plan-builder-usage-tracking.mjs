@@ -18,26 +18,46 @@ function assert(condition, message) {
 }
 
 const planBuilderSource = readFileSync(resolve(root, 'src/pages/AIPlanBuilder.jsx'), 'utf8');
+const proxySource = readFileSync(resolve(root, 'api/plan-builder-proxy.js'), 'utf8');
+const serviceSource = readFileSync(resolve(root, 'src/services/planBuilderAPI.js'), 'utf8');
 const usageHookSource = readFileSync(resolve(root, 'src/hooks/useAIUsage.js'), 'utf8');
 
 const directJobIndex = planBuilderSource.indexOf('createJobDirectly({');
-const usageTrackIndex = planBuilderSource.indexOf('const usageResult = await planUsage.trackFeatureUsage({');
-const usageGateIndex = planBuilderSource.indexOf('if (!usageResult.allowed)');
 const webhookIndex = planBuilderSource.indexOf('triggerN8nWebhook(jobId,');
+const refreshIndex = planBuilderSource.indexOf('await planUsage.refreshUsage();');
 
 assert(directJobIndex !== -1, 'AIPlanBuilder direct job creation was not found');
-assert(usageTrackIndex !== -1, 'AIPlanBuilder must capture trackFeatureUsage result');
-assert(usageGateIndex > usageTrackIndex, 'AIPlanBuilder must stop when usage tracking rejects');
-assert(webhookIndex > usageGateIndex, 'AIPlanBuilder must reserve usage before triggering n8n');
-
-const planBuilderUsageCall = planBuilderSource.slice(
-  usageTrackIndex,
-  planBuilderSource.indexOf('});', usageTrackIndex) + 3
+assert(webhookIndex > directJobIndex, 'AIPlanBuilder must trigger n8n only after job creation');
+assert(
+  !planBuilderSource.includes('planUsage.trackFeatureUsage({'),
+  'Plan Builder usage reservation must happen in the authenticated proxy'
 );
+assert(refreshIndex > webhookIndex, 'AIPlanBuilder should refresh usage after proxy reservation');
 
 assert(
-  !planBuilderUsageCall.includes('incrementFeatureCounter: false'),
-  'Plan Builder direct path must not suppress run-counter tracking'
+  proxySource.includes("select('id, user_id, type')") &&
+    proxySource.includes('job.user_id !== user.id'),
+  'Plan Builder proxy must verify job ownership before n8n'
+);
+assert(
+  proxySource.includes('getActiveSubscription(user.id)') &&
+    proxySource.includes('PLAN_BUILDER_14DAY_ALLOWED_TIERS'),
+  'Plan Builder proxy must enforce subscription and 14-day tier access'
+);
+assert(
+  proxySource.includes('hasPlanBuilderReservation') &&
+    proxySource.includes('reservePlanBuilderUsage') &&
+    proxySource.includes("feature: 'aiGenerations'"),
+  'Plan Builder proxy must reserve run counter and credit rows before n8n'
+);
+assert(
+  proxySource.indexOf('await reservePlanBuilderUsage({') <
+    proxySource.indexOf('const response = await fetch(N8N_WEBHOOK_URL'),
+  'Plan Builder proxy must reserve usage before forwarding to n8n'
+);
+assert(
+  serviceSource.includes('terminal: true') && planBuilderSource.includes('if (webhookTerminal)'),
+  'Plan Builder client must treat proxy quota/auth rejections as terminal'
 );
 
 assert(
