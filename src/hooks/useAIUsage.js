@@ -173,14 +173,16 @@ export default function useAIUsage(featureName = null) {
    *   • `overallCredits` aiGenerations rows are written (creditIndex 0..N-1),
    *     defaulting to FEATURE_CREDIT_COSTS[featureName].
    *
-   * Returns `{ allowed: false, reason }` if the DB-backed re-check trips a
-   * limit before any row is written.
+   * Returns `{ allowed: false, reason, message }` if the DB-backed re-check
+   * trips a limit or the usage rows cannot be recorded.
    */
   const trackFeatureUsage = useCallback(
     async (metadata = {}) => {
       if (!user?.id) return { allowed: false, reason: 'unauthenticated' };
 
       const incrementFeatureCounter = metadata.incrementFeatureCounter !== false;
+      const resetDate = getResetDateLabel();
+      const featureLabel = (featureName && FEATURE_LABELS[featureName]) || 'this feature';
       // Callers may override the credit cost (e.g. Full Post Builder passes its own),
       // but the default comes from FEATURE_CREDIT_COSTS so no feature has to hardcode.
       const rawCredits = metadata.overallCredits;
@@ -200,7 +202,11 @@ export default function useAIUsage(featureName = null) {
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
         } catch (_) {}
-        return { allowed: false, reason: 'pool_exhausted' };
+        return {
+          allowed: false,
+          reason: 'pool_exhausted',
+          message: `This feature uses ${overallCredits} credits. You have ${Math.max(0, overallLimit - currentOverall)} credits left this month. Your credits reset on ${resetDate}.`,
+        };
       }
 
       if (
@@ -212,7 +218,11 @@ export default function useAIUsage(featureName = null) {
         const currentFeature = await getFeatureUsageCount(user.id, featureName);
         if (currentFeature >= numericFeatureLimit) {
           if (mountedRef.current) setFeatureUsed(currentFeature);
-          return { allowed: false, reason: 'run_cap' };
+          return {
+            allowed: false,
+            reason: 'run_cap',
+            message: `You've used all ${numericFeatureLimit} ${featureLabel} runs for this month. Your limit resets on ${resetDate}.`,
+          };
         }
       }
 
@@ -222,22 +232,36 @@ export default function useAIUsage(featureName = null) {
 
       // Run-counter row (only for capped features). This is what FEATURE_RUN_CAPS counts.
       if (incrementFeatureCounter && featureName && numericFeatureLimit !== null) {
-        await trackUsage(user.id, featureName, {
+        const trackedFeature = await trackUsage(user.id, featureName, {
           ...persistMetadata,
           type: 'run_counter',
           timestamp: new Date().toISOString(),
         });
+        if (!trackedFeature) {
+          return {
+            allowed: false,
+            reason: 'tracking_failed',
+            message: 'Usage could not be recorded. Please try again.',
+          };
+        }
       }
 
       // aiGenerations credit rows — one per credit consumed.
       const sourceFeature = featureName || persistMetadata.sourceFeature || 'aiGenerations';
       for (let i = 0; i < overallCredits; i += 1) {
-        await trackUsage(user.id, 'aiGenerations', {
+        const trackedCredit = await trackUsage(user.id, 'aiGenerations', {
           ...persistMetadata,
           sourceFeature,
           creditIndex: i,
           overallCredits,
         });
+        if (!trackedCredit) {
+          return {
+            allowed: false,
+            reason: 'tracking_failed',
+            message: 'Usage could not be recorded. Please try again.',
+          };
+        }
       }
 
       if (mountedRef.current) {
