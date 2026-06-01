@@ -208,7 +208,9 @@ export default function useAIUsage(featureName = null) {
               body: JSON.stringify({ userId: user.id }),
             }).catch(() => {}); // fire-and-forget; never block the UI
           }
-        } catch (_) {}
+        } catch {
+          // Usage alert emails are best-effort; quota denial still proceeds.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
