@@ -51,6 +51,7 @@ const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL |
 const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const NO_ACCESS_STRIPE_STATUSES = new Set(['canceled', 'cancelled', 'incomplete', 'incomplete_expired', 'unpaid']);
 
 export default async function handler(req, res) {
   try {
@@ -171,12 +172,38 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
-      // If Stripe has no active subscription, return what Supabase knows.
+    if (stripeSubscription && NO_ACCESS_STRIPE_STATUSES.has(subStatus)) {
+      const normalizedFromStripe = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord: null,
+      });
+      const {
+        customerId: _cid,
+        stripeSubscriptionId: _sid,
+        id: _id,
+        ...safeSubscription
+      } = normalizedFromStripe ?? {};
+
+      return res.status(200).json({
+        subscription: normalizedFromStripe
+          ? { ...safeSubscription, plan: null, tier: null }
+          : null,
+        plan: null,
+        tier: null,
+        status: subStatus,
+        currentPeriodStart: normalizedFromStripe?.currentPeriodStart ?? null,
+        currentPeriodEnd: normalizedFromStripe?.currentPeriodEnd ?? null,
+        trialStart: normalizedFromStripe?.trialStart ?? null,
+        trialEnd: normalizedFromStripe?.trialEnd ?? null,
+        billingCycle: normalizedFromStripe?.billingCycle ?? null,
+        cancelAtPeriodEnd: normalizedFromStripe?.cancelAtPeriodEnd ?? false,
+        cancelledAt: normalizedFromStripe?.cancelledAt ?? null,
+        upcomingPlanChange: normalizedFromStripe?.upcomingPlanChange ?? null,
+      });
+    }
+
+    if (!stripeSubscription) {
+      // If Stripe data is unavailable, return what Supabase knows.
       // This keeps the billing UI functional even when Stripe data is unavailable.
       if (subscriptionRecord) {
         const normalizedFromRecord = buildSubscriptionPayload({

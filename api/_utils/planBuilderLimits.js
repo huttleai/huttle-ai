@@ -26,6 +26,20 @@ export const PLAN_BUILDER_14DAY_MONTHLY_BY_TIER = {
 /** Tiers that can access 14-day plans at all. */
 export const PLAN_BUILDER_14DAY_ALLOWED_TIERS = ['pro', 'founder', 'builder'];
 
+export const PLAN_BUILDER_CREDIT_POOLS_BY_TIER = {
+  essentials: 200,
+  pro: 600,
+  founder: 800,
+  builder: 800,
+};
+
+export const PLAN_BUILDER_CREDIT_COST_BY_FEATURE = {
+  planBuilder7Day: 3,
+  planBuilder14Day: 5,
+};
+
+export const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
+
 /** Back-compat export — total allowance (sum of both periods). */
 export const PLAN_BUILDER_MONTHLY_BY_TIER = {
   essentials:
@@ -58,4 +72,15 @@ export function resolvePlanBuilderCap(period, tier) {
     featureKey: 'planBuilder7Day',
     cap: PLAN_BUILDER_7DAY_MONTHLY_BY_TIER[tier] ?? 0,
   };
+}
+
+export function getPlanBuilderCreditCost(featureKey) {
+  return PLAN_BUILDER_CREDIT_COST_BY_FEATURE[featureKey] ?? 0;
+}
+
+export function getStartOfMonthISO() {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  return startOfMonth.toISOString();
 }

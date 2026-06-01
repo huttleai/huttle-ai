@@ -312,13 +312,21 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
       // If not OK, get error details
       const errorText = await response.text().catch(() => 'No error details');
+      const errorJson = safeJsonParse(errorText);
       console.warn(`[PlanBuilder] n8n webhook returned status ${response.status}, attempt ${attempt + 1}`);
       console.warn(`[PlanBuilder] Error response:`, errorText.substring(0, 200));
       
       // If it's a client error (4xx), don't retry
       if (response.status >= 400 && response.status < 500) {
         console.error(`[PlanBuilder] Client error (${response.status}), stopping retries`);
-        return { success: false, error: 'Unable to generate your plan right now. Please try again.' };
+        return {
+          success: false,
+          status: response.status,
+          error:
+            errorJson?.message ||
+            errorJson?.error ||
+            'Unable to generate your plan right now. Please try again.',
+        };
       }
     } catch (err) {
       console.error(`[PlanBuilder] ====== FETCH ERROR (Attempt ${attempt + 1}) ======`);
@@ -344,7 +352,11 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
   }
 
   console.error(`[PlanBuilder] n8n webhook failed after ${retries + 1} attempts`);
-  return { success: false, error: 'Plan generation service is temporarily unavailable. Please try again in a moment.' };
+  return {
+    success: false,
+    status: 503,
+    error: 'Plan generation service is temporarily unavailable. Please try again in a moment.',
+  };
 }
 
 // ============================================================================
