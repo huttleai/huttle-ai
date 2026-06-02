@@ -455,7 +455,9 @@ export default async function handler(req, res) {
             break;
           }
 
-          if (!customerId) break;
+          if (!customerId) {
+            throw new Error('Checkout session completed without a Stripe customer ID');
+          }
 
           // Resolve the Supabase user. Priority order:
           // 1. client_reference_id — dedicated Stripe field set at session creation (most reliable)
@@ -487,7 +489,7 @@ export default async function handler(req, res) {
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
               console.error('[checkout.session.completed] email lookup failed — cannot proceed', { eventId: event.id, error: userLookupError.message });
-              break;
+              throw new Error(`Failed to resolve checkout user by email: ${userLookupError.message}`);
             }
             userId = userList?.users?.[0]?.id ?? null;
             console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
@@ -501,7 +503,7 @@ export default async function handler(req, res) {
               customerEmail,
               clientReferenceId: session.client_reference_id,
             });
-            break;
+            throw new Error('Could not resolve Supabase user for completed checkout session');
           }
 
           const nameParts = customerName.split(' ');
@@ -628,6 +630,7 @@ export default async function handler(req, res) {
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
               console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              throw subErr;
             }
           } else {
             console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
@@ -635,6 +638,7 @@ export default async function handler(req, res) {
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
           console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1109,21 +1113,23 @@ export default async function handler(req, res) {
           if (profile && invoice.subscription) {
             let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
             let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
+            let cancelAtPeriodEnd = null;
 
             try {
               const stripeSub = await stripe.subscriptions.retrieve(invoice.subscription);
               periodStart = toIsoDate(stripeSub.current_period_start) || periodStart;
               periodEnd = toIsoDate(stripeSub.current_period_end) || periodEnd;
+              cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end);
             } catch (subErr) {
               logWarn('stripe_webhook.invoice_paid_sub_fetch_failed', { eventId: event.id, error: subErr.message });
             }
 
             const updatePayload = {
               status: 'active',
-              cancel_at_period_end: false,
               updated_at: new Date().toISOString(),
               ...(periodStart && { current_period_start: periodStart }),
               ...(periodEnd && { current_period_end: periodEnd }),
+              ...(cancelAtPeriodEnd !== null && { cancel_at_period_end: cancelAtPeriodEnd }),
             };
 
             const { error: paidError } = await supabase
@@ -1183,6 +1189,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
+    return res.status(500).json({ error: 'Webhook processing failed' });
   }
 }
