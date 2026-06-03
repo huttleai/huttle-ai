@@ -1210,22 +1210,32 @@ export default function AIPlanBuilder() {
           throw new Error('Failed to create job: invalid job id');
         }
 
-      // Charge credits only after we have a valid jobs.id UUID. If the
-      // DB insert failed above (createError/null jobId/invalid UUID),
-      // we've already thrown and the user is not charged. Every
-      // downstream failure (webhook, n8n crash, timeout) remains
-      // no-refund — this moves nothing except the charge boundary.
-      //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
-      // handler writes the authoritative run-counter row under the same
-      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
-      // would double-count against the monthly cap.
-      await planUsage.trackFeatureUsage({
-        incrementFeatureCounter: false,
+      // Reserve the run counter and credits after a valid jobs.id UUID exists.
+      // This client path creates the job directly, so it must write the
+      // per-period run-counter row that monthly caps read.
+      const usageResult = await planUsage.trackFeatureUsage({
         platforms: selectedPlatforms,
         goal: selectedGoal,
         period: selectedPeriod,
       });
+      if (!usageResult.allowed) {
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'failed',
+            error: usageResult.reason || 'Usage reservation failed',
+          })
+          .eq('id', jobId)
+          .eq('user_id', user.id);
+
+        const usageErrorMessage =
+          usageResult.reason === 'run_cap'
+            ? "You've reached your monthly Plan Builder limit."
+            : usageResult.reason === 'tracking_failed'
+              ? 'Could not reserve your Plan Builder usage. Please try again.'
+              : 'This plan would exceed your remaining monthly credits.';
+        throw new Error(usageErrorMessage);
+      }
 
       flushSync(() => {
         setCurrentJobId(jobId);

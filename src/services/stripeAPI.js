@@ -112,6 +112,23 @@ async function getAuthHeaders() {
   return headers;
 }
 
+function redirectToSignupForCheckout({ planId, billingCycle, targetWindow }) {
+  const signupUrl = new URL('/dashboard/signup', window.location.origin);
+  signupUrl.searchParams.set('checkout_plan', planId);
+  signupUrl.searchParams.set('billing', billingCycle);
+
+  if (targetWindow && !targetWindow.closed) {
+    try {
+      targetWindow.location.replace(signupUrl.toString());
+      return;
+    } catch {
+      // Fall through to current-window navigation below.
+    }
+  }
+
+  window.location.href = signupUrl.toString();
+}
+
 /**
  * Call synchronously from a click/tap handler so the browser treats it as a user gesture.
  * Do not pass `noopener` in window features — that makes `window.open` return `null`, so the
@@ -270,6 +287,18 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
 
     // Call your backend API to create a checkout session
     const headers = await getAuthHeaders();
+    if (!headers.Authorization) {
+      redirectToSignupForCheckout({
+        planId: plan.id,
+        billingCycle: effectiveBillingCycle,
+        targetWindow,
+      });
+      return {
+        success: false,
+        requiresAuth: true,
+        error: 'Create an account or sign in to start checkout.',
+      };
+    }
     
     let response;
     try {

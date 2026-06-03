@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
+import { authenticateBillingRequest } from '../_utils/billing.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,7 +15,7 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Body: { userId?: string }
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -28,9 +29,15 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode || 401).json({ error: authResult.error });
+  }
+
+  const requestedUserId = req.body?.userId || null;
+  const userId = authResult.user.id;
+  if (requestedUserId && requestedUserId !== userId) {
+    return res.status(403).json({ error: 'You can only trigger usage alerts for your own account' });
   }
 
   try {
@@ -40,12 +47,17 @@ export default async function handler(req, res) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { count: alreadySent } = await supabase
+    const { count: alreadySent, error: alreadySentError } = await supabase
       .from('user_activity')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('feature', 'usageAlert100')
       .gte('created_at', startOfMonth.toISOString());
+
+    if (alreadySentError) {
+      console.error('Usage alert idempotency check failed:', alreadySentError);
+      return res.status(500).json({ error: 'Failed to verify usage alert state' });
+    }
 
     if (alreadySent > 0) {
       return res.status(200).json({ skipped: true, reason: 'already_sent_this_cycle' });
@@ -96,7 +108,7 @@ export default async function handler(req, res) {
     );
 
     // ── Send the email ─────────────────────────────────────────────────────
-    await sendUsageAlert100Email({
+    const emailResult = await sendUsageAlert100Email({
       email,
       firstName: profile?.first_name || '',
       planName,
@@ -104,17 +116,27 @@ export default async function handler(req, res) {
       daysUntilReset,
     });
 
+    if (emailResult?.error) {
+      console.error('Usage alert email send failed:', emailResult.error);
+      return res.status(502).json({ error: 'Failed to send usage alert email' });
+    }
+
     // ── Mark as sent so we don't fire again this cycle ────────────────────
-    await supabase.from('user_activity').insert({
+    const { error: insertError } = await supabase.from('user_activity').insert({
       user_id: userId,
       feature: 'usageAlert100',
       metadata: { planName, creditResetDate, daysUntilReset },
       created_at: new Date().toISOString(),
     });
 
-    return res.status(200).json({ sent: true, email, planName, creditResetDate, daysUntilReset });
+    if (insertError) {
+      console.error('Usage alert sent marker insert failed:', insertError);
+      return res.status(500).json({ error: 'Failed to record usage alert state' });
+    }
+
+    return res.status(200).json({ sent: true, planName, creditResetDate, daysUntilReset });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Usage alert trigger failed' });
   }
 }
