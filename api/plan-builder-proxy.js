@@ -20,7 +20,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { logInfo, logError } from './_utils/observability.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
+import { logInfo, logWarn, logError } from './_utils/observability.js';
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -47,6 +53,109 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function getStartOfMonthISO() {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  return startOfMonth.toISOString();
+}
+
+function normalizePlanBuilderPeriod(period) {
+  return Number(period) === 14 ? 14 : 7;
+}
+
+function resolveRequestPeriod(body, job) {
+  const jobInput = job?.input && typeof job.input === 'object' ? job.input : {};
+  return normalizePlanBuilderPeriod(
+    body?.timePeriod ??
+      body?.period ??
+      body?.duration ??
+      jobInput.timePeriod ??
+      jobInput.period ??
+      jobInput.duration
+  );
+}
+
+export function assessPlanBuilderProxyAccess({
+  userId,
+  job,
+  subscription,
+  period,
+  usageCount,
+}) {
+  if (!job) {
+    return {
+      allowed: false,
+      statusCode: 404,
+      error: 'Job not found',
+    };
+  }
+
+  if (job.user_id !== userId) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: 'Job does not belong to the authenticated user',
+    };
+  }
+
+  if (job.type && job.type !== 'plan_builder') {
+    return {
+      allowed: false,
+      statusCode: 400,
+      error: 'Invalid job type',
+    };
+  }
+
+  const userTier = subscription?.tier || null;
+  if (!userTier) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: 'Active subscription required',
+      message: 'Choose a plan to use AI Plan Builder.',
+    };
+  }
+
+  if (period === 14 && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: 'tier_restricted',
+      message: '14-day plans require Pro or above.',
+    };
+  }
+
+  const { featureKey, cap } = resolvePlanBuilderCap(period, userTier);
+  if (cap == null || cap <= 0) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: 'Plan Builder not available for this subscription tier.',
+    };
+  }
+
+  const currentUsage = usageCount ?? 0;
+  if (currentUsage >= cap) {
+    const periodLabel = period === 14 ? '14-day' : '7-day';
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: 'AI usage limit reached',
+      message: `You've reached your monthly limit of ${cap} ${periodLabel} plan generations. This allowance resets on the 1st of each month.`,
+      currentUsage,
+      limit: cap,
+    };
+  }
+
+  return {
+    allowed: true,
+    userTier,
+    featureKey,
+    cap,
+  };
 }
 
 /**
@@ -95,7 +204,6 @@ export default async function handler(req, res) {
   const {
     job_id,
     contentGoal,
-    timePeriod,
     postingFrequency,
     platformFocus,
     niche,
@@ -146,10 +254,122 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { data: job, error: jobLookupError } = await supabase
+      .from('jobs')
+      .select('id, user_id, type, status, input')
+      .eq('id', job_id)
+      .maybeSingle();
+
+    if (jobLookupError) {
+      logError('plan_builder_proxy.job_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: jobLookupError.message,
+        code: jobLookupError.code,
+      });
+      return res.status(500).json({ error: 'Failed to verify job ownership', requestId });
+    }
+
+    const periodForGate = resolveRequestPeriod(body, job);
+
+    const { data: subscription, error: subLookupError } = await supabase
+      .from('subscriptions')
+      .select('tier, status')
+      .eq('user_id', user.id)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subLookupError) {
+      logError('plan_builder_proxy.subscription_lookup_failed', {
+        requestId,
+        userId: user.id,
+        message: subLookupError.message,
+        code: subLookupError.code,
+      });
+      return res.status(500).json({ error: 'Failed to verify subscription', requestId });
+    }
+
+    const { featureKey } = resolvePlanBuilderCap(periodForGate, subscription?.tier);
+    const startOfMonth = getStartOfMonthISO();
+    const { count: usageCount, error: usageCountError } = await supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('feature', featureKey)
+      .gte('created_at', startOfMonth);
+
+    if (usageCountError) {
+      logError('plan_builder_proxy.usage_count_failed', {
+        requestId,
+        userId: user.id,
+        featureKey,
+        message: usageCountError.message,
+        code: usageCountError.code,
+      });
+      return res.status(500).json({ error: 'Failed to verify usage limits', requestId });
+    }
+
+    const access = assessPlanBuilderProxyAccess({
+      userId: user.id,
+      job,
+      subscription,
+      period: periodForGate,
+      usageCount,
+    });
+
+    if (!access.allowed) {
+      logWarn('plan_builder_proxy.access_denied', {
+        requestId,
+        userId: user.id,
+        job_id,
+        period: periodForGate,
+        statusCode: access.statusCode,
+        error: access.error,
+      });
+      return res.status(access.statusCode).json({
+        error: access.error,
+        message: access.message,
+        currentUsage: access.currentUsage,
+        limit: access.limit,
+        requestId,
+      });
+    }
+
+    const { data: existingRun, error: existingRunError } = await supabase
+      .from('user_activity')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('feature', access.featureKey)
+      .eq('metadata->>job_id', job_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRunError) {
+      logError('plan_builder_proxy.existing_run_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        featureKey: access.featureKey,
+        message: existingRunError.message,
+        code: existingRunError.code,
+      });
+      return res.status(500).json({ error: 'Failed to verify job trigger state', requestId });
+    }
+
+    if (existingRun) {
+      return res.status(409).json({
+        error: 'Plan Builder job has already been triggered',
+        requestId,
+      });
+    }
+
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
-      timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
+      timePeriod: String(periodForGate),
       postingFrequency:
         postingFrequency != null && postingFrequency !== ''
           ? Number(postingFrequency)
@@ -241,12 +461,38 @@ export default async function handler(req, res) {
         requestId
       });
     }
+
+    const { error: usageTrackError } = await supabase
+      .from('user_activity')
+      .insert({
+        user_id: user.id,
+        feature: access.featureKey,
+        metadata: {
+          type: 'run_counter',
+          job_id,
+          period: periodForGate,
+          platforms: platformFocus,
+          source: 'plan-builder-proxy',
+        },
+      });
+
+    if (usageTrackError) {
+      logError('plan_builder_proxy.usage_track_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        featureKey: access.featureKey,
+        message: usageTrackError.message,
+        code: usageTrackError.code,
+      });
+    }
     
     // Return success (n8n will update job via Supabase)
     return res.status(200).json({ 
       success: true, 
       message: 'Webhook triggered successfully',
       job_id: job_id,
+      usageTracked: !usageTrackError,
       requestId
     });
 
