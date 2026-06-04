@@ -198,8 +198,10 @@ export default function useAIUsage(featureName = null) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id }),
-          }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+          }).catch(() => undefined); // fire-and-forget; never block the UI
+        } catch {
+          // Usage-alert failures must not block the usage gate response.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
