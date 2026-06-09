@@ -97,9 +97,11 @@ async function verifyStaticGuards() {
     'cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end);',
     'invoice.paid must preserve the live Stripe cancel_at_period_end flag'
   );
+  const invoicePaidBlock = webhook.match(/case 'invoice\.paid': \{[\s\S]*?case 'invoice\.payment_succeeded':/)?.[0] ?? '';
+  assert.ok(invoicePaidBlock, 'guard could not locate invoice.paid block');
   assertNotIncludes(
-    webhook,
-    'cancel_at_period_end: false,\n              updated_at: new Date().toISOString(),',
+    invoicePaidBlock,
+    'cancel_at_period_end: false',
     'invoice.paid must not blindly clear scheduled cancellations'
   );
 
