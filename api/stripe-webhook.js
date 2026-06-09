@@ -487,7 +487,7 @@ export default async function handler(req, res) {
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
               console.error('[checkout.session.completed] email lookup failed — cannot proceed', { eventId: event.id, error: userLookupError.message });
-              break;
+              throw new Error(userLookupError.message || 'Checkout user lookup failed');
             }
             userId = userList?.users?.[0]?.id ?? null;
             console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
@@ -501,7 +501,7 @@ export default async function handler(req, res) {
               customerEmail,
               clientReferenceId: session.client_reference_id,
             });
-            break;
+            throw new Error('Could not resolve Supabase user for checkout session');
           }
 
           const nameParts = customerName.split(' ');
@@ -628,6 +628,7 @@ export default async function handler(req, res) {
             } catch (subErr) {
               logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
               console.error('[checkout.session.completed] subscription sync failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+              throw subErr;
             }
           } else {
             console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
@@ -635,6 +636,7 @@ export default async function handler(req, res) {
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
           console.error('[checkout.session.completed] unhandled error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -663,7 +665,7 @@ export default async function handler(req, res) {
 
           if (profileError && profileError.code !== 'PGRST116') {
             logError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
-            break;
+            throw new Error(profileError.message || 'Failed to lookup subscription profile');
           }
 
           // Fallback: if user_profile has no mapping yet (e.g. row was never
@@ -848,6 +850,9 @@ export default async function handler(req, res) {
 
               if (!existingSub) {
                 console.warn(`[customer.subscription.updated] No subscriptions row for stripe_subscription_id=${stripeSubId} — possible orphaned record`);
+                if (!resolvedUserId) {
+                  throw new Error(`No local subscription mapping found for Stripe subscription ${stripeSubId}`);
+                }
               } else {
                 const mappedStatus = normaliseStatus(subscription.status);
                 const { error: statusSyncError } = await supabase
@@ -867,6 +872,7 @@ export default async function handler(req, res) {
                     mappedStatus,
                     error: statusSyncError.message,
                   });
+                  throw new Error(statusSyncError.message || 'Failed to sync subscription status');
                 } else {
                   logInfo('stripe_webhook.subscription_status_synced', {
                     eventId: event.id,
@@ -878,10 +884,12 @@ export default async function handler(req, res) {
               }
             } catch (syncErr) {
               logError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
+              throw syncErr;
             }
           }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -919,6 +927,7 @@ export default async function handler(req, res) {
 
             if (delError) {
               logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+              throw new Error(delError.message || 'Failed to mark subscription deleted');
             }
             // ── End Supabase update ───────────────────────────────────────────
 
@@ -1007,6 +1016,7 @@ export default async function handler(req, res) {
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1038,13 +1048,22 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (profile) {
-            await supabase
+            const { error: paymentFailedUpdateError } = await supabase
               .from('subscriptions')
               .update({
                 status: 'past_due',
                 updated_at: new Date().toISOString(),
               })
               .eq('user_id', profile.user_id);
+
+            if (paymentFailedUpdateError) {
+              logError('stripe_webhook.invoice_payment_failed_update_failed', {
+                eventId: event.id,
+                userId: profile.user_id,
+                error: paymentFailedUpdateError.message,
+              });
+              throw new Error(paymentFailedUpdateError.message || 'Failed to sync payment-failed status');
+            }
 
             // Slack alert to SLACK_WEBHOOK_ERRORS — distinct from the Resend customer email below
             try {
@@ -1091,6 +1110,7 @@ export default async function handler(req, res) {
           }
         } catch (err) {
           logError('stripe_webhook.invoice_payment_failed_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1109,19 +1129,21 @@ export default async function handler(req, res) {
           if (profile && invoice.subscription) {
             let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
             let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
+            let cancelAtPeriodEnd = null;
 
             try {
               const stripeSub = await stripe.subscriptions.retrieve(invoice.subscription);
               periodStart = toIsoDate(stripeSub.current_period_start) || periodStart;
               periodEnd = toIsoDate(stripeSub.current_period_end) || periodEnd;
+              cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end);
             } catch (subErr) {
               logWarn('stripe_webhook.invoice_paid_sub_fetch_failed', { eventId: event.id, error: subErr.message });
             }
 
             const updatePayload = {
               status: 'active',
-              cancel_at_period_end: false,
               updated_at: new Date().toISOString(),
+              ...(cancelAtPeriodEnd !== null && { cancel_at_period_end: cancelAtPeriodEnd }),
               ...(periodStart && { current_period_start: periodStart }),
               ...(periodEnd && { current_period_end: periodEnd }),
             };
@@ -1133,10 +1155,12 @@ export default async function handler(req, res) {
 
             if (paidError) {
               logError('stripe_webhook.invoice_paid_update_failed', { eventId: event.id, userId: profile.user_id, error: paidError.message });
+              throw new Error(paidError.message || 'Failed to sync paid invoice status');
             }
           }
         } catch (err) {
           logError('stripe_webhook.invoice_paid_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1160,13 +1184,23 @@ export default async function handler(req, res) {
               ...(invoice.period_end && { current_period_end: toIsoDate(invoice.period_end) }),
             };
 
-            await supabase
+            const { error: paymentSucceededUpdateError } = await supabase
               .from('subscriptions')
               .update(updatePayload)
               .eq('user_id', profile.user_id);
+
+            if (paymentSucceededUpdateError) {
+              logError('stripe_webhook.invoice_payment_succeeded_update_failed', {
+                eventId: event.id,
+                userId: profile.user_id,
+                error: paymentSucceededUpdateError.message,
+              });
+              throw new Error(paymentSucceededUpdateError.message || 'Failed to sync payment-succeeded status');
+            }
           }
         } catch (err) {
           logError('stripe_webhook.invoice_payment_succeeded_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -1183,6 +1217,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ received: true });
   } catch (error) {
     logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error â logged for review' });
+    return res.status(500).json({ error: 'Internal processing error - logged for retry' });
   }
 }

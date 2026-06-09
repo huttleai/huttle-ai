@@ -5,6 +5,7 @@ import {
   authenticateBillingRequest,
   getStripeSubscription,
   getStripeSubscriptionPlan,
+  normaliseSubscriptionStatus,
   resolveBillingContext,
   toIsoDate,
 } from './_utils/billing.js';
@@ -182,17 +183,21 @@ export default async function handler(req, res) {
       proration_behavior: 'create_prorations',
     });
 
-    await supabase
+    const { error: planSyncError } = await supabase
       .from('subscriptions')
       .update({
         tier: targetPlanId,
-        status: updatedSubscription.status,
+        status: normaliseSubscriptionStatus(updatedSubscription.status),
         current_period_start: toIsoDate(updatedSubscription.current_period_start),
         current_period_end: toIsoDate(updatedSubscription.current_period_end),
         cancel_at_period_end: updatedSubscription.cancel_at_period_end,
         cancelled_at: null,
       })
       .eq('user_id', authResult.user.id);
+
+    if (planSyncError) {
+      throw new Error(planSyncError.message || 'Failed to sync updated subscription plan');
+    }
 
     return res.status(200).json({
       success: true,

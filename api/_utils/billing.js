@@ -48,6 +48,20 @@ export function toIsoDate(unixSeconds) {
   return new Date(unixSeconds * 1000).toISOString();
 }
 
+export function normaliseSubscriptionStatus(stripeStatus) {
+  const map = {
+    active: 'active',
+    canceled: 'cancelled',
+    cancelled: 'cancelled',
+    past_due: 'past_due',
+    unpaid: 'unpaid',
+    incomplete: 'incomplete',
+    incomplete_expired: 'incomplete_expired',
+    trialing: 'trialing',
+  };
+  return map[stripeStatus] ?? stripeStatus;
+}
+
 export function summarizeCardPaymentMethod(paymentMethod) {
   const card = paymentMethod?.card;
   if (!card) return null;
