@@ -21,6 +21,12 @@ import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import {
+  AI_CREDIT_POOLS_BY_TIER,
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  PLAN_BUILDER_CREDIT_COSTS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -32,6 +38,9 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
+const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
 
 /**
  * Validate UUID format
@@ -47,6 +56,101 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function getStartOfMonthISO() {
+  const date = new Date();
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+async function getMonthlyUsageCount({ userId, feature, excludeDashboard = false }) {
+  let query = supabase
+    .from('user_activity')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('feature', feature)
+    .gte('created_at', getStartOfMonthISO());
+
+  if (excludeDashboard) {
+    query = query.or(
+      `metadata->>source.is.null,metadata->>source.neq.${DASHBOARD_GENERATION_SOURCE}`
+    );
+  }
+
+  const { count, error } = await query;
+  if (error) throw error;
+  return count || 0;
+}
+
+async function cleanupPlanBuilderReservation({ userId, jobId, requestId }) {
+  const { error } = await supabase
+    .from('user_activity')
+    .delete()
+    .eq('user_id', userId)
+    .eq('metadata->>job_id', jobId)
+    .eq('metadata->>reservation_id', requestId)
+    .eq('metadata->>source', 'plan-builder-proxy');
+
+  if (error) {
+    logError('plan_builder_proxy.usage_reservation_cleanup_failed', {
+      userId,
+      job_id: jobId,
+      error: error.message,
+    });
+  }
+}
+
+async function reservePlanBuilderUsage({
+  userId,
+  jobId,
+  requestId,
+  featureKey,
+  creditsRequired,
+  contentGoal,
+  timePeriod,
+  platformFocus,
+}) {
+  const now = new Date().toISOString();
+  const sharedMetadata = {
+    job_id: jobId,
+    reservation_id: requestId,
+    source: 'plan-builder-proxy',
+    sourceFeature: featureKey,
+    goal: contentGoal,
+    period: timePeriod,
+    platforms: platformFocus,
+  };
+
+  const rows = [
+    {
+      user_id: userId,
+      feature: featureKey,
+      metadata: {
+        ...sharedMetadata,
+        type: 'run_counter',
+        timestamp: now,
+      },
+      created_at: now,
+    },
+  ];
+
+  for (let creditIndex = 0; creditIndex < creditsRequired; creditIndex += 1) {
+    rows.push({
+      user_id: userId,
+      feature: 'aiGenerations',
+      metadata: {
+        ...sharedMetadata,
+        creditIndex,
+        overallCredits: creditsRequired,
+      },
+      created_at: now,
+    });
+  }
+
+  const { error } = await supabase.from('user_activity').insert(rows);
+  if (error) throw error;
 }
 
 /**
@@ -145,7 +249,104 @@ export default async function handler(req, res) {
     });
   }
 
+  let usageReserved = false;
+
   try {
+    const { data: job, error: jobLookupError } = await supabase
+      .from('jobs')
+      .select('id, user_id, type')
+      .eq('id', job_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (jobLookupError) {
+      throw jobLookupError;
+    }
+
+    if (!job || job.type !== 'plan_builder') {
+      return res.status(404).json({
+        error: 'Plan Builder job not found',
+        requestId,
+      });
+    }
+
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from('subscriptions')
+      .select('tier, status')
+      .eq('user_id', user.id)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subscriptionError) {
+      throw subscriptionError;
+    }
+
+    const userTier = subscription?.tier || null;
+    if (!userTier) {
+      return res.status(403).json({
+        error: 'Active subscription required',
+        requestId,
+      });
+    }
+
+    const isFourteenDay = Number(timePeriod) === 14;
+    if (isFourteenDay && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      return res.status(403).json({
+        error: '14-day plans require Pro or above.',
+        requestId,
+      });
+    }
+
+    const { featureKey, cap } = resolvePlanBuilderCap(timePeriod, userTier);
+    const creditsRequired = PLAN_BUILDER_CREDIT_COSTS[featureKey] ?? 0;
+    const creditLimit = AI_CREDIT_POOLS_BY_TIER[userTier] ?? 0;
+
+    if (!cap || cap <= 0) {
+      return res.status(403).json({
+        error: 'Plan Builder not available for this subscription tier.',
+        requestId,
+      });
+    }
+
+    const [featureUsage, overallUsage] = await Promise.all([
+      getMonthlyUsageCount({ userId: user.id, feature: featureKey }),
+      getMonthlyUsageCount({ userId: user.id, feature: 'aiGenerations', excludeDashboard: true }),
+    ]);
+
+    if (featureUsage >= cap) {
+      return res.status(429).json({
+        error: 'AI usage limit reached',
+        message: `You've reached your monthly limit of ${cap} ${isFourteenDay ? '14-day' : '7-day'} plan generations.`,
+        currentUsage: featureUsage,
+        limit: cap,
+        requestId,
+      });
+    }
+
+    if (creditLimit > 0 && overallUsage + creditsRequired > creditLimit) {
+      return res.status(429).json({
+        error: 'Monthly AI credit limit reached',
+        currentUsage: overallUsage,
+        limit: creditLimit,
+        creditsRequired,
+        requestId,
+      });
+    }
+
+    await reservePlanBuilderUsage({
+      userId: user.id,
+      jobId: job_id,
+      requestId,
+      featureKey,
+      creditsRequired,
+      contentGoal,
+      timePeriod,
+      platformFocus,
+    });
+    usageReserved = true;
+
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
@@ -214,6 +415,10 @@ export default async function handler(req, res) {
         statusText: response.statusText,
         snippet: String(errorText).slice(0, 400),
       });
+      if (usageReserved) {
+        await cleanupPlanBuilderReservation({ userId: user.id, jobId: job_id, requestId });
+        usageReserved = false;
+      }
       return res.status(response.status).json({ 
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
@@ -236,6 +441,10 @@ export default async function handler(req, res) {
     });
 
     if (parsedResponse && parsedResponse.success === false) {
+      if (usageReserved) {
+        await cleanupPlanBuilderReservation({ userId: user.id, jobId: job_id, requestId });
+        usageReserved = false;
+      }
       return res.status(502).json({
         error: parsedResponse.error || 'n8n rejected the request',
         requestId
@@ -259,6 +468,10 @@ export default async function handler(req, res) {
       message: error.message,
       stack: error.stack?.slice?.(0, 800),
     });
+
+    if (usageReserved) {
+      await cleanupPlanBuilderReservation({ userId: user.id, jobId: job_id, requestId });
+    }
 
     // Handle timeout errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {

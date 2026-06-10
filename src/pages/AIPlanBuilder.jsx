@@ -1210,23 +1210,6 @@ export default function AIPlanBuilder() {
           throw new Error('Failed to create job: invalid job id');
         }
 
-      // Charge credits only after we have a valid jobs.id UUID. If the
-      // DB insert failed above (createError/null jobId/invalid UUID),
-      // we've already thrown and the user is not charged. Every
-      // downstream failure (webhook, n8n crash, timeout) remains
-      // no-refund — this moves nothing except the charge boundary.
-      //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
-      // handler writes the authoritative run-counter row under the same
-      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
-      // would double-count against the monthly cap.
-      await planUsage.trackFeatureUsage({
-        incrementFeatureCounter: false,
-        platforms: selectedPlatforms,
-        goal: selectedGoal,
-        period: selectedPeriod,
-      });
-
       flushSync(() => {
         setCurrentJobId(jobId);
       });
@@ -1277,6 +1260,14 @@ export default function AIPlanBuilder() {
           );
 
           if (grokResult.success && grokResult.plan) {
+            await planUsage.trackFeatureUsage({
+              platforms: selectedPlatforms,
+              goal: selectedGoal,
+              period: selectedPeriod,
+              jobId,
+              source: 'plan-builder-fallback',
+            });
+            await planUsage.refreshUsage();
             const planText = grokResult.plan;
             const fallbackResult = {
               rawPlan: planText,
@@ -1299,6 +1290,7 @@ export default function AIPlanBuilder() {
         return;
       }
 
+      await planUsage.refreshUsage();
       showToast('Your AI plan is being generated...', 'info');
     } catch (error) {
       console.error('handleGeneratePlan error:', error);
