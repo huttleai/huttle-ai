@@ -209,7 +209,9 @@ export default function useAIUsage(featureName = null) {
             },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          // Usage alerts are best-effort; never block the limit response.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
