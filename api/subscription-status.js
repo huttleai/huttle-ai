@@ -27,6 +27,14 @@ import {
   resolveBillingContext,
 } from './_utils/billing.js';
 
+const TERMINAL_STRIPE_STATUSES = new Set([
+  'canceled',
+  'cancelled',
+  'incomplete',
+  'incomplete_expired',
+  'unpaid',
+]);
+
 // Validate and initialize Stripe (server-side: process.env.STRIPE_SECRET_KEY — never VITE_)
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || '').trim();
 const mode = STRIPE_SECRET_KEY.startsWith('sk_test') ? 'TEST' : 'LIVE';
@@ -171,11 +179,29 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
+    if (TERMINAL_STRIPE_STATUSES.has(subStatus)) {
+      const normalizedTerminal = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord,
+      });
+
+      return res.status(200).json({
+        subscription: null,
+        plan: null,
+        tier: null,
+        status: normalizedTerminal?.status ?? subStatus,
+        currentPeriodStart: normalizedTerminal?.currentPeriodStart ?? null,
+        currentPeriodEnd: normalizedTerminal?.currentPeriodEnd ?? null,
+        trialStart: normalizedTerminal?.trialStart ?? null,
+        trialEnd: normalizedTerminal?.trialEnd ?? null,
+        billingCycle: normalizedTerminal?.billingCycle ?? null,
+        cancelAtPeriodEnd: normalizedTerminal?.cancelAtPeriodEnd ?? false,
+        cancelledAt: normalizedTerminal?.cancelledAt ?? null,
+        upcomingPlanChange: null,
+      });
+    }
+
+    if (!stripeSubscription) {
       // If Stripe has no active subscription, return what Supabase knows.
       // This keeps the billing UI functional even when Stripe data is unavailable.
       if (subscriptionRecord) {
