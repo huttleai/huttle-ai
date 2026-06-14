@@ -204,7 +204,9 @@ export default function useAIUsage(featureName = null) {
             },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch (alertError) {
+          console.warn('Could not start usage alert trigger:', alertError);
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
