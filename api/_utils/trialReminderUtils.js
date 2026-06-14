@@ -136,6 +136,10 @@ export async function maybeSendTrialReminder({ stripe, supabase, subscription })
     contentCount: recipient.contentCount,
   });
 
+  if (resendResponse?.error) {
+    throw new Error(resendResponse.error.message || 'Failed to send trial reminder email');
+  }
+
   await markTrialReminderSent(supabase, {
     userId: recipient.userId,
     subscriptionId: subscription.id,
