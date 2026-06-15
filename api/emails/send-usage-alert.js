@@ -24,7 +24,7 @@ export async function sendUsageAlert100Email({
     throw new Error('RESEND_API_KEY is not configured');
   }
 
-  return resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: 'Huttle AI <hello@huttleai.com>',
     to: email,
     subject: "You're out of credits for the month",
@@ -41,4 +41,10 @@ export async function sendUsageAlert100Email({
       },
     ],
   });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to send usage alert email');
+  }
+
+  return data;
 }

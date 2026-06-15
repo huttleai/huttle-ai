@@ -891,13 +891,75 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('user_profile')
             .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
-          if (profile) {
+          if (profileError && profileError.code !== 'PGRST116') {
+            logWarn('stripe_webhook.subscription_deleted_profile_lookup_failed', {
+              eventId: event.id,
+              customerId,
+              error: profileError.message,
+            });
+          }
+
+          let resolvedUserId = profile?.user_id || null;
+
+          if (!resolvedUserId && subscription.id) {
+            const { data: subscriptionRow, error: subscriptionLookupError } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_subscription_id', subscription.id)
+              .maybeSingle();
+
+            if (subscriptionLookupError && subscriptionLookupError.code !== 'PGRST116') {
+              logWarn('stripe_webhook.subscription_deleted_row_lookup_failed', {
+                eventId: event.id,
+                subscriptionId: subscription.id,
+                error: subscriptionLookupError.message,
+              });
+            } else if (subscriptionRow?.user_id) {
+              resolvedUserId = subscriptionRow.user_id;
+              logInfo('stripe_webhook.subscription_deleted_user_from_subscription_row', {
+                eventId: event.id,
+                subscriptionId: subscription.id,
+                userId: resolvedUserId,
+              });
+            }
+          }
+
+          if (!resolvedUserId && subscription.metadata?.supabase_user_id) {
+            resolvedUserId = subscription.metadata.supabase_user_id;
+            logInfo('stripe_webhook.subscription_deleted_user_from_metadata', {
+              eventId: event.id,
+              customerId,
+              userId: resolvedUserId,
+            });
+          }
+
+          if (!resolvedUserId) {
+            try {
+              const customer = await stripe.customers.retrieve(customerId);
+              if (!customer.deleted && customer.metadata?.supabase_user_id) {
+                resolvedUserId = customer.metadata.supabase_user_id;
+                logInfo('stripe_webhook.subscription_deleted_user_from_customer_metadata', {
+                  eventId: event.id,
+                  customerId,
+                  userId: resolvedUserId,
+                });
+              }
+            } catch (custErr) {
+              logWarn('stripe_webhook.subscription_deleted_customer_metadata_lookup_failed', {
+                eventId: event.id,
+                customerId,
+                error: custErr.message,
+              });
+            }
+          }
+
+          if (resolvedUserId) {
             // ── Supabase subscription status update (do not modify) ──────────
             const deletionPayload = {
               tier: 'free',
@@ -910,21 +972,21 @@ export default async function handler(req, res) {
             let { error: delError } = await supabase
               .from('subscriptions')
               .update(deletionPayload)
-              .eq('user_id', profile.user_id);
+              .eq('user_id', resolvedUserId);
 
             if (delError?.message?.toLowerCase().includes('cancelled_at')) {
               const { cancelled_at: _ca, ...fallback } = deletionPayload;
-              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
+              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', resolvedUserId)).error;
             }
 
             if (delError) {
-              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: resolvedUserId, error: delError.message });
             }
             // ── End Supabase update ───────────────────────────────────────────
 
             // Fetch customer email for notifications
             let userEmail = null;
-            const firstName = profile.first_name || 'there';
+            const firstName = profile?.first_name || 'there';
 
             try {
               const customer = await stripe.customers.retrieve(customerId);
@@ -976,7 +1038,7 @@ export default async function handler(req, res) {
             if (cancellationReason === 'payment_failed' || cancellationReason === 'payment_disputed') {
               logInfo('stripe_webhook.cancellation_email_skipped', {
                 eventId: event.id,
-                userId: profile.user_id,
+                userId: resolvedUserId,
                 reason: cancellationReason,
               });
             } else if (userEmail) {
@@ -999,11 +1061,17 @@ export default async function handler(req, res) {
               } catch (emailErr) {
                 logWarn('stripe_webhook.cancellation_email_failed', {
                   eventId: event.id,
-                  userId: profile.user_id,
+                  userId: resolvedUserId,
                   error: emailErr.message,
                 });
               }
             }
+          } else {
+            logError('stripe_webhook.subscription_deleted_user_resolution_failed', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
