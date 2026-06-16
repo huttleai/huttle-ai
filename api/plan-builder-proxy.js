@@ -18,9 +18,16 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { parseBearerToken } from './_utils/billing.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import {
+  AI_CREDIT_POOL_BY_TIER,
+  DASHBOARD_GENERATION_SOURCE,
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  PLAN_BUILDER_CREDIT_COST_BY_FEATURE,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -32,6 +39,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
 
 /**
  * Validate UUID format
@@ -46,6 +55,214 @@ function safeJsonParse(value) {
     return JSON.parse(value);
   } catch {
     return null;
+  }
+}
+
+function getStartOfMonthISO() {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  return startOfMonth.toISOString();
+}
+
+function createHttpError(statusCode, message, extra = {}) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  Object.assign(error, extra);
+  return error;
+}
+
+function buildUsageRows({ userId, jobId, featureKey, creditCost, contentGoal, timePeriod, platformFocus }) {
+  const now = new Date().toISOString();
+  const baseMetadata = {
+    source: 'plan-builder-proxy',
+    job_id: jobId,
+    goal: contentGoal,
+    period: timePeriod,
+    platforms: platformFocus,
+  };
+
+  const rows = [
+    {
+      user_id: userId,
+      feature: featureKey,
+      metadata: {
+        ...baseMetadata,
+        type: 'run_counter',
+      },
+      created_at: now,
+    },
+  ];
+
+  for (let creditIndex = 0; creditIndex < creditCost; creditIndex += 1) {
+    rows.push({
+      user_id: userId,
+      feature: 'aiGenerations',
+      metadata: {
+        ...baseMetadata,
+        sourceFeature: featureKey,
+        creditIndex,
+        overallCredits: creditCost,
+      },
+      created_at: now,
+    });
+  }
+
+  return rows;
+}
+
+async function reservePlanBuilderUsage({ userId, jobId, contentGoal, timePeriod, platformFocus, requestId }) {
+  const [{ data: job, error: jobError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+    supabase
+      .from('jobs')
+      .select('id, user_id, type, status')
+      .eq('id', jobId)
+      .maybeSingle(),
+    supabase
+      .from('subscriptions')
+      .select('tier, status')
+      .eq('user_id', userId)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (jobError) {
+    logError('plan_builder_proxy.job_lookup_failed', { requestId, userId, jobId, error: jobError.message });
+    throw createHttpError(500, 'Failed to verify job ownership');
+  }
+
+  if (!job) {
+    throw createHttpError(404, 'Plan Builder job not found');
+  }
+
+  if (job.user_id !== userId || job.type !== 'plan_builder') {
+    logError('plan_builder_proxy.job_ownership_mismatch', {
+      requestId,
+      userId,
+      jobId,
+      jobUserId: job.user_id,
+      jobType: job.type,
+    });
+    throw createHttpError(403, 'You can only run your own Plan Builder jobs');
+  }
+
+  if (subscriptionError) {
+    logError('plan_builder_proxy.subscription_lookup_failed', { requestId, userId, error: subscriptionError.message });
+    throw createHttpError(500, 'Failed to verify subscription');
+  }
+
+  const userTier = subscription?.tier || null;
+  if (!userTier) {
+    throw createHttpError(403, 'Active subscription required');
+  }
+
+  const isFourteenDay = Number(timePeriod) === 14;
+  if (isFourteenDay && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+    throw createHttpError(403, '14-day plans require Pro or above');
+  }
+
+  const { featureKey, cap } = resolvePlanBuilderCap(timePeriod, userTier);
+  const creditCost = PLAN_BUILDER_CREDIT_COST_BY_FEATURE[featureKey] ?? 0;
+  const poolLimit = AI_CREDIT_POOL_BY_TIER[userTier] ?? 0;
+
+  if (!cap || cap <= 0 || !poolLimit || poolLimit <= 0) {
+    throw createHttpError(403, 'Plan Builder is not available for this subscription tier');
+  }
+
+  const startOfMonth = getStartOfMonthISO();
+  const [{ count: runCount, error: runCountError }, { count: creditCount, error: creditCountError }] = await Promise.all([
+    supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('feature', featureKey)
+      .gte('created_at', startOfMonth),
+    supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('feature', 'aiGenerations')
+      .or(`metadata->>source.is.null,metadata->>source.neq.${DASHBOARD_GENERATION_SOURCE}`)
+      .gte('created_at', startOfMonth),
+  ]);
+
+  if (runCountError || creditCountError) {
+    logError('plan_builder_proxy.usage_count_failed', {
+      requestId,
+      userId,
+      jobId,
+      runCountError: runCountError?.message,
+      creditCountError: creditCountError?.message,
+    });
+    throw createHttpError(500, 'Failed to verify usage limits');
+  }
+
+  if ((runCount ?? 0) >= cap) {
+    throw createHttpError(429, 'AI usage limit reached', {
+      currentUsage: runCount ?? 0,
+      limit: cap,
+    });
+  }
+
+  if ((creditCount ?? 0) + creditCost > poolLimit) {
+    throw createHttpError(429, 'AI credit limit reached', {
+      currentUsage: creditCount ?? 0,
+      limit: poolLimit,
+    });
+  }
+
+  const { error: insertError } = await supabase.from('user_activity').insert(
+    buildUsageRows({ userId, jobId, featureKey, creditCost, contentGoal, timePeriod, platformFocus })
+  );
+
+  if (insertError) {
+    logError('plan_builder_proxy.usage_reservation_failed', {
+      requestId,
+      userId,
+      jobId,
+      featureKey,
+      error: insertError.message,
+    });
+    throw createHttpError(500, 'Failed to reserve usage');
+  }
+
+  return { featureKey, creditCost };
+}
+
+async function releasePlanBuilderUsage({ userId, jobId, featureKey, requestId }) {
+  const { error } = await supabase
+    .from('user_activity')
+    .delete()
+    .eq('user_id', userId)
+    .in('feature', [featureKey, 'aiGenerations'])
+    .contains('metadata', { source: 'plan-builder-proxy', job_id: jobId });
+
+  if (error) {
+    logError('plan_builder_proxy.usage_release_failed', {
+      requestId,
+      userId,
+      jobId,
+      featureKey,
+      error: error.message,
+    });
+  }
+}
+
+async function markPlanBuilderJobFailed({ userId, jobId, reason }) {
+  const { error } = await supabase
+    .from('jobs')
+    .update({
+      status: 'failed',
+      error_message: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+    .eq('user_id', userId);
+
+  if (error) {
+    logError('plan_builder_proxy.job_failed_mark_failed', { userId, jobId, error: error.message });
   }
 }
 
@@ -67,19 +284,15 @@ export default async function handler(req, res) {
   }
 
   // SECURITY: Require authentication
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !supabase) {
+  if (!supabase) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const token = parseBearerToken(authHeader);
-  if (!token) {
-    return res.status(401).json({ error: 'Invalid authorization header' });
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode).json({ error: authResult.error });
   }
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) {
-    return res.status(401).json({ error: 'Invalid authentication' });
-  }
+  const { user } = authResult;
 
   // Validate environment variables
   if (!N8N_WEBHOOK_URL) {
@@ -145,6 +358,8 @@ export default async function handler(req, res) {
     });
   }
 
+  let usageReservation = null;
+
   try {
     const n8nPayload = {
       job_id,
@@ -183,6 +398,15 @@ export default async function handler(req, res) {
       city: city ?? null,
     };
 
+    usageReservation = await reservePlanBuilderUsage({
+      userId: user.id,
+      jobId: job_id,
+      contentGoal: n8nPayload.contentGoal,
+      timePeriod: n8nPayload.timePeriod,
+      platformFocus: n8nPayload.platformFocus,
+      requestId,
+    });
+
     logInfo('plan_builder_proxy.n8n_outbound', {
       requestId,
       userId: user.id,
@@ -214,6 +438,17 @@ export default async function handler(req, res) {
         statusText: response.statusText,
         snippet: String(errorText).slice(0, 400),
       });
+      await releasePlanBuilderUsage({
+        userId: user.id,
+        jobId: job_id,
+        featureKey: usageReservation.featureKey,
+        requestId,
+      });
+      await markPlanBuilderJobFailed({
+        userId: user.id,
+        jobId: job_id,
+        reason: `n8n webhook error: ${response.status} ${response.statusText}`,
+      });
       return res.status(response.status).json({ 
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
@@ -236,6 +471,17 @@ export default async function handler(req, res) {
     });
 
     if (parsedResponse && parsedResponse.success === false) {
+      await releasePlanBuilderUsage({
+        userId: user.id,
+        jobId: job_id,
+        featureKey: usageReservation.featureKey,
+        requestId,
+      });
+      await markPlanBuilderJobFailed({
+        userId: user.id,
+        jobId: job_id,
+        reason: parsedResponse.error || 'n8n rejected the request',
+      });
       return res.status(502).json({
         error: parsedResponse.error || 'n8n rejected the request',
         requestId
@@ -247,10 +493,27 @@ export default async function handler(req, res) {
       success: true, 
       message: 'Webhook triggered successfully',
       job_id: job_id,
+      usageReserved: true,
       requestId
     });
 
   } catch (error) {
+    if (usageReservation?.featureKey) {
+      await releasePlanBuilderUsage({
+        userId: user.id,
+        jobId: job_id,
+        featureKey: usageReservation.featureKey,
+        requestId,
+      });
+      await markPlanBuilderJobFailed({
+        userId: user.id,
+        jobId: job_id,
+        reason: error.message || 'Plan generation failed before n8n accepted the job',
+      });
+    }
+
+    const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : null;
+
     logError('plan_builder_proxy.handler_error', {
       requestId,
       userId: user?.id,
@@ -259,6 +522,15 @@ export default async function handler(req, res) {
       message: error.message,
       stack: error.stack?.slice?.(0, 800),
     });
+
+    if (statusCode) {
+      return res.status(statusCode).json({
+        error: error.message,
+        currentUsage: error.currentUsage,
+        limit: error.limit,
+        requestId,
+      });
+    }
 
     // Handle timeout errors
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {

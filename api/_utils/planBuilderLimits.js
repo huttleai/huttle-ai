@@ -23,6 +23,20 @@ export const PLAN_BUILDER_14DAY_MONTHLY_BY_TIER = {
   builder: 5,
 };
 
+export const PLAN_BUILDER_CREDIT_COST_BY_FEATURE = {
+  planBuilder7Day: 3,
+  planBuilder14Day: 5,
+};
+
+export const AI_CREDIT_POOL_BY_TIER = {
+  essentials: 200,
+  pro: 600,
+  founder: 800,
+  builder: 800,
+};
+
+export const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
+
 /** Tiers that can access 14-day plans at all. */
 export const PLAN_BUILDER_14DAY_ALLOWED_TIERS = ['pro', 'founder', 'builder'];
 
