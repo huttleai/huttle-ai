@@ -4,6 +4,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import {
   getFeatureUsageCount,
   getOverallAIUsageCount,
+  supabase,
   trackUsage,
   TIER_LIMITS,
 } from '../config/supabase';
@@ -208,7 +209,9 @@ export default function useAIUsage(featureName = null) {
             },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          // Non-blocking alert path; usage gating should still return the limit result.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
