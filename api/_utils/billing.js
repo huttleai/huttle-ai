@@ -223,8 +223,7 @@ export async function resolveBillingContext({
       const existingCustomers = await stripe.customers.list({ email, limit: 10 });
       const safeMatch = existingCustomers.data.find((c) => {
         if (c.deleted) return false;
-        const metaUserId = c.metadata?.supabase_user_id || null;
-        return !metaUserId || metaUserId === userId;
+        return c.metadata?.supabase_user_id === userId;
       });
 
       if (safeMatch) {
@@ -251,15 +250,12 @@ export async function resolveBillingContext({
       throw new Error('No billing account found');
     }
 
-    // When matching by email, only adopt a customer if its metadata either
-    // matches this supabase_user_id or is empty. This prevents hijacking a
-    // customer that was previously created for a different Supabase user
-    // (e.g. an account deleted and re-registered under the same email).
+    // Email alone does not prove account ownership. Only adopt a Stripe
+    // customer when metadata already binds it to this Supabase user.
     const existingCustomers = await stripe.customers.list({ email, limit: 10 });
     const safeMatch = existingCustomers.data.find((c) => {
       if (c.deleted) return false;
-      const metaUserId = c.metadata?.supabase_user_id || null;
-      return !metaUserId || metaUserId === userId;
+      return c.metadata?.supabase_user_id === userId;
     });
 
     if (safeMatch) {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { authenticateBillingRequest } from '../_utils/billing.js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -14,7 +15,7 @@ const supabase = (supabaseUrl && supabaseServiceKey)
  * monthly credit pool (pool_exhausted). Fires Email 7 (usage-alert-100)
  * exactly once per billing cycle per user.
  *
- * Body: { userId: string }
+ * Body: { userId?: string }
  *
  * Idempotency: checks user_activity for a row with feature = 'usageAlert100'
  * written this billing cycle. If one exists, skips the send and returns 200.
@@ -28,10 +29,16 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required' });
+  const auth = await authenticateBillingRequest(req, supabase);
+  if (auth.error) {
+    return res.status(auth.statusCode).json({ error: auth.error });
   }
+
+  const { userId: requestedUserId } = req.body || {};
+  if (requestedUserId && requestedUserId !== auth.user.id) {
+    return res.status(403).json({ error: 'User mismatch' });
+  }
+  const userId = auth.user.id;
 
   try {
     // ── Idempotency check ──────────────────────────────────────────────────
@@ -40,36 +47,51 @@ export default async function handler(req, res) {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { count: alreadySent } = await supabase
+    const { count: alreadySent, error: idempotencyError } = await supabase
       .from('user_activity')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('feature', 'usageAlert100')
       .gte('created_at', startOfMonth.toISOString());
 
+    if (idempotencyError) {
+      throw idempotencyError;
+    }
+
     if (alreadySent > 0) {
       return res.status(200).json({ skipped: true, reason: 'already_sent_this_cycle' });
     }
 
     // ── Fetch user data for the email ──────────────────────────────────────
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('user_profile')
       .select('first_name, stripe_customer_id')
       .eq('user_id', userId)
       .maybeSingle();
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    if (profileError && profileError.code !== 'PGRST116') {
+      throw profileError;
+    }
+
+    const { data: authUser, error: authUserError } = await supabase.auth.admin.getUserById(userId);
+    if (authUserError) {
+      throw authUserError;
+    }
     const email = authUser?.user?.email;
 
     if (!email) {
       return res.status(404).json({ error: 'User email not found' });
     }
 
-    const { data: subscription } = await supabase
+    const { data: subscription, error: subscriptionError } = await supabase
       .from('subscriptions')
       .select('tier, current_period_end')
       .eq('user_id', userId)
       .maybeSingle();
+
+    if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+      throw subscriptionError;
+    }
 
     // ── Build template variables ───────────────────────────────────────────
     const TIER_LABELS = {
@@ -96,7 +118,7 @@ export default async function handler(req, res) {
     );
 
     // ── Send the email ─────────────────────────────────────────────────────
-    await sendUsageAlert100Email({
+    const emailResult = await sendUsageAlert100Email({
       email,
       firstName: profile?.first_name || '',
       planName,
@@ -104,15 +126,23 @@ export default async function handler(req, res) {
       daysUntilReset,
     });
 
+    if (emailResult?.error) {
+      throw new Error(emailResult.error.message || 'Usage alert email failed');
+    }
+
     // ── Mark as sent so we don't fire again this cycle ────────────────────
-    await supabase.from('user_activity').insert({
+    const { error: insertError } = await supabase.from('user_activity').insert({
       user_id: userId,
       feature: 'usageAlert100',
       metadata: { planName, creditResetDate, daysUntilReset },
       created_at: new Date().toISOString(),
     });
 
-    return res.status(200).json({ sent: true, email, planName, creditResetDate, daysUntilReset });
+    if (insertError) {
+      throw insertError;
+    }
+
+    return res.status(200).json({ sent: true });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
     return res.status(500).json({ error: err.message });
