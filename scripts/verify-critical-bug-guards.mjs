@@ -21,6 +21,16 @@ function assertNotContains(file, needle, message) {
   }
 }
 
+function sliceBetween(file, startNeedle, endNeedle) {
+  const source = read(file);
+  const start = source.indexOf(startNeedle);
+  const end = source.indexOf(endNeedle, start + startNeedle.length);
+  if (start === -1 || end === -1) {
+    throw new Error(`Unable to locate expected code section (${file})`);
+  }
+  return source.slice(start, end);
+}
+
 assertContains(
   'api/emails/send-usage-alert-trigger.js',
   'authenticateBillingRequest',
@@ -53,11 +63,13 @@ assertContains(
   'return res.status(500).json({ error: \'Webhook processing failed\' })',
   'Stripe webhook must fail with 5xx on critical processing errors'
 );
-assertNotContains(
+if (sliceBetween(
   'api/stripe-webhook.js',
-  'cancel_at_period_end: false,\n              updated_at',
-  'invoice.paid must not blindly clear scheduled cancellation state'
-);
+  "case 'invoice.paid'",
+  "case 'invoice.payment_succeeded'"
+).includes('cancel_at_period_end: false')) {
+  throw new Error('invoice.paid must not blindly clear scheduled cancellation state (api/stripe-webhook.js)');
+}
 
 assertContains(
   'api/plan-builder-proxy.js',
