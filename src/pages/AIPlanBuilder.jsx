@@ -1216,7 +1216,7 @@ export default function AIPlanBuilder() {
       // downstream failure (webhook, n8n crash, timeout) remains
       // no-refund — this moves nothing except the charge boundary.
       //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
+      // `incrementFeatureCounter: false` — the server `plan-builder-proxy`
       // handler writes the authoritative run-counter row under the same
       // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
       // would double-count against the monthly cap.

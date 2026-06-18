@@ -52,6 +52,26 @@ const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
+const TERMINAL_ACCESS_STATUSES = new Set(['canceled', 'cancelled', 'unpaid', 'incomplete_expired']);
+
+function buildInactiveSubscriptionResponse(status = 'inactive', overrides = {}) {
+  return {
+    subscription: null,
+    plan: null,
+    tier: 'free',
+    status,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    trialStart: null,
+    trialEnd: null,
+    billingCycle: null,
+    cancelAtPeriodEnd: false,
+    cancelledAt: null,
+    upcomingPlanChange: null,
+    ...overrides,
+  };
+}
+
 export default async function handler(req, res) {
   try {
     setCorsHeaders(req, res);
@@ -171,11 +191,35 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
+    if (stripeSubscription && TERMINAL_ACCESS_STATUSES.has(subStatus)) {
+      const normalizedTerminalSubscription = buildSubscriptionPayload({
+        stripeSubscription,
+        subscriptionRecord,
+      });
+
+      const {
+        customerId: _cid,
+        stripeSubscriptionId: _sid,
+        id: _id,
+        ...safeSubscription
+      } = normalizedTerminalSubscription || {};
+
+      return res.status(200).json(buildInactiveSubscriptionResponse(subStatus, {
+        subscription: normalizedTerminalSubscription
+          ? {
+              ...safeSubscription,
+              plan: null,
+              tier: 'free',
+              status: subStatus,
+            }
+          : null,
+        currentPeriodStart: normalizedTerminalSubscription?.currentPeriodStart ?? null,
+        currentPeriodEnd: normalizedTerminalSubscription?.currentPeriodEnd ?? null,
+        cancelledAt: normalizedTerminalSubscription?.cancelledAt ?? null,
+      }));
+    }
+
+    if (!stripeSubscription) {
       // If Stripe has no active subscription, return what Supabase knows.
       // This keeps the billing UI functional even when Stripe data is unavailable.
       if (subscriptionRecord) {
@@ -209,13 +253,7 @@ export default async function handler(req, res) {
         }
       }
 
-      return res.status(200).json({
-        subscription: null,
-        plan: null,
-        status: 'inactive',
-        currentPeriodEnd: null,
-        trialEnd: null,
-      });
+      return res.status(200).json(buildInactiveSubscriptionResponse());
     }
 
     const normalizedSubscription = buildSubscriptionPayload({

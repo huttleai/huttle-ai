@@ -208,7 +208,7 @@ export async function resolveBillingContext({
      stripe_customer_id (e.g. manually provisioned accounts,
      import migrations, or invite-based signups). Attempts to
      locate a Stripe customer by email and backfill the DB record.
-     If no safe match is found, falls through to degraded state. */
+     If no same-user match is found, falls through to degraded state. */
   const needsSelfHeal =
     !customerId &&
     subscriptionRecord &&
@@ -224,21 +224,12 @@ export async function resolveBillingContext({
       const safeMatch = existingCustomers.data.find((c) => {
         if (c.deleted) return false;
         const metaUserId = c.metadata?.supabase_user_id || null;
-        return !metaUserId || metaUserId === userId;
+        return metaUserId === userId;
       });
 
       if (safeMatch) {
         customerId = safeMatch.id;
         await syncStripeCustomerId({ supabase, userId, customerId });
-        if (!safeMatch.metadata?.supabase_user_id) {
-          try {
-            await stripe.customers.update(customerId, {
-              metadata: { ...safeMatch.metadata, supabase_user_id: userId },
-            });
-          } catch (stampErr) {
-            console.warn('[billing] self-heal metadata stamp failed:', stampErr?.message);
-          }
-        }
         console.info('[billing] self-healed missing stripe_customer_id for user', userId, '->', customerId);
       }
     } catch (healErr) {
@@ -251,28 +242,19 @@ export async function resolveBillingContext({
       throw new Error('No billing account found');
     }
 
-    // When matching by email, only adopt a customer if its metadata either
-    // matches this supabase_user_id or is empty. This prevents hijacking a
-    // customer that was previously created for a different Supabase user
-    // (e.g. an account deleted and re-registered under the same email).
+    // When matching by email, only adopt a customer if Stripe already stamps it
+    // with this Supabase user. Unstamped email matches are ambiguous, so create
+    // a new customer rather than binding this account to someone else's legacy
+    // billing object.
     const existingCustomers = await stripe.customers.list({ email, limit: 10 });
     const safeMatch = existingCustomers.data.find((c) => {
       if (c.deleted) return false;
       const metaUserId = c.metadata?.supabase_user_id || null;
-      return !metaUserId || metaUserId === userId;
+      return metaUserId === userId;
     });
 
     if (safeMatch) {
       customerId = safeMatch.id;
-      if (!safeMatch.metadata?.supabase_user_id) {
-        try {
-          await stripe.customers.update(customerId, {
-            metadata: { ...safeMatch.metadata, supabase_user_id: userId },
-          });
-        } catch (stampErr) {
-          console.warn('[billing] metadata stamp on matched customer failed:', stampErr?.message);
-        }
-      }
     } else {
       const newCustomer = await stripe.customers.create({
         email,

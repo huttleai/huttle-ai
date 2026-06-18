@@ -21,6 +21,10 @@ import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -32,6 +36,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
 
 /**
  * Validate UUID format
@@ -146,10 +152,145 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('id, user_id, status')
+      .eq('id', job_id)
+      .maybeSingle();
+
+    if (jobError) {
+      logError('plan_builder_proxy.job_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: jobError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify plan job.', requestId });
+    }
+
+    if (!job || job.user_id !== user.id) {
+      logError('plan_builder_proxy.job_owner_mismatch', {
+        requestId,
+        userId: user.id,
+        job_id,
+        jobOwnerId: job?.user_id || null,
+      });
+      return res.status(403).json({ error: 'Plan job not found for this user.', requestId });
+    }
+
+    if (job.status !== 'queued') {
+      return res.status(409).json({
+        error: 'Plan job has already been started.',
+        requestId,
+      });
+    }
+
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from('subscriptions')
+      .select('tier, status')
+      .eq('user_id', user.id)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subscriptionError) {
+      logError('plan_builder_proxy.subscription_lookup_failed', {
+        requestId,
+        userId: user.id,
+        message: subscriptionError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify subscription.', requestId });
+    }
+
+    const userTier = subscription?.tier || null;
+    if (!userTier) {
+      return res.status(403).json({
+        error: 'Active subscription required',
+        message: 'Choose a plan to use AI Plan Builder.',
+        requestId,
+      });
+    }
+
+    const normalizedTimePeriod = ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7';
+    if (normalizedTimePeriod === '14' && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      return res.status(403).json({
+        error: 'tier_restricted',
+        message: '14-day plans require Pro or above.',
+        requestId,
+      });
+    }
+
+    const { featureKey, cap } = resolvePlanBuilderCap(normalizedTimePeriod, userTier);
+    if (!featureKey || cap == null || cap <= 0) {
+      return res.status(403).json({
+        error: 'Plan Builder not available for this subscription tier.',
+        requestId,
+      });
+    }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: usageCount, error: usageCountError } = await supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('feature', featureKey)
+      .gte('created_at', startOfMonth.toISOString());
+
+    if (usageCountError) {
+      logError('plan_builder_proxy.usage_count_failed', {
+        requestId,
+        userId: user.id,
+        message: usageCountError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify usage limits.', requestId });
+    }
+
+    const currentUsage = usageCount ?? 0;
+    if (currentUsage >= cap) {
+      const periodLabel = normalizedTimePeriod === '14' ? '14-day' : '7-day';
+      return res.status(429).json({
+        error: 'AI usage limit reached',
+        message: `You've reached your monthly limit of ${cap} ${periodLabel} plan generations. This allowance resets on the 1st of each month.`,
+        currentUsage,
+        limit: cap,
+        requestId,
+      });
+    }
+
+    const { error: usageInsertError } = await supabase
+      .from('user_activity')
+      .insert({
+        user_id: user.id,
+        feature: featureKey,
+        metadata: {
+          type: 'run_counter',
+          job_id,
+          source: 'plan-builder-proxy',
+          timePeriod: normalizedTimePeriod,
+          platformFocus,
+        },
+        created_at: new Date().toISOString(),
+      });
+
+    if (usageInsertError) {
+      logError('plan_builder_proxy.usage_reservation_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: usageInsertError.message,
+        code: usageInsertError.code,
+      });
+      return res.status(500).json({ error: 'Failed to reserve usage.', requestId });
+    }
+
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
-      timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
+      timePeriod: normalizedTimePeriod,
       postingFrequency:
         postingFrequency != null && postingFrequency !== ''
           ? Number(postingFrequency)
