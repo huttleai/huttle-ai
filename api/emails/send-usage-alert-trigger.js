@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendUsageAlert100Email } from './send-usage-alert.js';
+import { parseBearerToken } from '../_utils/billing.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -33,7 +34,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'userId is required' });
   }
 
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
   try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication' });
+    }
+
+    if (user.id !== userId) {
+      return res.status(403).json({ error: 'Cannot trigger usage alerts for another user' });
+    }
+
     // ── Idempotency check ──────────────────────────────────────────────────
     // Only send once per billing cycle (calendar month).
     const startOfMonth = new Date();
@@ -112,7 +131,7 @@ export default async function handler(req, res) {
       created_at: new Date().toISOString(),
     });
 
-    return res.status(200).json({ sent: true, email, planName, creditResetDate, daysUntilReset });
+    return res.status(200).json({ sent: true });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
     return res.status(500).json({ error: err.message });
