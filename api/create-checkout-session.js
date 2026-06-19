@@ -12,7 +12,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { isLaunchPlan } from './_utils/stripePlans.js';
+import { getPlanFromPriceId, getPriceIdForPlan, isLaunchPlan, normalizePlanId } from './_utils/stripePlans.js';
 import { authenticateBillingRequest } from './_utils/billing.js';
 
 // Validate Stripe key exists
@@ -54,6 +54,23 @@ export default async function handler(req, res) {
 
     if (!priceId) {
       return res.status(400).json({ error: 'Price ID is required' });
+    }
+
+    const normalizedPlanId = normalizePlanId(planId);
+    const normalizedBillingCycle = String(billingCycle || '').trim().toLowerCase();
+    const planFromPriceId = getPlanFromPriceId(priceId);
+    const expectedPriceId = getPriceIdForPlan({
+      planId: normalizedPlanId,
+      billingCycle: normalizedBillingCycle,
+    });
+
+    if (!normalizedPlanId || !['monthly', 'annual'].includes(normalizedBillingCycle)) {
+      return res.status(400).json({ error: 'Invalid subscription plan selected' });
+    }
+
+    if (!planFromPriceId || planFromPriceId !== normalizedPlanId || expectedPriceId !== priceId) {
+      logCheckoutPlanMismatch({ planId, billingCycle, priceId, planFromPriceId, expectedPriceId });
+      return res.status(400).json({ error: 'Invalid subscription price selected' });
     }
 
     // Get the app URL for redirects - REQUIRED in production
@@ -137,8 +154,8 @@ export default async function handler(req, res) {
       console.warn('[create-checkout-session] customer resolve error:', lookupErr.message);
     }
 
-    const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
-    const isAnnualBilling = billingCycle === 'annual';
+    const isLaunchPricingPlan = isLaunchPlan({ planId: normalizedPlanId, priceId });
+    const isAnnualBilling = normalizedBillingCycle === 'annual';
 
     const tierMetadataMap = {
       [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: { tier: 'Essentials',    billingCycle: 'Monthly' },
@@ -151,10 +168,10 @@ export default async function handler(req, res) {
     const tierInfo = tierMetadataMap[priceId] ?? { tier: 'Unknown', billingCycle: 'Unknown' };
 
     const baseMetadata = {
-      planId,
-      billingCycle,
+      planId: normalizedPlanId,
+      billingCycle: normalizedBillingCycle,
       ...tierInfo,
-      source: planId === 'founder' ? 'founders_club' : planId === 'builder' ? 'builders_club' : 'app_checkout',
+      source: normalizedPlanId === 'founder' ? 'founders_club' : normalizedPlanId === 'builder' ? 'builders_club' : 'app_checkout',
       ...(userId && { supabase_user_id: userId }),
     };
 
@@ -202,7 +219,7 @@ export default async function handler(req, res) {
       custom_text: {
         submit: {
           message: isLaunchPricingPlan
-            ? planId === 'founder'
+            ? normalizedPlanId === 'founder'
               ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
               : 'Your legacy annual membership will be activated immediately after payment.'
             : isAnnualBilling
@@ -244,5 +261,15 @@ export default async function handler(req, res) {
       error: 'An unexpected error occurred. Please try again.',
     });
   }
+}
+
+function logCheckoutPlanMismatch({ planId, billingCycle, priceId, planFromPriceId, expectedPriceId }) {
+  console.warn('[create-checkout-session] rejected plan/price mismatch', {
+    planId,
+    billingCycle,
+    priceId,
+    planFromPriceId,
+    expectedPriceId,
+  });
 }
 

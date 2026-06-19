@@ -77,12 +77,12 @@ export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
 }
 
 export function resolvePlanId({ planId, metadataPlanId, priceId }) {
-  const normalizedPlanId = normalizePlanId(planId || metadataPlanId);
-  if (normalizedPlanId) {
-    return normalizedPlanId;
+  const planFromPriceId = getPlanFromPriceId(priceId);
+  if (planFromPriceId) {
+    return planFromPriceId;
   }
 
-  return getPlanFromPriceId(priceId);
+  return normalizePlanId(planId || metadataPlanId);
 }
 
 export function isLaunchPlan({ planId, metadataPlanId, priceId }) {
