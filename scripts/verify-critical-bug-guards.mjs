@@ -99,7 +99,7 @@ assert(
   'Stripe webhook must retry failed checkout syncs and resolve deleted subscriptions beyond user_profile.'
 );
 assert(
-  !stripeWebhook.includes('cancel_at_period_end: false,\n              updated_at') &&
+  !stripeWebhook.includes("status: 'active',\n              cancel_at_period_end: false") &&
     stripeWebhook.includes('cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end)'),
   'Invoice-paid sync must mirror live Stripe cancel_at_period_end instead of clearing scheduled cancellations.'
 );
