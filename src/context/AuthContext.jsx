@@ -148,6 +148,13 @@ export function AuthProvider({ children }) {
   const checkUserProfile = useCallback(async (userId, currentUser = null) => {
     const hasCachedOnboardingCompletion = readCachedOnboardingCompletion(userId);
     const cachedUser = currentUser ?? { id: userId };
+    const resolveFallbackNeedsOnboarding = async () => {
+      if (hasCachedOnboardingCompletion) return false;
+
+      const createdBeforeCutoff = wasCreatedBeforeGateCutoff(currentUser);
+      const hasActivity = createdBeforeCutoff ? false : await hasAnyUserActivity(userId);
+      return !createdBeforeCutoff && !hasActivity;
+    };
 
     // Allow extra time for Supabase cold start; only a few columns are selected.
     const QUERY_TIMEOUT_MS = 15000;
@@ -193,13 +200,13 @@ export function AuthProvider({ children }) {
           console.error('❌ [Auth] Run: docs/setup/supabase-user-profile-schema.sql');
         }
 
-        // On error, assume user needs onboarding to be safe
+        const shouldGate = await resolveFallbackNeedsOnboarding();
         setUserProfile(null);
-        setNeedsOnboarding(true);
+        setNeedsOnboarding(shouldGate);
         setProfileChecked(true);
         profileCheckedRef.current = true;
         currentUserIdRef.current = userId;
-        writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: true });
+        writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: shouldGate });
         return;
       }
 
@@ -267,12 +274,13 @@ export function AuthProvider({ children }) {
       console.error('   3. Network connectivity issues');
       console.error('❌ [Auth] Please run the SQL scripts in docs/setup/ in your Supabase SQL Editor');
 
+      const shouldGate = await resolveFallbackNeedsOnboarding();
       setUserProfile(null);
-      setNeedsOnboarding(true);
+      setNeedsOnboarding(shouldGate);
       setProfileChecked(true);
       profileCheckedRef.current = true;
       currentUserIdRef.current = userId;
-      writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: true });
+      writeCachedAuthState({ user: cachedUser, userProfile: null, needsOnboarding: shouldGate });
     }
   }, []);
 

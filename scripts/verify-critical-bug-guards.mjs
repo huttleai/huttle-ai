@@ -47,6 +47,13 @@ assert(
     billing.includes('return metaUserId === userId;'),
   'Billing customer lookup must not adopt unstamped email-only Stripe customer matches.'
 );
+assert(
+  billing.includes("const STRIPE_CUSTOMER_OWNER_MISMATCH = 'STRIPE_CUSTOMER_OWNER_MISMATCH'") &&
+    billing.includes('ownerMismatch.code = STRIPE_CUSTOMER_OWNER_MISMATCH') &&
+    billing.includes('if (retrieveErr?.code === STRIPE_CUSTOMER_OWNER_MISMATCH)') &&
+    billing.includes('throw retrieveErr;'),
+  'Billing customer owner mismatches must not be swallowed as transient Stripe lookup errors.'
+);
 
 const usageAlert = read('api/emails/send-usage-alert-trigger.js');
 assert(
@@ -102,6 +109,24 @@ assert(
   !stripeWebhook.includes("status: 'active',\n              cancel_at_period_end: false") &&
     stripeWebhook.includes('cancelAtPeriodEnd = Boolean(stripeSub.cancel_at_period_end)'),
   'Invoice-paid sync must mirror live Stripe cancel_at_period_end instead of clearing scheduled cancellations.'
+);
+
+const subscriptionContext = read('src/context/SubscriptionContext.jsx');
+assert(
+  subscriptionContext.includes(`if (!sessionConfirmed) {
+      clearSubscriptionTimers();
+      applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
+      setLoading(false);
+      setSubscriptionReady(true);`),
+  'Subscription fallback must unblock ProtectedRoute when cached auth leaves sessionConfirmed false.'
+);
+
+const authContext = read('src/context/AuthContext.jsx');
+assert(
+  authContext.includes('const resolveFallbackNeedsOnboarding = async () => {') &&
+    authContext.includes('const shouldGate = await resolveFallbackNeedsOnboarding();') &&
+    !authContext.includes('// On error, assume user needs onboarding to be safe'),
+  'Profile lookup failures must reuse onboarding gate rules instead of forcing established users into onboarding.'
 );
 
 console.log('Critical bug guards passed.');

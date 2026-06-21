@@ -414,6 +414,7 @@ export function SubscriptionProvider({ children }) {
       clearSubscriptionTimers();
       applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
       setLoading(false);
+      setSubscriptionReady(true);
 
       return () => {
         clearSubscriptionTimers();

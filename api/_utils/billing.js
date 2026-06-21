@@ -10,6 +10,8 @@ const STRIPE_SUBSCRIPTION_STATUS_PRIORITY = {
   unpaid: 0,
 };
 
+const STRIPE_CUSTOMER_OWNER_MISMATCH = 'STRIPE_CUSTOMER_OWNER_MISMATCH';
+
 export function getAppUrl() {
   return process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://huttleai.com';
 }
@@ -290,9 +292,11 @@ export async function resolveBillingContext({
         if (!stripeCustomer.deleted) {
           const metaUserId = stripeCustomer.metadata?.supabase_user_id || null;
           if (metaUserId && metaUserId !== userId) {
-            throw new Error(
+            const ownerMismatch = new Error(
               `Stripe customer ${customerId} is bound to a different user — refusing to operate on it.`
             );
+            ownerMismatch.code = STRIPE_CUSTOMER_OWNER_MISMATCH;
+            throw ownerMismatch;
           }
           if (!metaUserId) {
             try {
@@ -305,6 +309,9 @@ export async function resolveBillingContext({
           }
         }
       } catch (retrieveErr) {
+        if (retrieveErr?.code === STRIPE_CUSTOMER_OWNER_MISMATCH) {
+          throw retrieveErr;
+        }
         // Don't fail the entire flow on a transient Stripe read error; log and continue.
         console.warn('[billing] stripe.customers.retrieve check failed:', retrieveErr?.message);
       }
