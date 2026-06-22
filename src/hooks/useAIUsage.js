@@ -205,8 +205,12 @@ export default function useAIUsage(featureName = null) {
               ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
             },
             body: JSON.stringify({ userId: user.id }),
-          }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+          }).catch(() => {
+            // Non-blocking alert path; quota enforcement already returned below.
+          });
+        } catch {
+          // Non-blocking alert path; quota enforcement already returned below.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
