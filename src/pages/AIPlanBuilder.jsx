@@ -1210,22 +1210,31 @@ export default function AIPlanBuilder() {
           throw new Error('Failed to create job: invalid job id');
         }
 
-      // Charge credits only after we have a valid jobs.id UUID. If the
-      // DB insert failed above (createError/null jobId/invalid UUID),
-      // we've already thrown and the user is not charged. Every
-      // downstream failure (webhook, n8n crash, timeout) remains
-      // no-refund — this moves nothing except the charge boundary.
-      //
-      // `incrementFeatureCounter: false` — the server `create-plan-builder-job`
-      // handler writes the authoritative run-counter row under the same
-      // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
-      // would double-count against the monthly cap.
-      await planUsage.trackFeatureUsage({
-        incrementFeatureCounter: false,
+      // Charge credits and record the monthly run-counter before triggering n8n.
+      // This direct Supabase flow does not call create-plan-builder-job, so the
+      // client-side usage write is the authoritative cap row for this path.
+      const usage = await planUsage.trackFeatureUsage({
         platforms: selectedPlatforms,
         goal: selectedGoal,
         period: selectedPeriod,
       });
+      if (!usage.allowed) {
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'failed',
+            error:
+              usage.reason === 'pool_exhausted'
+                ? 'Monthly credit pool exhausted before generation started.'
+                : 'Monthly Plan Builder run limit reached before generation started.',
+          })
+          .eq('id', jobId);
+        throw new Error(
+          usage.reason === 'pool_exhausted'
+            ? "You've reached your monthly AI credit limit."
+            : "You've reached your monthly Plan Builder limit."
+        );
+      }
 
       flushSync(() => {
         setCurrentJobId(jobId);
