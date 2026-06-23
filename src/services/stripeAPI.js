@@ -95,7 +95,7 @@ export function simulateDemoCheckout(planId) {
 /**
  * Get auth headers for API requests
  */
-async function getAuthHeaders() {
+export async function getAuthHeaders() {
   const headers = {
     'Content-Type': 'application/json',
   };
@@ -527,6 +527,29 @@ export async function cancelSubscription() {
     };
   } catch (error) {
     console.error('Cancel Subscription Error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function submitCancellationFeedback(feedback = {}) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch('/api/submit-cancellation-feedback', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(feedback),
+    });
+
+    const data = await parseJsonResponse(response, 'Failed to save cancellation feedback');
+    return {
+      success: true,
+      duplicate: Boolean(data.duplicate),
+    };
+  } catch (error) {
+    console.error('Cancellation Feedback Error:', error);
     return {
       success: false,
       error: error.message,
