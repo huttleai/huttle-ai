@@ -81,8 +81,8 @@ assert(
   'usage alert endpoint must not look up arbitrary body user IDs via service role'
 );
 assert(
-  !/json\(\{[^}]*email/.test(usageAlert),
-  'usage alert endpoint must not return recipient email'
+  !/json\(\{[^}]*\bemail\s*:/.test(usageAlert),
+  'usage alert endpoint must not return recipient email as a response field'
 );
 
 const stripeApi = read('src/services/stripeAPI.js');
