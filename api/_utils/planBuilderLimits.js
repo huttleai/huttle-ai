@@ -23,6 +23,11 @@ export const PLAN_BUILDER_14DAY_MONTHLY_BY_TIER = {
   builder: 5,
 };
 
+export const PLAN_BUILDER_CREDIT_COST_BY_PERIOD = {
+  7: 3,
+  14: 5,
+};
+
 /** Tiers that can access 14-day plans at all. */
 export const PLAN_BUILDER_14DAY_ALLOWED_TIERS = ['pro', 'founder', 'builder'];
 

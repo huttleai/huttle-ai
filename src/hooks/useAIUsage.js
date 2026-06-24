@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import {
+  supabase,
   getFeatureUsageCount,
   getOverallAIUsageCount,
   trackUsage,
@@ -194,9 +195,17 @@ export default function useAIUsage(featureName = null) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
         try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
           fetch('/api/emails/send-usage-alert-trigger', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : {}),
+            },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
         } catch (_) {}
@@ -222,22 +231,28 @@ export default function useAIUsage(featureName = null) {
 
       // Run-counter row (only for capped features). This is what FEATURE_RUN_CAPS counts.
       if (incrementFeatureCounter && featureName && numericFeatureLimit !== null) {
-        await trackUsage(user.id, featureName, {
+        const trackedRun = await trackUsage(user.id, featureName, {
           ...persistMetadata,
           type: 'run_counter',
           timestamp: new Date().toISOString(),
         });
+        if (!trackedRun) {
+          return { allowed: false, reason: 'tracking_failed' };
+        }
       }
 
       // aiGenerations credit rows — one per credit consumed.
       const sourceFeature = featureName || persistMetadata.sourceFeature || 'aiGenerations';
       for (let i = 0; i < overallCredits; i += 1) {
-        await trackUsage(user.id, 'aiGenerations', {
+        const trackedCredit = await trackUsage(user.id, 'aiGenerations', {
           ...persistMetadata,
           sourceFeature,
           creditIndex: i,
           overallCredits,
         });
+        if (!trackedCredit) {
+          return { allowed: false, reason: 'tracking_failed' };
+        }
       }
 
       if (mountedRef.current) {

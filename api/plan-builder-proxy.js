@@ -20,7 +20,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { logInfo, logError } from './_utils/observability.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  PLAN_BUILDER_CREDIT_COST_BY_PERIOD,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
+import { logInfo, logWarn, logError } from './_utils/observability.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -32,6 +37,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
 
 /**
  * Validate UUID format
@@ -47,6 +54,11 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function normalizePlanPeriod(value) {
+  const period = String(value);
+  return period === '14' ? '14' : '7';
 }
 
 /**
@@ -146,10 +158,163 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { data: job, error: jobLookupError } = await supabase
+      .from('jobs')
+      .select('id, user_id, type, status, input')
+      .eq('id', job_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (jobLookupError) {
+      logError('plan_builder_proxy.job_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: jobLookupError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify job ownership', requestId });
+    }
+
+    if (!job || job.type !== 'plan_builder') {
+      logWarn('plan_builder_proxy.job_not_owned_or_invalid', {
+        requestId,
+        userId: user.id,
+        job_id,
+      });
+      return res.status(404).json({ error: 'Plan Builder job not found', requestId });
+    }
+
+    if (!['queued', 'running'].includes(job.status)) {
+      return res.status(409).json({
+        error: 'Plan Builder job is not eligible to start',
+        requestId,
+      });
+    }
+
+    const requestedPeriod = normalizePlanPeriod(timePeriod);
+    const jobPeriod = normalizePlanPeriod(job.input?.timePeriod ?? job.input?.duration ?? requestedPeriod);
+    const planPeriod = requestedPeriod === '14' || jobPeriod === '14' ? '14' : '7';
+
+    const { data: subscription, error: subscriptionLookupError } = await supabase
+      .from('subscriptions')
+      .select('tier, status')
+      .eq('user_id', user.id)
+      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subscriptionLookupError) {
+      logError('plan_builder_proxy.subscription_lookup_failed', {
+        requestId,
+        userId: user.id,
+        message: subscriptionLookupError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify subscription', requestId });
+    }
+
+    const userTier = subscription?.tier || null;
+    if (!userTier) {
+      return res.status(403).json({
+        error: 'Active subscription required',
+        message: 'Choose a plan to use AI Plan Builder.',
+        requestId,
+      });
+    }
+
+    if (planPeriod === '14' && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      logWarn('plan_builder_proxy.tier_restricted_14day', {
+        requestId,
+        userId: user.id,
+        userTier,
+        job_id,
+      });
+      return res.status(403).json({
+        error: 'tier_restricted',
+        message: '14-day plans require Pro or above.',
+        requestId,
+      });
+    }
+
+    const { featureKey, cap } = resolvePlanBuilderCap(planPeriod, userTier);
+    if (!cap || cap <= 0) {
+      return res.status(403).json({
+        error: 'Plan Builder not available for this subscription tier.',
+        requestId,
+      });
+    }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [
+      { count: monthlyRunCount, error: monthlyRunCountError },
+      { count: jobRunReservations, error: jobRunReservationError },
+      { count: jobCreditReservations, error: jobCreditReservationError },
+    ] = await Promise.all([
+      supabase
+        .from('user_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('feature', featureKey)
+        .gte('created_at', startOfMonth.toISOString()),
+      supabase
+        .from('user_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('feature', featureKey)
+        .contains('metadata', { job_id }),
+      supabase
+        .from('user_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('feature', 'aiGenerations')
+        .contains('metadata', { job_id }),
+    ]);
+
+    const usageReservationError =
+      monthlyRunCountError || jobRunReservationError || jobCreditReservationError;
+    if (usageReservationError) {
+      logError('plan_builder_proxy.usage_reservation_lookup_failed', {
+        requestId,
+        userId: user.id,
+        job_id,
+        message: usageReservationError.message,
+      });
+      return res.status(500).json({ error: 'Failed to verify usage reservation', requestId });
+    }
+
+    if ((monthlyRunCount ?? 0) > cap) {
+      return res.status(429).json({
+        error: 'AI usage limit reached',
+        message: `You've reached your monthly limit for this Plan Builder period.`,
+        requestId,
+      });
+    }
+
+    const requiredCredits = PLAN_BUILDER_CREDIT_COST_BY_PERIOD[Number(planPeriod)] ?? 0;
+    if ((jobRunReservations ?? 0) < 1 || (jobCreditReservations ?? 0) < requiredCredits) {
+      logWarn('plan_builder_proxy.missing_usage_reservation', {
+        requestId,
+        userId: user.id,
+        job_id,
+        featureKey,
+        requiredCredits,
+        jobRunReservations: jobRunReservations ?? 0,
+        jobCreditReservations: jobCreditReservations ?? 0,
+      });
+      return res.status(402).json({
+        error: 'usage_not_reserved',
+        message: 'Plan Builder usage must be reserved before generation starts.',
+        requestId,
+      });
+    }
+
     const n8nPayload = {
       job_id,
       contentGoal: contentGoal || 'Grow followers',
-      timePeriod: ['7', '14'].includes(String(timePeriod)) ? String(timePeriod) : '7',
+      timePeriod: planPeriod,
       postingFrequency:
         postingFrequency != null && postingFrequency !== ''
           ? Number(postingFrequency)
