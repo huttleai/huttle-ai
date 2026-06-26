@@ -1,5 +1,6 @@
 import { AlertCircle, X, Calendar, Loader2, ChevronLeft, ChevronRight, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
+import { supabase } from '../config/supabase';
 
 const CANCELLATION_REASONS = [
   { value: 'too_expensive', label: "It's too expensive" },
@@ -108,9 +109,14 @@ export default function CancelSubscriptionModal({
 
     // Feedback is only submitted after a successful cancellation response.
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
       await fetch('/api/submit-cancellation-feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           user_id: userId,
           plan_name: planName || currentTier,
