@@ -25,7 +25,8 @@
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",
     "dev:grok-models": "node scripts/dev-grok-models-verify.mjs",
     "qa:ai-tools": "node scripts/ai-tools-qa.mjs",
-    "qa:reliability": "node scripts/reliability-qa.mjs"
+    "qa:reliability": "node scripts/reliability-qa.mjs",
+    "test:critical-bug-guards": "node scripts/critical-bug-guards.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

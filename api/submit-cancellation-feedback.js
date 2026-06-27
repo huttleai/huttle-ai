@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
+import { authenticateBillingRequest } from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
   }
 
   const {
-    user_id,
+    user_id: requestedUserId,
     plan_name,
     reason,
     reason_other,
@@ -32,8 +33,8 @@ export default async function handler(req, res) {
     additional_feedback,
   } = req.body ?? {};
 
-  if (!user_id || !reason) {
-    return res.status(400).json({ error: 'Missing required fields: user_id, reason' });
+  if (!reason) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -45,6 +46,17 @@ export default async function handler(req, res) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const authResult = await authenticateBillingRequest(req, supabase);
+  if (authResult.error || !authResult.user) {
+    return res.status(authResult.statusCode || 401).json({ error: authResult.error });
+  }
+
+  if (requestedUserId && requestedUserId !== authResult.user.id) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const user_id = authResult.user.id;
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
