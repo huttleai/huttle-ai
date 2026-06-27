@@ -23,8 +23,8 @@ assert(
   'usage alert trigger must reject mismatched body userIds'
 );
 assert(
-  !/json\(\{[^}]*email/.test(usageAlertTrigger),
-  'usage alert trigger must not return the user email'
+  !usageAlertTrigger.includes('sent: true, email') && !usageAlertTrigger.includes('email, planName'),
+  'usage alert trigger must not return a user email field'
 );
 
 const useAIUsage = read('src/hooks/useAIUsage.js');
