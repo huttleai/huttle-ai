@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 
 const REASON_LABELS = {
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
   }
 
   const {
-    user_id,
+    user_id: requestedUserId,
     plan_name,
     reason,
     reason_other,
@@ -32,8 +33,8 @@ export default async function handler(req, res) {
     additional_feedback,
   } = req.body ?? {};
 
-  if (!user_id || !reason) {
-    return res.status(400).json({ error: 'Missing required fields: user_id, reason' });
+  if (!reason) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -46,11 +47,29 @@ export default async function handler(req, res) {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Invalid authentication token' });
+  }
+
+  if (requestedUserId && requestedUserId !== user.id) {
+    return res.status(403).json({ error: 'You can only submit feedback for your own account' });
+  }
+
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
     .from('cancellation_feedback')
     .select('id')
-    .eq('user_id', user_id)
+    .eq('user_id', user.id)
     .gte('created_at', twentyFourHoursAgo)
     .limit(1)
     .maybeSingle();
@@ -60,7 +79,7 @@ export default async function handler(req, res) {
   }
 
   const { error: insertError } = await supabase.from('cancellation_feedback').insert({
-    user_id,
+    user_id: user.id,
     subscription_tier: plan_name || null,
     cancellation_reason: reason,
     reason_other: reason === 'other' ? (reason_other || null) : null,

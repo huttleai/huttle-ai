@@ -24,6 +24,7 @@
     "test:full-post-resilience": "node scripts/verify-full-post-resilience.mjs",
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",
     "dev:grok-models": "node scripts/dev-grok-models-verify.mjs",
+    "test:sensitive-endpoint-auth": "node scripts/verify-sensitive-endpoint-auth.mjs",
     "qa:ai-tools": "node scripts/ai-tools-qa.mjs",
     "qa:reliability": "node scripts/reliability-qa.mjs"
   },
