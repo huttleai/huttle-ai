@@ -208,7 +208,9 @@ export default function useAIUsage(featureName = null) {
             headers,
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        } catch {
+          // Usage alert failures must not block the pool-exhausted response.
+        }
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
