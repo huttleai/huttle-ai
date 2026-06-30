@@ -209,19 +209,17 @@ export default function useAIUsage(featureName = null) {
       if (overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          fetch('/api/emails/send-usage-alert-trigger', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-            },
-            body: JSON.stringify({ userId: user.id }),
-          }).catch(() => {}); // fire-and-forget; never block the UI
-        } catch (_) {}
+        const {
+          data: { session },
+        } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        void fetch('/api/emails/send-usage-alert-trigger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ userId: user.id }),
+        }).catch(() => undefined); // fire-and-forget; never block the UI
         return { allowed: false, reason: 'pool_exhausted' };
       }
 
