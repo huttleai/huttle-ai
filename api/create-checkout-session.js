@@ -12,7 +12,7 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { isLaunchPlan } from './_utils/stripePlans.js';
+import { getPlanFromPriceId, isLaunchPlan, normalizePlanId } from './_utils/stripePlans.js';
 import { authenticateBillingRequest } from './_utils/billing.js';
 
 // Validate Stripe key exists
@@ -28,6 +28,19 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+function getBillingCycleFromPriceId(priceId) {
+  const priceCycleMap = {
+    [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: 'monthly',
+    [process.env.STRIPE_PRICE_PRO_MONTHLY || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]: 'monthly',
+    [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]: 'annual',
+    [process.env.STRIPE_PRICE_PRO_ANNUAL || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'annual',
+    [process.env.STRIPE_PRICE_BUILDER_ANNUAL || process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]: 'annual',
+    [process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'annual',
+  };
+
+  return priceCycleMap[priceId] || null;
+}
 
 export default async function handler(req, res) {
   // Set secure CORS headers
@@ -54,6 +67,23 @@ export default async function handler(req, res) {
 
     if (!priceId) {
       return res.status(400).json({ error: 'Price ID is required' });
+    }
+
+    const pricePlanId = getPlanFromPriceId(priceId);
+    const requestedPlanId = normalizePlanId(planId);
+    const priceBillingCycle = getBillingCycleFromPriceId(priceId);
+    const requestedBillingCycle = billingCycle ? String(billingCycle).toLowerCase() : null;
+
+    if (!pricePlanId || !priceBillingCycle) {
+      return res.status(400).json({ error: 'Invalid checkout price selected' });
+    }
+
+    if (requestedPlanId && requestedPlanId !== pricePlanId) {
+      return res.status(400).json({ error: 'Selected plan does not match checkout price' });
+    }
+
+    if (requestedBillingCycle && requestedBillingCycle !== priceBillingCycle) {
+      return res.status(400).json({ error: 'Selected billing cycle does not match checkout price' });
     }
 
     // Get the app URL for redirects - REQUIRED in production
@@ -137,8 +167,10 @@ export default async function handler(req, res) {
       console.warn('[create-checkout-session] customer resolve error:', lookupErr.message);
     }
 
-    const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
-    const isAnnualBilling = billingCycle === 'annual';
+    const canonicalPlanId = pricePlanId;
+    const canonicalBillingCycle = priceBillingCycle;
+    const isLaunchPricingPlan = isLaunchPlan({ planId: canonicalPlanId, priceId });
+    const isAnnualBilling = canonicalBillingCycle === 'annual';
 
     const tierMetadataMap = {
       [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: { tier: 'Essentials',    billingCycle: 'Monthly' },
@@ -151,10 +183,10 @@ export default async function handler(req, res) {
     const tierInfo = tierMetadataMap[priceId] ?? { tier: 'Unknown', billingCycle: 'Unknown' };
 
     const baseMetadata = {
-      planId,
-      billingCycle,
+      planId: canonicalPlanId,
+      billingCycle: canonicalBillingCycle,
       ...tierInfo,
-      source: planId === 'founder' ? 'founders_club' : planId === 'builder' ? 'builders_club' : 'app_checkout',
+      source: canonicalPlanId === 'founder' ? 'founders_club' : canonicalPlanId === 'builder' ? 'builders_club' : 'app_checkout',
       ...(userId && { supabase_user_id: userId }),
     };
 
@@ -178,7 +210,6 @@ export default async function handler(req, res) {
       // Binds the authenticated Supabase user UUID to the Stripe session at
       // the platform level — more reliable than metadata for webhook user resolution.
       client_reference_id: userId,
-      payment_method_types: ['card'],
       payment_method_collection: 'always',
       line_items: [
         {
@@ -202,7 +233,7 @@ export default async function handler(req, res) {
       custom_text: {
         submit: {
           message: isLaunchPricingPlan
-            ? planId === 'founder'
+            ? canonicalPlanId === 'founder'
               ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
               : 'Your legacy annual membership will be activated immediately after payment.'
             : isAnnualBilling

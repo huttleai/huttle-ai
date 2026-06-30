@@ -111,16 +111,23 @@ export async function createJobDirectly({
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session?.user?.id) {
+    if (!session?.access_token) {
       throw new Error('Authentication required');
     }
 
-    const { data, error } = await supabase
-      .from('jobs')
-      .insert({
-        user_id: session.user.id,
-        type: 'plan_builder',
-        status: 'queued', // DB lifecycle: queued → running → completed/failed
+    const response = await fetch(`${API_BASE_URL}/create-plan-builder-job`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        goal: contentGoal,
+        period: timePeriod,
+        platforms: platformFocus,
+        niche,
+        brandVoiceId: null,
+        skipWebhook: true,
         input: {
           goal: contentGoal,
           niche,
@@ -135,7 +142,6 @@ export async function createJobDirectly({
           followerRange,
           extraContext: extraContext || '',
           requestedAt: new Date().toISOString(),
-          // Aliases / extended fields used by UI and n8n
           contentGoal,
           platformFocus,
           trendContext: trendContext || '',
@@ -162,30 +168,15 @@ export async function createJobDirectly({
           subNiche: subNiche ?? null,
           followerCount: followerCount ?? null,
         },
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) {
-      console.error('Error creating job directly:', error);
-      // Provide actionable error messages for common issues
-      if (error.message?.includes('row-level security') || error.code === '42501' || error.code === '42000') {
-        console.error('[PlanBuilder] RLS policy issue on jobs table. Verify migrations have been applied.');
-        throw new Error('Permission error creating job. The database security policies may need to be updated. Please contact support.');
-      }
-      if (error.message?.includes('violates foreign key') || error.code === '23503') {
-        console.error('[PlanBuilder] FK constraint error — user may not exist in referenced table');
-        throw new Error('Account setup incomplete. Please try logging out and back in.');
-      }
-      if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
-        console.error('[PlanBuilder] Jobs table does not exist. Database migration needed.');
-        throw new Error('Feature not yet configured. Please contact support.');
-      }
-      throw error;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || data.error || 'Failed to create job');
     }
 
-    return { jobId: data.id };
+    return { jobId: data.jobId };
   } catch (error) {
     console.error('createJobDirectly failed:', error);
     return { error };

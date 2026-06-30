@@ -21,6 +21,10 @@ import { createClient } from '@supabase/supabase-js';
 import { parseBearerToken } from './_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import {
+  PLAN_BUILDER_14DAY_ALLOWED_TIERS,
+  resolvePlanBuilderCap,
+} from './_utils/planBuilderLimits.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -143,6 +147,83 @@ export default async function handler(req, res) {
       error: 'Missing required field: platformFocus (array with at least one platform)',
       requestId
     });
+  }
+
+  const { data: job, error: jobError } = await supabase
+    .from('jobs')
+    .select('id, user_id, type, status, input')
+    .eq('id', job_id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (jobError) {
+    logError('plan_builder_proxy.job_lookup_failed', { requestId, userId: user.id, job_id, error: jobError.message });
+    return res.status(500).json({ error: 'Failed to verify plan job', requestId });
+  }
+
+  if (!job || job.type !== 'plan_builder') {
+    return res.status(403).json({ error: 'Plan job not found for this user', requestId });
+  }
+
+  if (!['queued', 'pending'].includes(job.status)) {
+    return res.status(409).json({ error: 'Plan job is not ready to start', requestId });
+  }
+
+  const jobPeriod = Number(job.input?.period ?? job.input?.timePeriod ?? job.input?.duration);
+  const requestedPeriod = Number(timePeriod);
+  if (![7, 14].includes(requestedPeriod) || jobPeriod !== requestedPeriod) {
+    return res.status(400).json({ error: 'Plan period does not match the reserved job', requestId });
+  }
+
+  const { data: subscription, error: subscriptionError } = await supabase
+    .from('subscriptions')
+    .select('tier, status')
+    .eq('user_id', user.id)
+    .in('status', ['active', 'trialing', 'past_due'])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (subscriptionError) {
+    logError('plan_builder_proxy.subscription_lookup_failed', {
+      requestId,
+      userId: user.id,
+      error: subscriptionError.message,
+    });
+    return res.status(500).json({ error: 'Failed to verify subscription', requestId });
+  }
+
+  const userTier = subscription?.tier || null;
+  if (!userTier) {
+    return res.status(403).json({ error: 'Active subscription required', requestId });
+  }
+
+  if (requestedPeriod === 14 && !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+    return res.status(403).json({ error: '14-day plans require Pro or above', requestId });
+  }
+
+  const { featureKey } = resolvePlanBuilderCap(requestedPeriod, userTier);
+  const { data: reservation, error: reservationError } = await supabase
+    .from('user_activity')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('feature', featureKey)
+    .contains('metadata', { job_id })
+    .limit(1)
+    .maybeSingle();
+
+  if (reservationError) {
+    logError('plan_builder_proxy.reservation_lookup_failed', {
+      requestId,
+      userId: user.id,
+      job_id,
+      error: reservationError.message,
+    });
+    return res.status(500).json({ error: 'Failed to verify usage reservation', requestId });
+  }
+
+  if (!reservation) {
+    return res.status(403).json({ error: 'Plan Builder usage was not reserved', requestId });
   }
 
   try {

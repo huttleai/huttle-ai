@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     // 3. Extract and validate input FIRST (the per-period tier gate below
     //    needs to know whether this is a 7-day or 14-day request before we
     //    even run the usage count query).
-    const { goal, period, platforms, niche, brandVoiceId } = req.body;
+    const { goal, period, platforms, niche, brandVoiceId, input, skipWebhook = false } = req.body;
 
     if (!goal || !period || !platforms || platforms.length === 0) {
       return res.status(400).json({ error: 'Missing required fields: goal, period, and platforms are required' });
@@ -155,6 +155,28 @@ export default async function handler(req, res) {
       });
     }
 
+    const jobInput =
+      input && typeof input === 'object' && !Array.isArray(input)
+        ? {
+            ...input,
+            goal,
+            period,
+            platforms,
+            niche: niche || input.niche || 'general',
+            brandVoiceId: brandVoiceId || input.brandVoiceId || null,
+            userTier,
+            requestedAt: new Date().toISOString(),
+          }
+        : {
+            goal,
+            period,
+            platforms,
+            niche: niche || 'general',
+            brandVoiceId: brandVoiceId || null,
+            userTier,
+            requestedAt: new Date().toISOString(),
+          };
+
     // 5. Create job record in Supabase
     const { data: job, error: jobError } = await supabase
       .from('jobs')
@@ -162,15 +184,7 @@ export default async function handler(req, res) {
         user_id: userId,
         type: 'plan_builder',
         status: 'queued',
-        input: {
-          goal,
-          period,
-          platforms,
-          niche: niche || 'general',
-          brandVoiceId: brandVoiceId || null,
-          userTier,
-          requestedAt: new Date().toISOString()
-        }
+        input: jobInput
       })
       .select()
       .single();
@@ -186,8 +200,45 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to create job. Please try again.' });
     }
 
-    // 6. Call n8n webhook to start processing (non-blocking)
-    if (N8N_WEBHOOK_URL) {
+    // 6. Track the usage immediately (reserved slot) before any generation trigger.
+    //    If this write fails, the job must not proceed because the monthly cap
+    //    would be bypassed.
+    const { error: usageTrackError } = await supabase
+      .from('user_activity')
+      .insert({
+        user_id: userId,
+        feature: featureKey,
+        metadata: {
+          type: 'run_counter',
+          job_id: job.id,
+          goal,
+          period,
+          platforms,
+          source: 'create-plan-builder-job',
+        },
+      });
+    if (usageTrackError) {
+      logError('create_plan_builder_job.usage_track_failed', {
+        requestId,
+        userId,
+        jobId: job.id,
+        message: usageTrackError.message,
+        code: usageTrackError.code,
+      });
+      await supabase
+        .from('jobs')
+        .update({
+          status: 'failed',
+          error_message: 'Usage reservation failed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', job.id)
+        .eq('user_id', userId);
+      return res.status(500).json({ error: 'Failed to reserve Plan Builder usage. Please try again.', requestId });
+    }
+
+    // 7. Call n8n webhook to start processing (non-blocking)
+    if (!skipWebhook && N8N_WEBHOOK_URL) {
       try {
         logInfo('create_plan_builder_job.n8n_outbound', {
           requestId,
@@ -245,40 +296,11 @@ export default async function handler(req, res) {
         });
         // Don't fail the request - n8n might pick it up via polling
       }
-    } else {
+    } else if (!skipWebhook) {
       logWarn('create_plan_builder_job.webhook_not_configured', {
         requestId,
         userId,
         jobId: job.id,
-      });
-    }
-
-    // 7. Track the usage immediately (reserved slot).
-    //    NOTE: the client's useAIUsage hook also writes credit rows when the
-    //    job is queued. This server row is the authoritative RUN COUNTER
-    //    consulted by the pre-flight cap check above; it uses the same
-    //    per-period featureKey so 7-day and 14-day counts stay separate.
-    const { error: usageTrackError } = await supabase
-      .from('user_activity')
-      .insert({
-        user_id: userId,
-        feature: featureKey,
-        metadata: {
-          type: 'run_counter',
-          job_id: job.id,
-          goal,
-          period,
-          platforms,
-          source: 'create-plan-builder-job',
-        },
-      });
-    if (usageTrackError) {
-      logError('create_plan_builder_job.usage_track_failed', {
-        requestId,
-        userId,
-        jobId: job.id,
-        message: usageTrackError.message,
-        code: usageTrackError.code,
       });
     }
 

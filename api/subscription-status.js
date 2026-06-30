@@ -171,50 +171,33 @@ export default async function handler(req, res) {
     }
 
     const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
-      // If Stripe has no active subscription, return what Supabase knows.
-      // This keeps the billing UI functional even when Stripe data is unavailable.
-      if (subscriptionRecord) {
-        const normalizedFromRecord = buildSubscriptionPayload({
-          stripeSubscription: null,
-          subscriptionRecord,
-        });
-
-        if (normalizedFromRecord) {
-          const {
-            customerId: _cid,
-            stripeSubscriptionId: _sid,
-            id: _id,
-            ...safeSubscription
-          } = normalizedFromRecord;
-
-          return res.status(200).json({
-            subscription: safeSubscription,
-            plan: normalizedFromRecord.plan ?? null,
-            tier: normalizedFromRecord.tier ?? null,
-            status: normalizedFromRecord.status ?? 'inactive',
-            currentPeriodStart: normalizedFromRecord.currentPeriodStart ?? null,
-            currentPeriodEnd: normalizedFromRecord.currentPeriodEnd ?? null,
-            trialStart: null,
-            trialEnd: null,
-            billingCycle: normalizedFromRecord.billingCycle ?? null,
-            cancelAtPeriodEnd: normalizedFromRecord.cancelAtPeriodEnd ?? false,
-            cancelledAt: normalizedFromRecord.cancelledAt ?? null,
-            upcomingPlanChange: null,
-          });
-        }
-      }
-
+    if (!stripeSubscription) {
+      // Once a user has Stripe identifiers, Stripe is authoritative for paid
+      // access. Falling back to an active Supabase row here can preserve paid
+      // entitlements after a missed/deleted terminal Stripe subscription.
       return res.status(200).json({
         subscription: null,
         plan: null,
         status: 'inactive',
         currentPeriodEnd: null,
         trialEnd: null,
+      });
+    }
+
+    if (subStatus === 'incomplete_expired' || subStatus === 'unpaid') {
+      return res.status(200).json({
+        subscription: {
+          status: subStatus,
+          cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end ?? false,
+          cancelledAt: stripeSubscription.canceled_at ? new Date(stripeSubscription.canceled_at * 1000).toISOString() : null,
+        },
+        plan: null,
+        tier: null,
+        status: subStatus,
+        currentPeriodEnd: null,
+        trialEnd: null,
+        cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end ?? false,
+        cancelledAt: stripeSubscription.canceled_at ? new Date(stripeSubscription.canceled_at * 1000).toISOString() : null,
       });
     }
 

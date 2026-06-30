@@ -1220,12 +1220,28 @@ export default function AIPlanBuilder() {
       // handler writes the authoritative run-counter row under the same
       // featureKey (planBuilder7Day / planBuilder14Day). Writing one here too
       // would double-count against the monthly cap.
-      await planUsage.trackFeatureUsage({
+      const usageResult = await planUsage.trackFeatureUsage({
         incrementFeatureCounter: false,
         platforms: selectedPlatforms,
         goal: selectedGoal,
         period: selectedPeriod,
       });
+
+      if (!usageResult?.allowed) {
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Credit reservation failed',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', jobId);
+        throw new Error(
+          usageResult?.reason === 'pool_exhausted'
+            ? 'You do not have enough credits left for this plan.'
+            : "You've reached your monthly Plan Builder limit."
+        );
+      }
 
       flushSync(() => {
         setCurrentJobId(jobId);

@@ -4,6 +4,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import {
   getFeatureUsageCount,
   getOverallAIUsageCount,
+  supabase,
   trackUsage,
   TIER_LIMITS,
 } from '../config/supabase';
@@ -150,7 +151,17 @@ export default function useAIUsage(featureName = null) {
     const poolLimit = overallLimit;
     const remaining = Math.max(0, poolLimit - creditsUsed);
 
-    if (poolLimit > 0 && remaining < creditsRequired) {
+    if (poolLimit <= 0) {
+      return {
+        allowed: false,
+        reason: 'pool_exhausted',
+        message: `This feature uses ${creditsRequired} credits. Choose a plan to unlock monthly AI credits.`,
+        remaining: 0,
+        required: creditsRequired,
+      };
+    }
+
+    if (remaining < creditsRequired) {
       return {
         allowed: false,
         reason: 'pool_exhausted',
@@ -190,13 +201,24 @@ export default function useAIUsage(featureName = null) {
 
       // Race-condition guard: re-read both counts before writing any row.
       const currentOverall = await getOverallAIUsageCount(user.id);
-      if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
+      if (overallCredits > 0 && overallLimit <= 0) {
+        if (mountedRef.current) setOverallUsed(currentOverall);
+        return { allowed: false, reason: 'pool_exhausted' };
+      }
+
+      if (overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
         try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
           fetch('/api/emails/send-usage-alert-trigger', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
             body: JSON.stringify({ userId: user.id }),
           }).catch(() => {}); // fire-and-forget; never block the UI
         } catch (_) {}
