@@ -151,7 +151,17 @@ export default function useAIUsage(featureName = null) {
     const poolLimit = overallLimit;
     const remaining = Math.max(0, poolLimit - creditsUsed);
 
-    if (poolLimit > 0 && remaining < creditsRequired) {
+    if (poolLimit <= 0) {
+      return {
+        allowed: false,
+        reason: 'subscription_required',
+        message: 'Choose a paid plan to use this AI feature.',
+        remaining: 0,
+        required: creditsRequired,
+      };
+    }
+
+    if (remaining < creditsRequired) {
       return {
         allowed: false,
         reason: 'pool_exhausted',
@@ -189,9 +199,13 @@ export default function useAIUsage(featureName = null) {
         ? Math.max(0, Math.floor(Number(rawCredits)))
         : creditsPerRun;
 
+      if (overallLimit <= 0 && overallCredits > 0) {
+        return { allowed: false, reason: 'subscription_required' };
+      }
+
       // Race-condition guard: re-read both counts before writing any row.
       const currentOverall = await getOverallAIUsageCount(user.id);
-      if (overallLimit > 0 && overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
+      if (overallCredits > 0 && currentOverall + overallCredits > overallLimit) {
         if (mountedRef.current) setOverallUsed(currentOverall);
         // Fire the usage-alert-100 email (server-side, idempotent — sends once per billing cycle).
         try {
@@ -234,22 +248,28 @@ export default function useAIUsage(featureName = null) {
 
       // Run-counter row (only for capped features). This is what FEATURE_RUN_CAPS counts.
       if (incrementFeatureCounter && featureName && numericFeatureLimit !== null) {
-        await trackUsage(user.id, featureName, {
+        const didTrackFeature = await trackUsage(user.id, featureName, {
           ...persistMetadata,
           type: 'run_counter',
           timestamp: new Date().toISOString(),
         });
+        if (!didTrackFeature) {
+          return { allowed: false, reason: 'tracking_failed' };
+        }
       }
 
       // aiGenerations credit rows — one per credit consumed.
       const sourceFeature = featureName || persistMetadata.sourceFeature || 'aiGenerations';
       for (let i = 0; i < overallCredits; i += 1) {
-        await trackUsage(user.id, 'aiGenerations', {
+        const didTrackCredit = await trackUsage(user.id, 'aiGenerations', {
           ...persistMetadata,
           sourceFeature,
           creditIndex: i,
           overallCredits,
         });
+        if (!didTrackCredit) {
+          return { allowed: false, reason: 'tracking_failed' };
+        }
       }
 
       if (mountedRef.current) {
