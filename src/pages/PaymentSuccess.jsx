@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AuthContext } from '../context/AuthContext';
 import { clearSubscriptionCache } from '../context/SubscriptionContext';
+import { supabase } from '../config/supabase';
 import { trackPixelEvent } from '../utils/metaPixel';
 
 function AnimatedCheckmark() {
@@ -87,9 +88,19 @@ export default function PaymentSuccess() {
     let cancelled = false;
     (async () => {
       try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
         const response = await fetch(
           `/api/stripe-session-details?session_id=${encodeURIComponent(sessionId)}`,
-          { method: 'GET' }
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
         );
         if (!response.ok) return;
 

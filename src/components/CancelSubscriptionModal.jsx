@@ -1,5 +1,6 @@
 import { AlertCircle, X, Calendar, Loader2, ChevronLeft, ChevronRight, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
+import { supabase } from '../config/supabase';
 
 const CANCELLATION_REASONS = [
   { value: 'too_expensive', label: "It's too expensive" },
@@ -108,19 +109,28 @@ export default function CancelSubscriptionModal({
 
     // Feedback is only submitted after a successful cancellation response.
     try {
-      await fetch('/api/submit-cancellation-feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          plan_name: planName || currentTier,
-          reason,
-          reason_other: reason === 'other' ? (reasonOther.trim() || null) : null,
-          what_would_stay: whatWouldStay.trim() || null,
-          recommend_likelihood: recommendLikelihood || null,
-          additional_feedback: additionalFeedback.trim() || null,
-        }),
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        await fetch('/api/submit-cancellation-feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            plan_name: planName || currentTier,
+            reason,
+            reason_other: reason === 'other' ? (reasonOther.trim() || null) : null,
+            what_would_stay: whatWouldStay.trim() || null,
+            recommend_likelihood: recommendLikelihood || null,
+            additional_feedback: additionalFeedback.trim() || null,
+          }),
+        });
+      }
     } catch (err) {
       console.error('Feedback submission error (non-blocking):', err);
     }
