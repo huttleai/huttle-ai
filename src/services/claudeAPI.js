@@ -7,7 +7,7 @@ import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-sonnet-5';
 
 async function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };

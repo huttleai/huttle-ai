@@ -10,7 +10,7 @@
  * DEV NOTE — common failures:
  * - 503 "coming soon" from this proxy: ANTHROPIC_API_KEY missing → add to .env for local-api-server.
  * - 401 from this proxy: valid Supabase Bearer token required (log in via the app).
- * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is claude-sonnet-4-6.
+ * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is claude-sonnet-5.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -30,11 +30,12 @@ if (!ANTHROPIC_API_KEY) {
 
 // Primary Messages API id (alias). Client may still send legacy snapshot strings; we normalize upstream.
 // To upgrade: change DEFAULT_CLAUDE_MODEL and aliases below.
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
 
 const CLAUDE_MODEL_ALIASES = {
   'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
   'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
+  'claude-sonnet-5': DEFAULT_CLAUDE_MODEL,
 };
 
 function resolveUpstreamClaudeModel(requested) {

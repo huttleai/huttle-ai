@@ -1,8 +1,8 @@
 # Huttle AI — internal AI model map
 
-**Purpose:** Single place to see which provider/model powers each feature, and where to change IDs when vendors ship new models (e.g. bump Claude Sonnet `4-6` → `4-7`).
+**Purpose:** Single place to see which provider/model powers each feature, and where to change IDs when vendors ship new models (e.g. bump Claude Sonnet `5` → next release).
 
-**Last reviewed:** 2026-03-26 (verify against repo after any AI-related PR).
+**Last reviewed:** 2026-07-01 (verify against repo after any AI-related PR).
 
 ---
 
@@ -24,10 +24,10 @@
 
 | Location | Constant / behavior |
 |----------|---------------------|
-| `api/ai/claude.js` | `DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6'`; aliases include `claude-sonnet-4-6-20250514` |
-| `src/services/claudeAPI.js` | `CLAUDE_MODEL = 'claude-sonnet-4-6'` on each request |
+| `api/ai/claude.js` | `DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5'`; aliases include legacy `claude-sonnet-4-6` / `claude-sonnet-4-6-20250514` |
+| `src/services/claudeAPI.js` | `CLAUDE_MODEL = 'claude-sonnet-5'` on each request |
 | `api/ai/content-remix.js` | Same as main Claude proxy (`DEFAULT_CLAUDE_MODEL` + aliases) |
-| `api/ai/humanize.js` | `HUMANIZE_MODEL = 'claude-sonnet-4-6-20250514'` |
+| `api/ai/humanize.js` | `HUMANIZE_MODEL = 'claude-sonnet-5'` |
 
 **Env:** `ANTHROPIC_API_KEY` (server only).
 
@@ -139,7 +139,7 @@ These features **do not** define the LLM in this repository’s model map; updat
 
 ## Tests & mocks
 
-- `tests/e2e/helpers/mock-api.ts` may reference fixed model strings (e.g. `claude-sonnet-4-6-20250514`) — update when changing defaults so E2E stays consistent.
+- `tests/e2e/helpers/mock-api.ts` may reference fixed model strings (e.g. `claude-sonnet-5`) — update when changing defaults so E2E stays consistent.
 
 ---
 

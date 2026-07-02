@@ -15,7 +15,7 @@ const ANTHROPIC_API_KEY =
   typeof _rawKey === 'string' && _rawKey.trim() ? _rawKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 /** Stable id; snapshot ids can 404 when deprecated. */
-const HUMANIZE_MODEL = 'claude-sonnet-4-6';
+const HUMANIZE_MODEL = 'claude-sonnet-5';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

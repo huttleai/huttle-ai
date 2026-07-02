@@ -29,10 +29,11 @@ const ANTHROPIC_API_KEY =
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 /** Match api/ai/claude.js — snapshot ids may 404 upstream; alias resolves to current Sonnet. */
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
 const CLAUDE_MODEL_ALIASES = {
   'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
   'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
+  'claude-sonnet-5': DEFAULT_CLAUDE_MODEL,
 };
 
 function resolveUpstreamClaudeModel(requested) {
@@ -42,7 +43,7 @@ function resolveUpstreamClaudeModel(requested) {
   return DEFAULT_CLAUDE_MODEL;
 }
 
-const MODEL = resolveUpstreamClaudeModel('claude-sonnet-4-6-20250514');
+const MODEL = resolveUpstreamClaudeModel(DEFAULT_CLAUDE_MODEL);
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

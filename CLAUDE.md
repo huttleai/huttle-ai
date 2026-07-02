@@ -8,7 +8,7 @@ AI-powered content creation SaaS for solopreneurs, small businesses, and creator
 - **Frontend:** React 19 (Vite), Tailwind CSS 3.4, React Router DOM 6, Framer Motion, Lucide React
 - **Backend:** Supabase (Postgres + Auth + Storage + Realtime), Vercel Functions (Node.js, NOT Edge)
 - **Local dev API:** Express via `server/local-api-server.js`
-- **AI APIs:** Anthropic Claude (`claude-sonnet-4-6-20250514`), Grok/xAI (`grok-4.1-fast-reasoning`), Perplexity (`llama-3.1-sonar-small-128k-online`)
+- **AI APIs:** Anthropic Claude (`claude-sonnet-5`), Grok/xAI (`grok-4.1-fast-reasoning`), Perplexity (`llama-3.1-sonar-small-128k-online`)
 - **Payments:** Stripe (subscriptions + Customer Portal), webhook at `api/stripe-webhook.js`
 - **Email:** Resend (transactional), Mailchimp (marketing)
 - **Automation:** n8n (`huttleai.app.n8n.cloud`)
