@@ -48,14 +48,11 @@ export default async function handler(req, res) {
     const amountTotal =
       typeof session.amount_total === 'number' ? session.amount_total : 0;
     const currency = session.currency || 'usd';
-    const customerEmail =
-      session.customer_details?.email || session.customer_email || null;
     const tierName = session.metadata?.tier || null;
 
     return res.status(200).json({
       amount_total: amountTotal,
       currency,
-      customer_email: customerEmail,
       tier_name: tierName,
     });
   } catch (error) {
