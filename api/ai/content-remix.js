@@ -554,7 +554,6 @@ ${HUMAN_WRITING_RULES}`;
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 2200,
-          temperature: normalizedMode === 'sales_conversion' ? 0.6 : 0.8,
           system: systemPrompt,
           messages: [
             {

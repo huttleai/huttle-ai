@@ -239,7 +239,6 @@ ${text}`;
       body: JSON.stringify({
         model: HUMANIZE_MODEL,
         max_tokens: 8192,
-        temperature: 0.45,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -270,7 +269,10 @@ ${text}`;
       return res.status(422).json({ error: parseErr?.message || 'Invalid response from AI service' });
     }
 
-    const out = (data.content?.[0]?.text ?? '').trim();
+    // claude-sonnet-5 can return leading non-text blocks; join all text blocks instead of reading [0].
+    const out = (Array.isArray(data.content)
+      ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
+      : '').trim();
     if (!out) {
       const err = new Error('AI returned an empty or unreadable response');
       console.error('[humanize]', err, { stopReason: data?.stop_reason });

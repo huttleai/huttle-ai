@@ -115,15 +115,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const { messages, temperature = 0.7, model, max_tokens: maxTokensBody } = req.body;
+    const { messages, model, max_tokens: maxTokensBody } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
     const safeModel = resolveUpstreamClaudeModel(model);
-
-    const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
 
     if (messages.length > 20) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
@@ -144,11 +142,11 @@ export default async function handler(req, res) {
         ? Math.min(8192, Math.max(64, Number(maxTokensBody) || 4096))
         : 4096;
 
+    // Anthropic deprecated `temperature` for claude-sonnet-5; sending it returns a 400.
     const requestBody = {
       model: safeModel,
       messages: filteredMessages,
       max_tokens: requestedMax,
-      temperature: safeTemperature,
     };
 
     if (systemPrompt) {
@@ -182,7 +180,10 @@ export default async function handler(req, res) {
     
     return res.status(200).json({
       success: true,
-      content: data.content?.[0]?.text || '',
+      // Join all text blocks; claude-sonnet-5 can return non-text blocks first.
+      content: (Array.isArray(data.content)
+        ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
+        : '') || '',
       usage: data.usage
     });
 
