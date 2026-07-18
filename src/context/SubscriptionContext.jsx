@@ -1,7 +1,8 @@
 import { createContext, useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getRemainingUsage, trackUsage, hasFeatureAccess, getStorageUsage as getSupabaseStorageUsage, supabase, TABLES, TIERS, TIER_LIMITS, FEATURES, canAccessFeature as canTierAccessFeature } from '../config/supabase';
-import { AuthContext } from './AuthContext';
+import { AuthContext, SESSION_REFRESHED_EVENT } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
+import { getConfirmedAccessToken } from '../utils/authReady';
 import { getTierConfig } from '../utils/tierConfig';
 
 export const SubscriptionContext = createContext();
@@ -87,13 +88,27 @@ export function SubscriptionProvider({ children }) {
   const requestTimeoutRef = useRef(null);
   const abortControllerRef = useRef(null);
   const isRefreshingRef = useRef(false);
-  
+  /** Last successfully resolved subscription state (kept during degraded loads). */
+  const lastKnownRef = useRef({ tier: null, status: null, subscription: null });
+  /** Timestamp of the last refresh attempt (debounces TOKEN_REFRESHED nudges). */
+  const lastRefreshAtRef = useRef(0);
+  /** Mirrors ready/degraded state for event listeners without stale closures. */
+  const subscriptionStateRef = useRef({ ready: false, degraded: false });
+  /** Lets scheduleRetry re-invoke refreshSubscription without a circular useCallback dependency. */
+  const refreshSubscriptionRef = useRef(null);
+
   // Get actual user ID from AuthContext
   const userId = user?.id || null;
 
   useEffect(() => {
     setSubscriptionReady(false);
+    lastKnownRef.current = { tier: null, status: null, subscription: null };
+    retryCountRef.current = 0;
   }, [userId]);
+
+  useEffect(() => {
+    subscriptionStateRef.current = { ready: subscriptionReady, degraded: isSubscriptionDegraded };
+  }, [subscriptionReady, isSubscriptionDegraded]);
 
   const applySubscriptionFallback = useCallback(({ status = 'inactive', tier = null, degraded = false, error = null } = {}) => {
     setSubscription(null);
@@ -131,6 +146,64 @@ export function SubscriptionProvider({ children }) {
     clearRequestTimeout();
     abortInFlightSubscriptionRequest();
   }, [abortInFlightSubscriptionRequest, clearRequestTimeout]);
+
+  const scheduleRetry = useCallback(() => {
+    if (retryCountRef.current >= MAX_SUBSCRIPTION_RETRIES) {
+      return false;
+    }
+
+    const retryDelay = SUBSCRIPTION_INITIAL_RETRY_DELAY_MS * (2 ** retryCountRef.current);
+    retryCountRef.current += 1;
+
+    if (retryTimeoutRef.current) {
+      window.clearTimeout(retryTimeoutRef.current);
+    }
+
+    retryTimeoutRef.current = window.setTimeout(() => {
+      retryTimeoutRef.current = null;
+      void refreshSubscriptionRef.current?.({ preserveRetryState: true });
+    }, retryDelay);
+
+    return true;
+  }, []);
+
+  /**
+   * Timeout/transient failure path. Never confirms FREE for a paying user:
+   * keeps the last-known tier when one exists (degraded but usable), otherwise
+   * stays unresolved (subscriptionReady=false) while retries are pending, and
+   * only defaults to a degraded FREE after retries are exhausted with no
+   * last-known tier so users are never locked behind an infinite spinner.
+   */
+  const applyDegradedSubscriptionState = useCallback((message) => {
+    const lastKnown = lastKnownRef.current;
+    const didScheduleRetry = scheduleRetry();
+
+    setSubscriptionError(message);
+    setIsSubscriptionDegraded(true);
+
+    if (lastKnown.tier) {
+      setSubscription(lastKnown.subscription);
+      setUserTier(lastKnown.tier);
+      setSubscriptionStatus(lastKnown.status || 'unknown');
+      setSubscriptionReady(true);
+      if (!didScheduleRetry) {
+        retryCountRef.current = 0;
+      }
+      return;
+    }
+
+    setSubscriptionStatus('unknown');
+
+    if (!didScheduleRetry) {
+      setUserTier(TIERS.FREE);
+      setSubscription(null);
+      setSubscriptionReady(true);
+      retryCountRef.current = 0;
+      return;
+    }
+    // Initial load still unresolved and a retry is scheduled — keep
+    // subscriptionReady=false so ProtectedRoute keeps showing the loader.
+  }, [scheduleRetry]);
 
   // Function to change tier in demo mode
   const setDemoTier = useCallback((newTier) => {
@@ -176,14 +249,6 @@ export function SubscriptionProvider({ children }) {
       return;
     }
 
-    if (!sessionConfirmed) {
-      clearSubscriptionTimers();
-      applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
-      setLoading(false);
-      setSubscriptionReady(true);
-      return;
-    }
-
     if (!userId) {
       retryCountRef.current = 0;
       clearSubscriptionTimers();
@@ -193,7 +258,28 @@ export function SubscriptionProvider({ children }) {
       return;
     }
 
-    if (isRefreshingRef.current) return;
+    if (!sessionConfirmed) {
+      // Half-session (cached user, session never confirmed): do NOT confirm FREE.
+      // Keep the route in a loading state — AuthContext recovery or a late
+      // TOKEN_REFRESHED event will nudge this refresh once a real session exists.
+      clearSubscriptionTimers();
+      setSubscriptionStatus('unknown');
+      setIsSubscriptionDegraded(true);
+      setSubscriptionError('Restoring your session…');
+      setLoading(true);
+      setSubscriptionReady(false);
+      return;
+    }
+
+    if (isRefreshingRef.current) {
+      // A scheduled retry fired while the previous request is still hanging.
+      // Re-schedule instead of dropping it; once retries are exhausted, resolve
+      // degraded so the route is never locked behind the spinner.
+      if (preserveRetryState && !scheduleRetry()) {
+        applyDegradedSubscriptionState('Billing status is temporarily unavailable.');
+      }
+      return;
+    }
 
     if (!preserveRetryState && retryTimeoutRef.current) {
       window.clearTimeout(retryTimeoutRef.current);
@@ -202,28 +288,27 @@ export function SubscriptionProvider({ children }) {
 
     isRefreshingRef.current = true;
     setLoading(true);
+    lastRefreshAtRef.current = Date.now();
+
+    // Token gate: acquire a real Bearer token (getSession → refreshSession once
+    // with transient-network backoff) BEFORE starting the request budget, so a
+    // slow token refresh does not eat the 10s window or resolve to FREE.
+    let hasAccessToken = false;
+    try {
+      await getConfirmedAccessToken();
+      hasAccessToken = true;
+    } catch {
+      hasAccessToken = false;
+    }
+
+    if (!hasAccessToken) {
+      isRefreshingRef.current = false;
+      setLoading(false);
+      applyDegradedSubscriptionState('Billing status is temporarily unavailable while your session reconnects.');
+      return;
+    }
 
     let timedOut = false;
-    const scheduleRetry = () => {
-      if (retryCountRef.current >= MAX_SUBSCRIPTION_RETRIES) {
-        return false;
-      }
-
-      const retryDelay = SUBSCRIPTION_INITIAL_RETRY_DELAY_MS * (2 ** retryCountRef.current);
-      retryCountRef.current += 1;
-
-      if (retryTimeoutRef.current) {
-        window.clearTimeout(retryTimeoutRef.current);
-      }
-
-      retryTimeoutRef.current = window.setTimeout(() => {
-        retryTimeoutRef.current = null;
-        void refreshSubscription({ preserveRetryState: true });
-      }, retryDelay);
-
-      return true;
-    };
-
     abortInFlightSubscriptionRequest();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -231,32 +316,13 @@ export function SubscriptionProvider({ children }) {
     requestTimeoutRef.current = window.setTimeout(() => {
       requestTimeoutRef.current = null;
       timedOut = true;
-      console.warn('⚠️ [Subscription] Load timed out after 10s — defaulting to free tier.');
+      console.warn('⚠️ [Subscription] Load timed out after 10s — keeping last-known tier and retrying.');
       abortController.abort();
-      applySubscriptionFallback({
-        status: 'unknown',
-        tier: TIERS.FREE,
-        degraded: true,
-        error: 'Billing status is temporarily unavailable. Showing free-tier defaults.',
-      });
-      scheduleRetry();
       setLoading(false);
-      // Unblock ProtectedRoute immediately — do not wait for in-flight fetch to settle
-      setSubscriptionReady(true);
+      applyDegradedSubscriptionState('Billing status is temporarily unavailable. Retrying…');
     }, SUBSCRIPTION_TIMEOUT_MS);
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        retryCountRef.current = 0;
-        clearSubscriptionTimers();
-        applySubscriptionFallback({ tier: TIERS.FREE });
-        return;
-      }
-
       const isCacheValid =
         !bypassCache &&
         subscriptionCache.data !== null &&
@@ -284,9 +350,17 @@ export function SubscriptionProvider({ children }) {
       );
 
       if ((stripeResult?.unauthorized || stripeResult?.statusCode === 401) && !hasActiveDatabaseSubscription) {
+        // stripeAPI already refreshed the session and retried once on 401. A
+        // persistent 401 with a paid last-known tier is treated as a degraded
+        // load (retry) rather than a confirmed downgrade to FREE.
+        if (lastKnownRef.current.tier && lastKnownRef.current.tier !== TIERS.FREE) {
+          applyDegradedSubscriptionState('Billing status could not be verified. Retrying…');
+          return;
+        }
         retryCountRef.current = 0;
         clearSubscriptionTimers();
         applySubscriptionFallback({ tier: TIERS.FREE });
+        setSubscriptionReady(true);
         return;
       }
 
@@ -334,6 +408,13 @@ export function SubscriptionProvider({ children }) {
           : null);
       const usingSafeFallback = Boolean(stripeResult?.degraded && !databaseSubscription && !stripeSubscription);
 
+      if (usingSafeFallback) {
+        // Stripe status is unavailable and the DB has no active row — do not
+        // confirm FREE from a transient failure; keep last-known tier and retry.
+        applyDegradedSubscriptionState(stripeResult.error || 'Billing status is temporarily unavailable.');
+        return;
+      }
+
       if (!isCacheValid && stripeResult?.success && !stripeResult?.shouldRetry) {
         subscriptionCache.data = stripeResult;
         subscriptionCache.timestamp = Date.now();
@@ -342,16 +423,13 @@ export function SubscriptionProvider({ children }) {
       setSubscription(nextSubscription);
       setSubscriptionStatus(nextStatus);
       setUserTier(nextTier);
-      setSubscriptionError(usingSafeFallback ? (stripeResult.error || 'Billing status is temporarily unavailable.') : null);
-      setIsSubscriptionDegraded(usingSafeFallback);
+      setSubscriptionError(null);
+      setIsSubscriptionDegraded(false);
+      setSubscriptionReady(true);
+      lastKnownRef.current = { tier: nextTier, status: nextStatus, subscription: nextSubscription };
 
       if (stripeResult?.shouldRetry) {
-        const didScheduleRetry = scheduleRetry();
-        if (!didScheduleRetry && usingSafeFallback) {
-          setSubscriptionError(stripeResult.error || 'Billing status is temporarily unavailable.');
-          setIsSubscriptionDegraded(true);
-          retryCountRef.current = 0;
-        }
+        scheduleRetry();
       } else {
         retryCountRef.current = 0;
       }
@@ -361,25 +439,35 @@ export function SubscriptionProvider({ children }) {
       if (timedOut) return;
 
       console.error('Error loading subscription:', error);
-      applySubscriptionFallback({
-        status: 'unknown',
-        tier: TIERS.FREE,
-        degraded: true,
-        error: 'Billing status is temporarily unavailable. Showing free-tier defaults.',
-      });
-
-      const didScheduleRetry = scheduleRetry();
-      if (!didScheduleRetry) {
-        retryCountRef.current = 0;
-      }
+      applyDegradedSubscriptionState('Billing status is temporarily unavailable. Retrying…');
     } finally {
       isRefreshingRef.current = false;
       if (!timedOut) {
         setLoading(false);
       }
-      setSubscriptionReady(true);
     }
-  }, [abortInFlightSubscriptionRequest, applySubscriptionFallback, clearRequestTimeout, clearSubscriptionTimers, sessionConfirmed, skipAuth, userId]);
+  }, [abortInFlightSubscriptionRequest, applyDegradedSubscriptionState, applySubscriptionFallback, clearRequestTimeout, clearSubscriptionTimers, scheduleRetry, sessionConfirmed, skipAuth, userId]);
+
+  useEffect(() => {
+    refreshSubscriptionRef.current = refreshSubscription;
+  }, [refreshSubscription]);
+
+  // Late session confirmation (TOKEN_REFRESHED / recovery): refresh billing only
+  // when the last load never resolved or resolved degraded. Routine hourly token
+  // refreshes on a healthy subscription are ignored, preventing refetch loops.
+  useEffect(() => {
+    if (skipAuth) return undefined;
+
+    const handleSessionRefreshed = () => {
+      const { ready, degraded } = subscriptionStateRef.current;
+      if (ready && !degraded) return;
+      if (Date.now() - lastRefreshAtRef.current < 5000) return;
+      void refreshSubscriptionRef.current?.({ bypassCache: true });
+    };
+
+    window.addEventListener(SESSION_REFRESHED_EVENT, handleSessionRefreshed);
+    return () => window.removeEventListener(SESSION_REFRESHED_EVENT, handleSessionRefreshed);
+  }, [skipAuth]);
 
   const refreshStorageUsage = useCallback(async () => {
     if (skipAuth) {
@@ -412,8 +500,19 @@ export function SubscriptionProvider({ children }) {
 
     if (!sessionConfirmed) {
       clearSubscriptionTimers();
-      applySubscriptionFallback({ tier: userId ? TIERS.FREE : null });
-      setLoading(false);
+      if (userId) {
+        // Cached user without a confirmed session: stay unresolved (loading)
+        // rather than confirming FREE. The sessionConfirmed flip re-runs this
+        // effect and loads the real tier.
+        setSubscriptionStatus('unknown');
+        setIsSubscriptionDegraded(true);
+        setSubscriptionError('Restoring your session…');
+        setLoading(true);
+        setSubscriptionReady(false);
+      } else {
+        applySubscriptionFallback();
+        setLoading(false);
+      }
 
       return () => {
         clearSubscriptionTimers();
