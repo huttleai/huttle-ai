@@ -52,7 +52,7 @@ const REPURPOSER_EXAMPLES = [
     }
   }
 ];
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 import { saveToVault } from '../services/contentService';
 
 const FORMAT_OPTIONS = [
@@ -123,17 +123,10 @@ export default function ContentRepurposer() {
       const niche = getNiche(brandData);
       const audience = getTargetAudience(brandData);
 
-      // Get auth headers
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers = { 'Content-Type': 'application/json' };
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
+      // Fail closed: never call the Grok proxy without a real Bearer token.
+      const headers = await getAuthReadyHeaders();
 
-      const response = await fetch(GROK_PROXY_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
+      const requestBody = JSON.stringify({
           model: 'grok-4.1-fast-reasoning',
           messages: [
             {
@@ -174,8 +167,25 @@ Format as JSON with fields: content, hashtags, tips, hooks`
             }
           ],
           temperature: 0.7,
-        })
       });
+
+      const postRepurposeRequest = (requestHeaders) => fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: requestBody,
+      });
+
+      let response = await postRepurposeRequest(headers);
+
+      // One-shot 401 recovery: refresh the session and retry once.
+      if (response.status === 401) {
+        try {
+          const refreshedHeaders = await getAuthReadyHeaders({ forceRefresh: true });
+          response = await postRepurposeRequest(refreshedHeaders);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -213,7 +223,12 @@ Format as JSON with fields: content, hashtags, tips, hooks`
 
     } catch (error) {
       console.error('Repurposing error:', error);
-      addToast('Failed to repurpose content. Please try again.', 'error');
+      addToast(
+        isAuthNotReadyError(error)
+          ? 'Your session is still reconnecting. Please try again in a moment.'
+          : 'Failed to repurpose content. Please try again.',
+        'error'
+      );
     } finally {
       setIsRepurposing(false);
     }

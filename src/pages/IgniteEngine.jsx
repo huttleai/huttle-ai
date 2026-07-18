@@ -40,7 +40,7 @@ import {
   FacebookIcon,
 } from '../components/SocialIcons';
 import UpgradeModal from '../components/UpgradeModal';
-import { supabase } from '../config/supabase';
+import { getConfirmedAccessToken, isAuthNotReadyError } from '../utils/authReady';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
@@ -346,34 +346,54 @@ export default function IgniteEngine() {
         keys: Object.keys(briefContext).sort(),
       });
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
+      // Fail closed: never POST to the n8n webhook without a real Bearer token.
+      const postBriefRequest = async (accessToken) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
+        try {
+          return await fetch(N8N_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(briefContext),
+            signal: controller.signal,
+            mode: 'cors',
+          });
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            throw new Error('Generation timed out after 90 seconds. Please try again.');
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
 
-      let response;
+      let authToken;
       try {
-        response = await fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-          },
-          body: JSON.stringify(briefContext),
-          signal: controller.signal,
-          mode: 'cors',
-        });
+        authToken = await getConfirmedAccessToken();
       } catch (err) {
-        clearTimeout(timeoutId);
-        if (err.name === 'AbortError') {
-          throw new Error('Generation timed out after 90 seconds. Please try again.');
+        if (isAuthNotReadyError(err)) {
+          throw new Error('Your session is still reconnecting. Please try again in a moment.');
         }
         throw err;
       }
 
-      clearTimeout(timeoutId);
+      let response = await postBriefRequest(authToken);
+
+      // One-shot 401 recovery: refresh the session and retry once.
+      if (response.status === 401) {
+        try {
+          const refreshedToken = await getConfirmedAccessToken({ forceRefresh: true });
+          response = await postBriefRequest(refreshedToken);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
@@ -1367,25 +1387,39 @@ CRITICAL RULE: Return hashtags ONLY in the "hashtags" field. Do NOT include any 
 Make content specific, actionable, and optimized for ${platform} ${contentType}. Output ONLY raw JSON.`;
 
   try {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // Fail closed: never call the Grok proxy without a real Bearer token.
+  const token = await getConfirmedAccessToken();
 
-  const res = await fetch('/api/ai/grok', {
+  const requestBody = JSON.stringify({
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: `You are a content strategist. Return only valid JSON.
+
+${HUMAN_WRITING_RULES}` },
+      { role: 'user', content: prompt }
+    ]
+  });
+
+  const postGrokFallback = (accessToken) => fetch('/api/ai/grok', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      'Authorization': `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      temperature: 0.7,
-      messages: [
-        { role: 'system', content: `You are a content strategist. Return only valid JSON.
-
-${HUMAN_WRITING_RULES}` },
-        { role: 'user', content: prompt }
-      ]
-    }),
+    body: requestBody,
   });
+
+  let res = await postGrokFallback(token);
+
+  // One-shot 401 recovery: refresh the session and retry once.
+  if (res.status === 401) {
+    try {
+      const refreshedToken = await getConfirmedAccessToken({ forceRefresh: true });
+      res = await postGrokFallback(refreshedToken);
+    } catch {
+      // Refresh failed — fall through with the original 401 response.
+    }
+  }
 
   if (!res.ok) {
     try {

@@ -8,23 +8,18 @@
 
 import { buildBrandContext, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fail closed: throws AUTH_NOT_READY
+ * instead of returning headers without Authorization. Callers already fall
+ * back to rule-based optimization when the AI request throws.
  */
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch { /* ignore */ }
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -209,19 +204,33 @@ REQUIREMENTS:
 Return ONLY valid JSON matching the structure specified.`;
 
   const headers = await getAuthHeaders();
-  
-  const response = await fetch(GROK_PROXY_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'grok-4.1-fast-reasoning',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-    })
+
+  const requestBody = JSON.stringify({
+    model: 'grok-4.1-fast-reasoning',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.3,
   });
+
+  const postOptimizeRequest = (requestHeaders) => fetch(GROK_PROXY_URL, {
+    method: 'POST',
+    headers: requestHeaders,
+    body: requestBody,
+  });
+
+  let response = await postOptimizeRequest(headers);
+
+  // One-shot 401 recovery: refresh the session and retry once.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+      response = await postOptimizeRequest(refreshedHeaders);
+    } catch {
+      // Refresh failed — fall through with the original 401 response.
+    }
+  }
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
