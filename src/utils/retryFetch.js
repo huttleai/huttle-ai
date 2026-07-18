@@ -51,6 +51,11 @@ export async function retryFetch(
       timeoutWrapper.clear();
       lastError = error;
 
+      // Never retry a request the caller aborted (external signal, not our timeout).
+      if (options.signal?.aborted) {
+        throw error;
+      }
+
       if (attempt >= maxRetries) {
         throw error;
       }
