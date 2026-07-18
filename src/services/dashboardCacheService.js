@@ -1,5 +1,6 @@
 import { supabase, trackUsage } from '../config/supabase';
 import { API_TIMEOUTS } from '../config/apiConfig';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 import { normalizeNiche, buildCacheKey, buildDashboardForYouCacheKey } from '../utils/normalizeNiche';
 import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
@@ -565,10 +566,12 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
 
   try {
     const currentPlatform = normalizePlatformValue(platform);
-    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
+    // SQL LIKE wildcard is %, not *. Prod schema truth: niche_content_cache has
+    // generated_date (and cache_date) — no generated_at, created_at unconfirmed.
+    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__%__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('cache_key, payload, generated_date, created_at')
+      .select('cache_key, payload, generated_date')
       .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
@@ -598,21 +601,14 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
   }
 }
 
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (error) {
-    console.warn('Could not get auth session for dashboard cache:', error);
-  }
-
-  return headers;
+/**
+ * Fail-closed auth headers: getSession → refreshSession once → typed
+ * AUTH_NOT_READY error. Never returns headers without Authorization, so no AI
+ * proxy call fires unauthenticated (the server would just 401).
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.
@@ -894,6 +890,28 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
   const MAX_RETRIES = 1;
   const modelForLog = type === 'trending' ? MODEL_CONFIG_REF.dashboard_trending : MODEL_CONFIG_REF.quick_scan;
 
+  const requestBody = JSON.stringify({
+    temperature: 0.2,
+    messages,
+    ...(type !== 'trending' && options?.searchContextSize
+      ? { search_context_size: options.searchContextSize }
+      : {}),
+    cache: {
+      key: cacheKey,
+      niche: context.cacheNiche,
+      platform: normalizePlatformValue(platform),
+      city: context.city || DEFAULT_CITY,
+      type,
+      ttlHours: 24,
+      forceRefresh: (type === 'hashtags' || type === 'trending_hashtags_widget')
+        ? Boolean(options.forceRefreshHashtags)
+        : Boolean(options.forceRefreshTrending),
+    },
+  });
+
+  let requestHeaders = headers;
+  let didAttempt401Recovery = false;
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
       if (type === 'trending') {
@@ -904,38 +922,33 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
         });
       }
 
+      // Default retryFetch retries (network + 408/429/5xx) instead of maxRetries: 0.
       const response = await retryFetch(
         PERPLEXITY_PROXY_URL,
         {
           method: 'POST',
-          headers,
-          body: JSON.stringify({
-            temperature: 0.2,
-            messages,
-            ...(type !== 'trending' && options?.searchContextSize
-              ? { search_context_size: options.searchContextSize }
-              : {}),
-            cache: {
-              key: cacheKey,
-              niche: context.cacheNiche,
-              platform: normalizePlatformValue(platform),
-              city: context.city || DEFAULT_CITY,
-              type,
-              ttlHours: 24,
-              forceRefresh: (type === 'hashtags' || type === 'trending_hashtags_widget')
-                ? Boolean(options.forceRefreshHashtags)
-                : Boolean(options.forceRefreshTrending),
-            },
-          }),
+          headers: requestHeaders,
+          body: requestBody,
         },
         {
           timeoutMs: API_TIMEOUTS.STANDARD,
-          maxRetries: 0,
         }
       );
 
       if (response.ok) {
         return response;
+      }
+
+      // One-shot 401 recovery: refresh the session, rebuild headers, retry once.
+      if (response.status === 401 && !didAttempt401Recovery) {
+        didAttempt401Recovery = true;
+        try {
+          requestHeaders = await getAuthHeaders({ forceRefresh: true });
+          continue;
+        } catch {
+          console.warn('[Perplexity] 401 with no recoverable session — using fallback:', platform, type);
+          return null;
+        }
       }
 
       if (response.status === 429) {
@@ -1309,7 +1322,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           'global',
           platform,
           false,
-          previousDayCache.generated_date || previousDayCache.created_at,
+          previousDayCache.generated_date,
           nicheGlobal,
         ))
         .filter(Boolean);
@@ -1318,7 +1331,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           items: merged,
           fromCache: false,
           fromYesterday: true,
-          generatedAt: previousDayCache.generated_date || previousDayCache.created_at,
+          generatedAt: previousDayCache.generated_date,
           fallbackMessage: 'Last updated from cache — tap refresh for latest.',
         };
       }
@@ -1412,7 +1425,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
         items: ensureArray(previousDayCache.payload),
         fromCache: false,
         fromYesterday: true,
-        generatedAt: previousDayCache.generated_date || previousDayCache.created_at || null,
+        generatedAt: previousDayCache.generated_date || null,
         fallbackMessage: 'From yesterday — updating now',
       };
     }
@@ -1609,7 +1622,6 @@ export async function fetchDashboardTrendingHashtags({
     return { items: [], fromCache: false };
   }
 
-  const headers = await getAuthHeaders();
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const cacheKey = buildCacheKey('platform_wide', platform, 'global', generatedDate, 'trending_hashtags_widget');
   const cacheContext = {
@@ -1655,6 +1667,10 @@ ${HUMAN_WRITING_RULES}`,
         }
       }
     }
+
+    // Fail closed: throws AUTH_NOT_READY (caught below → fallback items) when
+    // no Bearer token can be acquired, instead of firing an unauthenticated call.
+    const headers = await getAuthHeaders();
 
     const response = await requestPerplexityWidgetData(
       'trending_hashtags_widget',
@@ -1748,12 +1764,13 @@ export async function fetchDashboardForYouHashtags({
     return { items: [], fromCache: false };
   }
 
-  const headers = await getAuthHeaders();
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const nicheKey = normalizeNiche(personalization.niche) || 'general';
   const cacheKey = buildDashboardForYouCacheKey(userId, generatedDate, personalization.niche, platform);
 
   try {
+    // Fail closed: throws AUTH_NOT_READY (caught below) when no token exists.
+    const headers = await getAuthHeaders();
     const response = await retryFetch(
       GROK_PROXY_URL,
       {
@@ -1895,6 +1912,50 @@ function normalizeDashboardCacheRow(row, context) { // HUTTLE AI: cache fix
     brand_voice_nudge_copy: metadata.brand_voice_nudge_copy || context.brandVoiceNudgeCopy, // HUTTLE AI: cache fix
   }; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
+
+/**
+ * Extract the offending column name from a PostgREST/Postgres missing-column
+ * error (PGRST204: "Could not find the 'niche' column…" / 42703: column "niche"…).
+ * @returns {string|null}
+ */
+function parseMissingColumnName(error) {
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+  const pgrstMatch = message.match(/Could not find the '([^']+)' column/i);
+  if (pgrstMatch?.[1]) return pgrstMatch[1];
+  const pgMatch = message.match(/column "([^"]+)"/i);
+  if (pgMatch?.[1]) return pgMatch[1];
+  return null;
+}
+
+/**
+ * Upsert a daily_dashboard_cache row. When the write fails because a column is
+ * missing from the live schema, strip that exact column by name and retry —
+ * never retry the same invalid payload.
+ * @returns {Promise<{ error: object|null }>}
+ */
+async function upsertDashboardCacheRowStrippingBadColumns(row, maxStrips = 3) {
+  let currentRow = { ...row };
+
+  for (let attempt = 0; attempt <= maxStrips; attempt += 1) {
+    const { error } = await supabase
+      .from(DASHBOARD_CACHE_TABLE)
+      .upsert(currentRow, { onConflict: 'user_id,generated_date' });
+
+    if (!error) return { error: null };
+
+    const isMissingColumn = error.code === 'PGRST204' || error.code === '42703';
+    const badColumn = isMissingColumn ? parseMissingColumnName(error) : null;
+    if (!badColumn || !(badColumn in currentRow) || badColumn === 'user_id' || badColumn === 'generated_date') {
+      return { error };
+    }
+
+    console.warn(`[Dashboard] daily_dashboard_cache upsert: stripping unknown column "${badColumn}" and retrying.`);
+    const { [badColumn]: _removed, ...rest } = currentRow;
+    currentRow = rest;
+  }
+
+  return { error: new Error('daily_dashboard_cache upsert failed after stripping unknown columns.') };
+}
 
 function isMissingDashboardCacheColumnError(error) { // HUTTLE AI: cache fix
   const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase(); // HUTTLE AI: cache fix
@@ -2055,6 +2116,10 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     dashboardMetadata = {};
   }
 
+  // Prod schema truth (verified in live DB): daily_dashboard_cache DOES have a
+  // `niche` column (added outside migrations), so writing it is safe. If any
+  // environment lacks a column, upsertDashboardCacheRowStrippingBadColumns
+  // strips exactly the offending column and retries.
   const fullUpsertRow = {
     user_id: userId,
     generated_date: dateKey,
@@ -2068,6 +2133,9 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     created_at: dashboardData.created_at,
   };
 
+  // Genuinely minimal fallback: core columns only. Drops daily_alerts,
+  // dashboard_metadata, and created_at so this write can succeed even if an
+  // environment lacks the newer columns or rejects an explicit created_at.
   const minimalUpsertRow = {
     user_id: userId,
     generated_date: dateKey,
@@ -2076,32 +2144,26 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     hashtags_of_day: dashboardData.hashtags_of_day,
     ai_insights: dashboardData.ai_insights,
     ai_insight: dashboardData.ai_insight,
-    created_at: dashboardData.created_at,
   };
 
   try {
-    const { error } = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(fullUpsertRow, { onConflict: 'user_id,generated_date' });
-
-    if (!error) {
+    const fullResult = await upsertDashboardCacheRowStrippingBadColumns(fullUpsertRow);
+    if (!fullResult.error) {
       return true;
     }
 
-    if (!isMissingDashboardCacheColumnError(error)) {
+    if (!isMissingDashboardCacheColumnError(fullResult.error)) {
       console.warn(
         '[Dashboard] Full daily_dashboard_cache upsert failed (will retry minimal):',
-        error.code,
-        error.message,
-        error.details || '',
-        error.hint || '',
+        fullResult.error.code,
+        fullResult.error.message,
+        fullResult.error.details || '',
+        fullResult.error.hint || '',
         '(If code is 42501 or message mentions policy, ensure migrations include UPDATE … WITH CHECK on daily_dashboard_cache.)',
       );
     }
 
-    const fallbackResult = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(minimalUpsertRow, { onConflict: 'user_id,generated_date' });
+    const fallbackResult = await upsertDashboardCacheRowStrippingBadColumns(minimalUpsertRow);
 
     if (fallbackResult.error) {
       console.warn(
@@ -2130,18 +2192,15 @@ async function updateCacheHashtags(userId, generatedDate, hashtagsOfDay, context
   if (!userId || !dateKey) return;
 
   try {
-    await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(
-        {
-          user_id: userId,
-          generated_date: dateKey,
-          hashtags_of_day: hashtagsOfDay,
-          niche: context?.niche || null,
-          created_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,generated_date' },
-      );
+    // Prod schema truth: daily_dashboard_cache has a `niche` column, so keep
+    // writing it here (the stripping helper drops it if an env lacks it).
+    await upsertDashboardCacheRowStrippingBadColumns({
+      user_id: userId,
+      generated_date: dateKey,
+      niche: context?.niche || null,
+      hashtags_of_day: hashtagsOfDay,
+      created_at: new Date().toISOString(),
+    });
   } catch (err) {
     console.warn('[DashCache] Incremental hashtag update failed:', err?.message || err);
   }
@@ -2303,7 +2362,23 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
   if (!isDashboardCacheDateKey(generatedDate)) {
     generatedDate = getDashboardGeneratedDate();
   }
-  const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
+
+  // Fail closed: no Bearer token → do not fire AI proxy calls at all.
+  let headers;
+  try {
+    headers = await getAuthHeaders();
+  } catch (error) {
+    if (isAuthNotReadyError(error)) {
+      console.warn('[Dashboard] Auth token not ready, skipping dashboard generation');
+      return {
+        success: false,
+        errorType: 'auth_error',
+        errorMessage: 'Auth session is not ready yet.',
+      };
+    }
+    throw error;
+  }
+
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const optionsWithGeneratedDate = { ...normalizedOptions, generatedDate }; // HUTTLE AI: cache fix
 

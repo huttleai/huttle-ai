@@ -45,7 +45,9 @@ export async function getCachedResult(cacheKey) {
     if (!result) return null;
     return {
       data: result.payload ?? result.result_data,
-      generatedAt: result.generated_date || result.created_at,
+      // Prod schema truth: niche_content_cache has generated_date and cache_date
+      // (no generated_at; created_at is unconfirmed — do not depend on it).
+      generatedAt: result.generated_date || result.cache_date,
       cached: true,
     };
   } catch {

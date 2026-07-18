@@ -196,7 +196,9 @@ async function getCachedGrokResult(cacheConfig, cacheAccess) {
 
   return {
     resultData: data.payload ?? data.result_data,
-    generatedAt: data.generated_date || data.created_at,
+    // Prod schema truth: niche_content_cache has generated_date and cache_date
+    // (no generated_at, and created_at is unconfirmed — do not depend on it).
+    generatedAt: data.generated_date || data.cache_date,
   };
 }
 
@@ -210,12 +212,18 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
   const now = new Date();
   const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
   const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+  // Prod schema truth (verified in live DB): niche_content_cache columns are
+  // cache_key, niche, platform, feature, user_type, result_data, cache_date,
+  // generated_date, expires_at, payload, user_id, hit_count. There is NO
+  // generated_at, and created_at is unconfirmed — never write or read those.
+  const cacheDateKey = now.toISOString().split('T')[0];
   const cacheRow = {
     cache_key: cacheConfig.key,
     niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'grok',
-    cache_date: now.toISOString().split('T')[0],
+    cache_date: cacheDateKey,
+    generated_date: cacheDateKey,
     payload: cachePayload,
     result_data: cachePayload,
     expires_at: expiresAt.toISOString(),
@@ -225,9 +233,8 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
 
   const VALID_CACHE_COLUMNS = new Set([
     'id', 'cache_key', 'feature', 'niche', 'platform',
-    'user_type', 'cache_date', 'payload', 'hit_count',
-    'created_at', 'expires_at', 'user_id', 'result_data',
-    'generated_date',
+    'user_type', 'cache_date', 'generated_date', 'payload', 'hit_count',
+    'expires_at', 'user_id', 'result_data',
   ]);
 
   const invalidFields = Object.keys(cacheRow).filter(
