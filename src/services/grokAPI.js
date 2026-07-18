@@ -50,7 +50,7 @@ import {
   normalizeRemixModeForGoal,
   resolveRemixPromptGoal,
 } from '../data/contentRemixSystemPrompt';
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders } from '../utils/authReady';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { 
   isDemoMode, 
@@ -467,23 +467,13 @@ function getAudiencePainPointGuidance(niche) {
 }
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error, so no Grok proxy call ever fires without a
+ * real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 function getGrokProxyErrorMessage(errorData, status) {
@@ -601,11 +591,25 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     body.forceCacheRefresh = true;
   }
 
-  const response = await fetch(GROK_PROXY_URL, {
+  let response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+      response = await fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

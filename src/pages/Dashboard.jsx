@@ -376,7 +376,7 @@ const QUICK_CREATE_TOOLS = [
 ];
 
 export default function Dashboard() {
-  const { user, userProfile, loading: authLoading } = useContext(AuthContext);
+  const { user, userProfile, loading: authLoading, sessionConfirmed } = useContext(AuthContext);
   const { getDashboardSnapshot, loadSessionDashboardSnapshot, setDashboardSnapshot, clearDashboardSnapshot } = useDashboardCache(); // HUTTLE AI: cache fix
   const navigate = useNavigate();
   const { brandProfile, brandFetchComplete } = useBrand();
@@ -776,7 +776,9 @@ export default function Dashboard() {
   }, [brandProfile]); // HUTTLE AI: cache fix
 
   useEffect(() => {
-    if (!user?.id || !brandFetchComplete) return;
+    // Gate on a confirmed session — this path triggers AI proxy calls that
+    // would 401 (and cache writes that would 400) without a Bearer token.
+    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete) return;
     const key = brandPersonalizationKey;
     const prev = lastPersonalizationKeyRef.current;
     if (prev === key) return;
@@ -794,6 +796,8 @@ export default function Dashboard() {
     setGeneralTrendingReady(false);
     void loadDashboardData({ forceRefresh: true });
   }, [
+    authLoading,
+    sessionConfirmed,
     user?.id,
     brandFetchComplete,
     brandPersonalizationKey,
@@ -802,12 +806,12 @@ export default function Dashboard() {
   ]);
 
   useEffect(() => {
-    if (authLoading || !user?.id || !brandFetchComplete || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
+    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
     loadDashboardData(); // HUTTLE AI: cache fix
     return () => { // HUTTLE AI: cache fix
       activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
     }; // HUTTLE AI: cache fix
-  }, [authLoading, brandFetchComplete, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
+  }, [authLoading, sessionConfirmed, brandFetchComplete, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
     if (!user?.id || authLoading) return undefined;
@@ -1112,7 +1116,9 @@ export default function Dashboard() {
   }, [useForYouHashtags, widgetHashtagList]);
 
   useEffect(() => {
-    if (!user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
+    // Gate on a confirmed session — these fetches hit the Grok proxy and must
+    // never fire before a Bearer token exists.
+    if (authLoading || !sessionConfirmed || !user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1151,10 +1157,12 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
+  }, [authLoading, sessionConfirmed, user?.id, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
 
   useEffect(() => {
-    if (!user?.id || hashtagMode !== 'trending') return;
+    // Gate on a confirmed session — these fetches hit the Perplexity proxy and
+    // must never fire before a Bearer token exists.
+    if (authLoading || !sessionConfirmed || !user?.id || hashtagMode !== 'trending') return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1191,7 +1199,7 @@ export default function Dashboard() {
       cancelled = true;
       setGeneralTrendingLoading(false);
     };
-  }, [user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
+  }, [authLoading, sessionConfirmed, user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
 
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label

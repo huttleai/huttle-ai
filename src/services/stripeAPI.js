@@ -8,8 +8,9 @@
  * - Usage tracking for AI generations
  */
 
-import { supabase } from '../config/supabase';
 import { trackPixelEvent } from '../utils/metaPixel';
+import { retryFetch } from '../utils/retryFetch';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
@@ -93,23 +94,13 @@ export function simulateDemoCheckout(planId) {
 }
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. Billing endpoints are never called without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch {
-    console.warn('Could not get auth session for Stripe request');
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -569,25 +560,45 @@ export async function getSubscriptionStatus(options = {}) {
   const { signal } = options;
 
   try {
-    const headers = await getAuthHeaders();
-    if (!headers.Authorization) {
-      return buildSubscriptionStatusResult({
-        unauthorized: true,
-        statusCode: 401,
-        plan: null,
-        tier: null,
-        status: 'inactive',
-        degraded: false,
-      });
+    let headers;
+    try {
+      headers = await getAuthHeaders();
+    } catch (error) {
+      if (isAuthNotReadyError(error)) {
+        // No token in hand — never call the billing endpoint unauthenticated.
+        // Retryable: this is a session race, not a confirmed unauthenticated user.
+        return buildSubscriptionStatusResult({
+          shouldRetry: true,
+          error: 'Auth session is not ready yet.',
+        });
+      }
+      throw error;
     }
+
+    const fetchStatus = (requestHeaders) => retryFetch(
+      '/api/subscription-status',
+      {
+        method: 'GET',
+        headers: requestHeaders,
+        signal,
+      },
+      { timeoutMs: 15000 },
+    );
 
     let response;
     try {
-      response = await fetch('/api/subscription-status', {
-        method: 'GET',
-        headers,
-        signal,
-      });
+      response = await fetchStatus(headers);
+
+      // One-shot 401 recovery: refresh the session and retry once before
+      // treating the user as unauthenticated.
+      if (response.status === 401) {
+        try {
+          const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+          response = await fetchStatus(refreshedHeaders);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
     } catch (error) {
       if (error?.name === 'AbortError') {
         return buildSubscriptionStatusResult({

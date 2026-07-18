@@ -21,7 +21,7 @@ import {
   getPromptBrandProfile,
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders } from '../utils/authReady';
 import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
 import {
   getHashtagConstraint,
@@ -35,33 +35,21 @@ const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
 const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error, so no Perplexity/Grok proxy call ever
+ * fires without a real Bearer token.
  * @param {string | null | undefined} accessTokenOverride - When set (e.g. from the caller after getSession), always sent as Bearer
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders(accessTokenOverride = null) {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
+async function getAuthHeaders(accessTokenOverride = null, options = {}) {
   if (accessTokenOverride) {
-    headers.Authorization = `Bearer ${accessTokenOverride}`;
-    return headers;
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessTokenOverride}`,
+    };
   }
 
-  try {
-    let { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      const { data: refreshed } = await supabase.auth.refreshSession();
-      session = refreshed?.session ?? null;
-    }
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-
-  return headers;
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -69,26 +57,41 @@ async function getAuthHeaders(accessTokenOverride = null) {
  */
 async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders(options.accessToken);
-  
-  const response = await fetch(PERPLEXITY_PROXY_URL, {
+  const body = JSON.stringify({
+    messages,
+    temperature,
+    ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
+    ...(options.model ? { model: options.model } : {}),
+    cache: options.cache,
+    requireRealtime: options.requireRealtime,
+    personalized: options.personalized,
+    targetAudience: options.targetAudience,
+    brandContext: options.brandContext,
+    competitorHandles: options.competitorHandles,
+    web_search_options: options.webSearchOptions || {
+      search_context_size: 'low'
+    }
+  });
+
+  let response = await fetch(PERPLEXITY_PROXY_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-      ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
-      ...(options.model ? { model: options.model } : {}),
-      cache: options.cache,
-      requireRealtime: options.requireRealtime,
-      personalized: options.personalized,
-      targetAudience: options.targetAudience,
-      brandContext: options.brandContext,
-      competitorHandles: options.competitorHandles,
-      web_search_options: options.webSearchOptions || {
-        search_context_size: 'low'
-      }
-    })
+    body,
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders(null, { forceRefresh: true });
+      response = await fetch(PERPLEXITY_PROXY_URL, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body,
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -106,20 +109,35 @@ function getGrokProxyErrorMessage(errorData, status) {
 
 async function callGrokAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders();
+  const body = JSON.stringify({
+    messages,
+    temperature,
+    model: options.model || 'grok-4-1-fast-reasoning',
+    cache: options.cache,
+    personalized: options.personalized,
+    targetAudience: options.targetAudience,
+    brandContext: options.brandContext,
+  });
 
-  const response = await fetch(GROK_PROXY_URL, {
+  let response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-      model: options.model || 'grok-4-1-fast-reasoning',
-      cache: options.cache,
-      personalized: options.personalized,
-      targetAudience: options.targetAudience,
-      brandContext: options.brandContext,
-    }),
+    body,
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders(null, { forceRefresh: true });
+      response = await fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body,
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
