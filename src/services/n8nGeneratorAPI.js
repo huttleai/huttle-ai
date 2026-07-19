@@ -27,6 +27,7 @@
 
 import { API_TIMEOUTS } from '../config/apiConfig';
 import { retryFetch } from '../utils/retryFetch';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const N8N_PROXY_URL = '/api/ai/n8n-generator';
 
@@ -45,26 +46,13 @@ async function trackAIAnalytics(_data) {
 }
 
 /**
- * Get auth headers for API requests
- * Safe mode: Auth is optional - will work without it
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No n8n-generator proxy fetch fires without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  // Include auth headers for API requests
-  try {
-    const { supabase } = await import('../config/supabase');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('⚠️ [n8nGenerator] Could not get auth session:', e.message);
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**

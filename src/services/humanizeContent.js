@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const HUMANIZE_URL = '/api/ai/humanize';
 /** Allow long scripts; keep below serverless maxDuration and Anthropic latency. */
@@ -84,19 +84,14 @@ export function validateHumanizeRequest({ text, brandVoiceType, platform }) {
   };
 }
 
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch {
-    /* request may 401; caller keeps original text */
-  }
-  return headers;
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No humanize proxy fetch fires without a
+ * real Bearer token. Callers already fall back to original text on throw.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**

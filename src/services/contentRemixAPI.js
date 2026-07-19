@@ -1,5 +1,6 @@
 import { API_TIMEOUTS } from '../config/apiConfig';
 import { retryFetch } from '../utils/retryFetch';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const CONTENT_REMIX_PROXY_URL = '/api/ai/content-remix';
 const CONTENT_REMIX_TIMEOUT_MS = Math.min(API_TIMEOUTS.STANDARD, 46000);
@@ -28,23 +29,14 @@ function formatSectionsAsContent(sections) {
     .join('\n\n');
 }
 
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    const { supabase } = await import('../config/supabase');
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (error) {
-    console.warn('[contentRemixAPI] Could not get auth session:', error.message);
-  }
-
-  return headers;
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No content-remix proxy fetch fires without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 function createRequestError(message, errorType) {

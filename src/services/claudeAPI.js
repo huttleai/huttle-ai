@@ -1,25 +1,22 @@
-import { supabase } from '../config/supabase';
 import { buildPromptBrandSection, getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { buildUserContextBlock } from '../utils/buildUserContext';
 import { getPlatform } from '../utils/platformGuidelines';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
 const CLAUDE_MODEL = 'claude-sonnet-5';
 
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-  return headers;
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No Claude proxy fetch fires without a
+ * real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {

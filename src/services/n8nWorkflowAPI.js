@@ -32,6 +32,7 @@ import {
 } from '../utils/workflowConstants';
 import { API_TIMEOUTS } from '../config/apiConfig';
 import { retryFetch } from '../utils/retryFetch';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const TREND_DEEP_DIVE_PROXY_URL = '/api/ai/deep-dive';
 
@@ -40,24 +41,14 @@ const TREND_DEEP_DIVE_PROXY_URL = '/api/ai/deep-dive';
 // ============================================================================
 
 /**
- * Get authentication headers for n8n workflow requests
- * @returns {Promise<Object>} Headers object with Content-Type and optional Authorization
+ * Get authentication headers for n8n workflow requests. Fails closed:
+ * getSession → refreshSession once → typed AUTH_NOT_READY error. No workflow
+ * fetch fires without a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ * @returns {Promise<Object>} Headers object with Content-Type and Authorization
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('[N8N_WORKFLOW] Could not get auth session:', e);
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**
