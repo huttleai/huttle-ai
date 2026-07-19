@@ -477,9 +477,11 @@ export default function Subscription() {
                     {isTrialing && trialEndsAt && (
                       <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3">
                         <p className="text-sm font-semibold text-cyan-900">
-                          {trialDaysRemaining === 0
-                            ? 'Your trial ends today.'
-                            : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
+                          {trialDaysRemaining === null
+                            ? 'Your trial is active.'
+                            : trialDaysRemaining === 0
+                              ? 'Your trial ends today.'
+                              : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
                         </p>
                         <p className="text-sm text-cyan-800 mt-1">
                           Trial end date: {formatDate(trialEndsAt)}.

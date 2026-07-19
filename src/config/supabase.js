@@ -201,6 +201,7 @@ export const TIER_LIMITS = {
     performancePrediction: true,
     algorithmChecker: true,
     nicheIntel: FEATURE_RUN_CAPS.nicheIntel.essentials,
+    contentRemix: FEATURE_RUN_CAPS.contentRemix.essentials,
     aiPlanBuilderDays: 7, // 14-day plans are Pro+ only
     /** 7-day Plan Builder cap (Essentials cannot use 14-day at all — see creditConfig). */
     planBuilder: FEATURE_RUN_CAPS.planBuilder7Day.essentials,
@@ -316,7 +317,8 @@ export const FEATURES = {
   'humanizer-score': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'performance-prediction': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
   'algorithm-checker': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
-  'niche-intel': [TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'niche-intel': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
+  'content-remix': [TIERS.ESSENTIALS, TIERS.PRO, TIERS.FOUNDER, TIERS.BUILDER],
 };
 
 /**

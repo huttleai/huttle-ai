@@ -1,6 +1,5 @@
 import { useState, useContext } from 'react';
 import { BrandContext } from '../context/BrandContext';
-import { useSubscription } from '../context/SubscriptionContext';
 import { Lightbulb, Bell, Calendar, Copy, Check, Sparkles, ArrowRight } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
@@ -24,7 +23,6 @@ import { isComingSoonFeature } from '../config/creditConfig';
 export default function TrendLab() {
   const { brandData } = useContext(BrandContext);
   const { addToast: showToast } = useToast();
-  const { checkFeatureAccess } = useSubscription();
   const [trendForecast, _setTrendForecast] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
@@ -245,7 +243,7 @@ export default function TrendLab() {
                   </div>
                 </div>
               </div>
-              {!isComingSoon && trendForecast && checkFeatureAccess('trendForecasts') && (
+              {!isComingSoon && trendForecast && (
                 <button
                   onClick={() => toggleCard('trendForecaster')}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-all"
@@ -260,7 +258,7 @@ export default function TrendLab() {
             </div>
 
             {/* Trend Forecast Content */}
-            {!isComingSoon && trendForecast && !collapsedCards.trendForecaster && checkFeatureAccess('trendForecasts') && (
+            {!isComingSoon && trendForecast && !collapsedCards.trendForecaster && (
               <div className="space-y-6 mt-6 pt-6 border-t border-huttle-200 animate-fadeIn">
                 <AIDisclaimerFooter 
                   phraseIndex={0} 

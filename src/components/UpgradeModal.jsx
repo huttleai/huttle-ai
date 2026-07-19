@@ -76,7 +76,7 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
         'Optimal posting times',
         'Performance scoring',
         'Essentials: 15 briefs/month',
-        'Pro: 60 briefs/month'
+        'Pro: 40 briefs/month'
       ],
       tier: 'Essentials or Pro'
     },

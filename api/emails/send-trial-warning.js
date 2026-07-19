@@ -29,7 +29,7 @@ function getPlanDetails(plan) {
     return { planLabel: 'Essentials', formattedAmount: '$15/month', creditLimit: '200' };
   }
   if (normalizedPlan === 'builder') {
-    return { planLabel: 'Builders Club', formattedAmount: '$249/year', creditLimit: '800' };
+    return { planLabel: 'Legacy Annual', formattedAmount: '$249/year', creditLimit: '800' };
   }
   return { planLabel: 'Pro', formattedAmount: '$39/month', creditLimit: '600' };
 }

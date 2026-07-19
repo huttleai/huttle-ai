@@ -26,7 +26,7 @@ const SUBSCRIPTION_TIMEOUT_MS = 10000;
 async function getDatabaseSubscription(userId) {
   const { data, error } = await supabase
     .from(TABLES.SUBSCRIPTIONS)
-    .select('id, user_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancelled_at')
+    .select('id, user_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancelled_at, trial_end')
     .eq('user_id', userId)
     .in('status', Array.from(ACTIVE_ACCESS_STATUSES))
     .limit(1)
@@ -380,7 +380,7 @@ export function SubscriptionProvider({ children }) {
             currentPeriodStart: stripeSubscription.currentPeriodStart ?? databaseSubscription?.current_period_start ?? null,
             currentPeriodEnd: stripeSubscription.currentPeriodEnd ?? databaseSubscription?.current_period_end ?? null,
             trialStart: stripeSubscription.trialStart ?? null,
-            trialEnd: stripeSubscription.trialEnd ?? null,
+            trialEnd: stripeSubscription.trialEnd ?? databaseSubscription?.trial_end ?? null,
             cancelAtPeriodEnd: stripeSubscription.cancelAtPeriodEnd ?? databaseSubscription?.cancel_at_period_end ?? false,
             cancelledAt: stripeSubscription.cancelledAt ?? databaseSubscription?.cancelled_at ?? null,
             billingCycle: stripeSubscription.billingCycle ?? null,
@@ -396,7 +396,7 @@ export function SubscriptionProvider({ children }) {
               currentPeriodStart: databaseSubscription.current_period_start ?? null,
               currentPeriodEnd: databaseSubscription.current_period_end ?? null,
               trialStart: null,
-              trialEnd: null,
+              trialEnd: databaseSubscription.trial_end ?? null,
               cancelAtPeriodEnd: databaseSubscription.cancel_at_period_end ?? false,
               cancelledAt: databaseSubscription.cancelled_at ?? null,
               billingCycle: null,

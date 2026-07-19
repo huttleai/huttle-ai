@@ -15,7 +15,7 @@ const TEMPLATE_BY_TIER = {
 const SUBJECT_BY_TIER = {
   essentials: "You're on Essentials",
   pro: "You're on Pro",
-  builder: "You're in the Builders Club",
+  builder: "You're on Legacy Annual",
 };
 
 /**

@@ -184,17 +184,9 @@ export default function NicheIntel() {
       setLoadingPhase('analyze');
       const analysisRes = await analyzeNiche(researchRes.research, brandData, platform);
       if (analysisRes.success && analysisRes.analysis) {
-        const usage = await trackFeatureUsage({
-          query: resolvedQuery,
-          platform,
-          cachedResearch: Boolean(researchRes.cached),
-        });
-
-        if (!usage.allowed) {
-          addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
-          return;
-        }
-
+        // Show the already-successful analysis regardless of usage-tracking
+        // outcome — a failed/rejected trackFeatureUsage call must never
+        // discard research + analysis the user already paid credits for.
         setAnalysis(analysisRes.analysis);
         if (analysisStorageKey) {
           try {
@@ -210,6 +202,16 @@ export default function NicheIntel() {
           } catch (e) {
             console.error('[NicheIntel] Could not persist analysis cache', e);
           }
+        }
+
+        const usage = await trackFeatureUsage({
+          query: resolvedQuery,
+          platform,
+          cachedResearch: Boolean(researchRes.cached),
+        });
+
+        if (!usage.allowed) {
+          addToast('Your results are ready. Note: this run may not count toward this month\'s Niche Intel usage — resets on the 1st.', 'warning');
         }
       } else {
         addToast('Analysis failed. Try again.', 'error');

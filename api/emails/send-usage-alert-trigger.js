@@ -80,8 +80,8 @@ export default async function handler(req, res) {
     const TIER_LABELS = {
       pro: 'Pro',
       essentials: 'Essentials',
-      builder: 'Builders Club',
-      founder: 'Builders Club',
+      builder: 'Legacy Annual',
+      founder: 'Founders Club',
       free: 'Free',
     };
 

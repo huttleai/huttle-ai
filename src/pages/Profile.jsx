@@ -120,7 +120,7 @@ export default function Profile() {
                 )}
                 {isBuilderMember && (
                   <span className="inline-flex items-center rounded-full border border-[#01BAD2]/40 bg-[#01BAD2]/10 px-2.5 py-1 text-xs font-semibold text-[#008fa3]">
-                    BUILDER
+                    LEGACY ANNUAL
                   </span>
                 )}
               </div>

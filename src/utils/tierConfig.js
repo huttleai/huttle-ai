@@ -1,4 +1,13 @@
 export const TIER_CONFIG = {
+  free: {
+    displayName: 'Free',
+    badgeLabel: 'Free',
+    badgeColor: 'gray',
+    priceLabel: '$0/month',
+    description: 'Choose a plan to unlock Huttle AI.',
+    isLocked: false,
+    canChangePlan: true,
+  },
   essentials: {
     displayName: 'Essentials',
     badgeLabel: 'Essentials',

@@ -1269,9 +1269,11 @@ export default function Dashboard() {
                 : 'bg-cyan-100 text-cyan-800'
             }`}>
               <span>
-                {trialDaysRemaining === 0
-                  ? "⚠️ Trial ends today - you'll be charged tonight"
-                  : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
+                {trialDaysRemaining === null
+                  ? '🎯 Trial active'
+                  : trialDaysRemaining === 0
+                    ? "⚠️ Trial ends today - you'll be charged tonight"
+                    : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
               </span>
             </div>
           )}

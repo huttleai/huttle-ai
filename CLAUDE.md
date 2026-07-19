@@ -42,7 +42,7 @@ All AI calls go through server-side proxies — never call AI APIs directly from
 | Stripe webhook | `api/stripe-webhook.js` |
 | Checkout session | `api/create-checkout-session.js` |
 | Subscription status | `api/subscription-status.js` |
-| Tier limits (source of truth) | `TIER_GENERATION_LIMITS` constant |
+| Tier limits (source of truth) | `TIER_LIMITS` constant (`src/config/supabase.js`), sourced from `src/config/creditConfig.js` |
 | Algorithm checker (rules-based) | `src/data/algorithmSignals.js` |
 | Platform guidelines | `src/utils/platformGuidelines.js` |
 | Brand context | `src/utils/getBrandStoryContext.js` |
