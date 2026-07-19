@@ -23,7 +23,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube', 'LinkedIn']);
+const ALLOWED_PLATFORMS = new Set(['TikTok', 'Instagram', 'Facebook', 'X', 'YouTube']);
 
 const PLATFORM_ALIASES = {
   instagram: 'Instagram',
@@ -35,7 +35,6 @@ const PLATFORM_ALIASES = {
   x: 'X',
   youtube: 'YouTube',
   yt: 'YouTube',
-  linkedin: 'LinkedIn',
 };
 
 function normalizeWebhookPlatform(raw) {

@@ -189,6 +189,10 @@ export default function IgniteEngine() {
   const [isPolishingScript, setIsPolishingScript] = useState(false);
   const [briefGenerationError, setBriefGenerationError] = useState('');
   const scriptPolishGenRef = useRef(0);
+  // Guards against double-charging a single generate attempt (primary n8n
+  // path vs. Grok fallback path are mutually exclusive, but this ref makes
+  // that explicit and safe against future refactors).
+  const briefChargedRef = useRef(false);
 
   const hasMismatch = generatedBrief && (selectedPlatform !== generatedForPlatform || selectedPostType !== generatedForPostType);
   const mismatchLabel = hasMismatch ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
@@ -304,8 +308,24 @@ export default function IgniteEngine() {
     setIsGenerating(true);
     setParseError(false);
     setBriefGenerationError('');
+    briefChargedRef.current = false;
+
+    // Credits are only charged once a usable brief is confirmed (primary n8n
+    // path or Grok fallback) — a failed run must never cost the user usage.
     // overallCredits auto-derived from FEATURE_CREDIT_COSTS.igniteEngine (3).
-    await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
+    const chargeOnceIfNeeded = async () => {
+      if (briefChargedRef.current) return true;
+      const usage = await blueprintUsage.trackFeatureUsage({
+        platform: selectedPlatform,
+        postType: selectedPostType,
+      });
+      if (!usage.allowed) {
+        showToast("You've reached your monthly brief limit.", 'warning');
+        return false;
+      }
+      briefChargedRef.current = true;
+      return true;
+    };
 
     let scriptPolishGen = 0;
     try {
@@ -434,6 +454,12 @@ export default function IgniteEngine() {
         throw new Error('INVALID_BRIEF_STRUCTURE');
       }
 
+      const charged = await chargeOnceIfNeeded();
+      if (!charged) {
+        setBriefGenerationError("You've reached your monthly brief limit.");
+        return;
+      }
+
       setGeneratedBrief(normalized);
       setGeneratedForPlatform(selectedPlatform);
       setGeneratedForPostType(selectedPostType);
@@ -474,6 +500,11 @@ export default function IgniteEngine() {
             selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
           );
           if (fallbackBrief) {
+            const charged = await chargeOnceIfNeeded();
+            if (!charged) {
+              setBriefGenerationError("You've reached your monthly brief limit.");
+              return;
+            }
             setGeneratedBrief(fallbackBrief);
             setGeneratedForPlatform(selectedPlatform);
             setGeneratedForPostType(selectedPostType);
