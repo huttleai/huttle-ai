@@ -274,6 +274,8 @@ export default async function handler(req, res) {
     extraContext,
     brandVoice,
     brandContext,
+    brand_story_context,
+    brandStoryContext,
     trendContext,
     platform_rules_block,
     platforms_list,
@@ -331,6 +333,16 @@ export default async function handler(req, res) {
       extraContext: extraContext ?? null,
       brandVoice: typeof brandVoice === 'string' ? brandVoice : (typeof brandVoiceTone === 'string' ? brandVoiceTone : ''),
       brandContext: typeof brandContext === 'string' ? brandContext : '',
+      // IMPORTANT: This field must be mapped to the AI Plan Builder n8n
+      // workflow system message node. Verify in n8n that the AI Agent
+      // system message references: {{ $json.brand_story_context }}
+      // Without this, getBrandStoryContext output never reaches the model.
+      brand_story_context: typeof brand_story_context === 'string'
+        ? brand_story_context
+        : (typeof brandStoryContext === 'string' ? brandStoryContext : ''),
+      brandStoryContext: typeof brandStoryContext === 'string'
+        ? brandStoryContext
+        : (typeof brand_story_context === 'string' ? brand_story_context : ''), // HUTTLE AI: userBrandType-based content philosophy
       trendContext: typeof trendContext === 'string' ? trendContext : '',
       platform_rules_block:
         typeof platform_rules_block === 'string' ? platform_rules_block : '',

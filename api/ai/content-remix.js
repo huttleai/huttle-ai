@@ -11,6 +11,7 @@ import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 import {
   PLATFORM_CONTENT_RULES,
@@ -519,9 +520,10 @@ export default async function handler(req, res) {
 
     const { requestedMode, normalizedMode } = normalizeMode(mode);
     const remixPromptGoal = resolveRemixPromptGoal(goalFromBody, normalizedMode);
+    const storyContext = getBrandStoryContext(additionalContext); // HUTTLE AI: userBrandType-based content philosophy
     const brandBlock = buildCreatorBrandBlock({ ...additionalContext, brandVoice }, { ...additionalContext }); // HUTTLE AI: brand context injected
     const profileTypeForRemix = additionalContext?.profileType || req.body?.profileType || 'brand_business';
-    const systemPrompt = `${brandBlock}${buildSystemPrompt(
+    const systemPrompt = `${storyContext ? `${storyContext}\n\n` : ''}${brandBlock}${buildSystemPrompt(
       buildContentRemixClaudeSystemCore(remixPromptGoal, profileTypeForRemix),
       {
         ...additionalContext,

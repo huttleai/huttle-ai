@@ -39,6 +39,7 @@ import useAIUsage from '../hooks/useAIUsage';
 import { useSearchParams, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
 import { sanitizeAIOutput } from '../utils/textHelpers';
 import { getCachedTrends } from '../services/dashboardCacheService';
 import { parsePlanBuilderDisplayResult, normalizeN8nAlternatePlanToV2 } from '../utils/planBuilderJobResult';
@@ -1215,6 +1216,11 @@ export default function AIPlanBuilder() {
       });
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: user?.user_metadata?.first_name });
+      // IMPORTANT: This field must be mapped to the AI Plan Builder n8n
+      // workflow system message node. Verify in n8n that the AI Agent
+      // system message references: {{ $json.brand_story_context }}
+      // Without this, getBrandStoryContext output never reaches the model.
+      const brandStoryContext = getBrandStoryContext(brandProfile); // HUTTLE AI: userBrandType-based content philosophy
       const {
         success: webhookSuccess,
         error: webhookError,
@@ -1231,6 +1237,7 @@ export default function AIPlanBuilder() {
         extraContext: extraContext.trim() || null,
         brandVoice: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         brandContext: brandBlock,
+        brandStoryContext, // HUTTLE AI: userBrandType-based content philosophy
         trendContext,
         platform_rules_block: platformRulesBlock,
         platforms_list: platformsArray.join(', '),

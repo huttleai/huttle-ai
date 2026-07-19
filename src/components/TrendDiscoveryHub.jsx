@@ -449,7 +449,10 @@ export default function TrendDiscoveryHub() {
         platforms: userProfile?.preferred_platforms || ['Instagram', 'TikTok', 'X'],
         brandData: {
           brandVoice: brandData?.brandVoice || '',
-          targetAudience: brandData?.targetAudience || ''
+          targetAudience: brandData?.targetAudience || '',
+          userBrandType: brandData?.userBrandType || '', // HUTTLE AI: userBrandType-based content philosophy
+          profileType: brandData?.profileType || '',
+          contentFocusPillars: brandData?.contentFocusPillars || []
         }
       });
 

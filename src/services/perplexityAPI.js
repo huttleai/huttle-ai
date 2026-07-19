@@ -21,6 +21,7 @@ import {
   getPromptBrandProfile,
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
 import { getAuthReadyHeaders } from '../utils/authReady';
 import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
 import {
@@ -1201,6 +1202,7 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
       query: nicheQuery,
       date: currentDate,
     });
+    const storyContext = getBrandStoryContext(brandData); // HUTTLE AI: userBrandType-based content philosophy
     const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
     const competitorHandles = nicheQuery
       .split(',')
@@ -1210,7 +1212,7 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: `You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.
+        content: `${storyContext ? `${storyContext}\n\n` : ''}You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.
 
 ${HUMAN_WRITING_RULES}`
       },

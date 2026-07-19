@@ -19,10 +19,21 @@
 
 import { supabase } from '../config/supabase';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 // N8N Webhook URL for Plan Builder (via serverless proxy to avoid CORS)
 const N8N_PLAN_BUILDER_WEBHOOK_URL = '/api/plan-builder-proxy';
+
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No plan-builder proxy fetch fires without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
+}
 
 function safeJsonParse(value) {
   try {
@@ -235,6 +246,12 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     extraContext: formData.extraContext ?? null,
     brandVoice: formData.brandVoice || formData.brandVoiceTone || '',
     brandContext: typeof formData.brandContext === 'string' ? formData.brandContext : '',
+    // IMPORTANT: This field must be mapped to the AI Plan Builder n8n
+    // workflow system message node. Verify in n8n that the AI Agent
+    // system message references: {{ $json.brand_story_context }}
+    // Without this, getBrandStoryContext output never reaches the model.
+    brand_story_context: typeof formData.brandStoryContext === 'string' ? formData.brandStoryContext : '',
+    brandStoryContext: typeof formData.brandStoryContext === 'string' ? formData.brandStoryContext : '', // HUTTLE AI: userBrandType-based content philosophy
     trendContext: formData.trendContext || '',
     platform_rules_block: typeof formData.platform_rules_block === 'string' ? formData.platform_rules_block : '',
     platforms_list:
@@ -266,6 +283,7 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     console.log('[PlanBuilder] n8n webhook payload (keys + sizes):', {
       ...payload,
       brandContext: payload.brandContext ? `${payload.brandContext.slice(0, 120)}…` : '',
+      brandStoryContext: payload.brandStoryContext ? `${payload.brandStoryContext.slice(0, 120)}…` : '',
       platform_rules_block: payload.platform_rules_block
         ? `${payload.platform_rules_block.slice(0, 160)}…`
         : '',
@@ -274,19 +292,9 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // Include auth headers for the proxy endpoint
-      const requestHeaders = { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          requestHeaders['Authorization'] = `Bearer ${session.access_token}`;
-        }
-      } catch (e) {
-        console.warn('[PlanBuilder] Could not get auth session:', e.message);
-      }
+      // Include auth headers for the proxy endpoint (fail closed)
+      const requestHeaders = await getAuthHeaders();
+      requestHeaders.Accept = 'application/json';
 
       const response = await fetch(N8N_PLAN_BUILDER_WEBHOOK_URL, {
         method: 'POST',
@@ -372,19 +380,11 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
  */
 export async function createPlanBuilderJob({ goal, period, platforms, niche, brandVoiceId }) {
   try {
-    // Get auth token
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error('Not authenticated');
-    }
+    const headers = await getAuthHeaders();
 
     const response = await fetch(`${API_BASE_URL}/create-plan-builder-job`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
+      headers,
       body: JSON.stringify({
         goal,
         period,
@@ -422,17 +422,11 @@ export async function createPlanBuilderJob({ goal, period, platforms, niche, bra
  */
 export async function getJobStatus(jobId) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error('Not authenticated');
-    }
+    const headers = await getAuthHeaders();
 
     const response = await fetch(`${API_BASE_URL}/get-job-status?jobId=${jobId}`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`
-      }
+      headers
     });
 
     const data = await response.json();
