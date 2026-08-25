@@ -12,8 +12,6 @@ export default [
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
-        __GROK_FAST_MODEL__: 'readonly',
-        __GROK_REASONING_MODEL__: 'readonly',
       },
       parserOptions: {
         ecmaVersion: 'latest',

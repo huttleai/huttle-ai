@@ -66,7 +66,7 @@
 - **Vercel** - Hosting and serverless functions
 
 ### AI Services
-- **xAI Grok API** (`grok-4-1-fast-reasoning`) - Content generation, remixing, scoring
+- **xAI Grok API** (see `GROK_MODEL` in `src/config/grokConfig.js`) - Content generation, remixing, scoring
 - **Perplexity API** - Trend scanning, research, competitor analysis
 - **n8n** (optional) - Workflow automation for advanced features
 

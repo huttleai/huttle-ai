@@ -9,6 +9,7 @@
 import { buildBrandContext, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getAuthReadyHeaders } from '../utils/authReady';
+import { getGrokParams } from '../config/grokConfig';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -206,7 +207,7 @@ Return ONLY valid JSON matching the structure specified.`;
   const headers = await getAuthHeaders();
 
   const requestBody = JSON.stringify({
-    model: 'grok-4.1-fast-reasoning',
+    ...getGrokParams('optimizeTimes'),
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }

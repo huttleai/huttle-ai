@@ -8,6 +8,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
 import { buildContentVaultPayload } from '../utils/contentVault';
@@ -127,7 +128,7 @@ export default function ContentRepurposer() {
       const headers = await getAuthReadyHeaders();
 
       const requestBody = JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+          ...getGrokParams('contentRepurposer'),
           messages: [
             {
               role: 'system',
