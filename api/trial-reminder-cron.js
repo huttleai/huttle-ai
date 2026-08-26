@@ -36,13 +36,18 @@ export default async function handler(req, res) {
     // maybeSendTrialReminder gates sends to exactly 3 days or 1 day remaining.
     const reminderWindowEnd = new Date(now.getTime() + 73 * 60 * 60 * 1000);
 
+    // `subscriptions` has no `trial_end` column (never created / renamed away).
+    // For rows with status = 'trialing', Stripe keeps `current_period_end` equal to
+    // the trial expiry date, so we use it as the trial-end date here. This filter
+    // only ever touches trialing accounts, so non-trialing subscriptions (active,
+    // canceled, etc.) are unaffected by this query.
     const { data: subscriptions, error } = await supabase
       .from('subscriptions')
       .select('stripe_subscription_id')
       .eq('status', 'trialing')
-      .not('trial_end', 'is', null)
-      .gte('trial_end', now.toISOString())
-      .lte('trial_end', reminderWindowEnd.toISOString());
+      .not('current_period_end', 'is', null)
+      .gte('current_period_end', now.toISOString())
+      .lte('current_period_end', reminderWindowEnd.toISOString());
 
     if (error) {
       throw error;
