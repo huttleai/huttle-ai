@@ -363,6 +363,35 @@ export async function getStripeSubscription({
   }
 }
 
+/**
+ * Read a billing-period boundary off a Stripe subscription.
+ *
+ * As of API version 2025-03-31.basil, `current_period_start` / `current_period_end`
+ * were removed from the Subscription object and live on each subscription item.
+ * The SDK pins a newer version than that, so reading them off the subscription
+ * returns undefined. Falls back to the legacy top-level field so an older pinned
+ * API version keeps working.
+ *
+ * @param {object | null | undefined} stripeSubscription
+ * @param {'current_period_start' | 'current_period_end'} field
+ * @returns {string | null} ISO date, or null when unavailable.
+ */
+function extractCurrentPeriod(stripeSubscription, field) {
+  if (!stripeSubscription) return null;
+
+  const items = stripeSubscription.items?.data;
+  if (Array.isArray(items)) {
+    // A subscription can hold several items; the billing period is shared, so
+    // take the first item that reports one.
+    for (const item of items) {
+      const value = item?.[field];
+      if (value) return toIsoDate(value);
+    }
+  }
+
+  return toIsoDate(stripeSubscription[field]);
+}
+
 export function buildSubscriptionPayload({
   stripeSubscription,
   subscriptionRecord,
@@ -390,12 +419,14 @@ export function buildSubscriptionPayload({
     plan,
     tier: plan,
     billingCycle: extractBillingCycle(stripeSubscription),
-    currentPeriodStart: stripeSubscription
-      ? toIsoDate(stripeSubscription.current_period_start)
-      : subscriptionRecord?.current_period_start || null,
-    currentPeriodEnd: stripeSubscription
-      ? toIsoDate(stripeSubscription.current_period_end)
-      : subscriptionRecord?.current_period_end || null,
+    currentPeriodStart:
+      extractCurrentPeriod(stripeSubscription, 'current_period_start')
+      || subscriptionRecord?.current_period_start
+      || null,
+    currentPeriodEnd:
+      extractCurrentPeriod(stripeSubscription, 'current_period_end')
+      || subscriptionRecord?.current_period_end
+      || null,
     trialStart: stripeSubscription ? toIsoDate(stripeSubscription.trial_start) : null,
     trialEnd: stripeSubscription ? toIsoDate(stripeSubscription.trial_end) : null,
     cancelAtPeriodEnd: stripeSubscription?.cancel_at_period_end ?? subscriptionRecord?.cancel_at_period_end ?? false,

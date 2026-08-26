@@ -7,9 +7,18 @@ import { CardNetworkMark } from './CardNetworkMark';
 import UpdateCardModal from './UpdateCardModal';
 import CancelSubscriptionModal from './CancelSubscriptionModal';
 
+/**
+ * Renders a billing date. Returns a neutral dash when the value is absent:
+ * these fields are not fed by their own request, so a "Loading…" placeholder
+ * here would never resolve.
+ * @param {string | number | Date | null | undefined} dateValue
+ * @returns {string}
+ */
 function formatDate(dateValue) {
-  if (!dateValue) return 'Loading...';
-  return new Date(dateValue).toLocaleDateString('en-US', {
+  if (!dateValue) return '—';
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -41,8 +50,15 @@ export default function FoundersMembershipCard({
   const isFounder = tierKey === 'founder';
   const membershipName = isFounder ? 'Founders Club' : 'Legacy Annual';
   const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Legacy Annual';
-  const expiryDate = formatDate(subscription?.currentPeriodEnd);
-  const startDate = formatDate(subscription?.currentPeriodStart);
+  // The billing summary carries the live Stripe period; prefer it over the
+  // subscription context, which can lag behind or resolve without dates.
+  const billingSubscription = billingData?.subscription || null;
+  const expiryDate = formatDate(
+    subscription?.currentPeriodEnd ?? billingSubscription?.currentPeriodEnd
+  );
+  const startDate = formatDate(
+    subscription?.currentPeriodStart ?? billingSubscription?.currentPeriodStart
+  );
   // Null-safe plan-benefits lookup. Even if SUBSCRIPTION_PLANS shape changes
   // or the tier resolves to something unexpected (e.g. a degraded/null
   // subscription), we render an empty list instead of throwing in the render path.
