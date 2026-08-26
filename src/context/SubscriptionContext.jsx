@@ -23,6 +23,38 @@ const SUBSCRIPTION_INITIAL_RETRY_DELAY_MS = 1000;
 const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
 const SUBSCRIPTION_TIMEOUT_MS = 10000;
 
+/**
+ * Flatten a Supabase PostgrestError into a readable string.
+ *
+ * These errors carry their detail on own enumerable properties rather than in a
+ * `message` getter, so anything that stringifies them (log forwarders, error
+ * reporters, `String(err)`) collapses the whole object to "[object Object]" and
+ * the actual cause is lost.
+ *
+ * @param {unknown} error
+ * @returns {string}
+ */
+function describeSupabaseError(error) {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+
+  const { message, code, details, hint } = /** @type {Record<string, unknown>} */ (error);
+  const parts = [
+    message || (error instanceof Error ? error.message : ''),
+    code ? `code=${code}` : '',
+    details ? `details=${details}` : '',
+    hint ? `hint=${hint}` : '',
+  ].filter(Boolean);
+
+  if (parts.length > 0) return parts.join(' | ');
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 async function getDatabaseSubscription(userId) {
   const { data, error } = await supabase
     .from(TABLES.SUBSCRIPTIONS)
@@ -341,7 +373,7 @@ export function SubscriptionProvider({ children }) {
       if (timedOut) return;
 
       if (!databaseResult.success) {
-        console.error('Error loading subscription from database:', databaseResult.error);
+        console.error('Error loading subscription from database:', describeSupabaseError(databaseResult.error));
       }
 
       const databaseSubscription = databaseResult.subscription;
