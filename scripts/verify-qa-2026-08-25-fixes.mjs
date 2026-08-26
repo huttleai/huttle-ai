@@ -191,5 +191,39 @@ console.log('  silently downgrading the user to the Grok fallback.');
   check('no stale "90 seconds" copy remains', /timed out after 90 seconds/.test(igniteSource), false);
 }
 
+console.log('\nBUG-01 follow-up — slow deep research is isolated on its own function');
+console.log('  Pre-fix: Niche Intel research shared /api/ai/perplexity with the light');
+console.log('  callers, so it had to finish inside a 60s budget sized for them.');
+{
+  const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const perplexitySource = readFileSync(new URL('../src/services/perplexityAPI.js', import.meta.url), 'utf8');
+  const nicheIntelSource = readFileSync(new URL('../src/pages/NicheIntel.jsx', import.meta.url), 'utf8');
+  const localServer = readFileSync(new URL('../server/local-api-server.js', import.meta.url), 'utf8');
+
+  const sharedBudget = vercelConfig.functions?.['api/ai/perplexity.js']?.maxDuration;
+  const deepDiveBudget = vercelConfig.functions?.['api/ai/perplexity-deep-dive.js']?.maxDuration;
+
+  check('deep dive route has its own budget', typeof deepDiveBudget, 'number');
+  check('deep dive budget exceeds the shared one', deepDiveBudget > sharedBudget, true);
+  check('shared budget unchanged for light callers', sharedBudget, 60);
+  check('deep dive budget clears the observed ~75s overrun', deepDiveBudget * 1000 > 75_000, true);
+  check(
+    'client routes deep_dive to the dedicated endpoint',
+    /perplexityFeature === 'deep_dive'|cache\?\.type === 'niche_intel'/.test(perplexitySource),
+    true
+  );
+  check('dedicated route registered for local dev', localServer.includes('/api/ai/perplexity-deep-dive'), true);
+
+  const runTimeoutMs = Number(
+    nicheIntelSource.match(/const NICHE_INTEL_RUN_TIMEOUT_MS = (\d+)/)?.[1] ?? NaN
+  );
+  const grokBudget = vercelConfig.functions?.['api/ai/grok.js']?.maxDuration ?? 0;
+  check(
+    'client run timeout exceeds both server legs',
+    runTimeoutMs > (deepDiveBudget + grokBudget) * 1000,
+    true
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

@@ -105,6 +105,8 @@ async function setupRoutes() {
   // Other AI routes
   app.all('/api/ai/grok', await loadHandler('api/ai/grok.js'));
   app.all('/api/ai/perplexity', await loadHandler('api/ai/perplexity.js'));
+  // Same handler, separate function in production for a longer runtime budget.
+  app.all('/api/ai/perplexity-deep-dive', await loadHandler('api/ai/perplexity-deep-dive.js'));
   
   // Plan Builder routes
   app.all('/api/plan-builder-proxy', await loadHandler('api/plan-builder-proxy.js'));

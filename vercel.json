@@ -34,6 +34,9 @@
     "api/ai/perplexity.js": {
       "maxDuration": 60
     },
+    "api/ai/perplexity-deep-dive.js": {
+      "maxDuration": 120
+    },
     "api/ai/claude.js": {
       "maxDuration": 30
     },

@@ -34,7 +34,26 @@ import { getGrokParams } from '../config/grokConfig';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+/**
+ * Same handler, deployed separately with a longer runtime budget for the slow
+ * sonar-pro research path. See api/ai/perplexity-deep-dive.js.
+ */
+const PERPLEXITY_DEEP_DIVE_PROXY_URL = '/api/ai/perplexity-deep-dive';
 const GROK_PROXY_URL = '/api/ai/grok';
+
+/**
+ * Route long-running deep research to the endpoint with the larger budget, and
+ * everything else to the default one. Mirrors `resolvePerplexityFeatureKey` on
+ * the server, which derives the same feature from `cache.type` /
+ * `perplexityFeature`.
+ * @param {{ perplexityFeature?: string, cache?: { type?: string } }} options
+ * @returns {string}
+ */
+function resolvePerplexityProxyUrl(options = {}) {
+  const isDeepDive =
+    options.perplexityFeature === 'deep_dive' || options.cache?.type === 'niche_intel';
+  return isDeepDive ? PERPLEXITY_DEEP_DIVE_PROXY_URL : PERPLEXITY_PROXY_URL;
+}
 
 /**
  * Get auth headers for API requests. Fails closed: getSession → refreshSession
@@ -76,8 +95,9 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   });
 
   const signal = options.signal;
+  const proxyUrl = resolvePerplexityProxyUrl(options);
 
-  let response = await fetch(PERPLEXITY_PROXY_URL, {
+  let response = await fetch(proxyUrl, {
     method: 'POST',
     headers,
     body,
@@ -88,7 +108,7 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   if (response.status === 401) {
     try {
       const refreshedHeaders = await getAuthHeaders(null, { forceRefresh: true });
-      response = await fetch(PERPLEXITY_PROXY_URL, {
+      response = await fetch(proxyUrl, {
         method: 'POST',
         headers: refreshedHeaders,
         body,

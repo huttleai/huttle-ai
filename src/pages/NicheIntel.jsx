@@ -42,13 +42,12 @@ function nicheIntelResearchStatusMessages(platform) {
 /**
  * Client-side ceiling for a full Niche Intel run.
  *
- * The research leg (`/api/ai/perplexity`, deep_dive + sonar-pro) is capped at 60s
- * of Vercel runtime and returns a 504 when it overruns; the analysis leg adds its
- * own budget on top. This bounds the whole run so a hung request can never leave
- * the spinner up indefinitely, while still leaving room for a slow-but-successful
- * response to land.
+ * The research leg runs on `/api/ai/perplexity-deep-dive` (120s of Vercel
+ * runtime) and the analysis leg on `/api/ai/grok` (30s), so this sits above the
+ * combined server budget: the proxies get to return their own errors, and a
+ * hung request still cannot leave the spinner up indefinitely.
  */
-const NICHE_INTEL_RUN_TIMEOUT_MS = 150000;
+const NICHE_INTEL_RUN_TIMEOUT_MS = 165000;
 
 const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
   'Synthesizing themes, hook patterns, and content gaps…',
