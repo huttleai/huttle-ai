@@ -54,7 +54,7 @@ import {
 } from '../data/blueprintSchema';
 import { buildIgniteN8nPayload } from '../utils/igniteEngineN8nPayload';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
-import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { sanitizeAIOutput, normalizeAiPlaceholder } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { parseJsonLenient } from '../utils/parseAiJson';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { getCachedTrends } from '../services/dashboardCacheService';
@@ -66,6 +66,20 @@ import {
 } from '../services/humanizeContent';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
+
+/**
+ * How long the browser waits for a brief before giving up.
+ *
+ * Must stay above the proxy's own budget (`maxDuration: 120` in vercel.json, and
+ * an AbortSignal.timeout(120000) around the n8n call). A shorter client budget
+ * throws away workflow runs that were about to succeed and silently downgrades
+ * the user to the Grok fallback: a real 2026-08-25 run returned a valid blueprint
+ * at 104s and was discarded by the previous 90s client abort. The extra headroom
+ * lets the proxy's own 504 arrive so we can report the real reason.
+ */
+const BRIEF_REQUEST_TIMEOUT_MS = 130000;
+
+const BRIEF_TIMEOUT_MESSAGE = 'Generation timed out. Please try again.';
 
 const PLATFORMS = [
   {
@@ -176,6 +190,8 @@ export default function IgniteEngine() {
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
+  /** True while the Grok fallback is producing the brief after the n8n path failed. */
+  const [isUsingBackupGenerator, setIsUsingBackupGenerator] = useState(false);
   const [generatedBrief, setGeneratedBrief] = useState(null);
   const [generatedForPlatform, setGeneratedForPlatform] = useState('');
   const [generatedForPostType, setGeneratedForPostType] = useState('');
@@ -370,7 +386,7 @@ export default function IgniteEngine() {
       // Fail closed: never POST to the n8n webhook without a real Bearer token.
       const postBriefRequest = async (accessToken) => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 90000);
+        const timeoutId = setTimeout(() => controller.abort(), BRIEF_REQUEST_TIMEOUT_MS);
 
         try {
           return await fetch(N8N_WEBHOOK_URL, {
@@ -386,7 +402,7 @@ export default function IgniteEngine() {
           });
         } catch (err) {
           if (err.name === 'AbortError') {
-            throw new Error('Generation timed out after 90 seconds. Please try again.');
+            throw new Error(BRIEF_TIMEOUT_MESSAGE);
           }
           throw err;
         } finally {
@@ -486,41 +502,58 @@ export default function IgniteEngine() {
       }
 
       let msg = "We're having trouble generating your brief. Please try again in a moment.";
-      if (error.message.includes('timed out after 90 seconds')) {
-        msg = 'Generation timed out after 90 seconds. Please try again.';
+      if (error.message === BRIEF_TIMEOUT_MESSAGE) {
+        msg = BRIEF_TIMEOUT_MESSAGE;
         setBriefGenerationError(msg);
       } else if (error.message.startsWith('HTTP_ERROR')) {
         msg = 'We received an unexpected response. Please try again.';
       }
 
-      showToast(msg, 'error');
+      const canAttemptFallback = Boolean(topic.trim()) && !isParseFailure;
 
-      if (topic.trim() && !isParseFailure) {
-        try {
-          const fallbackBrief = await attemptGrokFallback(
-            selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
-          );
-          if (fallbackBrief) {
-            const charged = await chargeOnceIfNeeded();
-            if (!charged) {
-              setBriefGenerationError("You've reached your monthly brief limit.");
-              return;
-            }
-            setGeneratedBrief(fallbackBrief);
-            setGeneratedForPlatform(selectedPlatform);
-            setGeneratedForPostType(selectedPostType);
-            setParseError(false);
-            setBriefGenerationError('');
-            setCurrentView('results');
-            scheduleScriptHumanize(fallbackBrief, scriptPolishGen);
-            showToast('Brief generated via direct AI.', 'success');
+      // Hold the failure toast until the fallback has had its turn. Firing it
+      // first showed an error followed seconds later by a success toast for the
+      // same run, which reads as though something broke when it recovered.
+      if (!canAttemptFallback) {
+        showToast(msg, 'error');
+        return;
+      }
+
+      let fallbackSucceeded = false;
+      try {
+        setIsUsingBackupGenerator(true);
+        const fallbackBrief = await attemptGrokFallback(
+          selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
+        );
+        if (fallbackBrief) {
+          const charged = await chargeOnceIfNeeded();
+          if (!charged) {
+            setBriefGenerationError("You've reached your monthly brief limit.");
+            return;
           }
-        } catch {
-          // Both paths failed
+          fallbackSucceeded = true;
+          setGeneratedBrief(fallbackBrief);
+          setGeneratedForPlatform(selectedPlatform);
+          setGeneratedForPostType(selectedPostType);
+          setParseError(false);
+          setBriefGenerationError('');
+          setCurrentView('results');
+          scheduleScriptHumanize(fallbackBrief, scriptPolishGen);
+          showToast('Brief generated via direct AI.', 'success');
         }
+      } catch (fallbackError) {
+        console.error('[IgniteEngine] Grok fallback failed:', fallbackError);
+      } finally {
+        setIsUsingBackupGenerator(false);
+      }
+
+      if (!fallbackSucceeded) {
+        setBriefGenerationError(msg);
+        showToast(msg, 'error');
       }
     } finally {
       setIsGenerating(false);
+      setIsUsingBackupGenerator(false);
     }
   };
 
@@ -870,7 +903,11 @@ export default function IgniteEngine() {
                       {briefGenerationError}
                     </p>
                   ) : null}
-                  <p className="text-xs text-gray-500 text-center mt-3">Deep research & strategy generation takes 60-90 seconds. Please keep this tab open.</p>
+                  <p className="text-xs text-gray-500 text-center mt-3">
+                    {isUsingBackupGenerator
+                      ? 'Our main generator is slow right now, so we\'re finishing your brief a different way. Hang tight.'
+                      : 'Deep research and strategy generation can take up to two minutes. Please keep this tab open.'}
+                  </p>
                 </div>
               </>
             )}
@@ -1134,13 +1171,14 @@ function ReasonCallout({ text }) {
 }
 
 function InfoRow({ emoji, label, value }) {
-  if (!value) return null;
+  const text = normalizeAiPlaceholder(value);
+  if (!text) return null;
   return (
     <div className="flex items-start gap-3 py-2">
       <span className="text-base flex-shrink-0">{emoji}</span>
       <div>
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
-        <p className="text-sm text-gray-800 mt-0.5">{sanitizeAIOutput(value)}</p>
+        <p className="text-sm text-gray-800 mt-0.5">{sanitizeAIOutput(text)}</p>
       </div>
     </div>
   );
@@ -1307,7 +1345,7 @@ function normalizeN8nResponse(data) {
   const imageDirection = rawImageDir ? {
     concept: String(rawImageDir.concept ?? '').trim(),
     style: String(rawImageDir.style ?? '').trim(),
-    textOverlay: rawImageDir.textOverlay ?? rawImageDir.text_overlay ?? null,
+    textOverlay: normalizeAiPlaceholder(rawImageDir.textOverlay ?? rawImageDir.text_overlay),
     avoid: String(rawImageDir.avoid ?? '').trim(),
     reason: String(rawImageDir.reason ?? '').trim(),
   } : null;
