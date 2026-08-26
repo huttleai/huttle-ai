@@ -9,13 +9,14 @@
  *
  * DEV NOTE — common failures:
  * - 401/403 from xAI: wrong or expired GROK_API_KEY → rotate in .env (local-api-server loads via dotenv) or Vercel env.
- * - 400 invalid model: set GROK_CHAT_MODEL / GROK_MODEL to a current id (see xAI docs); default here is grok-4-1-fast-non-reasoning.
+ * - 400 invalid model: the model id lives in src/config/grokConfig.js (GROK_MODEL) — the only place it may be changed.
  * - 401 from this proxy (JSON): no Supabase session → pass Authorization: Bearer <access_token> from the logged-in app.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { GROK_MODEL } from '../../src/config/grokConfig.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
 const _rawGrokKey = process.env.GROK_API_KEY;
@@ -23,53 +24,7 @@ const GROK_API_KEY =
   typeof _rawGrokKey === 'string' && _rawGrokKey.trim() ? _rawGrokKey.trim() : null;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
-/**
- * Default chat model when env is unset. xAI’s current catalog centers on Grok 4.x;
- * legacy aliases like grok-3-latest often return 400 invalid model.
- * @see https://docs.x.ai/docs/models
- */
-const DEFAULT_GROK_MODEL = 'grok-4-1-fast-non-reasoning';
-
-function resolveGrokModelId() {
-  const fromChat = typeof process.env.GROK_CHAT_MODEL === 'string' ? process.env.GROK_CHAT_MODEL.trim() : '';
-  const fromLegacy = typeof process.env.GROK_MODEL === 'string' ? process.env.GROK_MODEL.trim() : '';
-  const nonReasoning = typeof process.env.GROK_MODEL_NON_REASONING === 'string' ? process.env.GROK_MODEL_NON_REASONING.trim() : '';
-  const fromFast = typeof process.env.GROK_FAST_MODEL === 'string' ? process.env.GROK_FAST_MODEL.trim() : '';
-  const raw = fromChat || fromLegacy || nonReasoning || fromFast || DEFAULT_GROK_MODEL;
-  return normalizeGrokModelIdAliases(raw);
-}
-
-/** Allow only xAI-style model ids from the client; no other semantics in the proxy. */
-function sanitizeUpstreamModelId(raw) {
-  if (typeof raw !== 'string') return null;
-  const s = raw.trim();
-  if (!s || s.length > 96) return null;
-  // xAI ids: grok-4-1-fast-non-reasoning, grok-3, grok-2-vision-1212, etc.
-  if (!/^grok-[a-zA-Z0-9._-]+$/.test(s)) return null;
-  return s;
-}
-
-/**
- * Map common typos / legacy spellings to ids xAI accepts (hyphenated 4-1, not 4.1).
- * @param {string} modelId
- */
-function normalizeGrokModelIdAliases(modelId) {
-  if (typeof modelId !== 'string') return modelId;
-  const t = modelId.trim();
-  if (!t) return t;
-  const lower = t.toLowerCase();
-  const map = new Map([
-    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-    ['grok-4.1-fast', 'grok-4-1-fast'],
-    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-  ]);
-  if (map.has(lower)) return map.get(lower);
-  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
-  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
-  return t;
-}
+const VALID_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high']);
 
 function summarizeXaiErrorBody(errorText) {
   const raw = String(errorText || '').trim();
@@ -419,7 +374,7 @@ export default async function handler(req, res) {
       targetAudience,
       brandContext,
       forceCacheRefresh,
-      model: clientModelRaw,
+      reasoning_effort: reasoningEffortRaw,
     } = rawBody;
 
     if (!messages || !Array.isArray(messages)) {
@@ -444,8 +399,10 @@ export default async function handler(req, res) {
       }
     }
 
-    const clientSanitized = sanitizeUpstreamModelId(clientModelRaw);
-    const safeModel = normalizeGrokModelIdAliases(clientSanitized || resolveGrokModelId());
+    // Model is server-owned (src/config/grokConfig.js); client model strings are ignored.
+    const safeReasoningEffort = VALID_REASONING_EFFORTS.has(reasoningEffortRaw)
+      ? reasoningEffortRaw
+      : 'none';
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -472,31 +429,14 @@ export default async function handler(req, res) {
     }
 
     const normalizedMessages = normalizeMessagesForUpstream(messages);
-    const serverPreferredModel = normalizeGrokModelIdAliases(resolveGrokModelId());
-
-    /** If env + client agree on one invalid id, still try known-good default last. */
-    const modelCandidates = [];
-    const pushModel = (id) => {
-      const m = normalizeGrokModelIdAliases(typeof id === 'string' ? id.trim() : '');
-      if (!m || modelCandidates.includes(m)) return;
-      modelCandidates.push(m);
-    };
-    pushModel(safeModel);
-    pushModel(serverPreferredModel);
-    pushModel(DEFAULT_GROK_MODEL);
 
     const runUpstreamOnce = async (modelId) => {
-      const isReasoningModel =
-        typeof modelId === 'string'
-        && modelId.includes('reasoning')
-        && !modelId.includes('non-reasoning');
       const upstreamBody = {
         model: modelId,
         messages: normalizedMessages,
+        temperature: safeTemperature,
+        reasoning_effort: safeReasoningEffort,
       };
-      if (!isReasoningModel) {
-        upstreamBody.temperature = safeTemperature;
-      }
       // xAI deprecates max_tokens in favor of max_completion_tokens for /v1/chat/completions
       if (typeof max_tokens === 'number' && max_tokens > 0 && max_tokens <= 8192) {
         upstreamBody.max_completion_tokens = max_tokens;
@@ -519,19 +459,13 @@ export default async function handler(req, res) {
       });
     };
 
-    logInfo('grok.upstream_call', { models: modelCandidates, messageCount: normalizedMessages.length });
+    logInfo('grok.upstream_call', { models: [GROK_MODEL], messageCount: normalizedMessages.length });
 
-    let response;
-    let lastErrorText = '';
+    const response = await runUpstreamOnce(GROK_MODEL);
+    devAiProxyLog('grok ← xAI response', { model: GROK_MODEL, status: response.status, ok: response.ok });
 
-    for (let ci = 0; ci < modelCandidates.length; ci += 1) {
-      const modelId = modelCandidates[ci];
-      response = await runUpstreamOnce(modelId);
-      devAiProxyLog('grok ← xAI response', { model: modelId, status: response.status, ok: response.ok });
-
-      if (response.ok) break;
-
-      lastErrorText = await response.text();
+    if (!response.ok) {
+      const lastErrorText = await response.text();
       console.error('[GROK UPSTREAM RAW]', response.status, lastErrorText); // TODO: remove after QA
 
       if (fpbGrokHookDevLogEnabled && isFpbGrokHookRequest && response.status >= 400) {
@@ -546,7 +480,7 @@ export default async function handler(req, res) {
         logError('grok.upstream_error', {
           status: response.status,
           snippet: (lastErrorText || '').slice(0, 280),
-          model: modelId,
+          model: GROK_MODEL,
         });
         return res.status(502).json({
           error: true,
@@ -556,25 +490,16 @@ export default async function handler(req, res) {
         });
       }
 
-      if (response.status === 400 && ci < modelCandidates.length - 1) {
-        devAiProxyLog('grok upstream 400; trying next model candidate', {
-          attempted: modelId,
-          next: modelCandidates[ci + 1],
-          snippet: summarizeXaiErrorBody(lastErrorText),
-        });
-        continue;
-      }
-
       logError('grok.upstream_error', {
         status: response.status,
         snippet: (lastErrorText || '').slice(0, 280),
-        model: modelId,
+        model: GROK_MODEL,
       });
       if (debugFullPost) {
         logError('grok.debug_fullpost_upstream', {
           status: response.status,
           snippet: (lastErrorText || '').slice(0, 500),
-          model: modelId,
+          model: GROK_MODEL,
         });
       }
       if (response.status === 400) {
@@ -589,14 +514,6 @@ export default async function handler(req, res) {
           ...(verbose ? { upstreamDetail } : {}),
         });
       }
-      return res.status(502).json({
-        error: true,
-        code: 'GROK_UPSTREAM_ERROR',
-        message: 'AI service error. Please try again.',
-      });
-    }
-
-    if (!response.ok) {
       return res.status(502).json({
         error: true,
         code: 'GROK_UPSTREAM_ERROR',

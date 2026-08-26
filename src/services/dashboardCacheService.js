@@ -5,6 +5,7 @@ import { normalizeNiche, buildCacheKey, buildDashboardForYouCacheKey } from '../
 import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 
 // Ops: if Trending Now gets stuck on samples, run scripts/clean-poisoned-cache.sql
 
@@ -740,7 +741,7 @@ Return ONLY JSON: { "niche_angle": "...", "hook_starter": "..." }`;
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+          ...getGrokParams('dashboardWidget'),
           temperature: 0.2,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -1499,7 +1500,7 @@ async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
         method: 'POST', // HUTTLE AI: cache fix
         headers, // HUTTLE AI: cache fix
         body: JSON.stringify({ // HUTTLE AI: cache fix
-          model: 'grok-4.1-fast-reasoning', // HUTTLE AI: cache fix
+          ...getGrokParams('dashboardWidget'), // HUTTLE AI: cache fix
           temperature: 0.2, // HUTTLE AI: cache fix
           messages: buildAIInsightsMessages(context), // HUTTLE AI: cache fix
         }), // HUTTLE AI: cache fix
@@ -1777,7 +1778,7 @@ export async function fetchDashboardForYouHashtags({
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+          ...getGrokParams('dashboardWidget'),
           temperature: 0.35,
           personalized: true,
           forceCacheRefresh: Boolean(forceRefresh),

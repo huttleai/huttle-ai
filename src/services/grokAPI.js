@@ -64,6 +64,7 @@ import {
 } from '../data/demo/demoMockData';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -491,63 +492,33 @@ function truncateForAiPrompt(text, maxChars = 2800) {
   return `${t.slice(0, maxChars)}\n[…truncated for length]`;
 }
 
-const DEFAULT_GROK_MODEL_CLIENT = 'grok-4-1-fast-non-reasoning';
-
 /**
- * xAI model ids use hyphens in the minor version (4-1), not dots (4.1).
- * Aligns with `normalizeGrokModelIdAliases` in `api/ai/grok.js`.
- * @param {string} modelId
+ * Transient-only retry gate for dual-attempt Grok calls (429 / 5xx / network).
+ * Deterministic failures (GROK_UPSTREAM_INVALID 400s, auth) must NOT be retried:
+ * an identical second attempt just double-bills the same failure.
+ * @param {Error & { code?: string, status?: number }} err
  */
-function normalizeClientGrokModelId(modelId) {
-  if (typeof modelId !== 'string') return modelId;
-  const t = modelId.trim();
-  if (!t) return t;
-  const lower = t.toLowerCase();
-  const map = new Map([
-    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-    ['grok-4.1-fast', 'grok-4-1-fast'],
-    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-  ]);
-  if (map.has(lower)) return map.get(lower);
-  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
-  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
-  return t;
-}
-
-function resolveGrokModelIdClientFallback() {
-  const chat = (import.meta.env.VITE_GROK_CHAT_MODEL || '').trim();
-  const legacy = (import.meta.env.VITE_GROK_MODEL || '').trim();
-  return normalizeClientGrokModelId(chat || legacy || DEFAULT_GROK_MODEL_CLIENT);
+function isTransientGrokError(err) {
+  if (err?.code === 'GROK_AUTH_FAILED' || err?.code === 'GROK_UPSTREAM_INVALID') return false;
+  const status = typeof err?.status === 'number' ? err.status : null;
+  if (status === 429) return true;
+  if (status != null && status >= 500 && err?.code !== 'GROK_UPSTREAM_INVALID') return true;
+  // No HTTP status at all → fetch itself failed (network error).
+  if (status == null) return true;
+  return false;
 }
 
 /**
- * Feature → model id. Values come from Vite `define` (GROK_MODEL_NON_REASONING / GROK_MODEL_REASONING at build time).
- * @param {'fast'|'reasoning'} [mode]
- */
-function getGrokModel(mode = 'fast') {
-  const fast = normalizeClientGrokModelId(String(__GROK_FAST_MODEL__ || '').trim());
-  const reasoning = normalizeClientGrokModelId(String(__GROK_REASONING_MODEL__ || '').trim());
-  if (mode === 'reasoning' && reasoning) return reasoning;
-  if (fast) return fast;
-  return resolveGrokModelIdClientFallback();
-}
-
-/** Maps to `GROK_MODEL_REASONING` / `__GROK_REASONING_MODEL__` — Full Post Builder + richer copy/analysis. */
-const GROK_MODE_QUALITY = 'reasoning';
-
-/**
- * Make a request to the Grok API via the secure proxy (API key server-only; model chosen here, forwarded in body).
- * Proxy body is only: model, messages, temperature, optional max_tokens (number).
+ * Make a request to the Grok API via the secure proxy (API key server-only;
+ * model + reasoning_effort come from src/config/grokConfig.js via featureKey).
+ * Proxy body is only: model, reasoning_effort, messages, temperature, optional max_tokens (number).
  * @param {object[]} messages
  * @param {number} [temperature]
- * @param {{ max_tokens?: number, mode?: 'fast'|'reasoning', grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
+ * @param {{ featureKey?: string, max_tokens?: number, grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
  */
 async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
   const headers = await getAuthHeaders();
-  const grokMode = requestOptions.mode === 'reasoning' ? 'reasoning' : 'fast';
-  const model = getGrokModel(grokMode);
+  const { model, reasoning_effort } = getGrokParams(requestOptions.featureKey);
 
   const normalizedMessages = Array.isArray(messages)
     ? messages.map((m) => ({
@@ -562,6 +533,7 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
   /** @type {Record<string, unknown>} */
   const body = {
     model,
+    reasoning_effort,
     messages: normalizedMessages,
     temperature: safeTemp,
   };
@@ -824,7 +796,7 @@ Make sure each idea:
 
 Number them 1-5 with brief descriptions.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'trendIdeas' });
 
     return {
       success: true,
@@ -1055,7 +1027,7 @@ Write EXACTLY 1–2 sentences. Stop writing after the second sentence. The entir
 
     let data;
     if (fullPostBuilder) {
-      const grokCaptionOpts = { mode: GROK_MODE_QUALITY, max_tokens: 8192 };
+      const grokCaptionOpts = { featureKey: 'fullPostBuilder', max_tokens: 8192 };
       grokCaptionOpts.grok_debug_fullpost = true;
       grokCaptionOpts.grok_debug_fullpost_step = 'caption';
       if (captionRegenNonce) grokCaptionOpts.forceCacheRefresh = true;
@@ -1063,21 +1035,17 @@ Write EXACTLY 1–2 sentences. Stop writing after the second sentence. The entir
     } else {
       const baseOpts = captionRegenNonce ? { forceCacheRefresh: true } : {};
       try {
-        data = await callGrokAPI(captionMessages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096, ...baseOpts });
+        data = await callGrokAPI(captionMessages, 0.7, { featureKey: 'caption', max_tokens: 4096, ...baseOpts });
       } catch (firstErr) {
-        const retryable =
-          firstErr?.code === 'GROK_UPSTREAM_INVALID'
-          || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-          || firstErr?.status === 502;
-        if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+        // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+        if (!isTransientGrokError(firstErr)) throw firstErr;
         if (import.meta.env.DEV) {
-          console.warn('[generateCaption] Quality model failed; retrying with fast model', {
+          console.warn('[generateCaption] First attempt failed transiently; retrying once', {
             code: firstErr?.code,
             status: firstErr?.status,
-            fastModel: getGrokModel('fast'),
           });
         }
-        data = await callGrokAPI(captionMessages, 0.7, { mode: 'fast', max_tokens: 4096, ...baseOpts });
+        data = await callGrokAPI(captionMessages, 0.7, { featureKey: 'caption', max_tokens: 4096, ...baseOpts });
       }
     }
 
@@ -1176,7 +1144,7 @@ ${truncateForAiPrompt(caption, 4000)}`;
     ],
     0.5,
     {
-      mode: GROK_MODE_QUALITY,
+      featureKey: 'fullPostBuilder',
       max_tokens: 4096,
       grok_debug_fullpost: true,
       grok_debug_fullpost_step: 'caption_enhance',
@@ -1273,7 +1241,10 @@ Rules:
 ${fullPostBuilder ? '- Full Post Builder: Reference the algorithm signal themes above in strengths/risks/fixes where relevant; every fix must name what to change and why.' : ''}`,
       },
     ];
-    const grokScorerOpts = { mode: GROK_MODE_QUALITY, max_tokens: 4096 };
+    const grokScorerOpts = {
+      featureKey: fullPostBuilder ? 'fullPostBuilder' : 'contentQualityScorer',
+      max_tokens: 4096,
+    };
     if (fullPostBuilder) {
       grokScorerOpts.grok_debug_fullpost = true;
       grokScorerOpts.grok_debug_fullpost_step = 'quality_score';
@@ -1393,7 +1364,7 @@ export async function generateContentPlan(goals, brandData, days = 7, options = 
 
 Make sure all content aligns with the brand voice and appeals to the target audience.`
       }
-    ], 0.6, { mode: GROK_MODE_QUALITY });
+    ], 0.6, { featureKey: 'contentPlan' });
 
     return {
       success: true,
@@ -1634,21 +1605,17 @@ Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); n
     ];
     let data;
     try {
-      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: GROK_MODE_QUALITY });
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { featureKey: 'hookBuilder' });
     } catch (firstErr) {
-      const retryable =
-        firstErr?.code === 'GROK_UPSTREAM_INVALID'
-        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-        || firstErr?.status === 502;
-      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+      if (!isTransientGrokError(firstErr)) throw firstErr;
       if (import.meta.env.DEV) {
-        console.warn('[generateHooks] Quality model failed; retrying with fast model', {
+        console.warn('[generateHooks] First attempt failed transiently; retrying once', {
           code: firstErr?.code,
           status: firstErr?.status,
-          fastModel: getGrokModel('fast'),
         });
       }
-      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: 'fast' });
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { featureKey: 'hookBuilder' });
     }
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -1767,30 +1734,23 @@ Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamb
 
     let data;
     try {
-      // Match dev-test-grok.mjs / server default: non-reasoning id first (GROK_CHAT_MODEL || GROK_MODEL || default).
-      // Reasoning is retried second so accounts where only the fast catalog works still get hooks without a 502.
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: 'fast',
+        featureKey: 'fullPostBuilder',
         max_tokens: 1024,
         grok_debug_fullpost: true,
         grok_debug_fullpost_step: 'hooks',
       });
     } catch (firstErr) {
-      const retryable =
-        firstErr?.code === 'GROK_UPSTREAM_INVALID'
-        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-        || firstErr?.status === 502;
-      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+      if (!isTransientGrokError(firstErr)) throw firstErr;
       if (import.meta.env.DEV) {
-        const qualityId = getGrokModel(GROK_MODE_QUALITY);
-        console.warn('[generateFullPostHooks] Fast model request failed; retrying with quality (reasoning) model', {
+        console.warn('[generateFullPostHooks] First attempt failed transiently; retrying once', {
           code: firstErr?.code,
           status: firstErr?.status,
-          qualityModel: qualityId,
         });
       }
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: GROK_MODE_QUALITY,
+        featureKey: 'fullPostBuilder',
         max_tokens: 1024,
         grok_debug_fullpost: true,
         grok_debug_fullpost_step: 'hooks',
@@ -1976,7 +1936,7 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
       ctaUserMessage += `\n\n— Regeneration (${ctaRegenNonce}) — Produce fresh CTAs from the latest topic/caption/goal; do not repeat a previous default set verbatim.`;
     }
 
-    const grokCtaOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    const grokCtaOpts = { featureKey: fullPostBuilder ? 'fullPostBuilder' : 'cta', max_tokens: 4096 };
     if (fullPostBuilder) {
       grokCtaOpts.grok_debug_fullpost = true;
       grokCtaOpts.grok_debug_fullpost_step = 'ctas';
@@ -2118,7 +2078,7 @@ Each CTA must:
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'cta' });
 
     return {
       success: true,
@@ -2289,7 +2249,7 @@ Post context (optional):
       userMessage += `\n\n— Regeneration request (${regenNonce}) — Produce a substantively different set of hashtags (new tags and/or tier mix) while staying on-topic and platform-appropriate. Avoid repeating a previous default list.`;
     }
 
-    const grokHashtagOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    const grokHashtagOpts = { featureKey: fullPostBuilder ? 'fullPostBuilder' : 'hashtag', max_tokens: 4096 };
     if (fullPostBuilder) {
       grokHashtagOpts.grok_debug_fullpost = true;
       grokHashtagOpts.grok_debug_fullpost_step = 'hashtags';
@@ -2379,7 +2339,7 @@ Requirements:
 
 Provide the improved version.`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'improveContent' });
 
     return {
       success: true,
@@ -2430,7 +2390,7 @@ Requirements:
 
 Return ONLY the polished caption with hashtags, no explanations.`
       }
-    ], 0.6, { mode: GROK_MODE_QUALITY });
+    ], 0.6, { featureKey: 'voiceTranscriptPolish' });
 
     const content = data.content || '';
     
@@ -2521,7 +2481,7 @@ VARIATION 2: [Hook Type]
 
 etc.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'captionVariations' });
 
     const content = data.content || '';
     
@@ -2682,7 +2642,7 @@ ${platformRemixRulesBlock}`;
         role: 'user',
         content: userPrompt
       }
-    ], normalizedMode === 'sales_conversion' ? 0.7 : 0.8, { mode: GROK_MODE_QUALITY });
+    ], normalizedMode === 'sales_conversion' ? 0.7 : 0.8, { featureKey: 'contentRemix' });
 
     return {
       success: true,
@@ -2739,7 +2699,7 @@ Caption: [optimized caption]
 Hashtags: [platform-appropriate hashtags]
 ---`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'platformRemixes' });
 
     const content_response = data.content || '';
     
@@ -2862,7 +2822,7 @@ The content should be specifically relevant to the topic: "${prompt}"
 
 Number them 1-4.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'visualIdeas' });
 
     return {
       success: true,
@@ -3018,7 +2978,7 @@ Rules:
       const data = await callGrokAPI(
         [{ role: 'system', content: systemPrompt }, { role: 'user', content: videoUserMessage }],
         0.7,
-        { mode: GROK_MODE_QUALITY },
+        { featureKey: 'visualBrainstorm' },
       );
 
       const parsed = parseJsonFromResponse(data.content || '');
@@ -3116,7 +3076,7 @@ Return ONLY a JSON array of 3–6 objects:
         { role: 'user', content: userMessage },
       ],
       outputType === 'ai-prompt' ? 0.8 : 0.7,
-      { mode: GROK_MODE_QUALITY },
+      { featureKey: 'visualBrainstorm' },
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -3337,7 +3297,8 @@ ${truncateForAiPrompt(content, 8000)}`,
       },
     ];
     const fp = options.fullPostBuilder === true;
-    const grokHumanOpts = { mode: fp ? GROK_MODE_QUALITY : 'fast', max_tokens: 2048 };
+    // Humanizer scoring stays 'none' even inside Full Post (approved effort map).
+    const grokHumanOpts = { featureKey: 'humanizerScore', max_tokens: 2048 };
     if (fp) {
       grokHumanOpts.grok_debug_fullpost = true;
       grokHumanOpts.grok_debug_fullpost_step = 'humanizer';
@@ -3409,7 +3370,7 @@ ${fullContent}
 Return the full content with that phrase rewritten to sound more human. Keep the meaning intact, avoid AI clichés, and make the local edit feel genuinely different.`,
       },
     ];
-    const data = await callGrokAPI([...messages], 0.5, { mode: GROK_MODE_QUALITY });
+    const data = await callGrokAPI([...messages], 0.5, { featureKey: 'autoImprovePhrase' });
 
     return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
   } catch (error) {
@@ -3490,7 +3451,7 @@ ${content}`,
       data = await callClaudeAPI([...messages], 0.3);
     } catch (claudeError) {
       if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.3, { mode: GROK_MODE_QUALITY });
+        data = await callGrokAPI([...messages], 0.3, { featureKey: 'performancePrediction' });
       } else {
         throw claudeError;
       }
@@ -3625,7 +3586,7 @@ For content ideas:
 - Include one strong hook per idea`,
       },
     ];
-    const data = await callGrokAPI(messages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096 });
+    const data = await callGrokAPI(messages, 0.7, { featureKey: 'nicheIntel', max_tokens: 4096 });
 
     const parsed = parseJsonFromResponse(data.content);
     const normalizedAnalysis = normalizeNicheAnalysisPayload(parsed, platform);

@@ -19,6 +19,7 @@ import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { getGrokParams } from '../../src/config/grokConfig.js';
 
 const PERPLEXITY_API_KEY =
   typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
@@ -630,12 +631,13 @@ export default async function handler(req, res) {
       if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
         return res.status(400).json({ error: 'Messages array is required' });
       }
-      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: 'grok-3-fast' });
+      const grokFallbackParams = getGrokParams('perplexityGrokFallback');
+      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: grokFallbackParams.model });
       const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
         body: JSON.stringify({
-          model: 'grok-3-fast',
+          ...grokFallbackParams,
           messages: normalizeMessagesForUpstream(fallbackMessages),
           temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2),
         }),

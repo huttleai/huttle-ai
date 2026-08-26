@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 import {
   Zap,
   Sparkles,
@@ -1422,6 +1423,7 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
   const token = await getConfirmedAccessToken();
 
   const requestBody = JSON.stringify({
+    ...getGrokParams('igniteEngine'),
     temperature: 0.7,
     messages: [
       { role: 'system', content: `You are a content strategist. Return only valid JSON.

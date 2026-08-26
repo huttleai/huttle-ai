@@ -30,6 +30,7 @@ import {
   getMinAcceptableHashtagCountForPlatform,
 } from '../data/platformContentRules.js';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -113,7 +114,7 @@ async function callGrokAPI(messages, temperature = 0.2, options = {}) {
   const body = JSON.stringify({
     messages,
     temperature,
-    model: options.model || 'grok-4-1-fast-reasoning',
+    ...getGrokParams(options.featureKey || 'audienceInsights'),
     cache: options.cache,
     personalized: options.personalized,
     targetAudience: options.targetAudience,
