@@ -31,6 +31,7 @@ import { saveToVault } from '../services/contentService';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
+import { assembleFullPost } from '../utils/fullPostAssembly';
 import { getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../services/claudeAPI';
 import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
@@ -508,10 +509,15 @@ export default function FullPostBuilder() {
     };
   }, [platform]);
 
-  const assembledPost = useMemo(() => {
-    const hashtagStr = hashtags.map((h) => h.tag).join(' ');
-    return [selectedHook, caption, hashtagStr, selectedCTA?.cta].filter(Boolean).join('\n\n');
-  }, [selectedHook, caption, hashtags, selectedCTA]);
+  const assembledPost = useMemo(
+    () => assembleFullPost({
+      hook: selectedHook,
+      caption,
+      hashtags,
+      cta: selectedCTA?.cta,
+    }),
+    [selectedHook, caption, hashtags, selectedCTA],
+  );
 
   useEffect(() => {
     assembledPostRef.current = assembledPost;
