@@ -75,10 +75,13 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     }
   });
 
+  const signal = options.signal;
+
   let response = await fetch(PERPLEXITY_PROXY_URL, {
     method: 'POST',
     headers,
     body,
+    signal,
   });
 
   // One-shot 401 recovery: refresh the session and retry once with a new token.
@@ -89,6 +92,7 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
         method: 'POST',
         headers: refreshedHeaders,
         body,
+        signal,
       });
     } catch {
       // Refresh failed — surface the original 401 below.
@@ -1289,6 +1293,7 @@ Requirements:
       }
     ], 0.2, {
       accessToken: requestOptions.accessToken,
+      signal: requestOptions.signal,
       perplexityFeature: 'deep_dive',
       cache: {
         key: cacheKey,
@@ -1319,7 +1324,8 @@ Requirements:
     console.error('Perplexity niche research error:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      aborted: error?.name === 'AbortError' || error?.name === 'TimeoutError',
     };
   }
 }

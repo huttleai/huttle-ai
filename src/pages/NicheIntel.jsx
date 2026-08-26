@@ -2,7 +2,7 @@ import { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
-  Copy, Check, Sparkles, Lock, FolderPlus,
+  Copy, Check, Sparkles, Lock, FolderPlus, AlertCircle,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -39,6 +39,17 @@ function nicheIntelResearchStatusMessages(platform) {
   ];
 }
 
+/**
+ * Client-side ceiling for a full Niche Intel run.
+ *
+ * The research leg (`/api/ai/perplexity`, deep_dive + sonar-pro) is capped at 60s
+ * of Vercel runtime and returns a 504 when it overruns; the analysis leg adds its
+ * own budget on top. This bounds the whole run so a hung request can never leave
+ * the spinner up indefinitely, while still leaving room for a slow-but-successful
+ * response to land.
+ */
+const NICHE_INTEL_RUN_TIMEOUT_MS = 150000;
+
 const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
   'Synthesizing themes, hook patterns, and content gaps…',
   'Shaping original ideas that fit your brand voice…',
@@ -65,6 +76,8 @@ export default function NicheIntel() {
   const [loadingPhase, setLoadingPhase] = useState(null);
   const [loadingDetailIndex, setLoadingDetailIndex] = useState(0);
   const [analysis, setAnalysis] = useState(null);
+  /** Persistent failure surface: `{ title, message }`. Toasts auto-dismiss after 4s, which is far shorter than a run. */
+  const [runError, setRunError] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [savedIdeaId, setSavedIdeaId] = useState(null);
@@ -161,6 +174,19 @@ export default function NicheIntel() {
     setLoading(true);
     setLoadingPhase('research');
     setAnalysis(null);
+    setRunError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), NICHE_INTEL_RUN_TIMEOUT_MS);
+    /** Distinguishes our own timeout from an upstream abort. */
+    let timedOut = false;
+    controller.signal.addEventListener('abort', () => { timedOut = true; }, { once: true });
+
+    /** Surface a failure that survives longer than a toast. */
+    const failRun = (title, message) => {
+      setRunError({ title, message });
+      addToast(message, 'error');
+    };
 
     try {
       let { data: { session } } = await supabase.auth.getSession();
@@ -171,18 +197,30 @@ export default function NicheIntel() {
         accessToken = session?.access_token ?? null;
       }
       if (!accessToken) {
-        addToast('Please log in to run Niche Intel.', 'error');
+        failRun('Session expired', 'Please log in again to run Niche Intel.');
         return;
       }
 
-      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData, { accessToken });
+      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData, {
+        accessToken,
+        signal: controller.signal,
+      });
       if (!researchRes.success) {
-        addToast('Research failed. Try again.', 'error');
+        if (timedOut || researchRes.aborted) {
+          failRun(
+            'This run took too long',
+            'Live research did not come back in time. This usually clears on a second attempt.',
+          );
+        } else {
+          failRun('Research failed', 'We could not pull live data for your niche. Try again.');
+        }
         return;
       }
 
       setLoadingPhase('analyze');
-      const analysisRes = await analyzeNiche(researchRes.research, brandData, platform);
+      const analysisRes = await analyzeNiche(researchRes.research, brandData, platform, {
+        signal: controller.signal,
+      });
       if (analysisRes.success && analysisRes.analysis) {
         // Show the already-successful analysis regardless of usage-tracking
         // outcome — a failed/rejected trackFeatureUsage call must never
@@ -213,13 +251,26 @@ export default function NicheIntel() {
         if (!usage.allowed) {
           addToast('Your results are ready. Note: this run may not count toward this month\'s Niche Intel usage — resets on the 1st.', 'warning');
         }
+      } else if (timedOut || analysisRes.aborted) {
+        failRun(
+          'This run took too long',
+          'The analysis step did not come back in time. This usually clears on a second attempt.',
+        );
       } else {
-        addToast('Analysis failed. Try again.', 'error');
+        failRun('Analysis failed', 'We pulled the research but could not build your report. Try again.');
       }
     } catch (e) {
       console.error('[NicheIntel] Analyze error', e);
-      addToast('Something went wrong. Try again.', 'error');
+      if (timedOut || e?.name === 'AbortError' || e?.name === 'TimeoutError') {
+        failRun(
+          'This run took too long',
+          'We stopped waiting after a couple of minutes. This usually clears on a second attempt.',
+        );
+      } else {
+        failRun('Something went wrong', 'We could not finish this run. Try again.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
       setLoadingPhase(null);
     }
@@ -464,8 +515,46 @@ export default function NicheIntel() {
           </div>
         </div>
 
+        {/* Run failure — persists until the next run, unlike a toast */}
+        {runError && !loading && (
+          <Motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4"
+            role="alert"
+            data-testid="niche-intel-error"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-900">{runError.title}</p>
+                <p className="mt-1 text-sm text-red-800">{runError.message}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={loading || !canGenerate}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="niche-intel-retry"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRunError(null)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Motion.div>
+        )}
+
         {/* Brand Context */}
-        {!analysis && !loading && brandData?.niche && (
+        {!analysis && !loading && !runError && brandData?.niche && (
           <div className="mb-6 bg-huttle-50 rounded-xl border border-huttle-100 p-4">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <Zap className="w-4 h-4 text-huttle-primary" />
@@ -623,7 +712,7 @@ export default function NicheIntel() {
         </AnimatePresence>
 
         {/* Empty State */}
-        {!analysis && !loading && (
+        {!analysis && !loading && !runError && (
           <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-400">
             <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-sm">Enter your niche and hit Analyze to discover content intelligence</p>

@@ -563,10 +563,13 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     body.forceCacheRefresh = true;
   }
 
+  const signal = requestOptions.signal;
+
   let response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal,
   });
 
   // One-shot 401 recovery: refresh the session and retry once with a new token.
@@ -577,6 +580,7 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
         method: 'POST',
         headers: refreshedHeaders,
         body: JSON.stringify(body),
+        signal,
       });
     } catch {
       // Refresh failed — surface the original 401 below.
@@ -3471,7 +3475,7 @@ ${content}`,
 /**
  * Analyze niche research data and generate structured content ideas.
  */
-export async function analyzeNiche(researchData, brandData, platform = 'instagram') {
+export async function analyzeNiche(researchData, brandData, platform = 'instagram', requestOptions = {}) {
   if (isDemoMode()) {
     await simulateDelay(1500, 2500);
     return {
@@ -3586,7 +3590,11 @@ For content ideas:
 - Include one strong hook per idea`,
       },
     ];
-    const data = await callGrokAPI(messages, 0.7, { featureKey: 'nicheIntel', max_tokens: 4096 });
+    const data = await callGrokAPI(messages, 0.7, {
+      featureKey: 'nicheIntel',
+      max_tokens: 4096,
+      signal: requestOptions.signal,
+    });
 
     const parsed = parseJsonFromResponse(data.content);
     const normalizedAnalysis = normalizeNicheAnalysisPayload(parsed, platform);
@@ -3637,6 +3645,9 @@ For content ideas:
     return { success: false, error: 'Could not extract structured niche analysis from the model response.' };
   } catch (error) {
     console.error('Niche analysis error:', error);
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+      return { success: false, error: error.message, aborted: true };
+    }
     return { success: false, error: error.message };
   }
 }
