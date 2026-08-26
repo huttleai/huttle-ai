@@ -292,9 +292,6 @@ export default function FullPostBuilder() {
   const [captionLength, setCaptionLength] = useState('long');
   const [loadingCaption, setLoadingCaption] = useState(false);
   const [loadingCaptionEnhancement, setLoadingCaptionEnhancement] = useState(false);
-  const [captionStreamlinedNotice, setCaptionStreamlinedNotice] = useState(null);
-  const [hashtagStreamlinedNotice, setHashtagStreamlinedNotice] = useState(null);
-  const [ctaStreamlinedNotice, setCtaStreamlinedNotice] = useState(null);
   const [hashtagStepError, setHashtagStepError] = useState(null);
 
   // Step 4 state
@@ -545,18 +542,15 @@ export default function FullPostBuilder() {
     }
     if (fromStep <= 2) {
       setCaption('');
-      setCaptionStreamlinedNotice(null);
     }
     if (fromStep <= 3) {
       setHashtags([]);
-      setHashtagStreamlinedNotice(null);
       setHashtagStepError(null);
     }
     if (fromStep <= 4) {
       setCtas([]);
       setSelectedCTA(null);
       setCustomCtaDraft('');
-      setCtaStreamlinedNotice(null);
     }
     setShowFinalPanel(false);
   };
@@ -765,7 +759,6 @@ export default function FullPostBuilder() {
       console.debug('[FullPostBuilder] caption generate start', { rid, forceFresh });
     }
     setLoadingCaption(true);
-    setCaptionStreamlinedNotice(null);
     try {
       let captionText;
       const tc = trendingContextRef.current;
@@ -811,7 +804,6 @@ export default function FullPostBuilder() {
 
       if (captionText) {
         setCaption(captionText);
-        setCaptionStreamlinedNotice(res.streamlined ? 'Using streamlined caption generation right now.' : null);
         resetDownstream(3);
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate success', { rid });
       } else {
@@ -918,7 +910,6 @@ export default function FullPostBuilder() {
     }
     setLoadingHashtags(true);
     setHashtagStepError(null);
-    setHashtagStreamlinedNotice(null);
     try {
       const goalLabel = GOALS.find((g) => g.id === w.goal)?.label || w.goal;
       const nicheKw = Array.isArray(brandData?.niche) ? brandData.niche.filter(Boolean).join(', ') : (brandData?.niche || '');
@@ -980,9 +971,6 @@ export default function FullPostBuilder() {
           addToast(msg, 'warning');
         } else {
           setHashtags(next);
-          setHashtagStreamlinedNotice(
-            res.streamlined ? 'Using streamlined hashtag generation right now.' : 'Hashtags grounded with live search where available.',
-          );
           resetDownstream(4);
           if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate success', { rid });
         }
@@ -1027,7 +1015,6 @@ export default function FullPostBuilder() {
       console.debug('[FullPostBuilder] CTA generate start', { rid, forceFresh });
     }
     setLoadingCTAs(true);
-    setCtaStreamlinedNotice(null);
     try {
       const res = await generateStyledCTAs({
         promoting: w.topic,
@@ -1047,7 +1034,6 @@ export default function FullPostBuilder() {
         setCtas(res.ctas.slice(0, 5));
         setSelectedCTA(null);
         setCustomCtaDraft('');
-        setCtaStreamlinedNotice(res.streamlined ? 'Using streamlined CTA generation right now.' : null);
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] CTA generate success', { rid });
       } else {
         const bucket = classifyGrokFailure(res || {});
@@ -1855,9 +1841,6 @@ export default function FullPostBuilder() {
                       <RefreshCw className={`w-3.5 h-3.5 ${loadingCaption ? 'animate-spin' : ''}`} /> Regenerate caption
                     </button>
                   )}
-                  {captionStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{captionStreamlinedNotice}</p>
-                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -1891,9 +1874,6 @@ export default function FullPostBuilder() {
                     >
                       {hashtagStepError}
                     </div>
-                  )}
-                  {hashtagStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{hashtagStreamlinedNotice}</p>
                   )}
                   {loadingHashtags ? (
                     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-huttle-primary/20 bg-huttle-primary/5 py-10">
@@ -1951,9 +1931,6 @@ export default function FullPostBuilder() {
               {/* Step 5: CTA */}
               {currentStep === 4 && (
                 <div className="space-y-4 mt-4">
-                  {ctaStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{ctaStreamlinedNotice}</p>
-                  )}
                   {loadingCTAs ? (
                     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-huttle-primary/20 bg-huttle-primary/5 py-10">
                       <RefreshCw className="w-6 h-6 text-huttle-primary animate-spin" />
