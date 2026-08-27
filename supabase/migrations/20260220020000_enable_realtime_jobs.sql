@@ -12,7 +12,19 @@
 -- This allows Realtime subscriptions to receive postgres_changes events
 -- NOTE: If this errors with "already member of publication", the table is already
 -- enabled for Realtime — skip this line and run the RLS verification below.
-ALTER PUBLICATION supabase_realtime ADD TABLE public.jobs;
+-- GUARDED 2026-08-26: re-running this raised "relation jobs is already member of
+-- publication supabase_realtime". The membership check makes it a no-op instead.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'jobs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.jobs;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- Verify RLS policies exist (idempotent — these were created in
