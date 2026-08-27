@@ -29,6 +29,9 @@ export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
   if (options && Number.isFinite(Number(options.max_tokens))) {
     payload.max_tokens = Number(options.max_tokens);
   }
+  if (options?.billingFeature) {
+    payload.billingFeature = options.billingFeature;
+  }
 
   const response = await fetch(CLAUDE_PROXY_URL, {
     method: 'POST',
@@ -216,6 +219,7 @@ ${trendBlock ? `Extra context:\n${trendBlock}\n` : ''}${hookRequirementInject ? 
         { role: 'user', content: user },
       ],
       0.65,
+      { billingFeature: 'fullPostBuilderRuns' },
     );
     const raw = String(data.content || '').trim();
     if (!raw) {

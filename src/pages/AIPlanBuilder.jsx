@@ -36,6 +36,7 @@ import {
   normalizePlatformLabelForIcon,
 } from '../components/SocialIcons';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import { useSearchParams, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
@@ -1668,6 +1669,7 @@ export default function AIPlanBuilder() {
 
             <div className="border-t border-gray-200 pt-6 space-y-3">
               <p className="text-center text-sm text-gray-600 font-plan-body">{generateButtonSummary}</p>
+              <GenerationAction>
               <button
                 type="button"
                 onClick={handleGeneratePlan}
@@ -1688,6 +1690,7 @@ export default function AIPlanBuilder() {
                   </>
                 )}
               </button>
+              </GenerationAction>
               {isGenerating ? (
                 <p className="text-center text-sm text-gray-400">
                   This takes 60–90 seconds. Grab a coffee ☕

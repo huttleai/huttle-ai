@@ -12,8 +12,9 @@ import {
   resolvePlanBuilderCap,
 } from './_utils/planBuilderLimits.js';
 import { logInfo, logWarn, logError } from './_utils/observability.js';
+import { isTrialingStatus } from '../src/config/subscriptionAccess.js';
 
-const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
 
 // SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
     }
 
     // 3b. Per-period monthly run cap check.
-    const { featureKey, cap } = resolvePlanBuilderCap(period, userTier);
+    const { featureKey, cap } = resolvePlanBuilderCap(period, userTier, isTrialingStatus(subscription?.status));
     if (cap == null || cap <= 0) {
       return res.status(403).json({
         error: 'Plan Builder not available for this subscription tier.',

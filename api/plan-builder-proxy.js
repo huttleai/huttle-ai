@@ -25,6 +25,8 @@ import {
   PLAN_BUILDER_14DAY_ALLOWED_TIERS,
   resolvePlanBuilderCap,
 } from './_utils/planBuilderLimits.js';
+import { getCreditPool } from '../src/config/creditConfig.js';
+import { isTrialingStatus } from '../src/config/subscriptionAccess.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -37,18 +39,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'];
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
 const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
 const PLAN_BUILDER_CREDITS_BY_FEATURE = {
   planBuilder7Day: 3,
   planBuilder14Day: 5,
-};
-const TIER_CREDIT_POOLS = {
-  builder: 800,
-  founder: 800,
-  pro: 600,
-  essentials: 200,
-  free: 0,
 };
 const RESERVATION_SOURCE = 'plan-builder-proxy';
 
@@ -425,7 +420,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { featureKey, cap } = resolvePlanBuilderCap(requestedPeriod, userTier);
+    const { featureKey, cap } = resolvePlanBuilderCap(requestedPeriod, userTier, isTrialingStatus(subscription?.status));
     const creditCost = PLAN_BUILDER_CREDITS_BY_FEATURE[featureKey] ?? 0;
 
     if (job.status === 'running') {
@@ -464,7 +459,7 @@ export default async function handler(req, res) {
       getMonthlyUsageCount({ userId: user.id, feature: featureKey }),
       getMonthlyCreditUsage(user.id),
     ]);
-    const poolLimit = TIER_CREDIT_POOLS[userTier] ?? 0;
+    const poolLimit = getCreditPool(userTier, isTrialingStatus(subscription?.status)) ?? 0;
     const remainingCredits = Math.max(0, poolLimit - creditsUsed);
 
     if (runsThisMonth >= cap) {

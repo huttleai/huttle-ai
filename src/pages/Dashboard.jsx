@@ -389,6 +389,8 @@ export default function Dashboard() {
     isTrialing,
     trialDaysRemaining,
     trialEndsAt,
+    isReadOnly,
+    isPaymentRetry,
     refreshSubscription,
   } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -418,6 +420,12 @@ export default function Dashboard() {
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
   const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
+  /**
+   * The dashboard load currently in flight, as `{ key, promise }`.
+   * `hasFetchedTodayRef` only flips true after a load finishes, so it cannot
+   * guard the window while one is running — this ref does.
+   */
+  const dashboardLoadInFlightRef = useRef(null);
   const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
   const lastPersonalizationKeyRef = useRef(null);
   dashboardDayKeyRef.current = dashboardDayKey;
@@ -472,12 +480,59 @@ export default function Dashboard() {
     }
   }, [setDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
-  const loadDashboardData = useCallback(async ({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
+  const runDashboardLoad = useCallback(async ({ forceRefresh, generatedDate }) => { // HUTTLE AI: cache fix
     if (!user?.id) return { success: false }; // HUTTLE AI: cache fix
 
-    const generatedDate = getDashboardGeneratedDate(); // HUTTLE AI: cache fix
     const requestId = activeDashboardRequestRef.current + 1; // HUTTLE AI: cache fix
     activeDashboardRequestRef.current = requestId; // HUTTLE AI: cache fix
+
+    if (isReadOnly) {
+      const perspKey = getBrandPersonalizationKey(brandProfileRef.current);
+      const snapshotMatchesBrand = (snap) => snap?.personalizationKey === perspKey;
+
+      const memorySnapshot = getDashboardSnapshot(user.id, generatedDate);
+      if (
+        memorySnapshot?.data
+        && snapshotMatchesBrand(memorySnapshot)
+        && hasPersistableTrendingTopics(memorySnapshot.data.trending_topics)
+      ) {
+        applyDashboardPayload(memorySnapshot.data, generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        setTrendingStatus(computeTrendingStatusFromData(memorySnapshot.data));
+        return { success: true, cacheHit: true, data: memorySnapshot.data };
+      }
+
+      const sessionSnapshot = loadSessionDashboardSnapshot(user.id, generatedDate);
+      if (
+        sessionSnapshot?.data
+        && snapshotMatchesBrand(sessionSnapshot)
+        && hasPersistableTrendingTopics(sessionSnapshot.data.trending_topics)
+      ) {
+        applyDashboardPayload(sessionSnapshot.data, generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        setTrendingStatus(computeTrendingStatusFromData(sessionSnapshot.data));
+        return { success: true, cacheHit: true, data: sessionSnapshot.data };
+      }
+
+      const cachedResult = await getDashboardCache(user.id, brandProfileRef.current, { generatedDate });
+      if (activeDashboardRequestRef.current !== requestId) return { success: false, cancelled: true };
+      if (cachedResult.success && cachedResult.cacheHit && cachedResult.data) {
+        applyDashboardPayload(cachedResult.data, cachedResult.generatedDate || generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        return cachedResult;
+      }
+
+      setIsDashboardLoading(false);
+      setIsAlertsLoading(false);
+      setTrendingStatus('fallback');
+      return { success: true, cacheHit: false, readOnly: true };
+    }
 
     if (forceRefresh) { // HUTTLE AI: cache fix
       setTrendingStatus('retrying');
@@ -570,7 +625,47 @@ export default function Dashboard() {
         setIsAlertsLoading(false); // HUTTLE AI: cache fix
       } // HUTTLE AI: cache fix
     } // HUTTLE AI: cache fix
-  }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
+  }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id, isReadOnly]); // HUTTLE AI: cache fix
+
+  /**
+   * Single entry point for loading the dashboard.
+   *
+   * ROOT CAUSE this guards: the mount effect below re-runs whenever
+   * `brandFetchComplete` toggles (BrandContext sets it false then true again on
+   * every profile refresh/reload), and its only guard was `hasFetchedTodayRef`,
+   * which is not set until a load finishes. A toggle mid-load therefore passed
+   * the guard and started a second full generation, doubling every Perplexity
+   * call, while the effect's cleanup bumped `activeDashboardRequestRef` so the
+   * first, already-paid-for run discarded its own results.
+   *
+   * The in-flight slot is claimed synchronously here, before any await, so a
+   * duplicate caller in the same tick joins the running load instead of starting
+   * another one.
+   */
+  const loadDashboardData = useCallback(({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
+    if (!user?.id) return Promise.resolve({ success: false });
+
+    const generatedDate = getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+    const inFlightKey = `${user.id}|${generatedDate}`;
+    const inFlight = dashboardLoadInFlightRef.current;
+
+    // forceRefresh is always deliberate (manual retry, brand change, day roll)
+    // and supersedes whatever is running.
+    if (!forceRefresh && inFlight?.key === inFlightKey) {
+      return inFlight.promise;
+    }
+
+    const promise = runDashboardLoad({ forceRefresh, generatedDate }).finally(() => {
+      // Clears on resolve and on reject. Only the owning promise clears the slot,
+      // so a superseding forceRefresh is never wiped by a late finisher.
+      if (dashboardLoadInFlightRef.current?.promise === promise) {
+        dashboardLoadInFlightRef.current = null;
+      }
+    });
+
+    dashboardLoadInFlightRef.current = { key: inFlightKey, promise };
+    return promise;
+  }, [runDashboardLoad, user?.id]);
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -617,8 +712,8 @@ export default function Dashboard() {
       updatedAt: Date.now(),
     };
 
-    if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'inactive')) {
-      showToast('Your subscription access has ended. Choose a plan to get back to creating content.', 'info', 6000);
+    if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled' || subscriptionStatus === 'inactive' || subscriptionStatus === 'expired')) {
+      showToast('Your Brand Voice profile is still here. Reactivate to start generating again.', 'info', 6000);
     }
 
     localStorage.setItem(snapshotKey, JSON.stringify(currentSnapshot));
@@ -778,7 +873,7 @@ export default function Dashboard() {
   useEffect(() => {
     // Gate on a confirmed session — this path triggers AI proxy calls that
     // would 401 (and cache writes that would 400) without a Bearer token.
-    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete) return;
+    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete || isReadOnly) return;
     const key = brandPersonalizationKey;
     const prev = lastPersonalizationKeyRef.current;
     if (prev === key) return;
@@ -801,16 +896,21 @@ export default function Dashboard() {
     user?.id,
     brandFetchComplete,
     brandPersonalizationKey,
+    isReadOnly,
     clearDashboardSnapshot,
     loadDashboardData,
   ]);
 
   useEffect(() => {
     if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
-    loadDashboardData(); // HUTTLE AI: cache fix
-    return () => { // HUTTLE AI: cache fix
-      activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
-    }; // HUTTLE AI: cache fix
+    // No cleanup that invalidates activeDashboardRequestRef. This effect re-runs
+    // on ordinary dependency churn (brandFetchComplete toggling), which is not a
+    // stale-result situation — invalidating there is what threw away the first
+    // run's paid Perplexity responses. Genuine invalidation still happens on
+    // user change (effect above) and when a new request starts in
+    // runDashboardLoad; concurrent duplicates are collapsed by
+    // dashboardLoadInFlightRef.
+    void loadDashboardData(); // HUTTLE AI: cache fix
   }, [authLoading, sessionConfirmed, brandFetchComplete, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
@@ -1118,7 +1218,7 @@ export default function Dashboard() {
   useEffect(() => {
     // Gate on a confirmed session — these fetches hit the Grok proxy and must
     // never fire before a Bearer token exists.
-    if (authLoading || !sessionConfirmed || !user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
+    if (authLoading || !sessionConfirmed || !user?.id || isReadOnly || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1157,12 +1257,12 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, sessionConfirmed, user?.id, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
+  }, [authLoading, sessionConfirmed, user?.id, isReadOnly, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
 
   useEffect(() => {
     // Gate on a confirmed session — these fetches hit the Perplexity proxy and
     // must never fire before a Bearer token exists.
-    if (authLoading || !sessionConfirmed || !user?.id || hashtagMode !== 'trending') return;
+    if (authLoading || !sessionConfirmed || !user?.id || isReadOnly || hashtagMode !== 'trending') return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1199,7 +1299,7 @@ export default function Dashboard() {
       cancelled = true;
       setGeneralTrendingLoading(false);
     };
-  }, [authLoading, sessionConfirmed, user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
+  }, [authLoading, sessionConfirmed, user?.id, isReadOnly, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
 
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label
@@ -1231,7 +1331,7 @@ export default function Dashboard() {
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
-      <MotionDiv className="relative mb-6 pt-2 sm:pt-3" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
+      <MotionDiv className={`relative mb-6 pt-2 sm:pt-3 ${isPaymentRetry ? 'mt-12' : ''}`} initial="hidden" animate="visible" custom={0} variants={fadeUp}>
         <div>
           {isCreator ? (
             <>
@@ -1262,20 +1362,20 @@ export default function Dashboard() {
               )}
             </>
           )}
-          {isTrialing && (
-            <div className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              trialDaysRemaining !== null && trialDaysRemaining <= 2
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-cyan-100 text-cyan-800'
-            }`}>
-              <span>
-                {trialDaysRemaining === null
-                  ? '🎯 Trial active'
-                  : trialDaysRemaining === 0
-                    ? "⚠️ Trial ends today - you'll be charged tonight"
-                    : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
-              </span>
-            </div>
+          {isTrialing && trialEndsAt && trialDaysRemaining !== null && (
+            trialDaysRemaining <= 2 ? (
+              <div className="mt-3 w-full max-w-xl rounded-xl border-2 border-amber-400 bg-amber-50 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-amber-950">
+                  {trialDaysRemaining === 0
+                    ? "Trial ends today. You'll be charged tonight."
+                    : `${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial. We'll charge your card when it ends.`}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 inline-flex items-center rounded-full bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800">
+                {`${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
+              </div>
+            )
           )}
         </div>
       </MotionDiv>

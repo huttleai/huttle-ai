@@ -29,10 +29,11 @@ function run() {
   const validated = normalizePlanResultShape(nestedString);
   assert(validated.isValid && validated.plan?.schedule?.length === 1, 'normalizePlanResultShape should accept snake_case mix + schedule');
 
-  assert(PLAN_BUILDER_MONTHLY_BY_TIER.pro === 20 && PLAN_BUILDER_MONTHLY_BY_TIER.essentials === 20, 'plan builder caps');
+  assert(PLAN_BUILDER_MONTHLY_BY_TIER.pro === 20, 'plan builder caps');
+  assert(PLAN_BUILDER_MONTHLY_BY_TIER.essentials === 3, 'plan builder essentials cap');
 
   console.log('✓ Plan builder job result coercion');
-  console.log('✓ Plan builder server tier caps (20/mo essentials & pro family)');
+  console.log('✓ Plan builder server tier caps (20/mo paying Pro, 3/mo paying Essentials)');
   console.log('\nAll reliability checks passed.');
 }
 

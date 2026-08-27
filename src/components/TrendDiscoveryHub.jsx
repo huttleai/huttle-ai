@@ -13,6 +13,7 @@ import { getToastDisclaimer } from './AIDisclaimer';
 import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from './ReadOnlyGenerateCta';
 import AIUsageMeter from './AIUsageMeter';
 import RunCapMeter from './RunCapMeter';
 import { getPlatformIcon } from './SocialIcons';
@@ -1102,6 +1103,7 @@ export default function TrendDiscoveryHub() {
                           className="w-full pl-12 pr-4 py-4 bg-white border-2 border-gray-200 rounded-2xl text-base focus:border-huttle-primary focus:ring-4 focus:ring-huttle-primary/10 transition-all outline-none"
                         />
                       </div>
+                      <GenerationAction>
                       <button
                         onClick={handleDeepDive}
                         disabled={isLoadingDeepDive || !deepDiveTopic.trim()}
@@ -1119,6 +1121,7 @@ export default function TrendDiscoveryHub() {
                           </>
                         )}
                       </button>
+                      </GenerationAction>
                     </div>
                   </div>
 

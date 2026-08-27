@@ -20,6 +20,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { getGrokParams } from '../../src/config/grokConfig.js';
+import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
   typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
@@ -695,6 +696,16 @@ export default async function handler(req, res) {
         error: 'Rate limit exceeded. Please wait before making more requests.',
         retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
       });
+    }
+
+    const billingFeature = typeof req.body?.billingFeature === 'string' ? req.body.billingFeature : null;
+    const usageGate = await assertCanGenerate(supabase, {
+      userId,
+      featureKey: billingFeature,
+      skipPool: !billingFeature,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
     }
 
     // Extract request parameters

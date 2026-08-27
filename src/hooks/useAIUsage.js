@@ -13,10 +13,12 @@ import {
   FEATURE_CREDIT_COSTS,
   FEATURE_RUN_CAPS,
   FEATURE_LABELS,
+  getCreditPool,
   getFeatureCreditCost,
   getFeatureRunCap,
   getResetDateLabel,
 } from '../config/creditConfig';
+import { READ_ONLY_GENERATE_MESSAGE } from '../config/subscriptionAccess';
 
 /**
  * useAIUsage — track and gate AI feature usage.
@@ -36,7 +38,7 @@ import {
  */
 export default function useAIUsage(featureName = null) {
   const { user } = useContext(AuthContext);
-  const { userTier } = useSubscription();
+  const { userTier, isTrialing, isReadOnly } = useSubscription();
   const [overallUsed, setOverallUsed] = useState(0);
   const [featureUsed, setFeatureUsed] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -45,11 +47,11 @@ export default function useAIUsage(featureName = null) {
   // Overall pool comes from creditConfig; fall back to TIER_LIMITS for unknown tiers.
   const tierLimits = (userTier && TIER_LIMITS[userTier]) || {};
   const overallLimit =
-    (userTier && TIER_CREDIT_POOLS[userTier]) ?? tierLimits.aiGenerations ?? 0;
+    (userTier && getCreditPool(userTier, isTrialing)) ?? tierLimits.aiGenerations ?? 0;
 
   // Per-feature run cap. Prefer creditConfig.FEATURE_RUN_CAPS; fall back to
   // the numeric value in TIER_LIMITS for features that predate the refactor.
-  const creditConfigCap = featureName ? getFeatureRunCap(featureName, userTier) : undefined;
+  const creditConfigCap = featureName ? getFeatureRunCap(featureName, userTier, isTrialing) : undefined;
   const rawFeatureLimit = featureName ? tierLimits[featureName] : null;
   const numericFeatureLimit =
     creditConfigCap === null
@@ -68,7 +70,9 @@ export default function useAIUsage(featureName = null) {
     numericFeatureLimit !== null && numericFeatureLimit > 0 && featureUsed >= numericFeatureLimit;
   // Zero-cost features bypass the overall pool gate entirely.
   const canGenerate =
-    (creditsPerRun === 0 || !isOverallLimitReached) && !isFeatureLimitReached;
+    !isReadOnly &&
+    (creditsPerRun === 0 || !isOverallLimitReached) &&
+    !isFeatureLimitReached;
 
   const percentage = overallLimit > 0 ? Math.round((overallUsed / overallLimit) * 100) : 0;
   const featurePercentage = numericFeatureLimit
@@ -120,12 +124,16 @@ export default function useAIUsage(featureName = null) {
       return { allowed: false, reason: 'unauthenticated', message: 'Please sign in to continue.' };
     }
 
+    if (isReadOnly) {
+      return { allowed: false, reason: 'read_only', message: READ_ONLY_GENERATE_MESSAGE };
+    }
+
     const resetDate = getResetDateLabel();
     const featureLabel = (featureName && FEATURE_LABELS[featureName]) || 'this feature';
 
     // STEP A — Run cap check (cheaper; runs first).
     if (featureName) {
-      const cap = getFeatureRunCap(featureName, userTier);
+      const cap = getFeatureRunCap(featureName, userTier, isTrialing);
       if (cap !== null && cap !== undefined) {
         const runsThisMonth = await getFeatureUsageCount(user.id, featureName);
         if (mountedRef.current) setFeatureUsed(runsThisMonth);
@@ -162,7 +170,7 @@ export default function useAIUsage(featureName = null) {
     }
 
     return { allowed: true, remaining, creditsRequired };
-  }, [user?.id, featureName, userTier, creditsPerRun, overallLimit]);
+  }, [user?.id, featureName, userTier, isTrialing, isReadOnly, creditsPerRun, overallLimit]);
 
   /**
    * Track usage for this feature AND the overall pool.
@@ -180,6 +188,7 @@ export default function useAIUsage(featureName = null) {
   const trackFeatureUsage = useCallback(
     async (metadata = {}) => {
       if (!user?.id) return { allowed: false, reason: 'unauthenticated' };
+      if (isReadOnly) return { allowed: false, reason: 'read_only', message: READ_ONLY_GENERATE_MESSAGE };
 
       const incrementFeatureCounter = metadata.incrementFeatureCounter !== false;
       // Callers may override the credit cost (e.g. Full Post Builder passes its own),
@@ -261,7 +270,7 @@ export default function useAIUsage(featureName = null) {
 
       return { allowed: true, creditsLogged: overallCredits };
     },
-    [user?.id, featureName, numericFeatureLimit, overallLimit, creditsPerRun]
+    [user?.id, featureName, numericFeatureLimit, overallLimit, creditsPerRun, isReadOnly]
   );
 
   return {

@@ -4,6 +4,7 @@ import { useBrand } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
@@ -871,6 +872,7 @@ export default function IgniteEngine() {
                 </div>
 
                 <div className="pt-6 flex flex-col items-center justify-center gap-6">
+                  <GenerationAction>
                   <button
                     onClick={handleGenerate}
                     disabled={!isFormValid || isGenerating || isAtLimit}
@@ -898,6 +900,7 @@ export default function IgniteEngine() {
                       </>
                     )}
                   </button>
+                  </GenerationAction>
                   {briefGenerationError ? (
                     <p className="text-sm text-red-600 text-center mt-3 max-w-md mx-auto" role="alert">
                       {briefGenerationError}
@@ -1462,6 +1465,12 @@ Make content specific, actionable, and optimized for ${platform} ${contentType}.
 
   const requestBody = JSON.stringify({
     ...getGrokParams('igniteEngine'),
+    // 4096: one content brief (hook, script, caption, hashtags, audio/image
+    // direction, posting intel, pro tip) runs ~1500-2000 output tokens even for
+    // a long-form script, so this leaves ~2x headroom while halving the server's
+    // blanket 8192 ceiling. Matters here because reasoning_effort 'low' bills
+    // reasoning tokens as output.
+    max_tokens: 4096,
     temperature: 0.7,
     messages: [
       { role: 'system', content: `You are a content strategist. Return only valid JSON.

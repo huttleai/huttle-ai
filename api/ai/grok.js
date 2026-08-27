@@ -17,6 +17,12 @@ import { createClient } from '@supabase/supabase-js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { GROK_MODEL } from '../../src/config/grokConfig.js';
+import {
+  assertCanGenerate,
+  sendUsageGateRejection,
+  GROK_FEATURE_TO_BILLING,
+  GROK_SKIP_POOL_FEATURES,
+} from '../_utils/usageGate.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
 const _rawGrokKey = process.env.GROK_API_KEY;
@@ -339,6 +345,17 @@ export default async function handler(req, res) {
     }
 
     const rawBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const grokFeatureKey = typeof rawBody.grokFeatureKey === 'string' ? rawBody.grokFeatureKey : null;
+    const skipPool = !grokFeatureKey || GROK_SKIP_POOL_FEATURES.has(grokFeatureKey);
+    const billingFeature = GROK_FEATURE_TO_BILLING[grokFeatureKey] || null;
+    const usageGate = await assertCanGenerate(supabase, {
+      userId,
+      featureKey: skipPool ? null : billingFeature,
+      skipPool,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate, { grokStyle: true });
+    }
     const debugStep =
       typeof rawBody.grok_debug_fullpost_step === 'string'
         ? rawBody.grok_debug_fullpost_step.trim().slice(0, 64)

@@ -4,6 +4,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
+import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
   typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
@@ -249,6 +250,14 @@ export default async function handler(req, res) {
   const authenticatedUserId = await getAuthenticatedUserId(req);
   if (!authenticatedUserId) {
     return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const usageGate = await assertCanGenerate(supabase, {
+    userId: authenticatedUserId,
+    featureKey: 'trendDeepDive',
+  });
+  if (!usageGate.ok) {
+    return sendUsageGateRejection(res, usageGate);
   }
 
   try {

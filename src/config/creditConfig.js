@@ -12,6 +12,11 @@
  *      number of runs for a specific feature, regardless of pool remaining.
  *      `null` means "no run cap, pool is the only limit".
  *
+ * Trial users keep the paid `subscriptions.tier` value (essentials | pro).
+ * Reduced trial allowances live in TRIAL_CREDIT_POOLS / TRIAL_FEATURE_RUN_CAPS
+ * and are resolved at read time when isTrialing is true. Never write a
+ * "_trial" suffix into subscriptions.tier.
+ *
  * Dashboard auto-generation rows (metadata.source === 'dashboard_daily_generation')
  * are EXCLUDED from the pool count — see usage gate and meter queries.
  */
@@ -76,10 +81,36 @@ export const FEATURE_RUN_CAPS = {
   trendDeepDive: { essentials: 20, pro: 50, founder: 50, builder: 50 },
   fullPostBuilderRuns: { essentials: 15, pro: 40, founder: 40, builder: 40 },
   nicheIntel: { essentials: 5, pro: 20, founder: 20, builder: 20 },
-  planBuilder7Day: { essentials: 3, pro: 10, founder: 10, builder: 10 },
+  planBuilder7Day: { essentials: 3, pro: 15, founder: 10, builder: 10 },
   planBuilder14Day: { essentials: 0, pro: 5, founder: 5, builder: 5 },
   igniteEngine: { essentials: 15, pro: 40, founder: 40, builder: 40 },
   contentRemix: { essentials: 10, pro: 30, founder: 30, builder: 30 },
+};
+
+/**
+ * Trial credit pools keyed on the paid tier (subscriptions.tier is never
+ * written as a "_trial" suffix). Consulted only when status === 'trialing'.
+ */
+export const TRIAL_CREDIT_POOLS = {
+  essentials: 50,
+  pro: 150,
+};
+
+/**
+ * Trial per-feature monthly run caps keyed on the paid tier.
+ * Missing keys fall back to FEATURE_RUN_CAPS for that tier.
+ * Essentials trial includes Deep Dive / Niche Intel / Content Remix so the
+ * trial can show the full product; paid Essentials still uses TIER_LIMITS
+ * for UI locks where those features are not in the paid map.
+ */
+export const TRIAL_FEATURE_RUN_CAPS = {
+  planBuilder7Day: { essentials: 2, pro: 4 },
+  planBuilder14Day: { essentials: 0, pro: 4 },
+  igniteEngine: { essentials: 3, pro: 8 },
+  fullPostBuilderRuns: { essentials: 6, pro: 20 },
+  trendDeepDive: { essentials: 3, pro: 10 },
+  nicheIntel: { essentials: 2, pro: 5 },
+  contentRemix: { essentials: 3, pro: 10 },
 };
 
 // Features that are disabled pending launch — render as Coming Soon
@@ -138,10 +169,30 @@ export function getResetDateLabel() {
 }
 
 /**
+ * Shared monthly credit pool for a tier. When `isTrialing` is true and the
+ * tier has a trial pool, that reduced allowance is used. Never reads a
+ * "_trial" tier string; trial state is orthogonal to subscriptions.tier.
+ */
+export function getCreditPool(tier, isTrialing = false) {
+  if (isTrialing && Object.prototype.hasOwnProperty.call(TRIAL_CREDIT_POOLS, tier)) {
+    return TRIAL_CREDIT_POOLS[tier];
+  }
+  return TIER_CREDIT_POOLS[tier] ?? 0;
+}
+
+/**
  * Look up the run cap for a given featureKey × tier.
+ * When `isTrialing` is true, TRIAL_FEATURE_RUN_CAPS is consulted first and
+ * falls back to FEATURE_RUN_CAPS for features without a trial override.
  * Returns a number (cap), null (no cap), or undefined (feature not capped at all).
  */
-export function getFeatureRunCap(featureKey, tier) {
+export function getFeatureRunCap(featureKey, tier, isTrialing = false) {
+  if (isTrialing) {
+    const trialCaps = TRIAL_FEATURE_RUN_CAPS[featureKey];
+    if (trialCaps && Object.prototype.hasOwnProperty.call(trialCaps, tier)) {
+      return trialCaps[tier];
+    }
+  }
   const caps = FEATURE_RUN_CAPS[featureKey];
   if (!caps) return undefined;
   return caps[tier];

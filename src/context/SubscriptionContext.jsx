@@ -4,6 +4,14 @@ import { AuthContext, SESSION_REFRESHED_EVENT } from './AuthContext';
 import { getSubscriptionStatus, isDemoMode } from '../services/stripeAPI';
 import { getConfirmedAccessToken } from '../utils/authReady';
 import { getTierConfig } from '../utils/tierConfig';
+import { getCreditPool, getFeatureRunCap } from '../config/creditConfig';
+import {
+  isGeneratingAccessStatus,
+  isReadOnlyStatus,
+  isPaymentRetryStatus,
+  READ_ONLY_GENERATE_MESSAGE,
+  PAYMENT_RETRY_BANNER_MESSAGE,
+} from '../config/subscriptionAccess';
 
 export const SubscriptionContext = createContext();
 
@@ -17,7 +25,6 @@ export function clearSubscriptionCache() {
 
 // Demo mode storage key
 const DEMO_TIER_KEY = 'demo_subscription_tier';
-const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const MAX_SUBSCRIPTION_RETRIES = 3;
 const SUBSCRIPTION_INITIAL_RETRY_DELAY_MS = 1000;
 const SUBSCRIPTION_POLL_INTERVAL_MS = 60000;
@@ -60,7 +67,7 @@ async function getDatabaseSubscription(userId) {
     .from(TABLES.SUBSCRIPTIONS)
     .select('id, user_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancelled_at, trial_end')
     .eq('user_id', userId)
-    .in('status', Array.from(ACTIVE_ACCESS_STATUSES))
+    .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -377,11 +384,8 @@ export function SubscriptionProvider({ children }) {
       }
 
       const databaseSubscription = databaseResult.subscription;
-      const hasActiveDatabaseSubscription = Boolean(
-        databaseSubscription && ACTIVE_ACCESS_STATUSES.has(databaseSubscription.status)
-      );
 
-      if ((stripeResult?.unauthorized || stripeResult?.statusCode === 401) && !hasActiveDatabaseSubscription) {
+      if ((stripeResult?.unauthorized || stripeResult?.statusCode === 401) && !databaseSubscription) {
         // stripeAPI already refreshed the session and retried once on 401. A
         // persistent 401 with a paid last-known tier is treated as a degraded
         // load (retry) rather than a confirmed downgrade to FREE.
@@ -399,11 +403,11 @@ export function SubscriptionProvider({ children }) {
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
       const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
-      const hasActiveSubscription = ACTIVE_ACCESS_STATUSES.has(nextStatus);
+      const hasGeneratingAccess = isGeneratingAccessStatus(nextStatus);
       const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
-      const nextTier = hasActiveSubscription
-        ? (databaseTier || resolvedStripeTier || TIERS.FREE)
-        : TIERS.FREE;
+      const nextTier = hasGeneratingAccess || isReadOnlyStatus(nextStatus)
+        ? (databaseTier || resolvedStripeTier || null)
+        : null;
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
       // the server-side API endpoints resolve them from the authenticated user_id.
       const nextSubscription = stripeSubscription
@@ -582,32 +586,44 @@ export function SubscriptionProvider({ children }) {
 
   const isTrialing = subscription?.status === 'trialing';
   const isPastDue = subscription?.status === 'past_due';
+  const isUnpaid = subscription?.status === 'unpaid';
+  const isPaymentRetry = isPaymentRetryStatus(subscription?.status) || isPaymentRetryStatus(subscriptionStatus);
+  const isReadOnly = isReadOnlyStatus(subscription?.status) || isReadOnlyStatus(subscriptionStatus);
   const isFounder = userTier === TIERS.FOUNDER;
   const isBuilder = userTier === TIERS.BUILDER;
   const isAnnualFounder = isFounder || isBuilder;
   const isPro = userTier === TIERS.PRO || userTier === TIERS.FOUNDER || userTier === TIERS.BUILDER;
-  const generationLimit = TIER_LIMITS[userTier]?.aiGenerations ?? 0;
+  const generationLimit = getCreditPool(userTier, isTrialing);
   const isCancelScheduled = Boolean(subscription?.cancelAtPeriodEnd);
-  const trialEndsAt = useMemo(
-    () => (subscription?.trialEnd ? new Date(subscription.trialEnd) : null),
-    [subscription?.trialEnd]
-  );
+  const trialEndsAt = useMemo(() => {
+    if (!subscription?.trialEnd) return null;
+    const parsed = new Date(subscription.trialEnd);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }, [subscription?.trialEnd]);
   const trialDaysRemaining = useMemo(() => {
     if (!trialEndsAt) return null;
 
     const remainingMs = trialEndsAt.getTime() - Date.now();
-    return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil(remainingMs / 86400000));
   }, [trialEndsAt]);
   const hasPaidAccess =
-    Boolean(userTier && userTier !== TIERS.FREE) && ACTIVE_ACCESS_STATUSES.has(subscriptionStatus);
+    Boolean(userTier && userTier !== TIERS.FREE) && isGeneratingAccessStatus(subscriptionStatus);
 
   const checkFeatureAccess = useCallback((feature) => {
+    if (isReadOnly) return true;
     return hasFeatureAccess(userTier, feature) || canTierAccessFeature(feature, userTier);
-  }, [userTier]);
+  }, [userTier, isReadOnly]);
 
   const getFeatureLimit = useCallback((feature) => {
+    if (feature === 'aiGenerations') {
+      return getCreditPool(userTier, isTrialing);
+    }
+    if (isTrialing) {
+      const trialCap = getFeatureRunCap(feature, userTier, true);
+      if (typeof trialCap === 'number') return trialCap;
+    }
     return TIER_LIMITS[userTier]?.[feature] ?? 0;
-  }, [userTier]);
+  }, [userTier, isTrialing]);
 
   const getAuthoritativeRemainingUsage = useCallback(async (feature) => {
     if (skipAuth) {
@@ -706,21 +722,22 @@ export function SubscriptionProvider({ children }) {
   }, [userTier, storageUsage]);
 
   const getUpgradeMessage = useCallback(() => {
-    if (isPastDue) {
-      return 'Your payment needs attention. Update your billing details to keep full access.';
+    if (isPaymentRetry) {
+      return PAYMENT_RETRY_BANNER_MESSAGE;
     }
-    if (subscriptionStatus === 'canceled') {
-      return 'Your subscription has ended. Choose a plan to get back to creating content.';
+    if (isReadOnly || subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled') {
+      return READ_ONLY_GENERATE_MESSAGE;
     }
     if (!userTier || userTier === TIERS.FREE) {
       return 'Choose a plan to unlock Huttle AI.';
     }
     return '';
-  }, [isPastDue, subscriptionStatus, userTier]);
+  }, [isPaymentRetry, isReadOnly, subscriptionStatus, userTier]);
 
   const canAccessFeatureByName = useCallback((featureName) => {
+    if (isReadOnly) return true;
     return canTierAccessFeature(featureName, userTier);
-  }, [userTier]);
+  }, [userTier, isReadOnly]);
 
   const value = useMemo(() => ({
     userTier,
@@ -731,6 +748,9 @@ export function SubscriptionProvider({ children }) {
     subscriptionStatus,
     isTrialing,
     isPastDue,
+    isUnpaid,
+    isPaymentRetry,
+    isReadOnly,
     isFounder,
     isBuilder,
     isAnnualFounder,
@@ -766,6 +786,7 @@ export function SubscriptionProvider({ children }) {
     setDemoTier,
   }), [
     userTier, userId, subscription, subscriptionStatus, isTrialing, isPastDue,
+    isUnpaid, isPaymentRetry, isReadOnly,
     isFounder, isBuilder, isAnnualFounder, isPro, generationLimit, isCancelScheduled,
     trialEndsAt, trialDaysRemaining, hasPaidAccess, usage, loading, subscriptionReady,
     subscriptionError, isSubscriptionDegraded, checkFeatureAccess, getFeatureLimit,

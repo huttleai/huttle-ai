@@ -8,6 +8,7 @@ import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import PlatformSelector from '../components/PlatformSelector';
 import UpgradeModal from '../components/UpgradeModal';
 import RunCapMeter from '../components/RunCapMeter';
@@ -500,6 +501,7 @@ export default function NicheIntel() {
               )}
             </div>
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
+            <GenerationAction>
             <button
               onClick={handleAnalyze}
               disabled={loading || !canGenerate}
@@ -511,6 +513,7 @@ export default function NicheIntel() {
                 <><Search className="w-4 h-4" /> Analyze Now</>
               )}
             </button>
+            </GenerationAction>
           </div>
         </div>
 
