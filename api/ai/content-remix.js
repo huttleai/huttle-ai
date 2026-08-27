@@ -24,28 +24,14 @@ import {
   buildContentRemixClaudeSystemCore,
   resolveRemixPromptGoal,
 } from '../../src/data/contentRemixSystemPrompt.js';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, resolveClaudeModel } from '../../src/config/claudeConfig.js';
 
 const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
   typeof _rawAnthropicKey === 'string' && _rawAnthropicKey.trim() ? _rawAnthropicKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
-/** Match api/ai/claude.js — snapshot ids may 404 upstream; alias resolves to current Sonnet. */
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
-const CLAUDE_MODEL_ALIASES = {
-  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-5': DEFAULT_CLAUDE_MODEL,
-};
-
-function resolveUpstreamClaudeModel(requested) {
-  const r = typeof requested === 'string' ? requested.trim() : '';
-  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
-  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
-  return DEFAULT_CLAUDE_MODEL;
-}
-
-const MODEL = resolveUpstreamClaudeModel(DEFAULT_CLAUDE_MODEL);
+const MODEL = resolveClaudeModel(CLAUDE_MODEL);
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -564,7 +550,7 @@ ${HUMAN_WRITING_RULES}`;
         },
         body: JSON.stringify({
           model: MODEL,
-          max_tokens: 2200,
+          max_tokens: CLAUDE_MAX_TOKENS.contentRemix,
           system: systemPrompt,
           messages: [
             {

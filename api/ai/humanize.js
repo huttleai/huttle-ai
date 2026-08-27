@@ -10,13 +10,12 @@ import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL } from '../../src/config/claudeConfig.js';
 
 const _rawKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
   typeof _rawKey === 'string' && _rawKey.trim() ? _rawKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-/** Stable id; snapshot ids can 404 when deprecated. */
-const HUMANIZE_MODEL = 'claude-sonnet-5';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -229,7 +228,7 @@ export default async function handler(req, res) {
       textLen: text.length,
       brandVoiceType,
       platform,
-      model: HUMANIZE_MODEL,
+      model: CLAUDE_MODEL,
     });
 
     const userMessage = `Brand voice type: ${brandVoiceType}
@@ -246,8 +245,8 @@ ${text}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: HUMANIZE_MODEL,
-        max_tokens: 8192,
+        model: CLAUDE_MODEL,
+        max_tokens: CLAUDE_MAX_TOKENS.humanize,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -278,7 +277,7 @@ ${text}`;
       return res.status(422).json({ error: parseErr?.message || 'Invalid response from AI service' });
     }
 
-    // claude-sonnet-5 can return leading non-text blocks; join all text blocks instead of reading [0].
+    // The current Claude model can return leading non-text blocks; join all text blocks instead of reading [0].
     const out = (Array.isArray(data.content)
       ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
       : '').trim();
