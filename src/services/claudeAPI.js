@@ -5,9 +5,9 @@ import { getPlatform } from '../utils/platformGuidelines';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getAuthReadyHeaders } from '../utils/authReady';
+import { CLAUDE_MODEL } from '../config/claudeConfig';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
-const CLAUDE_MODEL = 'claude-sonnet-5';
 
 /**
  * Get auth headers for API requests. Fails closed: getSession → refreshSession

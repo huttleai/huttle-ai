@@ -10,7 +10,7 @@
  * DEV NOTE — common failures:
  * - 503 "coming soon" from this proxy: ANTHROPIC_API_KEY missing → add to .env for local-api-server.
  * - 401 from this proxy: valid Supabase Bearer token required (log in via the app).
- * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is claude-sonnet-5.
+ * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is CLAUDE_MODEL in src/config/claudeConfig.js.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -19,6 +19,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { CLAUDE_MAX_TOKENS, resolveClaudeModel } from '../../src/config/claudeConfig.js';
 
 const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
@@ -27,23 +28,6 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 if (!ANTHROPIC_API_KEY) {
   console.warn('ANTHROPIC_API_KEY not set — Claude features will not work');
-}
-
-// Primary Messages API id (alias). Client may still send legacy snapshot strings; we normalize upstream.
-// To upgrade: change DEFAULT_CLAUDE_MODEL and aliases below.
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
-
-const CLAUDE_MODEL_ALIASES = {
-  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-5': DEFAULT_CLAUDE_MODEL,
-};
-
-function resolveUpstreamClaudeModel(requested) {
-  const r = typeof requested === 'string' ? requested.trim() : '';
-  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
-  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
-  return DEFAULT_CLAUDE_MODEL;
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -132,7 +116,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    const safeModel = resolveUpstreamClaudeModel(model);
+    const safeModel = resolveClaudeModel(model);
 
     if (messages.length > 20) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
@@ -150,10 +134,10 @@ export default async function handler(req, res) {
 
     const requestedMax =
       maxTokensBody != null && maxTokensBody !== ''
-        ? Math.min(8192, Math.max(64, Number(maxTokensBody) || 4096))
-        : 4096;
+        ? Math.min(8192, Math.max(64, Number(maxTokensBody) || CLAUDE_MAX_TOKENS.default))
+        : CLAUDE_MAX_TOKENS.default;
 
-    // Anthropic deprecated `temperature` for claude-sonnet-5; sending it returns a 400.
+    // Anthropic deprecated `temperature` for the current Claude model; sending it returns a 400.
     const requestBody = {
       model: safeModel,
       messages: filteredMessages,
@@ -191,7 +175,7 @@ export default async function handler(req, res) {
     
     return res.status(200).json({
       success: true,
-      // Join all text blocks; claude-sonnet-5 can return non-text blocks first.
+      // Join all text blocks; the current Claude model can return non-text blocks first.
       content: (Array.isArray(data.content)
         ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
         : '') || '',

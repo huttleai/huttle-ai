@@ -33,6 +33,7 @@ import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { callClaudeAPI } from '../services/claudeAPI';
+import { CLAUDE_MAX_TOKENS } from '../config/claudeConfig';
 import { saveToVault, CONTENT_VAULT_UPDATED_EVENT } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 
@@ -552,7 +553,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
           { role: 'user', content: userMsg },
         ],
         0.35,
-        { max_tokens: 700 },
+        { max_tokens: CLAUDE_MAX_TOKENS.algorithmChecker },
       );
       const parsed = parseClaudeJson(data.content);
       if (!parsed || typeof parsed !== 'object') {
