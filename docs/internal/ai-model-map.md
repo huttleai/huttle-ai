@@ -2,7 +2,9 @@
 
 **Purpose:** Single place to see which provider/model powers each feature, and where to change IDs when vendors ship new models (e.g. bump Claude Sonnet `5` → next release).
 
-**Last reviewed:** 2026-07-01 (verify against repo after any AI-related PR).
+**Last reviewed:** 2026-08-27 (verify against repo after any AI-related PR).
+
+**Upgrade runbook:** `docs/MODEL_UPGRADE_CHECKLIST.md` (repo constants + n8n nodes that must be changed by hand).
 
 ---
 
@@ -10,9 +12,8 @@
 
 | Provider | What to change | Notes |
 |----------|----------------|--------|
-| **Anthropic (Claude)** | `DEFAULT_CLAUDE_MODEL` + `CLAUDE_MODEL_ALIASES` in `api/ai/claude.js`; same pattern in `api/ai/content-remix.js` | Client sends model from `src/services/claudeAPI.js` (`CLAUDE_MODEL`). Update **all** three if you want one global Sonnet version. |
-| **Anthropic (Humanize-only)** | `HUMANIZE_MODEL` in `api/ai/humanize.js` | Currently a snapshot id; align with main Claude proxy aliases if Anthropic deprecates snapshots. |
-| **xAI (Grok)** | `GROK_MODEL` in `src/config/grokConfig.js` — the **only** place the Grok model id lives | Per-feature `reasoning_effort` is set in the same file (`GROK_EFFORT` map via `getGrokParams(featureKey)`). No env vars, no Vite defines. |
+| **Anthropic (Claude)** | `CLAUDE_MODEL` (+ `CLAUDE_LEGACY_ALIASES` if old ids must keep resolving) in `src/config/claudeConfig.js` | Single source of truth. Call sites import `CLAUDE_MODEL` / `resolveClaudeModel()`. n8n Anthropic nodes are **not** covered — see `docs/MODEL_UPGRADE_CHECKLIST.md`. |
+| **xAI (Grok)** | `GROK_MODEL` in `src/config/grokConfig.js` — the **only** place the Grok model id lives | Per-feature `reasoning_effort` is set in the same file (`GROK_EFFORT` map via `getGrokParams(featureKey)`). No env vars, no Vite defines. n8n Grok nodes are **not** covered — see `docs/MODEL_UPGRADE_CHECKLIST.md`. |
 | **Perplexity** | `MODEL_CONFIG` in `api/ai/perplexity.js` | Feature keys (`perplexityFeature` / `cache.type`) map to `sonar`, `sonar-pro`, or `llama-3.1-sonar-small-128k-online`. |
 | **Trend Deep Dive (standalone route)** | `MODEL` in `api/ai/deep-dive.js` | **Separate** from `api/ai/perplexity.js` — today hardcoded `sonar-pro`. |
 
@@ -24,10 +25,11 @@
 
 | Location | Constant / behavior |
 |----------|---------------------|
-| `api/ai/claude.js` | `DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5'`; aliases include legacy `claude-sonnet-4-6` / `claude-sonnet-4-6-20250514` |
-| `src/services/claudeAPI.js` | `CLAUDE_MODEL = 'claude-sonnet-5'` on each request |
-| `api/ai/content-remix.js` | Same as main Claude proxy (`DEFAULT_CLAUDE_MODEL` + aliases) |
-| `api/ai/humanize.js` | `HUMANIZE_MODEL = 'claude-sonnet-5'` |
+| `src/config/claudeConfig.js` | **Source of truth:** `CLAUDE_MODEL`; `CLAUDE_LEGACY_ALIASES` (`claude-sonnet-4-6`, `claude-sonnet-4-6-20250514`, and the current id); `resolveClaudeModel()`; `CLAUDE_MAX_TOKENS` |
+| `api/ai/claude.js` | Imports `resolveClaudeModel` / `CLAUDE_MAX_TOKENS.default` |
+| `src/services/claudeAPI.js` | Imports `CLAUDE_MODEL` and sends it on each proxy request |
+| `api/ai/content-remix.js` | Imports `CLAUDE_MODEL`, `resolveClaudeModel`, `CLAUDE_MAX_TOKENS.contentRemix` |
+| `api/ai/humanize.js` | Imports `CLAUDE_MODEL` and `CLAUDE_MAX_TOKENS.humanize` |
 
 **Env:** `ANTHROPIC_API_KEY` (server only).
 
@@ -118,7 +120,7 @@ Dashboard cache refresh paths may also call Grok directly — see `src/services/
 | Feature | Models / route |
 |---------|----------------|
 | **Content Remix Studio** | Primary: `api/ai/content-remix.js` → **Claude** (same Sonnet stack as main Claude proxy). Fallback: legacy `api/ai/n8n-generator.js` (n8n — **model configured in n8n**, not in this repo). |
-| **Humanize** | `api/ai/humanize.js` → **Claude** (`HUMANIZE_MODEL`) |
+| **Humanize** | `api/ai/humanize.js` → **Claude** (`CLAUDE_MODEL` from `claudeConfig.js`) |
 | **Ignite Engine** | Primary: n8n webhook (`api/ignite-engine-proxy.js`). Fallback JSON: `IgniteEngine.jsx` → `/api/ai/grok` with `getGrokParams('igniteEngine')`. |
 | **AI Plan Builder** | n8n (`api/create-plan-builder-job.js`) — **model in n8n workflow** |
 | **Optimize posting times** | `src/services/optimizeTimesAPI.js` → Grok via `getGrokParams('optimizeTimes')` |
@@ -129,10 +131,10 @@ Dashboard cache refresh paths may also call Grok directly — see `src/services/
 
 ## n8n / external workflows
 
-These features **do not** define the LLM in this repository’s model map; update the workflow in n8n (or the webhook’s downstream nodes):
+These features **do not** define the LLM in this repository’s model map; update the workflow in n8n (or the webhook’s downstream nodes). n8n model-selector dropdowns cannot read `CLAUDE_MODEL` / `GROK_MODEL` from this repo — change each named node by hand. See `docs/MODEL_UPGRADE_CHECKLIST.md`.
 
-- Ignite Engine (`N8N_IGNITE_ENGINE_WEBHOOK`)
-- Plan Builder (`N8N_PLAN_BUILDER_WEBHOOK_*`)
+- Ignite Engine (`4RBACXirZhUR2v31`) — nodes **Anthropic Chat Model** and **Grok Model**
+- Plan Builder (`iEs1WLZ3FDhONdqj`) — node **Anthropic Chat Model**
 - Legacy generator (`N8N_WEBHOOK_URL_GENERATOR`)
 
 ---
@@ -147,4 +149,5 @@ These features **do not** define the LLM in this repository’s model map; updat
 
 | Date | Change |
 |------|--------|
+| 2026-08-27 | Claude production model + aliases centralized in `src/config/claudeConfig.js`. Upgrade steps: `docs/MODEL_UPGRADE_CHECKLIST.md`. |
 | 2026-03-26 | Initial map; Full Post Builder hashtags use Perplexity `full_post_hashtags` → `sonar`. |
