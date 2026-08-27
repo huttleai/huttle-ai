@@ -575,17 +575,12 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 DO $$
 BEGIN
+  -- Constraints are applied in four passes -- PRIMARY KEY, UNIQUE, CHECK, then
+  -- FOREIGN KEY -- because a foreign key cannot be added before the primary or
+  -- unique key it references exists. Statement text is exactly as generated.
+  -- PRIMARY KEY (38)
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_pkey' AND conrelid=to_regclass('public.ai_analytics')) THEN
     ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_content_type_check' AND conrelid=to_regclass('public.ai_analytics')) THEN
-    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_content_type_check CHECK ((content_type = ANY (ARRAY['caption'::text, 'hook'::text, 'remix'::text, 'script'::text, 'trend_forecast'::text, 'audience_insight'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_response_time_ms_check' AND conrelid=to_regclass('public.ai_analytics')) THEN
-    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_response_time_ms_check CHECK ((response_time_ms >= 0));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_user_id_fkey' AND conrelid=to_regclass('public.ai_analytics')) THEN
-    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='api_rate_limit_counters_pkey' AND conrelid=to_regclass('public.api_rate_limit_counters')) THEN
     ALTER TABLE public.api_rate_limit_counters ADD CONSTRAINT api_rate_limit_counters_pkey PRIMARY KEY (user_key, route, window_start);
@@ -593,89 +588,32 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bonus_credit_ledger_pkey' AND conrelid=to_regclass('public.bonus_credit_ledger')) THEN
     ALTER TABLE public.bonus_credit_ledger ADD CONSTRAINT bonus_credit_ledger_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bonus_credit_ledger_event_type_check' AND conrelid=to_regclass('public.bonus_credit_ledger')) THEN
-    ALTER TABLE public.bonus_credit_ledger ADD CONSTRAINT bonus_credit_ledger_event_type_check CHECK ((event_type = ANY (ARRAY['granted'::text, 'consumed'::text, 'expired'::text, 'refunded'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bonus_credit_ledger_user_id_fkey' AND conrelid=to_regclass('public.bonus_credit_ledger')) THEN
-    ALTER TABLE public.bonus_credit_ledger ADD CONSTRAINT bonus_credit_ledger_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='brand_data_pkey' AND conrelid=to_regclass('public.brand_data')) THEN
     ALTER TABLE public.brand_data ADD CONSTRAINT brand_data_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='brand_data_user_id_fkey' AND conrelid=to_regclass('public.brand_data')) THEN
-    ALTER TABLE public.brand_data ADD CONSTRAINT brand_data_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='cancellation_feedback_pkey' AND conrelid=to_regclass('public.cancellation_feedback')) THEN
     ALTER TABLE public.cancellation_feedback ADD CONSTRAINT cancellation_feedback_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='cancellation_feedback_recommend_check' AND conrelid=to_regclass('public.cancellation_feedback')) THEN
-    ALTER TABLE public.cancellation_feedback ADD CONSTRAINT cancellation_feedback_recommend_check CHECK (((recommend_likelihood IS NULL) OR (recommend_likelihood = ANY (ARRAY['yes'::text, 'maybe'::text, 'no'::text]))));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='cancellation_feedback_user_id_fkey' AND conrelid=to_regclass('public.cancellation_feedback')) THEN
-    ALTER TABLE public.cancellation_feedback ADD CONSTRAINT cancellation_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collection_items_pkey' AND conrelid=to_regclass('public.content_collection_items')) THEN
     ALTER TABLE public.content_collection_items ADD CONSTRAINT content_collection_items_pkey PRIMARY KEY (collection_id, content_item_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collection_items_collection_id_fkey' AND conrelid=to_regclass('public.content_collection_items')) THEN
-    ALTER TABLE public.content_collection_items ADD CONSTRAINT content_collection_items_collection_id_fkey FOREIGN KEY (collection_id) REFERENCES content_collections(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collection_items_content_item_id_fkey' AND conrelid=to_regclass('public.content_collection_items')) THEN
-    ALTER TABLE public.content_collection_items ADD CONSTRAINT content_collection_items_content_item_id_fkey FOREIGN KEY (content_item_id) REFERENCES content_library(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collections_pkey' AND conrelid=to_regclass('public.content_collections')) THEN
     ALTER TABLE public.content_collections ADD CONSTRAINT content_collections_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collections_user_id_name_key' AND conrelid=to_regclass('public.content_collections')) THEN
-    ALTER TABLE public.content_collections ADD CONSTRAINT content_collections_user_id_name_key UNIQUE (user_id, name);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collections_user_id_fkey' AND conrelid=to_regclass('public.content_collections')) THEN
-    ALTER TABLE public.content_collections ADD CONSTRAINT content_collections_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_pkey' AND conrelid=to_regclass('public.content_library')) THEN
     ALTER TABLE public.content_library ADD CONSTRAINT content_library_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_type_check' AND conrelid=to_regclass('public.content_library')) THEN
-    ALTER TABLE public.content_library ADD CONSTRAINT content_library_type_check CHECK ((type = ANY (ARRAY['image'::text, 'video'::text, 'text'::text, 'caption'::text, 'hook'::text, 'hashtag'::text, 'cta'::text, 'plan'::text, 'content_plan'::text, 'blueprint'::text, 'remix'::text, 'post'::text, 'script'::text, 'full_post'::text, 'day'::text, 'plan_day'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_project_id_fkey' AND conrelid=to_regclass('public.content_library')) THEN
-    ALTER TABLE public.content_library ADD CONSTRAINT content_library_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_user_id_fkey' AND conrelid=to_regclass('public.content_library')) THEN
-    ALTER TABLE public.content_library ADD CONSTRAINT content_library_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='daily_dashboard_cache_pkey' AND conrelid=to_regclass('public.daily_dashboard_cache')) THEN
     ALTER TABLE public.daily_dashboard_cache ADD CONSTRAINT daily_dashboard_cache_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='daily_dashboard_cache_user_id_generated_date_key' AND conrelid=to_regclass('public.daily_dashboard_cache')) THEN
-    ALTER TABLE public.daily_dashboard_cache ADD CONSTRAINT daily_dashboard_cache_user_id_generated_date_key UNIQUE (user_id, generated_date);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='daily_dashboard_cache_user_id_fkey' AND conrelid=to_regclass('public.daily_dashboard_cache')) THEN
-    ALTER TABLE public.daily_dashboard_cache ADD CONSTRAINT daily_dashboard_cache_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dm_leads_pkey' AND conrelid=to_regclass('public.dm_leads')) THEN
     ALTER TABLE public.dm_leads ADD CONSTRAINT dm_leads_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dm_leads_platform_check' AND conrelid=to_regclass('public.dm_leads')) THEN
-    ALTER TABLE public.dm_leads ADD CONSTRAINT dm_leads_platform_check CHECK ((platform = ANY (ARRAY['ig'::text, 'x'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dm_leads_status_check' AND conrelid=to_regclass('public.dm_leads')) THEN
-    ALTER TABLE public.dm_leads ADD CONSTRAINT dm_leads_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'replied'::text, 'follow_up'::text, 'converted'::text, 'skip'::text])));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='feedback_pkey' AND conrelid=to_regclass('public.feedback')) THEN
     ALTER TABLE public.feedback ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='feedback_user_id_fkey' AND conrelid=to_regclass('public.feedback')) THEN
-    ALTER TABLE public.feedback ADD CONSTRAINT feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='generated_content_pkey' AND conrelid=to_regclass('public.generated_content')) THEN
     ALTER TABLE public.generated_content ADD CONSTRAINT generated_content_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='generated_content_type_check' AND conrelid=to_regclass('public.generated_content')) THEN
-    ALTER TABLE public.generated_content ADD CONSTRAINT generated_content_type_check CHECK ((type = ANY (ARRAY['caption'::text, 'hashtag'::text, 'hook'::text, 'cta'::text, 'scored'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='generated_content_user_id_fkey' AND conrelid=to_regclass('public.generated_content')) THEN
-    ALTER TABLE public.generated_content ADD CONSTRAINT generated_content_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='global_cache_pkey' AND conrelid=to_regclass('public.global_cache')) THEN
     ALTER TABLE public.global_cache ADD CONSTRAINT global_cache_pkey PRIMARY KEY (id);
@@ -683,107 +621,38 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='job_notifications_pkey' AND conrelid=to_regclass('public.job_notifications')) THEN
     ALTER TABLE public.job_notifications ADD CONSTRAINT job_notifications_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='job_notifications_job_id_fkey' AND conrelid=to_regclass('public.job_notifications')) THEN
-    ALTER TABLE public.job_notifications ADD CONSTRAINT job_notifications_job_id_fkey FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='job_notifications_user_id_fkey' AND conrelid=to_regclass('public.job_notifications')) THEN
-    ALTER TABLE public.job_notifications ADD CONSTRAINT job_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='jobs_pkey' AND conrelid=to_regclass('public.jobs')) THEN
     ALTER TABLE public.jobs ADD CONSTRAINT jobs_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='jobs_user_id_fkey' AND conrelid=to_regclass('public.jobs')) THEN
-    ALTER TABLE public.jobs ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='n8n_post_queue_pkey' AND conrelid=to_regclass('public.n8n_post_queue')) THEN
     ALTER TABLE public.n8n_post_queue ADD CONSTRAINT n8n_post_queue_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='n8n_post_queue_status_check' AND conrelid=to_regclass('public.n8n_post_queue')) THEN
-    ALTER TABLE public.n8n_post_queue ADD CONSTRAINT n8n_post_queue_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'completed'::text, 'failed'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='n8n_post_queue_user_id_fkey' AND conrelid=to_regclass('public.n8n_post_queue')) THEN
-    ALTER TABLE public.n8n_post_queue ADD CONSTRAINT n8n_post_queue_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='niche_content_cache_pkey' AND conrelid=to_regclass('public.niche_content_cache')) THEN
     ALTER TABLE public.niche_content_cache ADD CONSTRAINT niche_content_cache_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='niche_content_cache_user_type_check' AND conrelid=to_regclass('public.niche_content_cache')) THEN
-    ALTER TABLE public.niche_content_cache ADD CONSTRAINT niche_content_cache_user_type_check CHECK (((user_type = ANY (ARRAY['brand_business'::text, 'solo_creator'::text])) OR (user_type IS NULL)));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='niche_content_cache_user_id_fkey' AND conrelid=to_regclass('public.niche_content_cache')) THEN
-    ALTER TABLE public.niche_content_cache ADD CONSTRAINT niche_content_cache_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='notifications_pkey' AND conrelid=to_regclass('public.notifications')) THEN
     ALTER TABLE public.notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='notifications_user_id_fkey' AND conrelid=to_regclass('public.notifications')) THEN
-    ALTER TABLE public.notifications ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_pkey' AND conrelid=to_regclass('public.post_kit_slots')) THEN
     ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_kit_id_slot_key_key' AND conrelid=to_regclass('public.post_kit_slots')) THEN
-    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_kit_id_slot_key_key UNIQUE (kit_id, slot_key);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_kit_id_fkey' AND conrelid=to_regclass('public.post_kit_slots')) THEN
-    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_kit_id_fkey FOREIGN KEY (kit_id) REFERENCES post_kits(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_user_id_fkey' AND conrelid=to_regclass('public.post_kit_slots')) THEN
-    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kits_pkey' AND conrelid=to_regclass('public.post_kits')) THEN
     ALTER TABLE public.post_kits ADD CONSTRAINT post_kits_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kits_platform_check' AND conrelid=to_regclass('public.post_kits')) THEN
-    ALTER TABLE public.post_kits ADD CONSTRAINT post_kits_platform_check CHECK ((platform = ANY (ARRAY['instagram'::text, 'tiktok'::text, 'youtube'::text, 'twitter'::text, 'facebook'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kits_user_id_fkey' AND conrelid=to_regclass('public.post_kits')) THEN
-    ALTER TABLE public.post_kits ADD CONSTRAINT post_kits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='profiles_pkey' AND conrelid=to_regclass('public.profiles')) THEN
     ALTER TABLE public.profiles ADD CONSTRAINT profiles_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='profiles_id_fkey' AND conrelid=to_regclass('public.profiles')) THEN
-    ALTER TABLE public.profiles ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_pkey' AND conrelid=to_regclass('public.projects')) THEN
     ALTER TABLE public.projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_color_format' AND conrelid=to_regclass('public.projects')) THEN
-    ALTER TABLE public.projects ADD CONSTRAINT projects_color_format CHECK (((color)::text ~ '^#[0-9A-Fa-f]{6}$'::text));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_name_not_empty' AND conrelid=to_regclass('public.projects')) THEN
-    ALTER TABLE public.projects ADD CONSTRAINT projects_name_not_empty CHECK ((length(TRIM(BOTH FROM name)) > 0));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_user_id_fkey' AND conrelid=to_regclass('public.projects')) THEN
-    ALTER TABLE public.projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='scheduled_posts_pkey' AND conrelid=to_regclass('public.scheduled_posts')) THEN
     ALTER TABLE public.scheduled_posts ADD CONSTRAINT scheduled_posts_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='scheduled_posts_status_check' AND conrelid=to_regclass('public.scheduled_posts')) THEN
-    ALTER TABLE public.scheduled_posts ADD CONSTRAINT scheduled_posts_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'scheduled'::text, 'ready'::text, 'posting'::text, 'posted'::text, 'failed'::text, 'cancelled'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='scheduled_posts_user_id_fkey' AND conrelid=to_regclass('public.scheduled_posts')) THEN
-    ALTER TABLE public.scheduled_posts ADD CONSTRAINT scheduled_posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='smart_calendar_pkey' AND conrelid=to_regclass('public.smart_calendar')) THEN
     ALTER TABLE public.smart_calendar ADD CONSTRAINT smart_calendar_pkey PRIMARY KEY (id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='smart_calendar_user_id_fkey' AND conrelid=to_regclass('public.smart_calendar')) THEN
-    ALTER TABLE public.smart_calendar ADD CONSTRAINT smart_calendar_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_pkey' AND conrelid=to_regclass('public.social_connections')) THEN
     ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_user_id_platform_key' AND conrelid=to_regclass('public.social_connections')) THEN
-    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_user_id_platform_key UNIQUE (user_id, platform);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_platform_check' AND conrelid=to_regclass('public.social_connections')) THEN
-    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_platform_check CHECK ((platform = ANY (ARRAY['instagram'::text, 'facebook'::text, 'twitter'::text, 'tiktok'::text, 'youtube'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_user_id_fkey' AND conrelid=to_regclass('public.social_connections')) THEN
-    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_updates_pkey' AND conrelid=to_regclass('public.social_updates')) THEN
     ALTER TABLE public.social_updates ADD CONSTRAINT social_updates_pkey PRIMARY KEY (id);
@@ -794,8 +663,111 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_pkey' AND conrelid=to_regclass('public.subscriptions')) THEN
     ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tier_feature_limits_pkey' AND conrelid=to_regclass('public.tier_feature_limits')) THEN
+    ALTER TABLE public.tier_feature_limits ADD CONSTRAINT tier_feature_limits_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trend_forecasts_pkey' AND conrelid=to_regclass('public.trend_forecasts')) THEN
+    ALTER TABLE public.trend_forecasts ADD CONSTRAINT trend_forecasts_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_pkey' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
+    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_activity_pkey' AND conrelid=to_regclass('public.user_activity')) THEN
+    ALTER TABLE public.user_activity ADD CONSTRAINT user_activity_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_pkey' AND conrelid=to_regclass('public.user_daily_insights')) THEN
+    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_pkey' AND conrelid=to_regclass('public.user_feedback')) THEN
+    ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_pkey' AND conrelid=to_regclass('public.user_preferences')) THEN
+    ALTER TABLE public.user_preferences ADD CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_pkey' AND conrelid=to_regclass('public.user_profile')) THEN
+    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_publishes_pkey' AND conrelid=to_regclass('public.user_publishes')) THEN
+    ALTER TABLE public.user_publishes ADD CONSTRAINT user_publishes_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_pkey' AND conrelid=to_regclass('public.users')) THEN
+    ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+  END IF;
+
+  -- UNIQUE (9)
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collections_user_id_name_key' AND conrelid=to_regclass('public.content_collections')) THEN
+    ALTER TABLE public.content_collections ADD CONSTRAINT content_collections_user_id_name_key UNIQUE (user_id, name);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='daily_dashboard_cache_user_id_generated_date_key' AND conrelid=to_regclass('public.daily_dashboard_cache')) THEN
+    ALTER TABLE public.daily_dashboard_cache ADD CONSTRAINT daily_dashboard_cache_user_id_generated_date_key UNIQUE (user_id, generated_date);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_kit_id_slot_key_key' AND conrelid=to_regclass('public.post_kit_slots')) THEN
+    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_kit_id_slot_key_key UNIQUE (kit_id, slot_key);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_user_id_platform_key' AND conrelid=to_regclass('public.social_connections')) THEN
+    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_user_id_platform_key UNIQUE (user_id, platform);
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_user_id_unique' AND conrelid=to_regclass('public.subscriptions')) THEN
     ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_user_id_unique UNIQUE (user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tier_feature_limits_tier_feature_key_key' AND conrelid=to_regclass('public.tier_feature_limits')) THEN
+    ALTER TABLE public.tier_feature_limits ADD CONSTRAINT tier_feature_limits_tier_feature_key_key UNIQUE (tier, feature_key);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_stripe_subscription_id_reminder_type_key' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
+    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_stripe_subscription_id_reminder_type_key UNIQUE (stripe_subscription_id, reminder_type);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_user_id_key' AND conrelid=to_regclass('public.user_daily_insights')) THEN
+    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_user_id_key UNIQUE (user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_user_id_key' AND conrelid=to_regclass('public.user_profile')) THEN
+    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_user_id_key UNIQUE (user_id);
+  END IF;
+
+  -- CHECK (30)
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_content_type_check' AND conrelid=to_regclass('public.ai_analytics')) THEN
+    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_content_type_check CHECK ((content_type = ANY (ARRAY['caption'::text, 'hook'::text, 'remix'::text, 'script'::text, 'trend_forecast'::text, 'audience_insight'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_response_time_ms_check' AND conrelid=to_regclass('public.ai_analytics')) THEN
+    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_response_time_ms_check CHECK ((response_time_ms >= 0));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bonus_credit_ledger_event_type_check' AND conrelid=to_regclass('public.bonus_credit_ledger')) THEN
+    ALTER TABLE public.bonus_credit_ledger ADD CONSTRAINT bonus_credit_ledger_event_type_check CHECK ((event_type = ANY (ARRAY['granted'::text, 'consumed'::text, 'expired'::text, 'refunded'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='cancellation_feedback_recommend_check' AND conrelid=to_regclass('public.cancellation_feedback')) THEN
+    ALTER TABLE public.cancellation_feedback ADD CONSTRAINT cancellation_feedback_recommend_check CHECK (((recommend_likelihood IS NULL) OR (recommend_likelihood = ANY (ARRAY['yes'::text, 'maybe'::text, 'no'::text]))));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_type_check' AND conrelid=to_regclass('public.content_library')) THEN
+    ALTER TABLE public.content_library ADD CONSTRAINT content_library_type_check CHECK ((type = ANY (ARRAY['image'::text, 'video'::text, 'text'::text, 'caption'::text, 'hook'::text, 'hashtag'::text, 'cta'::text, 'plan'::text, 'content_plan'::text, 'blueprint'::text, 'remix'::text, 'post'::text, 'script'::text, 'full_post'::text, 'day'::text, 'plan_day'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dm_leads_platform_check' AND conrelid=to_regclass('public.dm_leads')) THEN
+    ALTER TABLE public.dm_leads ADD CONSTRAINT dm_leads_platform_check CHECK ((platform = ANY (ARRAY['ig'::text, 'x'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dm_leads_status_check' AND conrelid=to_regclass('public.dm_leads')) THEN
+    ALTER TABLE public.dm_leads ADD CONSTRAINT dm_leads_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'replied'::text, 'follow_up'::text, 'converted'::text, 'skip'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='generated_content_type_check' AND conrelid=to_regclass('public.generated_content')) THEN
+    ALTER TABLE public.generated_content ADD CONSTRAINT generated_content_type_check CHECK ((type = ANY (ARRAY['caption'::text, 'hashtag'::text, 'hook'::text, 'cta'::text, 'scored'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='n8n_post_queue_status_check' AND conrelid=to_regclass('public.n8n_post_queue')) THEN
+    ALTER TABLE public.n8n_post_queue ADD CONSTRAINT n8n_post_queue_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'completed'::text, 'failed'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='niche_content_cache_user_type_check' AND conrelid=to_regclass('public.niche_content_cache')) THEN
+    ALTER TABLE public.niche_content_cache ADD CONSTRAINT niche_content_cache_user_type_check CHECK (((user_type = ANY (ARRAY['brand_business'::text, 'solo_creator'::text])) OR (user_type IS NULL)));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kits_platform_check' AND conrelid=to_regclass('public.post_kits')) THEN
+    ALTER TABLE public.post_kits ADD CONSTRAINT post_kits_platform_check CHECK ((platform = ANY (ARRAY['instagram'::text, 'tiktok'::text, 'youtube'::text, 'twitter'::text, 'facebook'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_color_format' AND conrelid=to_regclass('public.projects')) THEN
+    ALTER TABLE public.projects ADD CONSTRAINT projects_color_format CHECK (((color)::text ~ '^#[0-9A-Fa-f]{6}$'::text));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_name_not_empty' AND conrelid=to_regclass('public.projects')) THEN
+    ALTER TABLE public.projects ADD CONSTRAINT projects_name_not_empty CHECK ((length(TRIM(BOTH FROM name)) > 0));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='scheduled_posts_status_check' AND conrelid=to_regclass('public.scheduled_posts')) THEN
+    ALTER TABLE public.scheduled_posts ADD CONSTRAINT scheduled_posts_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'scheduled'::text, 'ready'::text, 'posting'::text, 'posted'::text, 'failed'::text, 'cancelled'::text])));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_platform_check' AND conrelid=to_regclass('public.social_connections')) THEN
+    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_platform_check CHECK ((platform = ANY (ARRAY['instagram'::text, 'facebook'::text, 'twitter'::text, 'tiktok'::text, 'youtube'::text])));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_bonus_type_check' AND conrelid=to_regclass('public.subscriptions')) THEN
     ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_bonus_type_check CHECK ((bonus_type = ANY (ARRAY['annual_signup'::text, 'monthly_first_month'::text, 'manual_grant'::text, NULL::text])));
@@ -806,50 +778,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_tier_check' AND conrelid=to_regclass('public.subscriptions')) THEN
     ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_tier_check CHECK ((tier = ANY (ARRAY['free'::text, 'essentials'::text, 'pro'::text, 'founder'::text, 'builder'::text])));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_user_id_fkey' AND conrelid=to_regclass('public.subscriptions')) THEN
-    ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tier_feature_limits_pkey' AND conrelid=to_regclass('public.tier_feature_limits')) THEN
-    ALTER TABLE public.tier_feature_limits ADD CONSTRAINT tier_feature_limits_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tier_feature_limits_tier_feature_key_key' AND conrelid=to_regclass('public.tier_feature_limits')) THEN
-    ALTER TABLE public.tier_feature_limits ADD CONSTRAINT tier_feature_limits_tier_feature_key_key UNIQUE (tier, feature_key);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trend_forecasts_pkey' AND conrelid=to_regclass('public.trend_forecasts')) THEN
-    ALTER TABLE public.trend_forecasts ADD CONSTRAINT trend_forecasts_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trend_forecasts_user_id_fkey' AND conrelid=to_regclass('public.trend_forecasts')) THEN
-    ALTER TABLE public.trend_forecasts ADD CONSTRAINT trend_forecasts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_pkey' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
-    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_stripe_subscription_id_reminder_type_key' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
-    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_stripe_subscription_id_reminder_type_key UNIQUE (stripe_subscription_id, reminder_type);
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_reminder_type_check' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
     ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_reminder_type_check CHECK ((reminder_type = ANY (ARRAY['trial_3_days'::text, 'trial_2_days'::text, 'trial_1_day'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_user_id_fkey' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
-    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_activity_pkey' AND conrelid=to_regclass('public.user_activity')) THEN
-    ALTER TABLE public.user_activity ADD CONSTRAINT user_activity_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_activity_user_id_fkey' AND conrelid=to_regclass('public.user_activity')) THEN
-    ALTER TABLE public.user_activity ADD CONSTRAINT user_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_pkey' AND conrelid=to_regclass('public.user_daily_insights')) THEN
-    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_user_id_key' AND conrelid=to_regclass('public.user_daily_insights')) THEN
-    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_user_id_key UNIQUE (user_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_user_id_fkey' AND conrelid=to_regclass('public.user_daily_insights')) THEN
-    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_user_id_fkey FOREIGN KEY (user_id) REFERENCES user_profile(id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_pkey' AND conrelid=to_regclass('public.user_feedback')) THEN
-    ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_pkey PRIMARY KEY (id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_feedback_type_check' AND conrelid=to_regclass('public.user_feedback')) THEN
     ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_feedback_type_check CHECK ((feedback_type = ANY (ARRAY['bug'::text, 'feature'::text, 'general'::text])));
@@ -860,23 +790,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_status_check' AND conrelid=to_regclass('public.user_feedback')) THEN
     ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_status_check CHECK ((status = ANY (ARRAY['new'::text, 'reviewed'::text, 'resolved'::text, 'archived'::text])));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_user_id_fkey' AND conrelid=to_regclass('public.user_feedback')) THEN
-    ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_pkey' AND conrelid=to_regclass('public.user_preferences')) THEN
-    ALTER TABLE public.user_preferences ADD CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id);
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_calendar_view_check' AND conrelid=to_regclass('public.user_preferences')) THEN
     ALTER TABLE public.user_preferences ADD CONSTRAINT user_preferences_calendar_view_check CHECK ((calendar_view = ANY (ARRAY['month'::text, 'week'::text, 'day'::text])));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_user_id_fkey' AND conrelid=to_regclass('public.user_preferences')) THEN
-    ALTER TABLE public.user_preferences ADD CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_pkey' AND conrelid=to_regclass('public.user_profile')) THEN
-    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_pkey PRIMARY KEY (id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_user_id_key' AND conrelid=to_regclass('public.user_profile')) THEN
-    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_user_id_key UNIQUE (user_id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='audience_location_type_check' AND conrelid=to_regclass('public.user_profile')) THEN
     ALTER TABLE public.user_profile ADD CONSTRAINT audience_location_type_check CHECK (((audience_location_type = ANY (ARRAY['mostly_local'::text, 'mostly_online'::text, 'split_evenly'::text])) OR (audience_location_type IS NULL)));
@@ -896,20 +811,115 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_profile_type_check' AND conrelid=to_regclass('public.user_profile')) THEN
     ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_profile_type_check CHECK ((profile_type = ANY (ARRAY['brand_business'::text, 'solo_creator'::text])));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_user_id_fkey' AND conrelid=to_regclass('public.user_profile')) THEN
-    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_publishes_pkey' AND conrelid=to_regclass('public.user_publishes')) THEN
-    ALTER TABLE public.user_publishes ADD CONSTRAINT user_publishes_pkey PRIMARY KEY (id);
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_publishes_platform_check' AND conrelid=to_regclass('public.user_publishes')) THEN
     ALTER TABLE public.user_publishes ADD CONSTRAINT user_publishes_platform_check CHECK ((platform = ANY (ARRAY['instagram'::text, 'facebook'::text, 'twitter'::text, 'tiktok'::text, 'youtube'::text])));
   END IF;
+
+  -- FOREIGN KEY (35)
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ai_analytics_user_id_fkey' AND conrelid=to_regclass('public.ai_analytics')) THEN
+    ALTER TABLE public.ai_analytics ADD CONSTRAINT ai_analytics_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='bonus_credit_ledger_user_id_fkey' AND conrelid=to_regclass('public.bonus_credit_ledger')) THEN
+    ALTER TABLE public.bonus_credit_ledger ADD CONSTRAINT bonus_credit_ledger_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='brand_data_user_id_fkey' AND conrelid=to_regclass('public.brand_data')) THEN
+    ALTER TABLE public.brand_data ADD CONSTRAINT brand_data_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='cancellation_feedback_user_id_fkey' AND conrelid=to_regclass('public.cancellation_feedback')) THEN
+    ALTER TABLE public.cancellation_feedback ADD CONSTRAINT cancellation_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collection_items_collection_id_fkey' AND conrelid=to_regclass('public.content_collection_items')) THEN
+    ALTER TABLE public.content_collection_items ADD CONSTRAINT content_collection_items_collection_id_fkey FOREIGN KEY (collection_id) REFERENCES content_collections(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collection_items_content_item_id_fkey' AND conrelid=to_regclass('public.content_collection_items')) THEN
+    ALTER TABLE public.content_collection_items ADD CONSTRAINT content_collection_items_content_item_id_fkey FOREIGN KEY (content_item_id) REFERENCES content_library(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_collections_user_id_fkey' AND conrelid=to_regclass('public.content_collections')) THEN
+    ALTER TABLE public.content_collections ADD CONSTRAINT content_collections_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_project_id_fkey' AND conrelid=to_regclass('public.content_library')) THEN
+    ALTER TABLE public.content_library ADD CONSTRAINT content_library_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='content_library_user_id_fkey' AND conrelid=to_regclass('public.content_library')) THEN
+    ALTER TABLE public.content_library ADD CONSTRAINT content_library_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='daily_dashboard_cache_user_id_fkey' AND conrelid=to_regclass('public.daily_dashboard_cache')) THEN
+    ALTER TABLE public.daily_dashboard_cache ADD CONSTRAINT daily_dashboard_cache_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='feedback_user_id_fkey' AND conrelid=to_regclass('public.feedback')) THEN
+    ALTER TABLE public.feedback ADD CONSTRAINT feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='generated_content_user_id_fkey' AND conrelid=to_regclass('public.generated_content')) THEN
+    ALTER TABLE public.generated_content ADD CONSTRAINT generated_content_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='job_notifications_job_id_fkey' AND conrelid=to_regclass('public.job_notifications')) THEN
+    ALTER TABLE public.job_notifications ADD CONSTRAINT job_notifications_job_id_fkey FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='job_notifications_user_id_fkey' AND conrelid=to_regclass('public.job_notifications')) THEN
+    ALTER TABLE public.job_notifications ADD CONSTRAINT job_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='jobs_user_id_fkey' AND conrelid=to_regclass('public.jobs')) THEN
+    ALTER TABLE public.jobs ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='n8n_post_queue_user_id_fkey' AND conrelid=to_regclass('public.n8n_post_queue')) THEN
+    ALTER TABLE public.n8n_post_queue ADD CONSTRAINT n8n_post_queue_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='niche_content_cache_user_id_fkey' AND conrelid=to_regclass('public.niche_content_cache')) THEN
+    ALTER TABLE public.niche_content_cache ADD CONSTRAINT niche_content_cache_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='notifications_user_id_fkey' AND conrelid=to_regclass('public.notifications')) THEN
+    ALTER TABLE public.notifications ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_kit_id_fkey' AND conrelid=to_regclass('public.post_kit_slots')) THEN
+    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_kit_id_fkey FOREIGN KEY (kit_id) REFERENCES post_kits(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kit_slots_user_id_fkey' AND conrelid=to_regclass('public.post_kit_slots')) THEN
+    ALTER TABLE public.post_kit_slots ADD CONSTRAINT post_kit_slots_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='post_kits_user_id_fkey' AND conrelid=to_regclass('public.post_kits')) THEN
+    ALTER TABLE public.post_kits ADD CONSTRAINT post_kits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='profiles_id_fkey' AND conrelid=to_regclass('public.profiles')) THEN
+    ALTER TABLE public.profiles ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='projects_user_id_fkey' AND conrelid=to_regclass('public.projects')) THEN
+    ALTER TABLE public.projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='scheduled_posts_user_id_fkey' AND conrelid=to_regclass('public.scheduled_posts')) THEN
+    ALTER TABLE public.scheduled_posts ADD CONSTRAINT scheduled_posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='smart_calendar_user_id_fkey' AND conrelid=to_regclass('public.smart_calendar')) THEN
+    ALTER TABLE public.smart_calendar ADD CONSTRAINT smart_calendar_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_connections_user_id_fkey' AND conrelid=to_regclass('public.social_connections')) THEN
+    ALTER TABLE public.social_connections ADD CONSTRAINT social_connections_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_user_id_fkey' AND conrelid=to_regclass('public.subscriptions')) THEN
+    ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trend_forecasts_user_id_fkey' AND conrelid=to_regclass('public.trend_forecasts')) THEN
+    ALTER TABLE public.trend_forecasts ADD CONSTRAINT trend_forecasts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trial_email_reminders_user_id_fkey' AND conrelid=to_regclass('public.trial_email_reminders')) THEN
+    ALTER TABLE public.trial_email_reminders ADD CONSTRAINT trial_email_reminders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_activity_user_id_fkey' AND conrelid=to_regclass('public.user_activity')) THEN
+    ALTER TABLE public.user_activity ADD CONSTRAINT user_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_insights_user_id_fkey' AND conrelid=to_regclass('public.user_daily_insights')) THEN
+    ALTER TABLE public.user_daily_insights ADD CONSTRAINT user_daily_insights_user_id_fkey FOREIGN KEY (user_id) REFERENCES user_profile(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_feedback_user_id_fkey' AND conrelid=to_regclass('public.user_feedback')) THEN
+    ALTER TABLE public.user_feedback ADD CONSTRAINT user_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_user_id_fkey' AND conrelid=to_regclass('public.user_preferences')) THEN
+    ALTER TABLE public.user_preferences ADD CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_profile_user_id_fkey' AND conrelid=to_regclass('public.user_profile')) THEN
+    ALTER TABLE public.user_profile ADD CONSTRAINT user_profile_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_publishes_user_id_fkey' AND conrelid=to_regclass('public.user_publishes')) THEN
     ALTER TABLE public.user_publishes ADD CONSTRAINT user_publishes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_pkey' AND conrelid=to_regclass('public.users')) THEN
-    ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
   END IF;
 END
 $$;
