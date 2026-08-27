@@ -1,9 +1,10 @@
 import { Zap, Info } from 'lucide-react';
 import {
-  FEATURE_RUN_CAPS,
   FEATURE_CREDIT_COSTS,
+  getFeatureRunCap,
   getResetDateLabel,
 } from '../config/creditConfig';
+import { useSubscription } from '../context/SubscriptionContext';
 import useAIUsage from '../hooks/useAIUsage';
 
 /**
@@ -43,7 +44,9 @@ export default function RunCapMeter({
   compact = false,
   className = '',
 }) {
-  const cap = FEATURE_RUN_CAPS[featureKey]?.[tier];
+  const { userTier, isTrialing } = useSubscription();
+  const resolvedTier = tier || userTier;
+  const cap = getFeatureRunCap(featureKey, resolvedTier, isTrialing);
   const creditsPerRun = FEATURE_CREDIT_COSTS[featureKey] ?? 0;
   const hasCap = typeof cap === 'number' && cap > 0;
 

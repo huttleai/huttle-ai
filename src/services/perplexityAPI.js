@@ -83,6 +83,11 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     temperature,
     ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
     ...(options.model ? { model: options.model } : {}),
+    ...(options.perplexityFeature === 'deep_dive'
+      ? { billingFeature: 'trendDeepDive' }
+      : options.cache?.type === 'niche_intel'
+        ? { billingFeature: 'nicheIntel' }
+        : {}),
     cache: options.cache,
     requireRealtime: options.requireRealtime,
     personalized: options.personalized,

@@ -10,6 +10,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import RunCapMeter from '../components/RunCapMeter';
 import { useSubscription } from '../context/SubscriptionContext';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
@@ -965,6 +966,7 @@ export default function ContentRemix() {
               >
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
+              <GenerationAction>
               <button
                 onClick={handleRemix}
                 disabled={!canRemix || isLoading}
@@ -982,6 +984,7 @@ export default function ContentRemix() {
                   </>
                 )}
               </button>
+              </GenerationAction>
             </div>
           </div>
         )}

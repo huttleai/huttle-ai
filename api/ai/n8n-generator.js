@@ -10,6 +10,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
+import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
 
@@ -56,6 +57,14 @@ export default async function handler(req, res) {
     verifiedUserId = user.id;
   } catch {
     return res.status(401).json({ error: 'Authentication failed' });
+  }
+
+  const usageGate = await assertCanGenerate(supabase, {
+    userId: verifiedUserId,
+    skipPool: true,
+  });
+  if (!usageGate.ok) {
+    return sendUsageGateRejection(res, usageGate);
   }
 
   // Validate environment variables

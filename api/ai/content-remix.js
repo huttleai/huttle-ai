@@ -9,6 +9,7 @@ import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
@@ -487,6 +488,14 @@ export default async function handler(req, res) {
         error: 'Rate limit exceeded. Please wait before making more requests.',
         retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
       });
+    }
+
+    const usageGate = await assertCanGenerate(supabase, {
+      userId: authenticatedUserId,
+      featureKey: 'contentRemix',
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
     }
 
     const {

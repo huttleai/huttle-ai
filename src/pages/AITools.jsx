@@ -4,6 +4,8 @@ import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
+import { READ_ONLY_GENERATE_MESSAGE } from '../config/subscriptionAccess';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AIFeatureLock from '../components/AIFeatureLock';
 import PlatformSelector from '../components/PlatformSelector';
@@ -231,7 +233,7 @@ export default function AITools() {
   const { addToast: showToast } = useToast();
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { userTier, getFeatureLimit } = useSubscription();
+  const { userTier, getFeatureLimit, isReadOnly } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParamInitial = searchParams.get('tab');
   const initialToolFromUrl = tabParamInitial && TAB_QUERY_TO_TOOL[tabParamInitial]
@@ -346,6 +348,10 @@ export default function AITools() {
   }, [user, showToast]);
 
   const checkAIUsage = () => {
+    if (isReadOnly) {
+      showToast(READ_ONLY_GENERATE_MESSAGE, 'info');
+      return false;
+    }
     if (aiGensLimit !== Infinity && aiGensUsed >= aiGensLimit) {
       setIsAILocked(true);
       showToast('AI generation limit reached. Please upgrade to continue.', 'error');
@@ -1237,6 +1243,7 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateCaptions}
                 disabled={isLoadingCaptions}
@@ -1247,6 +1254,7 @@ export default function AITools() {
                 <span>{isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
                 {!isLoadingCaptions && <ChevronRight className="w-4 h-4" />}
               </button>
+              </GenerationAction>
               {generatedCaptions.length > 0 && (
                 <div className="pt-4 border-t border-gray-100" data-testid="ai-result-container">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1350,10 +1358,12 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button onClick={handleGenerateHashtags} disabled={isLoadingHashtags} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHashtags ? <LoadingSpinner size="sm" /> : <Hash className="w-4 h-4" />}
                 <span>{isLoadingHashtags ? 'Finding...' : 'Generate Hashtags'}</span>
               </button>
+              </GenerationAction>
               {generatedHashtags.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={1} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1537,10 +1547,12 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button onClick={handleGenerateHooks} disabled={isLoadingHooks} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHooks ? <LoadingSpinner size="sm" /> : <Type className="w-4 h-4" />}
                 <span>{isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
               </button>
+              </GenerationAction>
               {generatedHooks.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={2} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1666,6 +1678,7 @@ export default function AITools() {
                 </label>
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateCTAs}
                 disabled={isLoadingCTAs || !ctaPromoting.trim() || !ctaGoalType}
@@ -1674,6 +1687,7 @@ export default function AITools() {
                 {isLoadingCTAs ? <LoadingSpinner size="sm" /> : <Target className="w-4 h-4" />}
                 <span>{isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
               </button>
+              </GenerationAction>
               {/* Results — Styled CTAs */}
               {styledCTAs?.ctas && (
                 <div className="pt-4 border-t border-gray-100">
@@ -2111,6 +2125,7 @@ export default function AITools() {
                 </label>
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateVisualBrainstorm}
                 disabled={isLoadingVisualIdeas || !visualPrompt.trim() || !visualOutputType}
@@ -2127,6 +2142,7 @@ export default function AITools() {
                         : 'Generate Visuals'}
                 </span>
               </button>
+              </GenerationAction>
               {visualBrainstormResult && visualBrainstormTrendContext && (
                 <p className="sr-only">
                   A live platform trend scan was used as context for this generation.

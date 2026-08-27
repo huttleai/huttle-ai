@@ -9,6 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
+import { ReadOnlyGenerateCta } from '../components/ReadOnlyGenerateCta';
 import PlatformSelector from '../components/PlatformSelector';
 import UpgradeModal from '../components/UpgradeModal';
 import AIUsageMeter from '../components/AIUsageMeter';
@@ -249,7 +250,7 @@ function parseHashtagsFromResponse(text) {
 export default function FullPostBuilder() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { checkFeatureAccess } = useSubscription();
+  const { checkFeatureAccess, isReadOnly } = useSubscription();
   const { addToast } = useToast();
   const {
     featureUsed,
@@ -1446,6 +1447,7 @@ export default function FullPostBuilder() {
               Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
             </p>
           </div>
+          {isReadOnly && <ReadOnlyGenerateCta className="mt-4" />}
           {import.meta.env.DEV && FPB_DEV_SMOKE_UI_ENABLED && (
             <div className="mt-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
               <button

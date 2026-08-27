@@ -537,6 +537,9 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     messages: normalizedMessages,
     temperature: safeTemp,
   };
+  if (requestOptions.featureKey) {
+    body.grokFeatureKey = requestOptions.featureKey;
+  }
 
   const mtRaw = requestOptions.max_tokens;
   if (mtRaw != null) {
