@@ -6,6 +6,7 @@ import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getGrokParams } from '../config/grokConfig';
+import { dashLog, dashWarn } from '../utils/dashboardDebugLog';
 
 // Ops: if Trending Now gets stuck on samples, run scripts/clean-poisoned-cache.sql
 
@@ -39,6 +40,38 @@ function coerceDashboardCacheDateKey(value) {
 
 const GROK_PROXY_URL = '/api/ai/grok';
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+/**
+ * 504 is deliberately absent. /api/ai/perplexity has maxDuration 60 and makes a
+ * single upstream call, so a 504 means the full budget was already spent — a
+ * retry cannot finish faster and just burns another slot against the route's
+ * 20-requests-per-minute limit, turning one timeout into a 429 for everyone.
+ */
+const PERPLEXITY_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503]);
+
+/**
+ * Collapses concurrent identical Perplexity-backed requests onto one promise.
+ * Two callers racing for the same cache key would otherwise both miss the warm
+ * cache and each pay for a generation.
+ */
+const inFlightPerplexityRequests = new Map();
+
+function dedupeInFlightRequest(key, startRequest) {
+  if (!key) return startRequest();
+
+  const pending = inFlightPerplexityRequests.get(key);
+  if (pending) {
+    dashLog('[Trending] Reusing in-flight request', { key });
+    return pending;
+  }
+
+  const promise = (async () => startRequest())()
+    .finally(() => {
+      inFlightPerplexityRequests.delete(key);
+    });
+
+  inFlightPerplexityRequests.set(key, promise);
+  return promise;
+}
 /** Mirrors api/ai/perplexity.js MODEL_CONFIG (log labels / parity only). */
 const MODEL_CONFIG_REF = {
   dashboard_trending: 'sonar',
@@ -308,7 +341,7 @@ function parsePerplexityResponse(text) {
 
   if (!text || typeof text !== 'string') {
     if (text != null) {
-      console.warn('[Perplexity] Response is not an array:', typeof text);
+      dashWarn('[Perplexity] Response is not an array:', typeof text);
     }
     return null;
   }
@@ -323,13 +356,13 @@ function parsePerplexityResponse(text) {
 
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) {
-      console.warn('[Perplexity] Response is not an array:', typeof parsed);
+      dashWarn('[Perplexity] Response is not an array:', typeof parsed);
       return null;
     }
 
     return parsed;
   } catch (err) {
-    console.warn(
+    dashWarn(
       '[Perplexity] JSON parse failed:',
       err.message,
       '\nRaw text:',
@@ -351,7 +384,7 @@ function parseTrendingResponse(raw) {
         if (Array.isArray(raw[key])) return raw[key];
       }
 
-      console.warn('[Trending] Got object not array, wrapping:', Object.keys(raw));
+      dashWarn('[Trending] Got object not array, wrapping:', Object.keys(raw));
       return [raw];
     }
 
@@ -372,17 +405,17 @@ function parseTrendingResponse(raw) {
     }
 
     if (typeof parsed === 'object' && parsed !== null) {
-      console.warn('[Trending] Got object not array, wrapping:', Object.keys(parsed));
+      dashWarn('[Trending] Got object not array, wrapping:', Object.keys(parsed));
       return [parsed];
     }
 
-    console.warn('[Trending] Unparseable response shape:', typeof parsed);
+    dashWarn('[Trending] Unparseable response shape:', typeof parsed);
     return null;
   } catch (err) {
     const rawPreview = typeof raw === 'string'
       ? raw.substring(0, 300)
       : JSON.stringify(raw ?? null)?.substring(0, 300);
-    console.warn('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
+    dashWarn('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
     return null;
   }
 }
@@ -520,9 +553,9 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
       .maybeSingle();
 
     if (error) {
-      console.warn('[Cache Read Skipped]', error.message, error.code, cacheKey);
+      dashWarn('[Cache Read Skipped]', error.message, error.code, cacheKey);
       if (type === 'trending') {
-        console.log('[Trending] Cache check', { platform, niche, feature: type, hit: false });
+        dashLog('[Trending] Cache check', { platform, niche, feature: type, hit: false });
       }
       return null;
     }
@@ -531,10 +564,10 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
 
     if (type === 'trending') {
       const hit = Boolean(rowPayload) && isValidDashboardTrendingWarmPayload(rowPayload);
-      console.log('[Trending] Cache check', { platform, niche, feature: type, hit });
+      dashLog('[Trending] Cache check', { platform, niche, feature: type, hit });
       if (!data) return null;
       if (!hit) {
-        console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+        dashWarn('[TrendCache] Warm cache rejected — empty/invalid payload', {
           niche,
           platform,
           feature: type,
@@ -589,7 +622,7 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     const [previousCache] = data;
     const prevPayload = previousCache.payload;
     if (type === 'trending' && !isValidDashboardTrendingWarmPayload(prevPayload)) {
-      console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+      dashWarn('[TrendCache] Warm cache rejected — empty/invalid payload', {
         niche: context.cacheNiche,
         platform,
         feature: type,
@@ -916,14 +949,14 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
       if (type === 'trending') {
-        console.log('[Trending] Perplexity call firing', {
+        dashLog('[Trending] Perplexity call firing', {
           platform,
           niche: context.cacheNiche,
           model: modelForLog,
         });
       }
 
-      // Default retryFetch retries (network + 408/429/5xx) instead of maxRetries: 0.
+      // Retries network errors + 408/425/429/500/502/503, but not 504.
       const response = await retryFetch(
         PERPLEXITY_PROXY_URL,
         {
@@ -933,11 +966,21 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
         },
         {
           timeoutMs: API_TIMEOUTS.STANDARD,
+          retryableStatusCodes: PERPLEXITY_RETRYABLE_STATUS_CODES,
         }
       );
 
       if (response.ok) {
         return response;
+      }
+
+      if (response.status === 504) {
+        console.warn(
+          '[Perplexity] Upstream timed out (504) — not retrying, a retry would only spend another rate-limit slot:',
+          platform,
+          type,
+        );
+        return null;
       }
 
       // One-shot 401 recovery: refresh the session, rebuild headers, retry once.
@@ -1181,17 +1224,30 @@ function buildFallbackAIInsights(context) {
   ];
 }
 
+/**
+ * Deduped entry point. The force-refresh flag is part of the dedupe key so a
+ * forced refresh never joins (and silently inherits) a cache-allowed request.
+ */
 async function fetchSingleTrendingSlice(variant, platform, context, headers, options, generatedDate) {
-  const messages = buildDashboardTrendingMessages(
-    platform,
-    context,
-    variant === 'global' ? 'global' : 'niche',
-  );
   const cacheKey = buildPerPlatformCacheKey(
     context,
     platform,
     variant === 'global' ? 'trending_v2_global' : 'trending_v2_niche',
     generatedDate,
+  );
+  const forceRefresh = Boolean(options.forceRefreshTrending);
+
+  return dedupeInFlightRequest(
+    `trending_slice::${cacheKey}::force=${forceRefresh}`,
+    () => fetchSingleTrendingSliceUncached(variant, platform, context, headers, options, generatedDate, cacheKey),
+  );
+}
+
+async function fetchSingleTrendingSliceUncached(variant, platform, context, headers, options, generatedDate, cacheKey) {
+  const messages = buildDashboardTrendingMessages(
+    platform,
+    context,
+    variant === 'global' ? 'global' : 'niche',
   );
   const forceRefresh = Boolean(options.forceRefreshTrending);
 
@@ -1233,7 +1289,7 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
   const firstTitle = itemCount
     ? String(items[0]?.title || items[0]?.topic || items[0]?.name || '').slice(0, 80)
     : '';
-  console.log('[Trending] Perplexity response received', { platform, itemCount, firstTitle });
+  dashLog('[Trending] Perplexity response received', { platform, itemCount, firstTitle });
 
   return {
     items,
@@ -1270,7 +1326,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
     mergedRaw = await enrichTrendsWithGrokAdaptation(mergedRaw, context);
 
     const realPre = mergedRaw.filter((x) => !x._isSampleTrend).length;
-    console.log('[Trending] Merge result', {
+    dashLog('[Trending] Merge result', {
       platform,
       realCount: realPre,
       sampleCount: mergedRaw.length - realPre,
@@ -1366,6 +1422,15 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
 
   const cacheKey = buildPerPlatformCacheKey(context, platform, type, generatedDate);
   const forceRefresh = Boolean(options.forceRefreshHashtags);
+
+  return dedupeInFlightRequest(
+    `widget::${type}::${cacheKey}::force=${forceRefresh}`,
+    () => fetchPerPlatformHashtagData(type, platform, context, headers, options, generatedDate, cacheKey),
+  );
+}
+
+async function fetchPerPlatformHashtagData(type, platform, context, headers, options, generatedDate, cacheKey) {
+  const forceRefresh = Boolean(options.forceRefreshHashtags);
   const messages = buildHashtagMessages(context, platform);
 
   try {
@@ -1399,7 +1464,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
     const parsed = Array.isArray(payload?.structuredData)
       ? payload.structuredData
       : payload?.structuredData
-        ? (console.warn('[Perplexity] Response is not an array, using parser fallback:', typeof payload.structuredData), null)
+        ? (dashWarn('[Perplexity] Response is not an array, using parser fallback:', typeof payload.structuredData), null)
         : parsePerplexityResponse(payload?.content || '');
 
     if (!Array.isArray(parsed)) {
@@ -1625,6 +1690,14 @@ export async function fetchDashboardTrendingHashtags({
 
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const cacheKey = buildCacheKey('platform_wide', platform, 'global', generatedDate, 'trending_hashtags_widget');
+
+  return dedupeInFlightRequest(
+    `trending_hashtags_widget::${cacheKey}::force=${forceRefresh}`,
+    () => fetchDashboardTrendingHashtagsUncached(platform, cacheKey, forceRefresh),
+  );
+}
+
+async function fetchDashboardTrendingHashtagsUncached(platform, cacheKey, forceRefresh) {
   const cacheContext = {
     cacheNiche: 'platform_wide',
     normalizedCity: 'global',
@@ -1915,47 +1988,15 @@ function normalizeDashboardCacheRow(row, context) { // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
 /**
- * Extract the offending column name from a PostgREST/Postgres missing-column
- * error (PGRST204: "Could not find the 'niche' column…" / 42703: column "niche"…).
- * @returns {string|null}
- */
-function parseMissingColumnName(error) {
-  const message = `${error?.message || ''} ${error?.details || ''}`;
-  const pgrstMatch = message.match(/Could not find the '([^']+)' column/i);
-  if (pgrstMatch?.[1]) return pgrstMatch[1];
-  const pgMatch = message.match(/column "([^"]+)"/i);
-  if (pgMatch?.[1]) return pgMatch[1];
-  return null;
-}
-
-/**
- * Upsert a daily_dashboard_cache row. When the write fails because a column is
- * missing from the live schema, strip that exact column by name and retry —
- * never retry the same invalid payload.
+ * Upsert a daily_dashboard_cache row.
  * @returns {Promise<{ error: object|null }>}
  */
-async function upsertDashboardCacheRowStrippingBadColumns(row, maxStrips = 3) {
-  let currentRow = { ...row };
+async function upsertDashboardCacheRow(row) {
+  const { error } = await supabase
+    .from(DASHBOARD_CACHE_TABLE)
+    .upsert(row, { onConflict: 'user_id,generated_date' });
 
-  for (let attempt = 0; attempt <= maxStrips; attempt += 1) {
-    const { error } = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(currentRow, { onConflict: 'user_id,generated_date' });
-
-    if (!error) return { error: null };
-
-    const isMissingColumn = error.code === 'PGRST204' || error.code === '42703';
-    const badColumn = isMissingColumn ? parseMissingColumnName(error) : null;
-    if (!badColumn || !(badColumn in currentRow) || badColumn === 'user_id' || badColumn === 'generated_date') {
-      return { error };
-    }
-
-    console.warn(`[Dashboard] daily_dashboard_cache upsert: stripping unknown column "${badColumn}" and retrying.`);
-    const { [badColumn]: _removed, ...rest } = currentRow;
-    currentRow = rest;
-  }
-
-  return { error: new Error('daily_dashboard_cache upsert failed after stripping unknown columns.') };
+  return { error: error || null };
 }
 
 function isMissingDashboardCacheColumnError(error) { // HUTTLE AI: cache fix
@@ -2007,13 +2048,26 @@ function isDailyDashboardCacheStaleByLocalWeekday(cachedRow) {
   return cachedDay !== todayDay;
 }
 
+/**
+ * Read today's cache row.
+ *
+ * Returns a status alongside the row so callers can tell "this user has no row
+ * yet" (miss, expected, cheap) apart from "the read itself failed" (error,
+ * a real problem). Both used to collapse into null, which made a broken read
+ * look like a routine miss and silently trigger a paid regeneration.
+ *
+ * @returns {Promise<{ row: object|null, status: 'hit'|'miss'|'error' }>}
+ */
 async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI: cache fix
   if (!userId) {
-    return null;
+    return { row: null, status: 'error' };
   }
   // Must match writeDailyDashboardCache / generateDashboardData (local calendar + 6am roll), not UTC midnight.
   const dateKey = coerceDashboardCacheDateKey(generatedDateHint) ?? getDashboardGeneratedDate();
 
+  // dashboard_metadata exists in production (added 2026-08-25). The full
+  // select should succeed cleanly. Legacy and minimal selects stay as a read
+  // fallback only. Do not retry writes with a mutated payload.
   const fullSelect =
     'generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at';
 
@@ -2036,9 +2090,9 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
         return tryMinimalSelect();
       }
       console.warn('[Dashboard] Failed to read daily dashboard cache (legacy select):', fallbackResult.error);
-      return null;
+      return { row: null, status: 'error' };
     }
-    return fallbackResult.data || null;
+    return { row: fallbackResult.data || null, status: fallbackResult.data ? 'hit' : 'miss' };
   };
 
   const tryMinimalSelect = async () => {
@@ -2050,9 +2104,9 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
       .maybeSingle();
     if (minimalResult.error) {
       console.warn('[Dashboard] Failed to read daily dashboard cache (minimal select):', minimalResult.error);
-      return null;
+      return { row: null, status: 'error' };
     }
-    return minimalResult.data || null;
+    return { row: minimalResult.data || null, status: minimalResult.data ? 'hit' : 'miss' };
   };
 
   if (error) {
@@ -2063,7 +2117,7 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
     return tryLegacySelect();
   }
 
-  return data || null; // HUTTLE AI: cache fix
+  return { row: data || null, status: data ? 'hit' : 'miss' }; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
 export function hasPersistableTrendingTopics(trendingTopics) {
@@ -2117,11 +2171,9 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     dashboardMetadata = {};
   }
 
-  // Prod schema truth (verified in live DB): daily_dashboard_cache DOES have a
-  // `niche` column (added outside migrations), so writing it is safe. If any
-  // environment lacks a column, upsertDashboardCacheRowStrippingBadColumns
-  // strips exactly the offending column and retries.
-  const fullUpsertRow = {
+  // Prod schema truth (verified in live DB): daily_dashboard_cache has every
+  // column written below, including `niche` (added outside migrations).
+  const upsertRow = {
     user_id: userId,
     generated_date: dateKey,
     niche: dashboardData.niche || null,
@@ -2134,45 +2186,17 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     created_at: dashboardData.created_at,
   };
 
-  // Genuinely minimal fallback: core columns only. Drops daily_alerts,
-  // dashboard_metadata, and created_at so this write can succeed even if an
-  // environment lacks the newer columns or rejects an explicit created_at.
-  const minimalUpsertRow = {
-    user_id: userId,
-    generated_date: dateKey,
-    niche: dashboardData.niche || null,
-    trending_topics: dashboardData.trending_topics,
-    hashtags_of_day: dashboardData.hashtags_of_day,
-    ai_insights: dashboardData.ai_insights,
-    ai_insight: dashboardData.ai_insight,
-  };
-
   try {
-    const fullResult = await upsertDashboardCacheRowStrippingBadColumns(fullUpsertRow);
-    if (!fullResult.error) {
-      return true;
-    }
+    const { error } = await upsertDashboardCacheRow(upsertRow);
 
-    if (!isMissingDashboardCacheColumnError(fullResult.error)) {
-      console.warn(
-        '[Dashboard] Full daily_dashboard_cache upsert failed (will retry minimal):',
-        fullResult.error.code,
-        fullResult.error.message,
-        fullResult.error.details || '',
-        fullResult.error.hint || '',
-        '(If code is 42501 or message mentions policy, ensure migrations include UPDATE … WITH CHECK on daily_dashboard_cache.)',
-      );
-    }
-
-    const fallbackResult = await upsertDashboardCacheRowStrippingBadColumns(minimalUpsertRow);
-
-    if (fallbackResult.error) {
+    if (error) {
       console.warn(
         '[Dashboard] Failed to write daily dashboard cache:',
-        fallbackResult.error.code,
-        fallbackResult.error.message,
-        fallbackResult.error.details || '',
-        fallbackResult.error.hint || '',
+        error.code,
+        error.message,
+        error.details || '',
+        error.hint || '',
+        '(If code is 42501 or message mentions policy, ensure migrations include UPDATE … WITH CHECK on daily_dashboard_cache.)',
       );
       return false;
     }
@@ -2193,9 +2217,8 @@ async function updateCacheHashtags(userId, generatedDate, hashtagsOfDay, context
   if (!userId || !dateKey) return;
 
   try {
-    // Prod schema truth: daily_dashboard_cache has a `niche` column, so keep
-    // writing it here (the stripping helper drops it if an env lacks it).
-    await upsertDashboardCacheRowStrippingBadColumns({
+    // Prod schema truth: daily_dashboard_cache has a `niche` column.
+    await upsertDashboardCacheRow({
       user_id: userId,
       generated_date: dateKey,
       niche: context?.niche || null,
@@ -2277,14 +2300,21 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
     generatedDate = getDashboardGeneratedDate();
   }
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
-  const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
+  const { row: cachedRow, status: cacheReadStatus } = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
 
   if (!cachedRow) { // HUTTLE AI: cache fix
+    if (cacheReadStatus === 'error') {
+      // Not a normal miss: the read failed, so we are about to pay for a
+      // regeneration that an existing row may already have covered.
+      console.warn('[Dashboard] daily_dashboard_cache read failed — regenerating (this costs a generation).');
+    } else {
+      dashLog('[Dashboard] daily_dashboard_cache miss — no row for today yet.');
+    }
     return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
   if (isDailyDashboardCacheStaleByLocalWeekday(cachedRow)) {
-    console.warn('[Dashboard] daily_dashboard_cache ignored — weekday mismatch vs today (will regenerate)');
+    dashWarn('[Dashboard] daily_dashboard_cache ignored — weekday mismatch vs today (will regenerate)');
     return { success: true, cacheHit: false, generatedDate, data: null };
   }
 
@@ -2308,7 +2338,7 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
 
   const normalizedRow = normalizeDashboardCacheRow(cachedRow, context);
   if (!hasPersistableTrendingTopics(normalizedRow.trending_topics)) {
-    console.warn('[Dashboard] daily_dashboard_cache ignored — trending empty or all sample (will regenerate)');
+    dashWarn('[Dashboard] daily_dashboard_cache ignored — trending empty or all sample (will regenerate)');
     return { success: true, cacheHit: false, generatedDate, data: null };
   }
 
@@ -2471,7 +2501,7 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
     }); // HUTTLE AI: cache fix
 
     const sampleItems = ensureArray(dashboardData.trending_topics).filter((t) => t._isSampleTrend).length;
-    console.log('[Trending] Final payload', {
+    dashLog('[Trending] Final payload', {
       totalItems: dashboardData.trending_topics.length,
       sampleItems,
       willWrite: hasPersistableTrendingTopics(dashboardData.trending_topics),

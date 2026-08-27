@@ -5,6 +5,9 @@ const LAUNCH_PRICE_IDS = [
   process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL,
 ].filter(Boolean);
 
+// `builder` (Builders Club) is closed to new signups — no price is offered for
+// it in getPriceIdForPlan. The alias, price-id lookup, and display name below
+// are retained on purpose so existing legacy subscriptions still resolve.
 const PLAN_ALIASES = {
   essentials: 'essentials',
   essentials_monthly: 'essentials',
@@ -64,12 +67,6 @@ export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
     },
     founder: {
       annual: process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || null,
-    },
-    builder: {
-      annual:
-        process.env.STRIPE_PRICE_BUILDER_ANNUAL ||
-        process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL ||
-        null,
     },
   };
 
