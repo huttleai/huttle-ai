@@ -50,7 +50,8 @@ export default function FoundersPage() {
           {/* Body copy */}
           <p className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-lg mx-auto mb-10">
             If you followed a Founders link, that pricing window has ended. You can still start on
-            Essentials or Pro with a 7-day free trial. Pro is where you get everything we build.
+            Essentials or Pro with a 7-day free trial. Pro adds our full trend intelligence suite
+            and 14-day planning.
           </p>
 
           {/* Primary CTA */}
