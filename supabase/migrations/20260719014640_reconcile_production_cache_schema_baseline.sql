@@ -24,8 +24,11 @@ ALTER TABLE IF EXISTS public.niche_content_cache
 -- absent from production. Their guarded removal is intentional baseline
 -- reconciliation, not an attempt to preserve an obsolete cross-environment
 -- extension.
-ALTER TABLE IF EXISTS public.daily_dashboard_cache
-  DROP COLUMN IF EXISTS dashboard_metadata;
+-- SUPERSEDED 2026-08-26: dashboard_metadata is present in production and is
+-- actively selected by dashboardCacheService.js:2017. See migration
+-- 20260826000000.
+-- ALTER TABLE IF EXISTS public.daily_dashboard_cache
+--   DROP COLUMN IF EXISTS dashboard_metadata;
 
 ALTER TABLE IF EXISTS public.niche_content_cache
   DROP COLUMN IF EXISTS generated_at;

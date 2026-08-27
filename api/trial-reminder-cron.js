@@ -36,18 +36,21 @@ export default async function handler(req, res) {
     // maybeSendTrialReminder gates sends to exactly 3 days or 1 day remaining.
     const reminderWindowEnd = new Date(now.getTime() + 73 * 60 * 60 * 1000);
 
-    // `subscriptions` has no `trial_end` column (never created / renamed away).
-    // For rows with status = 'trialing', Stripe keeps `current_period_end` equal to
-    // the trial expiry date, so we use it as the trial-end date here. This filter
-    // only ever touches trialing accounts, so non-trialing subscriptions (active,
-    // canceled, etc.) are unaffected by this query.
+    // Filter on subscriptions.trial_end, which exists in production (verified
+    // 2026-08-25, re-asserted by migration 20260826000000) and is written by
+    // api/stripe-webhook.js on every subscription event. current_period_end
+    // only coincides with trial expiry while status = 'trialing', so trial_end
+    // is the correct column by design. Rows with a NULL trial_end are excluded
+    // by the query, so a subscription missing the value is skipped rather than
+    // breaking the whole cron run. The status = 'trialing' scope is unchanged,
+    // so non-trialing subscriptions are unaffected.
     const { data: subscriptions, error } = await supabase
       .from('subscriptions')
       .select('stripe_subscription_id')
       .eq('status', 'trialing')
-      .not('current_period_end', 'is', null)
-      .gte('current_period_end', now.toISOString())
-      .lte('current_period_end', reminderWindowEnd.toISOString());
+      .not('trial_end', 'is', null)
+      .gte('trial_end', now.toISOString())
+      .lte('trial_end', reminderWindowEnd.toISOString());
 
     if (error) {
       throw error;
