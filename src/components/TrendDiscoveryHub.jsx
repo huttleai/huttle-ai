@@ -412,7 +412,7 @@ export default function TrendDiscoveryHub() {
 
     if (!canAccessDeepDive) {
       setShowUpgradeModal(true);
-      showToast('Deep Dive is available for Essentials and Pro plans', 'warning');
+      showToast('Deep Dive is available on Pro plans', 'warning');
       return;
     }
 

@@ -10,6 +10,7 @@ import {
   Shuffle, FolderOpen, BarChart2, CalendarDays, LockKeyhole, ShieldCheck, Undo2
 } from "lucide-react";
 import { createCheckoutSession, openStripeCheckoutTab } from './services/stripeAPI';
+import { FEATURE_RUN_CAPS } from './config/creditConfig';
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
 import { OrbitingCircles, SocialIcons } from "./components/OrbitingCircles";
@@ -1229,7 +1230,8 @@ const PricingSection = () => {
             Start creating. Pick your path.
           </h2>
           <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto mb-8">
-            Every plan includes full access to all AI tools. The only question is how you want to pay.
+            Essentials gives you the full content creation toolkit. Pro adds our trend intelligence
+            suite and 14-day planning.
           </p>
 
           {/* Billing Toggle */}
@@ -1295,9 +1297,9 @@ const PricingSection = () => {
                 {[
                   '200 AI generations/month',
                   'All AI Power Tools',
-                  'AI Plan Builder',
+                  '7-Day AI Plan Builder',
                   'Content Remix Studio',
-                  'Ignite Engine',
+                  `Ignite Engine (${FEATURE_RUN_CAPS.igniteEngine.essentials} briefs/month)`,
                   '5GB Content Vault',
                 ].map((feat, j) => (
                   <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">

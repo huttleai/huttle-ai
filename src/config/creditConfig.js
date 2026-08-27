@@ -78,12 +78,15 @@ export const FEATURE_RUN_CAPS = {
   audienceInsights: { essentials: null, pro: null, founder: null, builder: null },
 
   // Hard monthly run caps — RUN CAP is the binding limit for these features
-  trendDeepDive: { essentials: 20, pro: 50, founder: 50, builder: 50 },
+  // Deep Dive and Niche Intel are the Pro trend intelligence pair: essentials 0
+  // means the paid Essentials UI locks them, same as planBuilder14Day.
+  trendDeepDive: { essentials: 0, pro: 50, founder: 50, builder: 50 },
   fullPostBuilderRuns: { essentials: 15, pro: 40, founder: 40, builder: 40 },
-  nicheIntel: { essentials: 5, pro: 20, founder: 20, builder: 20 },
+  nicheIntel: { essentials: 0, pro: 20, founder: 20, builder: 20 },
   planBuilder7Day: { essentials: 3, pro: 15, founder: 10, builder: 10 },
   planBuilder14Day: { essentials: 0, pro: 5, founder: 5, builder: 5 },
-  igniteEngine: { essentials: 15, pro: 40, founder: 40, builder: 40 },
+  // Essentials gets a taste of the Ignite beta, not the full allowance.
+  igniteEngine: { essentials: 5, pro: 40, founder: 40, builder: 40 },
   contentRemix: { essentials: 10, pro: 30, founder: 30, builder: 30 },
 };
 

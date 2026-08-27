@@ -22,6 +22,7 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { supabase } from '../config/supabase';
+import { FEATURE_RUN_CAPS } from '../config/creditConfig';
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -60,7 +61,7 @@ const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
 export default function NicheIntel() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { checkFeatureAccess, userTier } = useSubscription();
+  const { getFeatureLimit, userTier } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const {
@@ -86,7 +87,7 @@ export default function NicheIntel() {
   const userEditedNicheRef = useRef(false);
   const cacheRestoredRef = useRef(false);
 
-  const hasAccess = checkFeatureAccess('niche-intel');
+  const hasAccess = getFeatureLimit('nicheIntel') > 0;
   const analysisStorageKey = useMemo(
     () => (user?.id ? `nicheIntelAnalysis:${user.id}` : null),
     [user?.id],
@@ -408,7 +409,9 @@ export default function NicheIntel() {
               <Lock className="w-4 h-4" />
               Upgrade to Pro to Unlock
             </button>
-            <p className="text-xs text-gray-400 mt-3">Pro: 5 analyses/month &bull; Founders: 10 analyses/month</p>
+            <p className="text-xs text-gray-400 mt-3">
+              Pro: {FEATURE_RUN_CAPS.nicheIntel.pro} analyses/month &bull; Founders: {FEATURE_RUN_CAPS.nicheIntel.founder} analyses/month
+            </p>
           </Motion.div>
           <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} feature="nicheIntel" featureName="Niche Content Intelligence" />
         </div>

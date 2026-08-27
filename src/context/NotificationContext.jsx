@@ -2,6 +2,7 @@ import { createContext, useState, useContext, useEffect, useRef, useMemo, useCal
 import { useNavigate } from 'react-router-dom';
 import { Bell, Clock, AlertTriangle, CheckCircle, Info, X, ExternalLink, Sparkles, Zap } from 'lucide-react';
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers';
+import { TIER_CREDIT_POOLS } from '../config/creditConfig';
 import { AuthContext } from './AuthContext';
 import {
   fetchNotifications as fetchNotificationsFromDb,
@@ -206,7 +207,7 @@ export function NotificationProvider({ children }) {
     if (percentage >= 100) {
       severity = 'error';
       title = 'AI Usage Limit Reached!';
-      message = `You've used all ${limit} AI generations this month. Upgrade to Pro for unlimited AI access!`;
+      message = `You've used all ${limit} AI generations this month. Pro gives you ${TIER_CREDIT_POOLS.pro} a month plus our full trend intelligence suite.`;
     } else if (percentage >= 95) {
       severity = 'error';
       title = 'AI Usage Almost Exhausted!';
@@ -214,7 +215,7 @@ export function NotificationProvider({ children }) {
     } else if (percentage >= 75) {
       severity = 'warning';
       title = 'AI Usage Running Low';
-      message = `You've used ${used} of ${limit} AI generations (${percentage}%). Consider upgrading for unlimited access.`;
+      message = `You've used ${used} of ${limit} AI generations (${percentage}%). Pro gives you ${TIER_CREDIT_POOLS.pro} a month if you need more room.`;
     }
 
     return addNotification({

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { isDemoMode, simulateDemoCheckout } from '../services/stripeAPI';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
+import { FEATURE_RUN_CAPS } from '../config/creditConfig';
 
 /**
  * UpgradeModal Component
@@ -75,8 +76,8 @@ export default function UpgradeModal({ isOpen, onClose, feature }) {
         'AI-generated hooks and content structure',
         'Optimal posting times',
         'Performance scoring',
-        'Essentials: 15 briefs/month',
-        'Pro: 40 briefs/month'
+        `Essentials: ${FEATURE_RUN_CAPS.igniteEngine.essentials} briefs/month`,
+        `Pro: ${FEATURE_RUN_CAPS.igniteEngine.pro} briefs/month`
       ],
       tier: 'Essentials or Pro'
     },
