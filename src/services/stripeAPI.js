@@ -161,9 +161,8 @@ export const SUBSCRIPTION_PLANS = {
         'Everything in Essentials',
         '600 AI generations/month',
         '25GB storage',
-        'Content Remix Studio',
         'Trend Lab',
-        'Ignite Engine',
+        'Full Ignite Engine access',
         'Priority Email Support'
       ]
     }

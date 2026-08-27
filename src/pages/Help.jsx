@@ -51,7 +51,7 @@ export default function Help() {
     },
     {
       question: 'How does the Trend Lab work?',
-      answer: 'Trend Lab is your hub for real-time trend intelligence. It has three sections:\n\n• Quick Scan — a rapid AI scan of rising topics in your niche, showing momentum, opportunity windows, and active platforms.\n• Deep Dive — a full intelligence report on a specific topic with competitor activity, audience sentiment, timing windows, and cited sources (Essentials/Pro).\n• Algorithm Alignment Checker — paste any draft content and select a platform to see how well it matches the platform\'s ranking signals.\n\nClick "Create Content" on any trend to jump to AI Tools, or "Remix" to send it to Content Remix Studio.'
+      answer: 'Trend Lab is your hub for real-time trend intelligence. It has three sections:\n\n• Quick Scan — a rapid AI scan of rising topics in your niche, showing momentum, opportunity windows, and active platforms.\n• Deep Dive — a full intelligence report on a specific topic with competitor activity, audience sentiment, timing windows, and cited sources (Pro).\n• Algorithm Alignment Checker — paste any draft content and select a platform to see how well it matches the platform\'s ranking signals.\n\nClick "Create Content" on any trend to jump to AI Tools, or "Remix" to send it to Content Remix Studio.'
     },
     {
       question: 'How do I save and organize content?',

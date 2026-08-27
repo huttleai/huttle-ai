@@ -262,7 +262,7 @@ const features = [
   {
     id: 'ai-plan-builder',
     title: 'AI Plan Builder',
-    description: 'Generate complete 7-day and 14-day content calendars in seconds with personalized post ideas tailored to your niche.',
+    description: 'Generate a complete 7-day content calendar in seconds with personalized post ideas tailored to your niche. Pro unlocks 14-day plans.',
     icon: CalendarDays,
     preview: AIPlanBuilderPreview,
   },
