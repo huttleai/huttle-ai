@@ -168,26 +168,10 @@ export const SUBSCRIPTION_PLANS = {
       ]
     }
   },
-  BUILDER: {
-    id: 'builder',
-    name: 'Legacy Annual',
-    monthlyPrice: null,
-    annualPrice: 249,
-    priceId: null,
-    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || '',
-    features: {
-      aiGenerations: 800,
-      storageGB: 25,
-      features: [
-        'Everything in Pro',
-        '800 AI generations/month',
-        '25GB storage',
-        'Locked-in legacy annual pricing',
-        'All future Pro features included',
-        'Priority support'
-      ]
-    }
-  },
+  // Builders Club ("builder") is intentionally absent: it is closed to new
+  // signups, so listing it here only inlined VITE_STRIPE_PRICE_BUILDER_ANNUAL
+  // into the client bundle for a plan nobody can buy. Existing legacy
+  // subscriptions are still recognized server-side in api/_utils/stripePlans.js.
   FOUNDER: {
     id: 'founder',
     name: 'Founders Club',
@@ -228,8 +212,8 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       throw new Error('Invalid plan selected');
     }
 
-    // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; legacy annual plans are annual-only
-    // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL / BUILDER_ANNUAL). Never send monthly for those.
+    // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; Founders Club is annual-only
+    // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL). Never send monthly for those.
     const monthlyPriceMissing =
       plan.monthlyPrice == null || !plan.priceId || String(plan.priceId).trim() === '';
     const effectiveBillingCycle = monthlyPriceMissing ? 'annual' : billingCycle;
@@ -237,11 +221,11 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       effectiveBillingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
 
     // Demo mode: Simulate checkout when this plan has no price ID, or when
-    // Essentials/Pro are unset (app-wide demo). Legacy annual plans only need their own annual price.
+    // Essentials/Pro are unset (app-wide demo). Founders Club only needs its own annual price.
     if (!priceId) {
       return simulateDemoCheckout(planId);
     }
-    if (planId !== 'founder' && planId !== 'builder' && isDemoMode()) {
+    if (planId !== 'founder' && isDemoMode()) {
       return simulateDemoCheckout(planId);
     }
 

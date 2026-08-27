@@ -129,6 +129,11 @@ export default function ContentRepurposer() {
 
       const requestBody = JSON.stringify({
           ...getGrokParams('contentRepurposer'),
+          // 4096: worst case is one 5000-char Facebook/YouTube post (~1300
+          // tokens) plus hashtags, tips, and hooks (~400), and reasoning_effort
+          // 'low' bills reasoning tokens as output on top of that. 4096 covers
+          // that with margin while halving the server's blanket 8192 ceiling.
+          max_tokens: 4096,
           messages: [
             {
               role: 'system',
