@@ -421,9 +421,17 @@ export default function Dashboard() {
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
   const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
   /**
-   * The dashboard load currently in flight, as `{ key, promise }`.
+   * Which user's data `activeDashboardRequestRef` currently guards. Only a
+   * hand-off from one known user to a DIFFERENT one (or to logged-out) should
+   * invalidate an in-flight load — see the `[user?.id]` reset effect below.
+   */
+  const dashboardOwnerUserIdRef = useRef(null);
+  /**
+   * The dashboard load currently in flight, as `{ key, requestId, promise }`.
    * `hasFetchedTodayRef` only flips true after a load finishes, so it cannot
-   * guard the window while one is running — this ref does.
+   * guard the window while one is running — this ref does. `requestId` lets a
+   * new caller tell a live in-flight load apart from one that has already
+   * been invalidated but hasn't unwound yet — see `loadDashboardData`.
    */
   const dashboardLoadInFlightRef = useRef(null);
   const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
@@ -480,11 +488,8 @@ export default function Dashboard() {
     }
   }, [setDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
-  const runDashboardLoad = useCallback(async ({ forceRefresh, generatedDate }) => { // HUTTLE AI: cache fix
+  const runDashboardLoad = useCallback(async ({ forceRefresh, generatedDate, requestId }) => { // HUTTLE AI: cache fix
     if (!user?.id) return { success: false }; // HUTTLE AI: cache fix
-
-    const requestId = activeDashboardRequestRef.current + 1; // HUTTLE AI: cache fix
-    activeDashboardRequestRef.current = requestId; // HUTTLE AI: cache fix
 
     if (isReadOnly) {
       const perspKey = getBrandPersonalizationKey(brandProfileRef.current);
@@ -640,7 +645,10 @@ export default function Dashboard() {
    *
    * The in-flight slot is claimed synchronously here, before any await, so a
    * duplicate caller in the same tick joins the running load instead of starting
-   * another one.
+   * another one — but only when that in-flight load is still valid (its
+   * requestId still matches activeDashboardRequestRef). If something has
+   * already invalidated it, a fresh load is started instead of hanging a new
+   * caller off a promise that is only ever going to resolve `cancelled: true`.
    */
   const loadDashboardData = useCallback(({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
     if (!user?.id) return Promise.resolve({ success: false });
@@ -650,12 +658,26 @@ export default function Dashboard() {
     const inFlight = dashboardLoadInFlightRef.current;
 
     // forceRefresh is always deliberate (manual retry, brand change, day roll)
-    // and supersedes whatever is running.
-    if (!forceRefresh && inFlight?.key === inFlightKey) {
+    // and supersedes whatever is running. A same-key in-flight entry is only
+    // safe to join if its requestId still matches activeDashboardRequestRef —
+    // if the ref has already moved past it (e.g. a real user switch
+    // invalidated it), that promise is going to resolve `cancelled: true` and
+    // must never be handed to a new caller as if it were a live, fresh load.
+    // Without this check, a caller could silently receive a doomed result
+    // instead of the fresh data it asked for — exactly how the trend cache
+    // went permanently empty before this fix.
+    const inFlightIsJoinable =
+      Boolean(inFlight)
+      && inFlight.key === inFlightKey
+      && inFlight.requestId === activeDashboardRequestRef.current;
+    if (!forceRefresh && inFlightIsJoinable) {
       return inFlight.promise;
     }
 
-    const promise = runDashboardLoad({ forceRefresh, generatedDate }).finally(() => {
+    const requestId = activeDashboardRequestRef.current + 1;
+    activeDashboardRequestRef.current = requestId;
+
+    const promise = runDashboardLoad({ forceRefresh, generatedDate, requestId }).finally(() => {
       // Clears on resolve and on reject. Only the owning promise clears the slot,
       // so a superseding forceRefresh is never wiped by a late finisher.
       if (dashboardLoadInFlightRef.current?.promise === promise) {
@@ -663,7 +685,7 @@ export default function Dashboard() {
       }
     });
 
-    dashboardLoadInFlightRef.current = { key: inFlightKey, promise };
+    dashboardLoadInFlightRef.current = { key: inFlightKey, requestId, promise };
     return promise;
   }, [runDashboardLoad, user?.id]);
 
@@ -854,8 +876,23 @@ export default function Dashboard() {
   }, [user?.id, loadRecentVaultItems]);
 
   useEffect(() => {
+    // Only a hand-off from one KNOWN user to a DIFFERENT one (including to
+    // logged-out) has anything to invalidate. Bumping activeDashboardRequestRef
+    // unconditionally here — including on the very first resolution of a user
+    // id — raced with the mount effect below that actually starts the load:
+    // React Strict Mode's dev-only double-invoke re-runs this effect a second
+    // time in the same commit (refs persist across that replay), moving the
+    // ref out from under a load that had just started with nothing new to
+    // replace it. That load then aborted as "superseded" and nothing retried,
+    // so setCachedTrends was never called and the trend cache stayed empty.
+    const previousUserId = dashboardOwnerUserIdRef.current;
+    const isRealUserHandoff = previousUserId != null && previousUserId !== user?.id;
+    dashboardOwnerUserIdRef.current = user?.id ?? null;
+
     hasFetchedTodayRef.current = false; // HUTTLE AI: cache fix
-    activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    if (isRealUserHandoff) {
+      activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    }
     setDashboardData(null); // HUTTLE AI: cache fix
     setDashboardAlerts([]); // HUTTLE AI: cache fix
     setDashboardError(''); // HUTTLE AI: cache fix
