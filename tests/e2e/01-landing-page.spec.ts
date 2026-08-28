@@ -18,7 +18,7 @@ test.describe('Landing page', () => {
   test('hero, nav login, and key marketing copy', async ({ page }) => {
     const detach = attachStrictErrorCollector(page);
     await page.goto('/');
-    await expect(page.getByTestId('landing-hero')).toContainText(/Know What to Post/i);
+    await expect(page.getByTestId('landing-hero')).toContainText(/The Guesswork/i);
     await expect(page.getByTestId('landing-nav-login')).toBeVisible();
     await page.getByTestId('landing-nav-login').click();
     await expect(page).toHaveURL(/\/login|\/dashboard/);
