@@ -4,19 +4,23 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
+import { assertGeneratingAccess, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL } from '../../src/config/claudeConfig.js';
 
 const _rawKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
   typeof _rawKey === 'string' && _rawKey.trim() ? _rawKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const HUMANIZE_MODEL = 'claude-sonnet-4-6-20250514';
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 40;
@@ -41,6 +45,19 @@ const ALLOWED_PLATFORM = new Set([
   'LinkedIn',
   'Email',
 ]);
+
+function parseJsonBody(req) {
+  const b = req.body;
+  if (b == null) return {};
+  if (typeof b === 'string') {
+    try {
+      return JSON.parse(b);
+    } catch {
+      return {};
+    }
+  }
+  return typeof b === 'object' ? b : {};
+}
 
 function sanitizeBrandVoiceType(raw) {
   const s = typeof raw === 'string' ? raw.trim() : '';
@@ -124,7 +141,9 @@ Output rules:
 - Do not repeat labels
 - Do not explain your changes
 - Do not add headings, bullet points, or markdown unless clearly present in
-  the original`;
+  the original
+
+${HUMAN_WRITING_RULES}`;
 
 const MAX_TEXT_CHARS = 48000;
 
@@ -137,21 +156,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { text: bodyText, brandVoiceType: bodyVoice, platform: bodyPlatform } = req.body || {};
+  const body = parseJsonBody(req);
+  const { text: bodyText, brandVoiceType: bodyVoice, platform: bodyPlatform } = body;
 
   if (!ANTHROPIC_API_KEY) {
     logError('humanize.missing_api_key');
     const err = new Error('AI service is not configured');
-    console.error(err);
+    console.error('[humanize] configuration error:', err);
     return res.status(500).json({ error: err.message });
+  }
+
+  if (!supabase) {
+    logError('humanize.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+    return res.status(503).json({
+      error: 'Authentication service not configured on the server.',
+    });
   }
 
   try {
     let userId = null;
-    const authHeader = req.headers.authorization;
+    const token = parseBearerToken(req.headers.authorization);
 
-    if (authHeader && supabase) {
-      const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (!error && user) userId = user.id;
     }
@@ -160,6 +186,13 @@ export default async function handler(req, res) {
       return res.status(401).json({
         error: 'Authentication required to use AI features. Please log in.',
       });
+    }
+
+    const usageGate = await assertGeneratingAccess(supabase, {
+      userId,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
     }
 
     const rateLimit = await checkPersistentRateLimit({
@@ -174,7 +207,7 @@ export default async function handler(req, res) {
     if (!rateLimit.allowed) {
       logInfo('humanize.rate_limited', { userId, remaining: rateLimit.remaining });
       const err = new Error('Too many requests. Please try again later.');
-      console.error(err);
+      console.error('[humanize]', err);
       return res.status(429).json({ error: err.message });
     }
 
@@ -188,6 +221,14 @@ export default async function handler(req, res) {
 
     const brandVoiceType = sanitizeBrandVoiceType(bodyVoice);
     const platform = sanitizePlatform(bodyPlatform);
+
+    logInfo('humanize.request', {
+      userId,
+      textLen: text.length,
+      brandVoiceType,
+      platform,
+      model: CLAUDE_MODEL,
+    });
 
     const userMessage = `Brand voice type: ${brandVoiceType}
 Platform: ${platform}
@@ -203,9 +244,8 @@ ${text}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: HUMANIZE_MODEL,
-        max_tokens: 8192,
-        temperature: 0.45,
+        model: CLAUDE_MODEL,
+        max_tokens: CLAUDE_MAX_TOKENS.humanize,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -213,7 +253,11 @@ ${text}`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      logError('humanize.upstream_error', { status: response.status, errorText: errorText?.slice?.(0, 500) });
+      logError('humanize.upstream_error', {
+        status: response.status,
+        errorText: errorText?.slice?.(0, 800),
+      });
+      console.error('[humanize] Anthropic error:', response.status, errorText?.slice?.(0, 1200));
       let status = 500;
       if (response.status === 401 || response.status === 403) status = 401;
       else if (response.status === 429) status = 429;
@@ -221,7 +265,6 @@ ${text}`;
       const err = new Error(
         errorText?.trim() ? errorText.trim().slice(0, 500) : `Upstream request failed (${response.status})`
       );
-      console.error(err);
       return res.status(status).json({ error: err.message });
     }
 
@@ -229,21 +272,30 @@ ${text}`;
     try {
       data = await response.json();
     } catch (parseErr) {
-      console.error(parseErr);
+      console.error('[humanize] JSON parse error:', parseErr);
       return res.status(422).json({ error: parseErr?.message || 'Invalid response from AI service' });
     }
 
-    const out = (data.content?.[0]?.text ?? '').trim();
+    // The current Claude model can return leading non-text blocks; join all text blocks instead of reading [0].
+    const out = (Array.isArray(data.content)
+      ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
+      : '').trim();
     if (!out) {
       const err = new Error('AI returned an empty or unreadable response');
-      console.error(err);
+      console.error('[humanize]', err, { stopReason: data?.stop_reason });
+      logError('humanize.empty_output', { userId, stopReason: data?.stop_reason });
       return res.status(422).json({ error: err.message });
     }
 
+    logInfo('humanize.success', { userId, outLen: out.length });
     return res.status(200).json({ humanized: out });
   } catch (error) {
-    logError('humanize.handler_error', { error: error?.message });
-    console.error(error);
+    logError('humanize.handler_error', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.slice?.(0, 1200),
+    });
+    console.error('[humanize] unhandled error:', error);
     return res.status(500).json({ error: error?.message || 'Internal server error' });
   }
 }

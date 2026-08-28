@@ -239,7 +239,7 @@ export default function SocialUpdates() {
 
   return (
     <div className="flex-1 bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-8 pb-8">
-      <div className="mb-6">
+      <div className="pt-6 md:pt-0 mb-6">
         <div className="flex items-center gap-4 mb-2">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
             <Newspaper className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
@@ -423,7 +423,7 @@ export default function SocialUpdates() {
 
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                     <span>{getRelativePublishedDate(publishedDate)}</span>
-                    {sourceUrl ? (
+                    {sourceUrl && (
                       <a
                         href={sourceUrl}
                         target="_blank"
@@ -434,8 +434,6 @@ export default function SocialUpdates() {
                         Source
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                    ) : (
-                      <span className="text-gray-400 italic">No source available</span>
                     )}
                   </div>
                 </div>

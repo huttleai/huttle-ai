@@ -4,8 +4,11 @@ import { useBrand } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import { usePreferredPlatforms, normalizePlatformName } from '../hooks/usePreferredPlatforms';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 import {
   Zap,
   Sparkles,
@@ -29,6 +32,7 @@ import {
   Clock,
   Camera,
   Loader2,
+  Shuffle,
 } from 'lucide-react';
 import {
   TikTokIcon,
@@ -38,33 +42,80 @@ import {
   FacebookIcon,
 } from '../components/SocialIcons';
 import UpgradeModal from '../components/UpgradeModal';
-import { supabase } from '../config/supabase';
+import { getConfirmedAccessToken, isAuthNotReadyError } from '../utils/authReady';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import useAIUsage from '../hooks/useAIUsage';
-import AIUsageMeter from '../components/AIUsageMeter';
+import RunCapMeter from '../components/RunCapMeter';
 import {
   getSectionsForType,
   getBlueprintLabel,
   getViralScoreWeights,
   getSectionMeta,
 } from '../data/blueprintSchema';
-import {
-  getPlatformPromptRule,
-  getHashtagConstraint,
-  PLATFORM_CONTENT_RULES,
-} from '../data/platformContentRules';
+import { buildIgniteN8nPayload } from '../utils/igniteEngineN8nPayload';
 import { buildBrandContext } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
-import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { sanitizeAIOutput, normalizeAiPlaceholder } from '../utils/textHelpers'; // HUTTLE: sanitized
 import { parseJsonLenient } from '../utils/parseAiJson';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { getCachedTrends } from '../services/dashboardCacheService';
-import humanizeContent, {
+import {
   mapBrandVoiceToHumanizeType,
   normalizeHumanizePlatform,
+  validateHumanizeRequest,
+  humanizeContentOrOriginal,
 } from '../services/humanizeContent';
 
 const N8N_WEBHOOK_URL = '/api/ignite-engine-proxy'; // HUTTLE AI: updated 3
+
+/**
+ * How long the browser waits for a brief before giving up.
+ *
+ * Must stay above the proxy's own budget (`maxDuration: 120` in vercel.json, and
+ * an AbortSignal.timeout(120000) around the n8n call). A shorter client budget
+ * throws away workflow runs that were about to succeed and silently downgrades
+ * the user to the Grok fallback: a real 2026-08-25 run returned a valid blueprint
+ * at 104s and was discarded by the previous 90s client abort. The extra headroom
+ * lets the proxy's own 504 arrive so we can report the real reason.
+ */
+const BRIEF_REQUEST_TIMEOUT_MS = 130000;
+
+const BRIEF_TIMEOUT_MESSAGE = 'Generation timed out. Please try again.';
+
+const USAGE_GATE_NO_FALLBACK_CODES = new Set([
+  'unauthenticated',
+  'read_only',
+  'subscription_required',
+  'tier_restricted',
+  'run_cap',
+  'pool_exhausted',
+]);
+
+function parseIgniteProxyError(status, errorText) {
+  let parsed = null;
+  if (errorText) {
+    try {
+      parsed = JSON.parse(errorText);
+    } catch {
+      parsed = null;
+    }
+  }
+  const errorCode = typeof parsed?.error === 'string' ? parsed.error : null;
+  const isUsageGate =
+    status === 401 ||
+    status === 403 ||
+    status === 429 ||
+    USAGE_GATE_NO_FALLBACK_CODES.has(errorCode);
+
+  return {
+    creditsReserved: Boolean(parsed?.creditsReserved),
+    message:
+      typeof parsed?.message === 'string' && parsed.message.trim()
+        ? parsed.message
+        : null,
+    isUsageGate,
+  };
+}
 
 const PLATFORMS = [
   {
@@ -114,12 +165,20 @@ const PLATFORMS = [
   }
 ];
 
-const GOALS = [
-  { id: 'Grow Followers', label: 'Grow Followers', emoji: '🚀' },
-  { id: 'Drive Engagement', label: 'Drive Engagement', emoji: '💬' },
+const BUSINESS_GOALS_IGNITE = [
+  { id: 'Drive Foot Traffic', label: 'Drive Foot Traffic', emoji: '📍' },
   { id: 'Generate Leads', label: 'Generate Leads', emoji: '🎯' },
   { id: 'Sales/Conversions', label: 'Sales/Conversions', emoji: '💰' },
-  { id: 'Build Authority', label: 'Build Authority', emoji: '🤝' },
+  { id: 'Build Brand Awareness', label: 'Build Brand Awareness', emoji: '📣' },
+  { id: 'Grow Online Community', label: 'Grow Online Community', emoji: '🤝' },
+];
+
+const CREATOR_GOALS_IGNITE = [
+  { id: 'Grow Followers', label: 'Grow Followers', emoji: '🚀' },
+  { id: 'Build Niche Authority', label: 'Build Niche Authority', emoji: '🧠' },
+  { id: 'Land Brand Deals', label: 'Land Brand Deals', emoji: '🤝' },
+  { id: 'Drive Engagement', label: 'Drive Engagement', emoji: '💬' },
+  { id: 'Grow to Monetization', label: 'Grow to Monetization', emoji: '💰' },
 ];
 
 const cardVariants = {
@@ -132,13 +191,16 @@ const cardVariants = {
 };
 
 export default function IgniteEngine() {
-  const { brandProfile, isCreator } = useBrand();
+  const { brandProfile, brandFetchComplete, isCreator } = useBrand();
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { checkFeatureAccess, getFeatureLimit, userTier } = useSubscription();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
   const blueprintUsage = useAIUsage('igniteEngine'); // HUTTLE AI: updated 3
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const GOALS = isCreator ? CREATOR_GOALS_IGNITE : BUSINESS_GOALS_IGNITE;
 
   const availablePlatforms = hasPlatformsConfigured
     ? PLATFORMS.filter(p => {
@@ -153,13 +215,19 @@ export default function IgniteEngine() {
   // Form state
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedPostType, setSelectedPostType] = useState('');
-  const [goal, setGoal] = useState('Grow Followers');
+  const [goal, setGoal] = useState('');
+  useEffect(() => {
+    if (!brandFetchComplete) return;
+    setGoal((prev) => (prev ? prev : GOALS[0]?.id || ''));
+  }, [brandFetchComplete, isCreator]); // eslint-disable-line react-hooks/exhaustive-deps
   const [topic, setTopic] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [trendingExtras, setTrendingExtras] = useState(null);
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
+  /** True while the Grok fallback is producing the brief after the n8n path failed. */
+  const [isUsingBackupGenerator, setIsUsingBackupGenerator] = useState(false);
   const [generatedBrief, setGeneratedBrief] = useState(null);
   const [generatedForPlatform, setGeneratedForPlatform] = useState('');
   const [generatedForPostType, setGeneratedForPostType] = useState('');
@@ -174,6 +242,10 @@ export default function IgniteEngine() {
   const [isPolishingScript, setIsPolishingScript] = useState(false);
   const [briefGenerationError, setBriefGenerationError] = useState('');
   const scriptPolishGenRef = useRef(0);
+  // Guards against double-charging a single generate attempt (primary n8n
+  // path vs. Grok fallback path are mutually exclusive, but this ref makes
+  // that explicit and safe against future refactors).
+  const briefChargedRef = useRef(false);
 
   const hasMismatch = generatedBrief && (selectedPlatform !== generatedForPlatform || selectedPostType !== generatedForPostType);
   const mismatchLabel = hasMismatch ? getBlueprintLabel(generatedForPlatform, generatedForPostType) : '';
@@ -257,9 +329,18 @@ export default function IgniteEngine() {
       try {
         const brandVoiceType = mapBrandVoiceToHumanizeType(brandProfile?.brandVoice);
         const platform = normalizeHumanizePlatform(selectedPlatform);
-        const h = await humanizeContent({ text: raw, brandVoiceType, platform });
+        const checked = validateHumanizeRequest({ text: raw, brandVoiceType, platform });
+        if (!checked.ok) {
+          console.warn('[IgniteEngine] humanize skipped:', checked.reason);
+          return;
+        }
+        const h = await humanizeContentOrOriginal(checked.payload);
         if (gen !== scriptPolishGenRef.current) return;
         setGeneratedBrief((prev) => (prev ? { ...prev, script: h } : null));
+      } catch (e) {
+        console.warn('[IgniteEngine] script humanize skipped:', e?.message || e);
+        if (gen === scriptPolishGenRef.current) setIsPolishingScript(false);
+        return;
       } finally {
         if (gen === scriptPolishGenRef.current) setIsPolishingScript(false);
       }
@@ -268,16 +349,43 @@ export default function IgniteEngine() {
 
   const handleGenerate = async () => {
     if (!hasAccess) { setShowUpgradeModal(true); return; }
-    if (isAtLimit || !blueprintUsage.canGenerate) {
-      showToast("You've reached your monthly brief limit. Resets on the 1st.", 'warning');
+    if (!isFormValid) { showToast('Please fill in all required fields', 'warning'); return; }
+
+    // Pre-flight: enforce both run cap and credit pool from creditConfig.js.
+    const gate = await blueprintUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly brief limit.", 'warning');
       return;
     }
-    if (!isFormValid) { showToast('Please fill in all required fields', 'warning'); return; }
 
     setIsGenerating(true);
     setParseError(false);
     setBriefGenerationError('');
-    await blueprintUsage.trackFeatureUsage({ platform: selectedPlatform, postType: selectedPostType });
+    briefChargedRef.current = false;
+
+    // The proxy reserves the run + credit pool before forwarding to n8n.
+    // Refresh the meter from those server rows; do not write a second set.
+    // Grok fallback only writes client-side rows when the proxy never reserved
+    // (e.g. the proxy was unreachable).
+    const markChargedFromServer = async () => {
+      if (briefChargedRef.current) return;
+      briefChargedRef.current = true;
+      await blueprintUsage.refreshUsage();
+    };
+
+    const chargeOnceIfNeeded = async () => {
+      if (briefChargedRef.current) return true;
+      const usage = await blueprintUsage.trackFeatureUsage({
+        platform: selectedPlatform,
+        postType: selectedPostType,
+      });
+      if (!usage.allowed) {
+        showToast("You've reached your monthly brief limit.", 'warning');
+        return false;
+      }
+      briefChargedRef.current = true;
+      return true;
+    };
 
     let scriptPolishGen = 0;
     try {
@@ -289,9 +397,7 @@ export default function IgniteEngine() {
       const briefLabel = getBlueprintLabel(selectedPlatform, selectedPostType);
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: brandProfile?.firstName }); // HUTTLE AI: brand context injected
-      const platform = selectedPlatform?.toLowerCase() || 'instagram';
-      const rules = PLATFORM_CONTENT_RULES[platform] || PLATFORM_CONTENT_RULES['instagram'];
-      const briefContext = {
+      const briefContext = buildIgniteN8nPayload({
         topic: topic.trim(),
         platform: selectedPlatform,
         content_type: selectedPostType,
@@ -304,74 +410,89 @@ export default function IgniteEngine() {
         excluded_sections: excluded,
         viral_score_weights: viralWeights,
         blueprint_label: briefLabel,
-        hashtag_instruction: getHashtagConstraint(selectedPlatform),
-        platform_content_rules: getPlatformPromptRule(selectedPlatform),
-        platform_rules: getPlatformPromptRule(platform),
-        hashtag_constraint: getHashtagConstraint(platform),
-        hashtag_max: rules.hashtags.max,
-        hashtag_optimal: rules.hashtags.optimal,
-        caption_visible_chars: rules.caption.visibleBeforeTruncation,
-        caption_optimal_length: rules.caption.optimalChars || `max ${rules.caption.maxChars}`,
-        video_hook_guidance: rules.video?.hook || 'Hook must land in first 2 seconds',
-        platform_display_name: rules.displayName,
-        user_type: brandProfile?.profileType || 'brand',
-        brand_name: brandProfile?.brandName || '',
-        handle: brandProfile?.socialHandle || '',
-        creator_name: brandProfile?.brandName || brandProfile?.firstName || '', // HUTTLE AI: brand context injected
-        brand_context: brandBlock, // HUTTLE AI: brand context injected
+        brand_context: brandBlock,
         trending_format_type: trendingExtras?.format_type || '',
         trending_niche_angle: trendingExtras?.niche_angle || '',
-        sub_niche: brandProfile?.subNiche || '',
-        city: brandProfile?.city || '',
-        audience_pain_point: brandProfile?.audiencePainPoint || '',
-        audience_action_trigger: brandProfile?.audienceActionTrigger || '',
-        tone_chips: brandProfile?.toneChips || [],
-        writing_style: brandProfile?.writingStyle || '',
-        example_post: brandProfile?.examplePost || '',
-        content_to_post: brandProfile?.contentToPost || [],
-        content_to_avoid: brandProfile?.contentToAvoid || '',
-        follower_count: brandProfile?.followerCount || '',
-        primary_offer: brandProfile?.primaryOffer || '',
-        conversion_goal: brandProfile?.conversionGoal || '',
-        content_persona: brandProfile?.contentPersona || '',
-        monetization_goal: brandProfile?.monetizationGoal || '',
-        hashtag_isolation_rule: 'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
+        brandProfile,
+        hashtag_isolation_rule:
+          'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
+      });
+
+      console.log('[IgniteEngine] n8n outbound', {
+        platform: briefContext.platform,
+        user_type: briefContext.user_type,
+        profile_type: briefContext.profile_type,
+        topicLen: String(briefContext.topic || '').length,
+        keys: Object.keys(briefContext).sort(),
+      });
+
+      // Fail closed: never POST to the n8n webhook without a real Bearer token.
+      const postBriefRequest = async (accessToken) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), BRIEF_REQUEST_TIMEOUT_MS);
+
+        try {
+          return await fetch(N8N_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(briefContext),
+            signal: controller.signal,
+            mode: 'cors',
+          });
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            throw new Error(BRIEF_TIMEOUT_MESSAGE);
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeoutId);
+        }
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
-
-      let response;
+      let authToken;
       try {
-        response = await fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-          },
-          body: JSON.stringify(briefContext),
-          signal: controller.signal,
-          mode: 'cors',
-        });
+        authToken = await getConfirmedAccessToken();
       } catch (err) {
-        clearTimeout(timeoutId);
-        if (err.name === 'AbortError') {
-          throw new Error('Generation timed out after 90 seconds. Please try again.');
+        if (isAuthNotReadyError(err)) {
+          throw new Error('Your session is still reconnecting. Please try again in a moment.');
         }
         throw err;
       }
 
-      clearTimeout(timeoutId);
+      let response = await postBriefRequest(authToken);
+
+      // One-shot 401 recovery: refresh the session and retry once.
+      if (response.status === 401) {
+        try {
+          const refreshedToken = await getConfirmedAccessToken({ forceRefresh: true });
+          response = await postBriefRequest(refreshedToken);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.error('[IgniteEngine] HTTP Error:', response.status, errorText);
+        const parsedErr = parseIgniteProxyError(response.status, errorText);
+        if (parsedErr.creditsReserved) {
+          await markChargedFromServer();
+        }
+        if (parsedErr.isUsageGate) {
+          const gateError = new Error(
+            parsedErr.message || "You've reached your monthly brief limit."
+          );
+          gateError.code = 'USAGE_GATE';
+          throw gateError;
+        }
         throw new Error(`HTTP_ERROR: ${response.status}`);
       }
+
+      await markChargedFromServer();
 
       const rawText = await response.text();
       let responseData = parseJsonLenient(rawText);
@@ -390,6 +511,11 @@ export default function IgniteEngine() {
       }
 
       const normalized = normalizeN8nResponse(responseData);
+      console.log('[IgniteEngine] n8n inbound', {
+        hasHook: Boolean(normalized?.hook?.trim?.()),
+        hasScript: Boolean(normalized?.script?.trim?.()),
+        hasCaption: Boolean(normalized?.caption?.trim?.()),
+      });
       const hasBriefBody = normalized && (
         (normalized.hook && normalized.hook.trim())
         || (normalized.script && normalized.script.trim())
@@ -418,44 +544,71 @@ export default function IgniteEngine() {
       console.error('[IgniteEngine] Generation error:', error);
 
       const isParseFailure = error.message === 'INVALID_JSON' || error.message === 'INVALID_BRIEF_STRUCTURE';
+      const isUsageGate = error.code === 'USAGE_GATE';
       if (isParseFailure) {
         setParseError(true);
         setCurrentView('results');
+      } else if (isUsageGate) {
+        setBriefGenerationError(error.message);
       } else {
         setBriefGenerationError('Generation failed. Please try again.');
       }
 
       let msg = "We're having trouble generating your brief. Please try again in a moment.";
-      if (error.message.includes('timed out after 90 seconds')) {
-        msg = 'Generation timed out after 90 seconds. Please try again.';
+      if (isUsageGate) {
+        msg = error.message;
+      } else if (error.message === BRIEF_TIMEOUT_MESSAGE) {
+        msg = BRIEF_TIMEOUT_MESSAGE;
         setBriefGenerationError(msg);
       } else if (error.message.startsWith('HTTP_ERROR')) {
         msg = 'We received an unexpected response. Please try again.';
       }
 
-      showToast(msg, 'error');
+      const canAttemptFallback = Boolean(topic.trim()) && !isParseFailure && !isUsageGate;
 
-      if (topic.trim() && !isParseFailure) {
-        try {
-          const fallbackBrief = await attemptGrokFallback(
-            selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
-          );
-          if (fallbackBrief) {
-            setGeneratedBrief(fallbackBrief);
-            setGeneratedForPlatform(selectedPlatform);
-            setGeneratedForPostType(selectedPostType);
-            setParseError(false);
-            setBriefGenerationError('');
-            setCurrentView('results');
-            scheduleScriptHumanize(fallbackBrief, scriptPolishGen);
-            showToast('Brief generated via direct AI.', 'success');
+      // Hold the failure toast until the fallback has had its turn. Firing it
+      // first showed an error followed seconds later by a success toast for the
+      // same run, which reads as though something broke when it recovered.
+      if (!canAttemptFallback) {
+        showToast(msg, isUsageGate ? 'warning' : 'error');
+        return;
+      }
+
+      let fallbackSucceeded = false;
+      try {
+        setIsUsingBackupGenerator(true);
+        const fallbackBrief = await attemptGrokFallback(
+          selectedPlatform, selectedPostType, topic, goal, targetAudience, brandProfile
+        );
+        if (fallbackBrief) {
+          const charged = await chargeOnceIfNeeded();
+          if (!charged) {
+            setBriefGenerationError("You've reached your monthly brief limit.");
+            return;
           }
-        } catch {
-          // Both paths failed
+          fallbackSucceeded = true;
+          setGeneratedBrief(fallbackBrief);
+          setGeneratedForPlatform(selectedPlatform);
+          setGeneratedForPostType(selectedPostType);
+          setParseError(false);
+          setBriefGenerationError('');
+          setCurrentView('results');
+          scheduleScriptHumanize(fallbackBrief, scriptPolishGen);
+          showToast('Brief generated via direct AI.', 'success');
         }
+      } catch (fallbackError) {
+        console.error('[IgniteEngine] Grok fallback failed:', fallbackError);
+      } finally {
+        setIsUsingBackupGenerator(false);
+      }
+
+      if (!fallbackSucceeded) {
+        setBriefGenerationError(msg);
+        showToast(msg, 'error');
       }
     } finally {
       setIsGenerating(false);
+      setIsUsingBackupGenerator(false);
     }
   };
 
@@ -540,7 +693,7 @@ export default function IgniteEngine() {
 
         {/* Header — extra top spacing on mobile below fixed top bar */}
         <div className="pt-6 md:pt-0 mb-4 md:mb-6 lg:mb-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3 md:gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 md:gap-4">
             <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 md:h-12 md:w-12 lg:h-14 lg:w-14">
                 <Flame className="h-5 w-5 text-huttle-primary md:h-6 md:w-6 lg:h-7 lg:w-7" />
@@ -560,14 +713,13 @@ export default function IgniteEngine() {
               </div>
             </div>
             {hasAccess && (
-              <div className="w-full shrink-0 sm:w-auto sm:min-w-[200px]">
-                <AIUsageMeter
-                  used={blueprintUsage.featureUsed}
-                  limit={blueprintUsage.featureLimit}
-                  label="Briefs this month"
-                  compact
-                />
-              </div>
+              <RunCapMeter
+                featureKey="igniteEngine"
+                tier={userTier}
+                featureLabel="Ignite Engine runs"
+                compact
+                className="flex-shrink-0 sm:mt-2"
+              />
             )}
           </div>
         </div>
@@ -616,7 +768,9 @@ export default function IgniteEngine() {
                   <div className="flex items-center gap-3 p-4 bg-huttle-50 border border-huttle-primary/20 rounded-xl animate-fadeIn">
                     <Sparkles className="w-5 h-5 text-huttle-primary flex-shrink-0" />
                     <p className="text-sm text-gray-700">
-                      Finishing <span className="font-medium">Brand Profile</span> (sidebar → Account) improves brief personalization.
+                      {isCreator
+                        ? <>Complete your <span className="font-medium">Creator Profile</span> (sidebar → Account) so briefs match your voice and niche.</>
+                        : <>Finishing <span className="font-medium">Brand Profile</span> (sidebar → Account) improves brief personalization.</>}
                     </p>
                   </div>
                 )}
@@ -627,8 +781,16 @@ export default function IgniteEngine() {
                     <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-amber-800">You haven't selected your platforms yet.</p>
-                        <p className="text-xs text-amber-600 mt-0.5">Choose platforms under Account → Brand Profile in the sidebar.</p>
+                        <p className="text-sm font-medium text-amber-800">
+                          {isCreator
+                            ? "You haven't added your creator platforms yet."
+                            : "You haven't selected your business platforms yet."}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          {isCreator
+                            ? 'Add the platforms you create on under Account → Creator Profile.'
+                            : 'Choose platforms under Account → Brand Profile in the sidebar.'}
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -764,6 +926,7 @@ export default function IgniteEngine() {
                 </div>
 
                 <div className="pt-6 flex flex-col items-center justify-center gap-6">
+                  <GenerationAction>
                   <button
                     onClick={handleGenerate}
                     disabled={!isFormValid || isGenerating || isAtLimit}
@@ -791,12 +954,17 @@ export default function IgniteEngine() {
                       </>
                     )}
                   </button>
+                  </GenerationAction>
                   {briefGenerationError ? (
                     <p className="text-sm text-red-600 text-center mt-3 max-w-md mx-auto" role="alert">
                       {briefGenerationError}
                     </p>
                   ) : null}
-                  <p className="text-xs text-gray-500 text-center mt-3">Deep research & strategy generation takes 60-90 seconds. Please keep this tab open.</p>
+                  <p className="text-xs text-gray-500 text-center mt-3">
+                    {isUsingBackupGenerator
+                      ? 'Our main generator is slow right now, so we\'re finishing your brief a different way. Hang tight.'
+                      : 'Deep research and strategy generation can take up to two minutes. Please keep this tab open.'}
+                  </p>
                 </div>
               </>
             )}
@@ -986,6 +1154,22 @@ export default function IgniteEngine() {
                     {savedBrief ? <Check className="w-5 h-5 text-green-600" /> : <FolderPlus className="w-5 h-5 text-huttle-primary" />}
                     <span>{savedBrief ? 'Saved ✓' : 'Save to Vault'}</span>
                   </button>
+                  {bp && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/dashboard/content-remix', {
+                        state: {
+                          prefillContent: bp.caption || bp.script || bp.hook || '',
+                          prefillTopic: topic || '',
+                          sourcePlatform: selectedPlatform || '',
+                        },
+                      })}
+                      className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-6 py-4 font-bold text-gray-900 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
+                    >
+                      <Shuffle className="w-5 h-5 text-huttle-primary" />
+                      <span>Remix for Other Platforms</span>
+                    </button>
+                  )}
                   <button onClick={handleReset} className="group flex items-center gap-3 rounded-xl bg-gray-900 px-6 py-4 font-bold text-white transition-all duration-300 hover:scale-[1.02] hover:bg-gray-800 hover:shadow-xl">
                     <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
                     <span>Create New Brief</span>
@@ -1044,13 +1228,14 @@ function ReasonCallout({ text }) {
 }
 
 function InfoRow({ emoji, label, value }) {
-  if (!value) return null;
+  const text = normalizeAiPlaceholder(value);
+  if (!text) return null;
   return (
     <div className="flex items-start gap-3 py-2">
       <span className="text-base flex-shrink-0">{emoji}</span>
       <div>
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</span>
-        <p className="text-sm text-gray-800 mt-0.5">{sanitizeAIOutput(value)}</p>
+        <p className="text-sm text-gray-800 mt-0.5">{sanitizeAIOutput(text)}</p>
       </div>
     </div>
   );
@@ -1217,7 +1402,7 @@ function normalizeN8nResponse(data) {
   const imageDirection = rawImageDir ? {
     concept: String(rawImageDir.concept ?? '').trim(),
     style: String(rawImageDir.style ?? '').trim(),
-    textOverlay: rawImageDir.textOverlay ?? rawImageDir.text_overlay ?? null,
+    textOverlay: normalizeAiPlaceholder(rawImageDir.textOverlay ?? rawImageDir.text_overlay),
     avoid: String(rawImageDir.avoid ?? '').trim(),
     reason: String(rawImageDir.reason ?? '').trim(),
   } : null;
@@ -1329,23 +1514,46 @@ CRITICAL RULE: Return hashtags ONLY in the "hashtags" field. Do NOT include any 
 Make content specific, actionable, and optimized for ${platform} ${contentType}. Output ONLY raw JSON.`;
 
   try {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // Fail closed: never call the Grok proxy without a real Bearer token.
+  const token = await getConfirmedAccessToken();
 
-  const res = await fetch('/api/ai/grok', {
+  const requestBody = JSON.stringify({
+    ...getGrokParams('igniteEngine'),
+    // 4096: one content brief (hook, script, caption, hashtags, audio/image
+    // direction, posting intel, pro tip) runs ~1500-2000 output tokens even for
+    // a long-form script, so this leaves ~2x headroom while halving the server's
+    // blanket 8192 ceiling. Matters here because reasoning_effort 'low' bills
+    // reasoning tokens as output.
+    max_tokens: 4096,
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: `You are a content strategist. Return only valid JSON.
+
+${HUMAN_WRITING_RULES}` },
+      { role: 'user', content: prompt }
+    ]
+  });
+
+  const postGrokFallback = (accessToken) => fetch('/api/ai/grok', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      'Authorization': `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      temperature: 0.7,
-      messages: [
-        { role: 'system', content: 'You are a content strategist. Return only valid JSON.' },
-        { role: 'user', content: prompt }
-      ]
-    }),
+    body: requestBody,
   });
+
+  let res = await postGrokFallback(token);
+
+  // One-shot 401 recovery: refresh the session and retry once.
+  if (res.status === 401) {
+    try {
+      const refreshedToken = await getConfirmedAccessToken({ forceRefresh: true });
+      res = await postGrokFallback(refreshedToken);
+    } catch {
+      // Refresh failed — fall through with the original 401 response.
+    }
+  }
 
   if (!res.ok) {
     try {

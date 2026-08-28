@@ -66,7 +66,7 @@
 - **Vercel** - Hosting and serverless functions
 
 ### AI Services
-- **xAI Grok API** (`grok-4-1-fast-reasoning`) - Content generation, remixing, scoring
+- **xAI Grok API** (see `GROK_MODEL` in `src/config/grokConfig.js`) - Content generation, remixing, scoring
 - **Perplexity API** - Trend scanning, research, competitor analysis
 - **n8n** (optional) - Workflow automation for advanced features
 
@@ -101,7 +101,7 @@ huttle-ai/
 │   │   ├── ContentLibrary.jsx
 │   │   ├── AIPlanBuilder.jsx
 │   │   ├── TrendLab.jsx
-│   │   ├── ViralBlueprint.jsx
+│   │   ├── IgniteEngine.jsx
 │   │   ├── AITools.jsx
 │   │   └── ...
 │   ├── context/                  # React Context providers
@@ -924,7 +924,7 @@ const { data, error } = await Promise.race([
 - `src/pages/ContentLibrary.jsx` - Content library
 - `src/pages/AIPlanBuilder.jsx` - Plan builder
 - `src/pages/TrendLab.jsx` - Trend discovery
-- `src/pages/ViralBlueprint.jsx` - Viral blueprint generator
+- `src/pages/IgniteEngine.jsx` - Ignite Engine (renamed from ViralBlueprint)
 - `src/pages/AITools.jsx` - AI Power Tools
 - `src/pages/BrandVoice.jsx` - Brand voice setup
 - `src/pages/Subscription.jsx` - Subscription management

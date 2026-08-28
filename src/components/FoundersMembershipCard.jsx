@@ -5,10 +5,20 @@ import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import { SUBSCRIPTION_PLANS, cancelSubscription, createPaymentMethodUpdateSession } from '../services/stripeAPI';
 import { CardNetworkMark } from './CardNetworkMark';
 import UpdateCardModal from './UpdateCardModal';
+import CancelSubscriptionModal from './CancelSubscriptionModal';
 
+/**
+ * Renders a billing date. Returns a neutral dash when the value is absent:
+ * these fields are not fed by their own request, so a "Loading…" placeholder
+ * here would never resolve.
+ * @param {string | number | Date | null | undefined} dateValue
+ * @returns {string}
+ */
 function formatDate(dateValue) {
-  if (!dateValue) return 'Loading...';
-  return new Date(dateValue).toLocaleDateString('en-US', {
+  if (!dateValue) return '—';
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -38,13 +48,24 @@ export default function FoundersMembershipCard({
 
   const tierKey = normalizeTier(subscription?.tier || subscription?.plan);
   const isFounder = tierKey === 'founder';
-  const membershipName = isFounder ? 'Founders Club' : 'Builders Club';
-  const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Builders Club';
-  const expiryDate = formatDate(subscription?.currentPeriodEnd);
-  const startDate = formatDate(subscription?.currentPeriodStart);
-  const planBenefits = isFounder
-    ? SUBSCRIPTION_PLANS.FOUNDER.features.features
-    : SUBSCRIPTION_PLANS.BUILDER.features.features;
+  const membershipName = isFounder ? 'Founders Club' : 'Legacy Annual';
+  const membershipBadgeLabel = isFounder ? 'Founding Member' : 'Legacy Annual';
+  // The billing summary carries the live Stripe period; prefer it over the
+  // subscription context, which can lag behind or resolve without dates.
+  const billingSubscription = billingData?.subscription || null;
+  const expiryDate = formatDate(
+    subscription?.currentPeriodEnd ?? billingSubscription?.currentPeriodEnd
+  );
+  const startDate = formatDate(
+    subscription?.currentPeriodStart ?? billingSubscription?.currentPeriodStart
+  );
+  // Null-safe plan-benefits lookup. Even if SUBSCRIPTION_PLANS shape changes
+  // or the tier resolves to something unexpected (e.g. a degraded/null
+  // subscription), we render an empty list instead of throwing in the render path.
+  const planConfig = isFounder ? SUBSCRIPTION_PLANS?.FOUNDER : SUBSCRIPTION_PLANS?.BUILDER;
+  const planBenefits = Array.isArray(planConfig?.features?.features)
+    ? planConfig.features.features
+    : [];
   const pricingLabel = isFounder
     ? '$199/year — locked in for life'
     : '$249/year — locked while active';
@@ -55,7 +76,7 @@ export default function FoundersMembershipCard({
   const handleCancelMembership = async () => {
     if (!user?.id) {
       addToast('Please sign in again to manage your membership.', 'error');
-      return;
+      return { success: false, error: 'Please sign in again to manage your membership.' };
     }
 
     setIsCancelling(true);
@@ -66,7 +87,6 @@ export default function FoundersMembershipCard({
         throw new Error(result.error || 'Could not cancel your membership.');
       }
 
-      setIsConfirmOpen(false);
       addToast(
         `Your membership has been cancelled. You'll keep access until ${formatDate(result.accessUntil || subscription?.currentPeriodEnd)}.`,
         'success'
@@ -74,14 +94,25 @@ export default function FoundersMembershipCard({
 
       if (typeof onCancelled === 'function') {
         clearSubscriptionCache();
-        await onCancelled();
+        try {
+          await onCancelled();
+        } catch (refreshError) {
+          console.error('Founders membership refresh after cancellation failed:', refreshError);
+        }
       }
+      return { success: true };
     } catch (error) {
       console.error('Founders membership cancellation error:', error);
       addToast(error.message || 'Something went wrong. Please try again.', 'error');
+      return { success: false, error: error.message };
     } finally {
       setIsCancelling(false);
     }
+  };
+
+  const handleCancelModalClose = () => {
+    if (isCancelling) return;
+    setIsConfirmOpen(false);
   };
 
   const handleCardUpdated = (newPaymentMethod) => {
@@ -179,7 +210,7 @@ export default function FoundersMembershipCard({
                   <p className="mt-1 text-sm text-gray-600">
                     {isFounder
                       ? 'Your Founders rate stays locked for life, even as Huttle AI evolves.'
-                      : 'Your Builders rate stays locked while your membership remains active.'}
+                      : 'Your legacy annual rate stays locked while your membership remains active.'}
                   </p>
                 </div>
               </div>
@@ -207,7 +238,7 @@ export default function FoundersMembershipCard({
         </div>
 
         {/* Invoices section */}
-        {invoices.length > 0 && (
+        {Array.isArray(invoices) && invoices.length > 0 && (
           <div className="border-t border-gray-100 px-6 py-5 md:px-8">
             <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-gray-400 mb-3">Recent Invoices</h3>
             <div className="space-y-2">
@@ -251,7 +282,7 @@ export default function FoundersMembershipCard({
         )}
 
         {/* Footer actions */}
-        <div className="border-t border-gray-100 px-6 py-4 md:px-8 flex items-center justify-between">
+        <div className="border-t border-gray-100 px-6 py-4 md:px-8 flex flex-wrap items-center justify-between gap-3">
           {isCancellationScheduled ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
               Cancellation scheduled — access until {expiryDate}
@@ -277,44 +308,16 @@ export default function FoundersMembershipCard({
         </div>
       </div>
 
-      {/* Cancel confirmation modal */}
-      {isConfirmOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-red-600">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Cancel {membershipName}?</h3>
-                <p className="mt-2 text-sm leading-6 text-gray-600">
-                  Are you sure? You&apos;ll keep access until {expiryDate}. This action cannot be undone.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setIsConfirmOpen(false)}
-                disabled={isCancelling}
-                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-              >
-                Keep My Membership
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelMembership}
-                disabled={isCancelling}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-              >
-                {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Yes, Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CancelSubscriptionModal
+        isOpen={isConfirmOpen}
+        onClose={handleCancelModalClose}
+        onConfirm={handleCancelMembership}
+        currentTier={tierKey}
+        isLoading={isCancelling}
+        renewalDate={subscription?.currentPeriodEnd}
+        userId={user?.id}
+        planName={membershipName}
+      />
 
       <UpdateCardModal
         isOpen={showUpdateCard}

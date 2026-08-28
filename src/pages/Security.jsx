@@ -66,7 +66,7 @@ export default function Security() {
       } else {
         addToast(result.error || 'Failed to update password', 'error');
       }
-    } catch (error) {
+    } catch {
       addToast('An unexpected error occurred', 'error');
     } finally {
       setPasswordLoading(false);
@@ -103,7 +103,7 @@ export default function Security() {
       } else {
         addToast(result.error || 'Failed to update email', 'error');
       }
-    } catch (error) {
+    } catch {
       addToast('An unexpected error occurred', 'error');
     } finally {
       setEmailLoading(false);

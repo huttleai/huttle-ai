@@ -13,7 +13,9 @@ import { getToastDisclaimer } from './AIDisclaimer';
 import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from './ReadOnlyGenerateCta';
 import AIUsageMeter from './AIUsageMeter';
+import RunCapMeter from './RunCapMeter';
 import { getPlatformIcon } from './SocialIcons';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
 
@@ -111,7 +113,7 @@ export default function TrendDiscoveryHub() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { getFeatureLimit } = useSubscription();
+  const { getFeatureLimit, userTier } = useSubscription();
   const quickScanUsage = useAIUsage('trendQuickScan');
   const deepDiveUsage = useAIUsage('trendDeepDive');
   
@@ -371,20 +373,18 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
-    // Check feature limit before proceeding
-    if (!quickScanUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Trend Pulse limit. Resets on the 1st.', 'warning');
+    const gate = await quickScanUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Trend Pulse limit.", 'warning');
       return;
     }
 
     setIsScanning(true);
     try {
-      // Track this usage
-      await quickScanUsage.trackFeatureUsage({ niche: brandData.niche });
-
       const result = await scanTrendingTopics(brandData, 'all');
       
       if (result.success && result.scan) {
+        await quickScanUsage.refreshUsage();
         setScanResults({
           ...result.scan,
           citations: result.citations || []
@@ -410,7 +410,7 @@ export default function TrendDiscoveryHub() {
 
     if (!canAccessDeepDive) {
       setShowUpgradeModal(true);
-      showToast('Deep Dive is available for Essentials and Pro plans', 'warning');
+      showToast('Deep Dive is available on Pro plans', 'warning');
       return;
     }
 
@@ -419,9 +419,9 @@ export default function TrendDiscoveryHub() {
       return;
     }
 
-    // Check feature limit before proceeding
-    if (!deepDiveUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Deep Dive limit. Resets on the 1st.', 'warning');
+    const gate = await deepDiveUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Deep Dive limit.", 'warning');
       return;
     }
 
@@ -448,7 +448,10 @@ export default function TrendDiscoveryHub() {
         platforms: userProfile?.preferred_platforms || ['Instagram', 'TikTok', 'X'],
         brandData: {
           brandVoice: brandData?.brandVoice || '',
-          targetAudience: brandData?.targetAudience || ''
+          targetAudience: brandData?.targetAudience || '',
+          userBrandType: brandData?.userBrandType || '', // HUTTLE AI: userBrandType-based content philosophy
+          profileType: brandData?.profileType || '',
+          contentFocusPillars: brandData?.contentFocusPillars || []
         }
       });
 
@@ -456,7 +459,7 @@ export default function TrendDiscoveryHub() {
         if (deepDiveCancelledRef.current) {
           return;
         }
-        await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
+        await deepDiveUsage.refreshUsage();
         setDeepDiveResults({
           topic: deepDiveTopic.trim(),
           report: result.report,
@@ -698,15 +701,18 @@ export default function TrendDiscoveryHub() {
               <AIUsageMeter
                 used={quickScanUsage.featureUsed}
                 limit={quickScanUsage.featureLimit}
+                poolUsed={quickScanUsage.overallUsed}
+                poolLimit={quickScanUsage.overallLimit}
+                creditsPerRun={quickScanUsage.creditsPerRun}
                 label="Trend Pulses this month"
                 compact
               />
             )}
             {activeMode === 'deepDive' && (
-              <AIUsageMeter
-                used={deepDiveUsage.featureUsed}
-                limit={deepDiveUsage.featureLimit}
-                label="Deep Dives this month"
+              <RunCapMeter
+                featureKey="trendDeepDive"
+                tier={userTier}
+                featureLabel="Deep Dive runs"
                 compact
               />
             )}
@@ -1095,6 +1101,7 @@ export default function TrendDiscoveryHub() {
                           className="w-full pl-12 pr-4 py-4 bg-white border-2 border-gray-200 rounded-2xl text-base focus:border-huttle-primary focus:ring-4 focus:ring-huttle-primary/10 transition-all outline-none"
                         />
                       </div>
+                      <GenerationAction>
                       <button
                         onClick={handleDeepDive}
                         disabled={isLoadingDeepDive || !deepDiveTopic.trim()}
@@ -1112,6 +1119,7 @@ export default function TrendDiscoveryHub() {
                           </>
                         )}
                       </button>
+                      </GenerationAction>
                     </div>
                   </div>
 

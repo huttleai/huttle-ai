@@ -1,23 +1,23 @@
-import { supabase } from '../config/supabase';
 import { buildPromptBrandSection, getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { buildUserContextBlock } from '../utils/buildUserContext';
 import { getPlatform } from '../utils/platformGuidelines';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getAuthReadyHeaders } from '../utils/authReady';
+import { CLAUDE_MODEL } from '../config/claudeConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-  return headers;
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No Claude proxy fetch fires without a
+ * real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
@@ -45,7 +45,10 @@ export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
     throw new Error(errorData.error || `API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  const charged = Number(data?.billing?.creditsCharged);
+  bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  return data;
 }
 
 export async function enhanceCaptionWithClaude(
@@ -64,11 +67,12 @@ export async function enhanceCaptionWithClaude(
     brandVoice
     || getPromptBrandProfile(brandData, { platforms: [plat] }).tone
     || 'authentic';
+  const captionUserCtx = buildUserContextBlock(brandData);
 
   const messages = [
     {
       role: 'system',
-      content: `${brandBlock}You are a senior social copy editor. Polish the caption for clarity, specificity, storytelling flow, and emotional resonance on ${platformData?.name || plat}.
+      content: `${captionUserCtx ? `${captionUserCtx}\n\n` : ''}${brandBlock}You are a senior social copy editor. Polish the caption for clarity, specificity, storytelling flow, and emotional resonance on ${platformData?.name || plat}.
 
 Rules:
 - Preserve all factual claims and offers exactly — do not invent discounts, guarantees, medical outcomes, or services not stated in the original.
@@ -79,7 +83,9 @@ Rules:
 Style rule:
 - Follow standard English capitalization.
 - Only capitalize the first word of a sentence and proper nouns (brands, clinic names, product names).
-- Treatment and procedure names such as "microneedling", "botox", "fillers", "chemical peel", and "CO2 laser" should be lowercase when used in the middle of a sentence, unless they are part of an official brand name.`,
+- Treatment and procedure names such as "microneedling", "botox", "fillers", "chemical peel", and "CO2 laser" should be lowercase when used in the middle of a sentence, unless they are part of an official brand name.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -155,8 +161,11 @@ export async function generateFullPostHooksWithClaude(
   const audience = passedAudience || promptProfile.targetAudience || 'followers';
   const tone = promptProfile.tone || 'authentic';
 
-  const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
-You write scroll-stopping social hooks. Output exactly as the user specifies.`.trim();
+  const fullPostHooksUserCtx = buildUserContextBlock(brandData);
+  const system = `${fullPostHooksUserCtx ? `${fullPostHooksUserCtx}\n\n` : ''}${buildCreatorBrandBlock(brandData, brandData) || ''}
+You write scroll-stopping social hooks. Output exactly as the user specifies.
+
+${HUMAN_WRITING_RULES}`.trim();
 
   const hookRequirementInject = String(options.fullPostBuilderHookRequirement ?? '').trim();
 
@@ -240,7 +249,9 @@ export async function humanizeContentWithClaude(content, brandData = null, platf
   const messages = [
     {
       role: 'system',
-      content: `${brandBlock}You are an expert at making AI-generated content sound authentically human.`, // HUTTLE AI: brand context injected
+      content: `${brandBlock}You are an expert at making AI-generated content sound authentically human.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',

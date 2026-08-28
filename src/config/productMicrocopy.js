@@ -28,7 +28,7 @@ export const DASHBOARD = {
 export const FULL_POST = {
   tagline: 'One topic → one publish-ready post',
   usageExplainer: (credits) =>
-    `One “run” counts when hooks generate successfully (uses ${credits} AI credits). Refining hook style in the same visit stays on that run — caption, hashtags, and CTA steps don’t add another run.`,
+    `One “run” counts when hooks generate successfully (uses ${credits} credits). Refining hook style in the same visit stays on that run — caption, hashtags, and CTA steps don’t add another run.`,
   brandContextTitle: 'Brand context',
   completionTitle: 'You’re ready to publish',
   completionSummary: (platform) =>
@@ -90,7 +90,7 @@ export const IGNITE = {
 export const REMIX = {
   tagline: 'Same idea — native versions per platform',
   loading: 'Rewriting for each platform’s culture…',
-  loadingSub: 'Claude first, with a fast fallback if needed',
+  loadingSub: 'Adapting tone, length, and CTA for each platform',
   step1Hint: 'Longer paste = richer remix. Aim for a full paragraph or caption.',
   resultsTitle: 'Your platform-native set',
   resultsSubtitle: (mode) => `Optimized for ${mode === 'sales' ? 'conversion' : 'reach and saves'}`,

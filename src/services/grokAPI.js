@@ -32,6 +32,8 @@ import {
   getPromptBrandProfile
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
+import { buildUserContextBlock } from '../utils/buildUserContext';
 import { buildPlatformContext, getPlatform, getHashtagGuidelines, getHookGuidelines, getCTAGuidelines } from '../utils/platformGuidelines';
 import {
   PLATFORM_CONTENT_RULES,
@@ -48,7 +50,7 @@ import {
   normalizeRemixModeForGoal,
   resolveRemixPromptGoal,
 } from '../data/contentRemixSystemPrompt';
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders } from '../utils/authReady';
 import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { 
   isDemoMode, 
@@ -61,6 +63,9 @@ import {
   getVisualIdeaMocks 
 } from '../data/demo/demoMockData';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -93,11 +98,23 @@ function buildPromptGuardrails({ includeStats = false, readyToUse = false } = {}
   ].filter(Boolean).join('\n');
 }
 
-// HUTTLE AI: brand context injected — prepend creator brand profile to any system prompt
+/*
+ * HUTTLE AUDIT — Central system prompt builder
+ * Criteria A: getBrandStoryContext(brandData) is prepended to ALL system messages
+ *   that flow through this function. This covers: Caption Generator, Hook Builder,
+ *   CTA Suggester, Hashtag Generator, Content Plan Builder, Full Post Builder,
+ *   Content Remix Studio, Visual Ideas, and Visual Brainstorm.
+ * Criteria B: No niche-as-topic hardcoding — niche is only used as freeform user
+ *   context from brandData, never as a routing key or content topic signal.
+ * Criteria C: No influencer framing for business owners — framing is determined
+ *   exclusively by userBrandType via getBrandStoryContext.
+ */
 function buildSystemPromptWithBrandBlock(basePrompt, brandData) {
+  const storyContext = getBrandStoryContext(brandData);
   const brandBlock = buildCreatorBrandBlock(brandData, brandData);
   const fullPrompt = buildSystemPrompt(basePrompt, brandData);
-  return brandBlock ? `${brandBlock}\n${fullPrompt}` : fullPrompt;
+  const parts = [storyContext, brandBlock, fullPrompt].filter(Boolean);
+  return parts.join('\n\n') + '\n' + HUMAN_WRITING_RULES;
 }
 
 const AI_POWER_BRAIN_BASE = `You are Huttle AI's AI Power Brain: a cross-platform social growth strategist,
@@ -452,23 +469,13 @@ function getAudiencePainPointGuidance(niche) {
 }
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error, so no Grok proxy call ever fires without a
+ * real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 function getGrokProxyErrorMessage(errorData, status) {
@@ -486,63 +493,35 @@ function truncateForAiPrompt(text, maxChars = 2800) {
   return `${t.slice(0, maxChars)}\n[…truncated for length]`;
 }
 
-const DEFAULT_GROK_MODEL_CLIENT = 'grok-4-1-fast-non-reasoning';
-
 /**
- * xAI model ids use hyphens in the minor version (4-1), not dots (4.1).
- * Aligns with `normalizeGrokModelIdAliases` in `api/ai/grok.js`.
- * @param {string} modelId
+ * Transient-only retry gate for dual-attempt Grok calls (429 / 5xx / network).
+ * Deterministic failures (GROK_UPSTREAM_INVALID 400s, auth) must NOT be retried:
+ * an identical second attempt just double-bills the same failure.
+ * @param {Error & { code?: string, status?: number }} err
  */
-function normalizeClientGrokModelId(modelId) {
-  if (typeof modelId !== 'string') return modelId;
-  const t = modelId.trim();
-  if (!t) return t;
-  const lower = t.toLowerCase();
-  const map = new Map([
-    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-    ['grok-4.1-fast', 'grok-4-1-fast'],
-    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-  ]);
-  if (map.has(lower)) return map.get(lower);
-  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
-  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
-  return t;
-}
-
-function resolveGrokModelIdClientFallback() {
-  const chat = (import.meta.env.VITE_GROK_CHAT_MODEL || '').trim();
-  const legacy = (import.meta.env.VITE_GROK_MODEL || '').trim();
-  return normalizeClientGrokModelId(chat || legacy || DEFAULT_GROK_MODEL_CLIENT);
+function isTransientGrokError(err) {
+  if (err?.code === 'GROK_AUTH_FAILED' || err?.code === 'GROK_UPSTREAM_INVALID') return false;
+  const status = typeof err?.status === 'number' ? err.status : null;
+  if (status === 429) return true;
+  if (status != null && status >= 500 && err?.code !== 'GROK_UPSTREAM_INVALID') return true;
+  // No HTTP status at all → fetch itself failed (network error).
+  if (status == null) return true;
+  return false;
 }
 
 /**
- * Feature → model id. Values come from Vite `define` (GROK_MODEL_NON_REASONING / GROK_MODEL_REASONING at build time).
- * @param {'fast'|'reasoning'} [mode]
- */
-function getGrokModel(mode = 'fast') {
-  const fast = normalizeClientGrokModelId(String(__GROK_FAST_MODEL__ || '').trim());
-  const reasoning = normalizeClientGrokModelId(String(__GROK_REASONING_MODEL__ || '').trim());
-  if (mode === 'reasoning' && reasoning) return reasoning;
-  if (fast) return fast;
-  return resolveGrokModelIdClientFallback();
-}
-
-/** Maps to `GROK_MODEL_REASONING` / `__GROK_REASONING_MODEL__` — Full Post Builder + richer copy/analysis. */
-const GROK_MODE_QUALITY = 'reasoning';
-
-/**
- * Make a request to the Grok API via the secure proxy (API key server-only; model chosen here, forwarded in body).
- * Proxy body is only: model, messages, temperature, optional max_tokens (number).
+ * Make a request to the Grok API via the secure proxy (API key server-only;
+ * model + reasoning_effort come from src/config/grokConfig.js via featureKey).
+ * Proxy body is only: model, reasoning_effort, messages, temperature, optional max_tokens (number).
+ * grokFeatureKey is sent for model routing only — the server ignores it for billing
+ * and always charges the Grok route's own credit bucket.
  * @param {object[]} messages
  * @param {number} [temperature]
- * @param {{ max_tokens?: number, mode?: 'fast'|'reasoning', grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
+ * @param {{ featureKey?: string, max_tokens?: number, grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
  */
 async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
   const headers = await getAuthHeaders();
-  const grokMode = requestOptions.mode === 'reasoning' ? 'reasoning' : 'fast';
-  const model = getGrokModel(grokMode);
+  const { model, reasoning_effort } = getGrokParams(requestOptions.featureKey);
 
   const normalizedMessages = Array.isArray(messages)
     ? messages.map((m) => ({
@@ -557,9 +536,13 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
   /** @type {Record<string, unknown>} */
   const body = {
     model,
+    reasoning_effort,
     messages: normalizedMessages,
     temperature: safeTemp,
   };
+  if (requestOptions.featureKey) {
+    body.grokFeatureKey = requestOptions.featureKey;
+  }
 
   const mtRaw = requestOptions.max_tokens;
   if (mtRaw != null) {
@@ -586,11 +569,29 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     body.forceCacheRefresh = true;
   }
 
-  const response = await fetch(GROK_PROXY_URL, {
+  const signal = requestOptions.signal;
+
+  let response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal,
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+      response = await fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -609,7 +610,12 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     throw err;
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function normalizeMomentumLabel(value, fallback = 'Rising') {
@@ -786,11 +792,12 @@ export async function generateTrendIdeas(brandData, trendTopic) {
       'You are an expert content creator assistant. Generate creative, engaging content ideas that resonate with the target audience.',
       brandData
     );
+    const trendIdeasUserCtx = buildUserContextBlock(brandData);
 
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: systemPrompt
+        content: trendIdeasUserCtx ? `${trendIdeasUserCtx}\n\n${systemPrompt}` : systemPrompt
       },
       {
         role: 'user',
@@ -804,7 +811,7 @@ Make sure each idea:
 
 Number them 1-5 with brief descriptions.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'trendIdeas' });
 
     return {
       success: true,
@@ -894,9 +901,20 @@ export async function generateCaption(contentData, brandData, options = {}) {
     const contentGoalLabel =
       contentGoal === 'sales'
         ? 'Drive sales / conversions'
-        : contentGoal === 'dms' || contentGoal === 'leads'
-          ? 'Drive DMs and leads'
-          : 'Drive engagement (saves, comments, shares)';
+        : contentGoal === 'book_appointment' || contentGoal === 'Drive Appointments' || contentGoal === 'drive_appointments'
+          ? 'Drive appointment bookings'
+          : contentGoal === 'dms' || contentGoal === 'leads'
+            ? 'Drive DMs and leads'
+            : 'Drive engagement (saves, comments, shares)';
+
+    let goalInstruction = '';
+    const isBookingGoal =
+      contentGoal === 'book_appointment' ||
+      contentGoal === 'Drive Appointments' ||
+      contentGoal === 'drive_appointments';
+    if (isBookingGoal) {
+      goalInstruction = `\nGOAL: Drive appointment bookings. Every output must end with a clear, frictionless booking CTA. Use platform-specific next steps: Instagram = "DM us to book" or "Check our profile to schedule". Facebook = "Call or message us". TikTok = "Profile link to book". Urgency must be specific: "We have 3 openings left this week" not "Limited time only". This business's revenue depends on booked appointments — never generate a post that doesn't have a booking pathway.\n`;
+    }
 
     const variantTarget = isSingleCaptionMode ? 1 : 4;
     const hashtagRequirementLine = fullPostBuilder
@@ -929,7 +947,7 @@ Generate captions for this context:
 - Post idea / keywords: ${contentData.topic}
 - Desired LENGTH: ${contentData.length || 'medium'} (short ≈ tight 1–2 short paragraphs; medium = standard feed caption; long = richer arc but stay within the character limit)
 - Desired TONE: ${promptProfile.tone}
-- Primary GOAL: ${contentGoalLabel}
+- Primary GOAL: ${contentGoalLabel}${goalInstruction}
 - Creator type: ${creatorPromptGuidance.label}
 - Audience: ${promptProfile.targetAudience}
 - Niche: ${promptProfile.niche}
@@ -976,6 +994,7 @@ AI POWER TOOLS — caption quality (non–Full Post Builder):
 
     if (fullPostBuilder) {
       const igTik = ['instagram', 'tiktok'].includes(String(platform).toLowerCase());
+      const isShortCaption = options.captionLength === 'short';
       userMessage += igTik
         ? `
 
@@ -984,18 +1003,26 @@ FULL POST BUILDER — platform-native caption (Instagram/TikTok):
 - Add 1–3 short, concrete value beats (benefits, objection handling, or proof-style specifics tied to THIS topic — not generic filler).
 - End with one clear CTA suited to the platform: Instagram → save, share, comment, DM, or link in bio; TikTok → comment keyword, follow, stitch/duet, or DM as appropriate.
 - Sound like a strong human creator in this niche — avoid vague AI phrases ("unlock", "game-changer", "in today's world", "whether you're a beginner or pro").
-- Keep total length sensible for feed viewing; no markdown in caption body.`
+- Keep total length sensible for feed viewing; no markdown in caption body.
+IMPORTANT: Do NOT include any hashtags in the caption. Hashtags are handled separately in the next step. The caption must be clean body text only — no # symbols anywhere in the output.`
         : `
 
 FULL POST BUILDER:
 - Structure: hook echo → concrete value → single clear CTA.
-- Stay specific to the topic; avoid generic templates.`;
+- Stay specific to the topic; avoid generic templates.
+IMPORTANT: Do NOT include any hashtags in the caption. Hashtags are handled separately in the next step. The caption must be clean body text only — no # symbols anywhere in the output.`;
       const captionHints = String(options.fullPostBuilderCaptionHints ?? '').trim();
       if (captionHints) {
         userMessage += `
 
 Platform caption constraints (Full Post Builder):
 ${captionHints}`;
+      }
+      if (isShortCaption) {
+        userMessage += `
+
+⚠️ STRICT SHORT CAPTION OVERRIDE — this overrides all length guidance above:
+Write EXACTLY 1–2 sentences. Stop writing after the second sentence. The entire caption body must be 2 sentences or fewer — this is a hard limit. Do NOT add bullet points, numbered lists, line breaks between ideas, or extra context. One punchy statement + one brief CTA is the ideal format. If you write more than 2 sentences you have failed this instruction.`;
       }
     }
 
@@ -1007,14 +1034,15 @@ ${captionHints}`;
       userMessage += `\n\n— Regeneration request (${captionRegenNonce}) — Produce a meaningfully different caption body while honoring every constraint above (including the exact opening hook line when provided). Vary structure, examples, and phrasing.`;
     }
 
+    const userContextBlock = buildUserContextBlock(brandData);
     const captionMessages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: userContextBlock ? `${userContextBlock}\n\n${systemPrompt}` : systemPrompt },
       { role: 'user', content: userMessage },
     ];
 
     let data;
     if (fullPostBuilder) {
-      const grokCaptionOpts = { mode: GROK_MODE_QUALITY, max_tokens: 8192 };
+      const grokCaptionOpts = { featureKey: 'fullPostBuilder', max_tokens: 8192 };
       grokCaptionOpts.grok_debug_fullpost = true;
       grokCaptionOpts.grok_debug_fullpost_step = 'caption';
       if (captionRegenNonce) grokCaptionOpts.forceCacheRefresh = true;
@@ -1022,21 +1050,17 @@ ${captionHints}`;
     } else {
       const baseOpts = captionRegenNonce ? { forceCacheRefresh: true } : {};
       try {
-        data = await callGrokAPI(captionMessages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096, ...baseOpts });
+        data = await callGrokAPI(captionMessages, 0.7, { featureKey: 'caption', max_tokens: 4096, ...baseOpts });
       } catch (firstErr) {
-        const retryable =
-          firstErr?.code === 'GROK_UPSTREAM_INVALID'
-          || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-          || firstErr?.status === 502;
-        if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+        // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+        if (!isTransientGrokError(firstErr)) throw firstErr;
         if (import.meta.env.DEV) {
-          console.warn('[generateCaption] Quality model failed; retrying with fast model', {
+          console.warn('[generateCaption] First attempt failed transiently; retrying once', {
             code: firstErr?.code,
             status: firstErr?.status,
-            fastModel: getGrokModel('fast'),
           });
         }
-        data = await callGrokAPI(captionMessages, 0.7, { mode: 'fast', max_tokens: 4096, ...baseOpts });
+        data = await callGrokAPI(captionMessages, 0.7, { featureKey: 'caption', max_tokens: 4096, ...baseOpts });
       }
     }
 
@@ -1135,7 +1159,7 @@ ${truncateForAiPrompt(caption, 4000)}`;
     ],
     0.5,
     {
-      mode: GROK_MODE_QUALITY,
+      featureKey: 'fullPostBuilder',
       max_tokens: 4096,
       grok_debug_fullpost: true,
       grok_debug_fullpost_step: 'caption_enhance',
@@ -1232,7 +1256,10 @@ Rules:
 ${fullPostBuilder ? '- Full Post Builder: Reference the algorithm signal themes above in strengths/risks/fixes where relevant; every fix must name what to change and why.' : ''}`,
       },
     ];
-    const grokScorerOpts = { mode: GROK_MODE_QUALITY, max_tokens: 4096 };
+    const grokScorerOpts = {
+      featureKey: fullPostBuilder ? 'fullPostBuilder' : 'contentQualityScorer',
+      max_tokens: 4096,
+    };
     if (fullPostBuilder) {
       grokScorerOpts.grok_debug_fullpost = true;
       grokScorerOpts.grok_debug_fullpost_step = 'quality_score';
@@ -1352,7 +1379,7 @@ export async function generateContentPlan(goals, brandData, days = 7, options = 
 
 Make sure all content aligns with the brand voice and appeals to the target audience.`
       }
-    ], 0.6, { mode: GROK_MODE_QUALITY });
+    ], 0.6, { featureKey: 'contentPlan' });
 
     return {
       success: true,
@@ -1586,27 +1613,24 @@ Return ONLY a JSON array with 6–10 objects. Each object:
 
 Every hook must clearly embody "${canonicalTheme}" (user theme "${themeRaw}"); no mixing in unrelated hook types. No two hooks may share the same generic sentence frame with only a noun swapped.`;
 
+    const hookUserContextBlock = buildUserContextBlock(brandData);
     const hookBuilderMessages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: hookUserContextBlock ? `${hookUserContextBlock}\n\n${systemPrompt}` : systemPrompt },
       { role: 'user', content: userMessage },
     ];
     let data;
     try {
-      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: GROK_MODE_QUALITY });
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { featureKey: 'hookBuilder' });
     } catch (firstErr) {
-      const retryable =
-        firstErr?.code === 'GROK_UPSTREAM_INVALID'
-        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-        || firstErr?.status === 502;
-      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+      if (!isTransientGrokError(firstErr)) throw firstErr;
       if (import.meta.env.DEV) {
-        console.warn('[generateHooks] Quality model failed; retrying with fast model', {
+        console.warn('[generateHooks] First attempt failed transiently; retrying once', {
           code: firstErr?.code,
           status: firstErr?.status,
-          fastModel: getGrokModel('fast'),
         });
       }
-      data = await callGrokAPI(hookBuilderMessages, 0.8, { mode: 'fast' });
+      data = await callGrokAPI(hookBuilderMessages, 0.8, { featureKey: 'hookBuilder' });
     }
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -1725,30 +1749,23 @@ Return only the numbered hooks (or a JSON array of exactly 4 strings). No preamb
 
     let data;
     try {
-      // Match dev-test-grok.mjs / server default: non-reasoning id first (GROK_CHAT_MODEL || GROK_MODEL || default).
-      // Reasoning is retried second so accounts where only the fast catalog works still get hooks without a 502.
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: 'fast',
+        featureKey: 'fullPostBuilder',
         max_tokens: 1024,
         grok_debug_fullpost: true,
         grok_debug_fullpost_step: 'hooks',
       });
     } catch (firstErr) {
-      const retryable =
-        firstErr?.code === 'GROK_UPSTREAM_INVALID'
-        || firstErr?.code === 'GROK_UPSTREAM_ERROR'
-        || firstErr?.status === 502;
-      if (!retryable || firstErr?.code === 'GROK_AUTH_FAILED') throw firstErr;
+      // Transient-only retry (429 / 5xx / network); deterministic failures are not re-billed.
+      if (!isTransientGrokError(firstErr)) throw firstErr;
       if (import.meta.env.DEV) {
-        const qualityId = getGrokModel(GROK_MODE_QUALITY);
-        console.warn('[generateFullPostHooks] Fast model request failed; retrying with quality (reasoning) model', {
+        console.warn('[generateFullPostHooks] First attempt failed transiently; retrying once', {
           code: firstErr?.code,
           status: firstErr?.status,
-          qualityModel: qualityId,
         });
       }
       data = await callGrokAPI([systemMsg, userMsg], 0.7, {
-        mode: GROK_MODE_QUALITY,
+        featureKey: 'fullPostBuilder',
         max_tokens: 1024,
         grok_debug_fullpost: true,
         grok_debug_fullpost_step: 'hooks',
@@ -1805,7 +1822,8 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     'engagement': 'Drive Engagement (comments, shares, saves)',
     'sales': 'Drive Sales/Conversions (purchases, sign-ups, downloads)',
     'leads': 'Generate leads',
-    'dms': 'Drive DMs/Leads (direct messages, inquiries)'
+    'dms': 'Drive DMs/Leads (direct messages, inquiries)',
+    'book_appointment': 'Book Appointment / Consultation (calendar bookings, discovery calls)'
   };
 
   // Demo mode
@@ -1848,9 +1866,21 @@ export async function generateStyledCTAs(params, brandData, platform = 'instagra
     const primaryGoalModel =
       goalType === 'sales'
         ? 'sales'
-        : goalType === 'dms' || goalType === 'leads'
+        : goalType === 'dms' || goalType === 'leads' || goalType === 'book_appointment' || goalType === 'Book Appointment / Consultation'
           ? 'dms_leads'
           : 'engagement';
+
+    let ctaInstruction = '';
+    if (goalType === 'book_appointment' || goalType === 'Book Appointment / Consultation') {
+      ctaInstruction = `
+Generate 5 CTAs that drive the viewer to book an appointment or consultation. Rules:
+- Each CTA must name a specific frictionless next action (DM, profile link, call, text)
+- At least 2 CTAs must anchor urgency to real availability: "We have 3 spots open this week" not "Book now before it's too late"
+- At least 1 CTA must use warm consultation language: "Let's see if we're a good fit — DM the word READY"
+- Platform-specific: Instagram uses DM or profile link. Facebook can use call or message. TikTok uses profile link only.
+- Never write "Learn more", "Click the link", or "Sign up". Every CTA must name the exact action.
+`;
+    }
 
     const systemPrompt = buildAIPowerBrainSystemPrompt(
       'ctas',
@@ -1888,6 +1918,8 @@ Goal bias:
 - Engagement / followers → low-friction saves, shares, comments; keyword comments.
 - Sales → benefit + urgency without spam; clear next step to buy or sign up.
 - DMs / leads → conversational DM prompts and lead-magnet framing.
+- Book appointment / consultation → specific availability, frictionless next action (DM, profile link, call), warm invitational language.
+${ctaInstruction}
 
 Return ONLY JSON:
 {
@@ -1919,7 +1951,7 @@ Require 5–7 items in "ctas". Each "cta" is the final line to paste.`;
       ctaUserMessage += `\n\n— Regeneration (${ctaRegenNonce}) — Produce fresh CTAs from the latest topic/caption/goal; do not repeat a previous default set verbatim.`;
     }
 
-    const grokCtaOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    const grokCtaOpts = { featureKey: fullPostBuilder ? 'fullPostBuilder' : 'cta', max_tokens: 4096 };
     if (fullPostBuilder) {
       grokCtaOpts.grok_debug_fullpost = true;
       grokCtaOpts.grok_debug_fullpost_step = 'ctas';
@@ -2061,7 +2093,7 @@ Each CTA must:
 
 Number them 1-5. Include a brief explanation of why each CTA works for ${platformData?.name || 'this platform'}.`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'cta' });
 
     return {
       success: true,
@@ -2232,7 +2264,7 @@ Post context (optional):
       userMessage += `\n\n— Regeneration request (${regenNonce}) — Produce a substantively different set of hashtags (new tags and/or tier mix) while staying on-topic and platform-appropriate. Avoid repeating a previous default list.`;
     }
 
-    const grokHashtagOpts = { mode: fullPostBuilder ? GROK_MODE_QUALITY : 'fast', max_tokens: 4096 };
+    const grokHashtagOpts = { featureKey: fullPostBuilder ? 'fullPostBuilder' : 'hashtag', max_tokens: 4096 };
     if (fullPostBuilder) {
       grokHashtagOpts.grok_debug_fullpost = true;
       grokHashtagOpts.grok_debug_fullpost_step = 'hashtags';
@@ -2322,7 +2354,7 @@ Requirements:
 
 Provide the improved version.`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'improveContent' });
 
     return {
       success: true,
@@ -2373,7 +2405,7 @@ Requirements:
 
 Return ONLY the polished caption with hashtags, no explanations.`
       }
-    ], 0.6, { mode: GROK_MODE_QUALITY });
+    ], 0.6, { featureKey: 'voiceTranscriptPolish' });
 
     const content = data.content || '';
     
@@ -2464,7 +2496,7 @@ VARIATION 2: [Hook Type]
 
 etc.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'captionVariations' });
 
     const content = data.content || '';
     
@@ -2534,8 +2566,9 @@ export async function remixContentWithMode(content, brandData, mode = 'viral', p
 
     const platformList = platforms.length > 0 ? platforms.join(', ') : 'Instagram, TikTok, X';
 
-    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal);
+    const baseSystemPrompt = buildContentRemixClaudeSystemCore(remixPromptGoal, brandData?.userBrandType || brandData?.profileType || 'brand_business');
     const systemPrompt = buildSystemPromptWithBrandBlock(baseSystemPrompt, brandData);
+    const remixUserCtx = buildUserContextBlock(brandData);
 
     const modeLabels = {
       viral: 'maximum viral reach and engagement',
@@ -2618,13 +2651,13 @@ ${platformRemixRulesBlock}`;
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: systemPrompt
+        content: remixUserCtx ? `${remixUserCtx}\n\n${systemPrompt}` : systemPrompt
       },
       {
         role: 'user',
         content: userPrompt
       }
-    ], normalizedMode === 'sales_conversion' ? 0.7 : 0.8, { mode: GROK_MODE_QUALITY });
+    ], normalizedMode === 'sales_conversion' ? 0.7 : 0.8, { featureKey: 'contentRemix' });
 
     return {
       success: true,
@@ -2681,7 +2714,7 @@ Caption: [optimized caption]
 Hashtags: [platform-appropriate hashtags]
 ---`
       }
-    ], 0.7, { mode: GROK_MODE_QUALITY });
+    ], 0.7, { featureKey: 'platformRemixes' });
 
     const content_response = data.content || '';
     
@@ -2804,7 +2837,7 @@ The content should be specifically relevant to the topic: "${prompt}"
 
 Number them 1-4.`
       }
-    ], 0.8, { mode: GROK_MODE_QUALITY });
+    ], 0.8, { featureKey: 'visualIdeas' });
 
     return {
       success: true,
@@ -2960,7 +2993,7 @@ Rules:
       const data = await callGrokAPI(
         [{ role: 'system', content: systemPrompt }, { role: 'user', content: videoUserMessage }],
         0.7,
-        { mode: GROK_MODE_QUALITY },
+        { featureKey: 'visualBrainstorm' },
       );
 
       const parsed = parseJsonFromResponse(data.content || '');
@@ -3058,7 +3091,7 @@ Return ONLY a JSON array of 3–6 objects:
         { role: 'user', content: userMessage },
       ],
       outputType === 'ai-prompt' ? 0.8 : 0.7,
-      { mode: GROK_MODE_QUALITY },
+      { featureKey: 'visualBrainstorm' },
     );
 
     const parsed = parseJsonFromResponse(data.content || '');
@@ -3263,7 +3296,9 @@ RULES:
 - Heavily penalize phrases like "In today's world", "It's important to", "As a [niche] professional", "In conclusion", "delve into", "Moreover", and "Furthermore"
 - Do not evaluate content quality, grammar, or marketing effectiveness
 
-${buildPromptGuardrails()}`,
+${buildPromptGuardrails()}
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3277,7 +3312,8 @@ ${truncateForAiPrompt(content, 8000)}`,
       },
     ];
     const fp = options.fullPostBuilder === true;
-    const grokHumanOpts = { mode: fp ? GROK_MODE_QUALITY : 'fast', max_tokens: 2048 };
+    // Humanizer scoring stays 'none' even inside Full Post (approved effort map).
+    const grokHumanOpts = { featureKey: 'humanizerScore', max_tokens: 2048 };
     if (fp) {
       grokHumanOpts.grok_debug_fullpost = true;
       grokHumanOpts.grok_debug_fullpost_step = 'humanizer';
@@ -3335,7 +3371,9 @@ export async function autoImprovePhrase(fullContent, originalPhrase, brandData =
         role: 'system',
         content: `You rewrite the full sentence containing the flagged phrase so it sounds more natural, human, and brand-consistent. You may lightly smooth the neighboring sentence if needed, but do not rewrite the whole draft. Pass a clear "make this more human" instruction through your rewrite. Return ONLY the improved full content with the local edit applied — no explanation, no JSON.
 
-${buildPromptBrandSection(brandData)}`,
+${buildPromptBrandSection(brandData)}
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3347,7 +3385,7 @@ ${fullContent}
 Return the full content with that phrase rewritten to sound more human. Keep the meaning intact, avoid AI clichés, and make the local edit feel genuinely different.`,
       },
     ];
-    const data = await callGrokAPI([...messages], 0.5, { mode: GROK_MODE_QUALITY });
+    const data = await callGrokAPI([...messages], 0.5, { featureKey: 'autoImprovePhrase' });
 
     return { success: true, improvedContent: data.content || fullContent, usage: data.usage };
   } catch (error) {
@@ -3409,7 +3447,9 @@ RULES:
 - Never set confidence to "High" — always "Low" or "Medium"
 - platformFitScore under 60 must include a better-fitting platform suggestion in platformFitNote
 - Base engagement prediction on content structure, not just topic
-- If trendContext is provided, use it for trendAlignment scoring`,
+- If trendContext is provided, use it for trendAlignment scoring
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3426,7 +3466,7 @@ ${content}`,
       data = await callClaudeAPI([...messages], 0.3);
     } catch (claudeError) {
       if (claudeError.message?.includes('coming soon')) {
-        data = await callGrokAPI([...messages], 0.3, { mode: GROK_MODE_QUALITY });
+        data = await callGrokAPI([...messages], 0.3, { featureKey: 'performancePrediction' });
       } else {
         throw claudeError;
       }
@@ -3446,7 +3486,7 @@ ${content}`,
 /**
  * Analyze niche research data and generate structured content ideas.
  */
-export async function analyzeNiche(researchData, brandData, platform = 'instagram') {
+export async function analyzeNiche(researchData, brandData, platform = 'instagram', requestOptions = {}) {
   if (isDemoMode()) {
     await simulateDelay(1500, 2500);
     return {
@@ -3480,16 +3520,25 @@ export async function analyzeNiche(researchData, brandData, platform = 'instagra
   }
 
   try {
+    /*
+     * HUTTLE AUDIT — analyzeNiche (Niche Intel + Trend Lab Quick Scan)
+     * Criteria A: getBrandStoryContext(brandData) prepended to system message below.
+     * Criteria B: Research data is the content topic source — niche is never hardcoded
+     *   as the content topic. Ideas reference research findings, not niche category.
+     * Criteria C: No influencer framing — storyContext routes framing via userBrandType.
+     */
+    const storyContext = getBrandStoryContext(brandData);
     const creatorBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
     const brandContext = brandData ? `${creatorBlock}${buildBrandContext(brandData)}` : '';
     const structuredResearch = normalizeResearchPayload(researchData);
     const researchContext = structuredResearch
       ? JSON.stringify(structuredResearch, null, 2)
       : String(researchData || '').trim();
+    const nicheIntelUserCtx = buildUserContextBlock(brandData);
     const messages = [
       {
         role: 'system',
-        content: `You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
+        content: `${storyContext ? `${storyContext}\n\n` : ''}${nicheIntelUserCtx ? `${nicheIntelUserCtx}\n\n` : ''}You are a social media content strategist. Analyze the research data provided and classify each trend with a momentum label (Rising, Peaking, or Declining) based on signal strength. Generate specific, actionable content ideas and hooks a creator can use immediately.
 
 OUTPUT — Return ONLY valid JSON:
 {
@@ -3526,7 +3575,9 @@ RULES:
 - All ideas must be original and aligned with the brand voice
 - Never copy or closely paraphrase existing content
 - Use competitor patterns and momentum_signals when provided
-- Rank the content ideas from strongest opportunity to weakest opportunity`,
+- Rank the content ideas from strongest opportunity to weakest opportunity
+
+${HUMAN_WRITING_RULES}`,
       },
       {
         role: 'user',
@@ -3550,7 +3601,11 @@ For content ideas:
 - Include one strong hook per idea`,
       },
     ];
-    const data = await callGrokAPI(messages, 0.7, { mode: GROK_MODE_QUALITY, max_tokens: 4096 });
+    const data = await callGrokAPI(messages, 0.7, {
+      featureKey: 'nicheIntel',
+      max_tokens: 4096,
+      signal: requestOptions.signal,
+    });
 
     const parsed = parseJsonFromResponse(data.content);
     const normalizedAnalysis = normalizeNicheAnalysisPayload(parsed, platform);
@@ -3601,6 +3656,9 @@ For content ideas:
     return { success: false, error: 'Could not extract structured niche analysis from the model response.' };
   } catch (error) {
     console.error('Niche analysis error:', error);
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+      return { success: false, error: error.message, aborted: true };
+    }
     return { success: false, error: error.message };
   }
 }

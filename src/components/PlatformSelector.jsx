@@ -11,7 +11,7 @@ import {
   Check,
   Lightbulb
 } from 'lucide-react';
-import { getPlatform, getPlatformTips } from '../utils/platformGuidelines';
+import { getPlatformTips } from '../utils/platformGuidelines';
 import { BottomSheet } from './BottomSheet';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -143,9 +143,7 @@ export default function PlatformSelector({
 /**
  * Platform Tips Display Component
  */
-export function PlatformTips({ tips, platformId, className = '' }) {
-  const platform = getPlatform(platformId);
-  
+export function PlatformTips({ tips, platformId: _platformId, className = '' }) {
   if (!tips || !tips.items?.length) return null;
 
   return (

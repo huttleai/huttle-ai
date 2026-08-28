@@ -95,12 +95,12 @@ Create a new n8n workflow with the following structure:
   - `Authorization: Bearer YOUR_GROK_API_KEY`
   - `Content-Type: application/json`
 - **Body**: Generate 7-14 day content calendar skeleton
-- **Model**: `grok-4-1-fast-reasoning`
+- **Model**: see `GROK_MODEL` in `src/config/grokConfig.js`
 
 Example prompt structure:
 ```json
 {
-  "model": "grok-4-1-fast-reasoning",
+  "model": "<GROK_MODEL from src/config/grokConfig.js>",
   "messages": [
     {
       "role": "system",

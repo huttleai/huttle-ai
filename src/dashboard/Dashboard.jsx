@@ -9,6 +9,7 @@ import { SubscriptionProvider } from '../context/SubscriptionContext';
 import { DashboardProvider } from '../context/DashboardContext'; // HUTTLE AI: cache fix
 import Sidebar from '../components/Sidebar';
 import TopHeader from '../components/TopHeader';
+import { PaymentRetryBanner } from '../components/PaymentRetryBanner';
 import { MobileNavProvider } from '../context/MobileNavContext';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -72,7 +73,8 @@ function DashboardRouteFallback() {
 
 function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   const authContext = useContext(AuthContext);
-  
+  useNotificationGenerator();
+
   // Safety check - if context is undefined, show error
   if (!authContext) {
     console.error('AuthContext is not available. This should not happen.');
@@ -87,8 +89,6 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
   }
 
   const { user, loading, needsOnboarding, profileChecked, completeOnboarding } = authContext;
-
-  useNotificationGenerator();
 
   // Show loading state while checking auth OR while profile is being checked
   // CRITICAL: Wait for BOTH auth loading AND profile check to complete
@@ -144,6 +144,7 @@ function AppContent({ secureAccountMode = false, onboardingMode = false }) {
         <div className="flex min-h-screen min-w-0 bg-gradient-to-br from-gray-50 via-white to-gray-50">
           <Sidebar />
           <TopHeader />
+          <PaymentRetryBanner />
           <Suspense fallback={<DashboardRouteFallback />}>
           <Routes>
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

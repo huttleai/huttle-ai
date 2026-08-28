@@ -1,71 +1,31 @@
 import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Award, BadgeCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
-import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode } from '../services/stripeAPI';
+import { cancelSubscription, closeCheckoutTab, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode, openStripeCheckoutTab } from '../services/stripeAPI';
 import { useSubscription, clearSubscriptionCache } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import BillingManagementPanel from '../components/BillingManagementPanel';
 import CancelSubscriptionModal from '../components/CancelSubscriptionModal';
 import FoundersMembershipCard from '../components/FoundersMembershipCard';
-import { supabase } from '../config/supabase';
 import { getTierConfig } from '../utils/tierConfig';
 
-const LAUNCH_PLANS = [
-  {
-    id: 'founder',
-    name: 'Founders Club',
-    badge: 'Best value',
-    annualPrice: 199,
-    monthlyEquivalent: '16.58',
-    description: 'The lowest price we will ever offer.',
-    features: [
-      'All Pro features',
-      '800 AI generations/month',
-      '25GB storage',
-      'Priority support',
-      'Founders rate locked forever',
-      '14-day money-back guarantee',
-    ],
-    gradient: 'from-huttle-primary to-cyan-500',
-    tier: 'founder',
-  },
-  {
-    id: 'builder',
-    name: 'Builders Club',
-    badge: 'Launch pricing',
-    annualPrice: 249,
-    monthlyEquivalent: '20.75',
-    description: 'Launch-only pricing with the same Pro feature access.',
-    features: [
-      'All Pro features',
-      '800 AI generations/month',
-      '25GB storage',
-      'Priority support',
-      'Builders rate locked while active',
-      '14-day money-back guarantee',
-    ],
-    gradient: 'from-sky-500 to-cyan-500',
-    tier: 'builder',
-  },
-];
-
-const FUTURE_PLANS = [
+const CURRENT_PLANS = [
   {
     id: 'essentials',
     name: 'Essentials',
     monthlyPrice: 15,
     annualPrice: 153,
-    description: 'Available after the launch window closes.',
-    features: ['150 AI generations/month', '5GB storage', 'Core AI tools and Trend Lab'],
+    description: 'Core tools for planning and creating content consistently.',
+    features: ['7-day free trial', '200 AI generations/month', 'All AI Power Tools', 'Content Vault'],
   },
   {
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 39,
-    annualPrice: 397.8,
-    description: 'Available after the launch window closes.',
-    features: ['600 AI generations/month', '25GB storage', 'Full Pro feature set'],
+    annualPrice: 398,
+    description: 'Higher limits and the complete toolkit for serious creators.',
+    features: ['7-day free trial', '600 AI generations/month', '25GB storage', 'Full Pro feature set'],
   },
 ];
 
@@ -79,10 +39,10 @@ const PLAN_DETAILS = {
     accentClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   },
   builder: {
-    title: 'Builders Club',
-    subtitle: 'Launch member',
+    title: 'Legacy Annual',
+    subtitle: 'Legacy member',
     annualLabel: '$249/year while active',
-    summary: 'Builders get full Pro access with the same launch feature set and an early pricing lock while the plan stays active.',
+    summary: 'Legacy annual members keep their original plan terms while the plan stays active.',
     iconGradient: 'from-sky-500 to-cyan-500',
     accentClasses: 'border-sky-200 bg-sky-50 text-sky-700',
   },
@@ -90,14 +50,14 @@ const PLAN_DETAILS = {
     title: 'Essentials',
     subtitle: 'Paid plan',
     annualLabel: '$15/month or $153/year',
-    summary: '150 AI generations per month, 5GB storage, and access to the core Huttle AI workflow.',
+    summary: '200 AI generations per month, 5GB storage, and access to the core Huttle AI workflow.',
     iconGradient: 'from-huttle-primary to-cyan-400',
     accentClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   },
   pro: {
     title: 'Pro',
     subtitle: 'Paid plan',
-    annualLabel: '$39/month or $397.80/year',
+    annualLabel: '$39/month or $398/year',
     summary: '600 AI generations per month, 25GB storage, and the full Pro feature suite.',
     iconGradient: 'from-purple-500 to-pink-500',
     accentClasses: 'border-purple-200 bg-purple-50 text-purple-700',
@@ -129,12 +89,15 @@ export default function Subscription() {
     trialEndsAt,
     trialDaysRemaining,
     isPastDue,
+    isUnpaid,
+    isPaymentRetry,
     isAnnualFounder,
     isCancelScheduled,
     refreshSubscription,
     hasPaidAccess,
     getTierDisplayName,
     loading: subscriptionLoading,
+    subscriptionReady,
     subscriptionError,
     isSubscriptionDegraded,
   } = useSubscription();
@@ -146,6 +109,10 @@ export default function Subscription() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [billingData, setBillingData] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  // Inline banner flag for an HTTP 409 from /api/create-checkout-session
+  // (billing account conflict — stripe_customer_id belongs to another auth
+  // user). A toast auto-dismisses; this must stay visible on the page.
+  const [hasCheckoutConflict, setHasCheckoutConflict] = useState(false);
   const checkoutResetTimeoutRef = useRef(null);
 
   const demoMode = isDemoMode() || contextDemoMode;
@@ -170,17 +137,25 @@ export default function Subscription() {
     }
   }, []);
 
+  // Trigger a subscription refresh only when we truly haven't resolved yet.
+  // Depending on `subscriptionLoading` here creates an infinite loop for users
+  // whose subscription legitimately resolves to null (free tier or degraded
+  // state): loading flips true→false while subscription stays null, re-firing
+  // this effect on every render. The provider already polls every 60s, so we
+  // gate strictly on `subscriptionReady` to avoid re-entering once resolved.
   useEffect(() => {
-    if (user?.id && !subscription && !subscriptionLoading) {
+    if (user?.id && !subscriptionReady && !subscriptionLoading) {
       void refreshSubscription();
     }
-  }, [user?.id, refreshSubscription, subscription, subscriptionLoading]);
+  }, [user?.id, refreshSubscription, subscriptionReady, subscriptionLoading]);
+
+  const showBillingManagement = hasPaidAccess || isPaymentRetry;
 
   useEffect(() => {
-    if (user?.id && hasPaidAccess) {
+    if (user?.id && showBillingManagement) {
       void loadBillingDetails();
     }
-  }, [user?.id, hasPaidAccess, loadBillingDetails]);
+  }, [user?.id, showBillingManagement, loadBillingDetails]);
 
   useEffect(() => () => {
     if (checkoutResetTimeoutRef.current) {
@@ -216,10 +191,12 @@ export default function Subscription() {
   const isResolvingSubscription = subscriptionLoading && !subscription && !isSubscriptionDegraded;
 
   const handleCheckout = async (planId, billingCycle = 'annual') => {
+    const checkoutTab = openStripeCheckoutTab();
     setLoading(planId);
+    setHasCheckoutConflict(false);
 
     try {
-      const result = await createCheckoutSession(planId, billingCycle);
+      const result = await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
 
       if (result.demo) {
         if (setDemoTier) {
@@ -237,7 +214,18 @@ export default function Subscription() {
       }
 
       if (!result.success) {
-        addToast(result.error || 'Failed to start checkout. Please try again.', 'error');
+        // HTTP 409 from /api/create-checkout-session: a stripe_customer_id in
+        // our DB belongs to a different Supabase auth user. Do NOT redirect to
+        // Stripe or retry — show a sticky inline banner so the user can reach
+        // support. stripeAPI.createCheckoutSession surfaces the backend body
+        // verbatim as `result.error`, so we match on its stable prefix.
+        closeCheckoutTab(checkoutTab);
+        const errorMessage = result.error || '';
+        if (/billing account conflict/i.test(errorMessage)) {
+          setHasCheckoutConflict(true);
+        } else {
+          addToast(errorMessage || 'Failed to start checkout. Please try again.', 'error');
+        }
         setLoading(null);
         return;
       }
@@ -248,11 +236,13 @@ export default function Subscription() {
           checkoutResetTimeoutRef.current = null;
         }, 5000);
       } else {
+        closeCheckoutTab(checkoutTab);
         addToast('Checkout session created but no redirect URL was returned.', 'error');
         setLoading(null);
       }
     } catch (error) {
       console.error('Checkout error:', error);
+      closeCheckoutTab(checkoutTab);
       addToast('Something went wrong. Please try again.', 'error');
       setLoading(null);
     }
@@ -262,60 +252,79 @@ export default function Subscription() {
     setShowCancelModal(true);
   };
 
-  const confirmCancelSubscription = async (feedbackData) => {
+  const confirmCancelSubscription = async () => {
     setLoading('cancel');
 
     try {
-      if (feedbackData?.reason) {
-        const { error } = await supabase.from('cancellation_feedback').insert({
-          user_id: user.id,
-          subscription_tier: userTier,
-          cancellation_reason: feedbackData.reason,
-          custom_feedback: feedbackData.customFeedback || null,
-        });
-
-        if (error) {
-          console.error('Failed to save feedback:', error);
-        }
-      }
-
       const result = await cancelSubscription();
       if (!result.success) {
         addToast(result.error || 'Failed to cancel your subscription. Please try again.', 'error');
+        return { success: false, error: result.error };
       } else {
-        setShowCancelModal(false);
         addToast(
           `Your subscription has been cancelled. You'll keep access until ${formatDate(result.accessUntil || subscription?.currentPeriodEnd)}.`,
           'success'
         );
         clearSubscriptionCache();
-        await refreshSubscription();
+        try {
+          await refreshSubscription();
+        } catch (refreshError) {
+          console.error('Subscription refresh after cancellation failed:', refreshError);
+        }
+        return { success: true };
       }
     } catch (error) {
       console.error('Cancel subscription error:', error);
       addToast('Something went wrong. Please try again.', 'error');
+      return { success: false, error: error.message };
     } finally {
       setLoading(null);
     }
   };
 
-  const handleDowngrade = async (planId) => {
-    setShowCancelModal(false);
-    const billingCycle = planId === 'founder' || planId === 'builder' ? 'annual' : 'monthly';
-    await handleCheckout(planId, billingCycle);
-  };
-
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8" data-testid="subscription-page">
-      <div className="max-w-6xl mx-auto">
-        {/* Past due banner */}
-        {isPastDue && (
+      <div className="w-full max-w-5xl mx-auto pt-6 md:pt-0">
+        {/* Billing conflict banner (HTTP 409 from /api/create-checkout-session).
+            Sticks until the user retries or dismisses — matches the
+            degraded-state red banner style used in the free-user view below. */}
+        {hasCheckoutConflict && (
+          <div
+            role="alert"
+            data-testid="checkout-conflict-banner"
+            className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-900">Billing account conflict</p>
+              <p className="text-sm text-red-700">
+                There&apos;s a billing account conflict on this account. Please contact support at{' '}
+                <a href="mailto:support@huttleai.com" className="underline font-semibold">
+                  support@huttleai.com
+                </a>
+                .
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHasCheckoutConflict(false)}
+              className="text-sm font-semibold text-red-900 hover:text-red-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Past due / unpaid banner */}
+        {isPaymentRetry && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold text-amber-900">Your payment needs attention</p>
               <p className="text-sm text-amber-800">
-                Your subscription is past due. Update your payment details to keep uninterrupted access.
+                {isUnpaid
+                  ? 'We could not collect this payment. Update your card to restore generating access.'
+                  : 'Your subscription is past due. Update your payment details to keep uninterrupted access.'}
               </p>
             </div>
           </div>
@@ -346,7 +355,6 @@ export default function Subscription() {
               className="text-sm px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-medium focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
               <option value={TIERS.FOUNDER}>Founders Club</option>
-              <option value={TIERS.BUILDER}>Builders Club</option>
               <option value={TIERS.ESSENTIALS}>Essentials</option>
               <option value={TIERS.PRO}>Pro</option>
             </select>
@@ -355,7 +363,7 @@ export default function Subscription() {
 
         {/* Loading state */}
         {isResolvingSubscription ? (
-          <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 md:p-8 shadow-sm">
             <div className="flex items-start gap-3">
               <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-huttle-primary flex-shrink-0" />
               <div>
@@ -366,9 +374,9 @@ export default function Subscription() {
               </div>
             </div>
           </div>
-        ) : hasPaidAccess ? (
+        ) : showBillingManagement ? (
           /* ===== PAID USER VIEW ===== */
-          <div className="max-w-4xl mx-auto space-y-8">
+          <div className="w-full space-y-6 md:space-y-8">
             {/* Degraded banner */}
             {isSubscriptionDegraded && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
@@ -404,7 +412,7 @@ export default function Subscription() {
               </div>
             </div>
 
-            {/* Founder/Builder special card */}
+            {/* Legacy annual special card */}
             {isAnnualFounder ? (
               <FoundersMembershipCard
                 subscription={subscription}
@@ -427,25 +435,23 @@ export default function Subscription() {
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         tierConfig.badgeColor === 'amber'
                           ? 'bg-amber-100 text-amber-700'
-                          : tierConfig.badgeColor === 'silver'
-                            ? 'bg-gray-100 text-gray-600'
-                            : tierConfig.badgeColor === 'purple'
-                              ? 'bg-purple-100 text-purple-700'
-                              : tierConfig.badgeColor === 'blue'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-gray-100 text-gray-700'
+                          : tierConfig.badgeColor === 'teal'
+                            ? 'bg-[#01BAD2]/15 text-[#008fa3]'
+                            : tierConfig.badgeColor === 'teal-light'
+                              ? 'bg-[#01BAD2]/10 text-[#00a8bf]'
+                              : 'bg-gray-100 text-gray-700'
                       }`}>
                         {tierConfig.badgeColor === 'amber' ? `⭐ ${tierConfig.badgeLabel}` : tierConfig.badgeLabel}
                       </span>
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         isTrialing
                           ? 'bg-cyan-100 text-cyan-700'
-                          : isPastDue
+                          : isPaymentRetry
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-green-100 text-green-700'
                       }`}>
-                        <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPastDue ? 'bg-amber-500' : 'bg-green-500'}`} />
-                        {isTrialing ? 'Trialing' : isPastDue ? 'Past Due' : 'Active'}
+                        <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPaymentRetry ? 'bg-amber-500' : 'bg-green-500'}`} />
+                        {isTrialing ? 'Trialing' : isUnpaid ? 'Unpaid' : isPastDue ? 'Past Due' : 'Active'}
                       </span>
                     </div>
 
@@ -477,9 +483,11 @@ export default function Subscription() {
                     {isTrialing && trialEndsAt && (
                       <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3">
                         <p className="text-sm font-semibold text-cyan-900">
-                          {trialDaysRemaining === 0
-                            ? 'Your trial ends today.'
-                            : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
+                          {trialDaysRemaining === null
+                            ? 'Your trial is active.'
+                            : trialDaysRemaining === 0
+                              ? 'Your trial ends today.'
+                              : `You have ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
                         </p>
                         <p className="text-sm text-cyan-800 mt-1">
                           Trial end date: {formatDate(trialEndsAt)}.
@@ -497,7 +505,7 @@ export default function Subscription() {
                       <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mt-4">
                         {tierConfig.badgeColor === 'amber'
                           ? '⭐ You\'re a Founding Member — your $199/year rate is locked in forever. Your plan cannot be changed.'
-                          : '🔒 You\'re a Builders Club member — your $249/year rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
+                          : 'Your legacy annual rate is locked in for as long as your plan stays active. Your plan cannot be changed.'}
                       </p>
                     )}
 
@@ -541,11 +549,11 @@ export default function Subscription() {
               <div className="space-y-6">
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">What is your refund policy?</h3>
-                  <p className="text-sm text-gray-600">Founders Club and Builders Club include a 14-day money-back guarantee. If you cancel after that window, you keep access through the end of your paid annual term.</p>
+                  <p className="text-sm text-gray-600">Essentials and Pro plans include a 7-day free trial. You will not be charged until the trial ends. If you cancel after your paid subscription begins, you keep access through the end of your paid term.</p>
                 </div>
                 <div className="pb-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h3>
-                  <p className="text-sm text-gray-600">Yes. You can manage billing from this page — update your card, review invoices, and control cancellation timing for your membership.</p>
+                  <p className="text-sm text-gray-600">Yes. You can cancel at any time from this page. Cancellation stops future charges and you keep access until the end of your current billing period.</p>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Do AI generations roll over?</h3>
@@ -555,10 +563,10 @@ export default function Subscription() {
             </div>
           </div>
         ) : (
-          /* ===== FREE/UNPAID USER VIEW (Plan Selection) ===== */
-          <div className="space-y-12">
+          /* ===== FREE / LAPSED USER VIEW (Plan Selection) ===== */
+          <div className="w-full space-y-10 md:space-y-12">
             {isSubscriptionDegraded && (
-              <div className="max-w-5xl mx-auto rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-semibold text-red-900">We couldn&apos;t load your subscription status</p>
@@ -577,24 +585,20 @@ export default function Subscription() {
                 <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Choose Your Launch Plan</h1>
-                <p className="text-base text-gray-600">Huttle AI is currently paid-only. Both clubs include full Pro feature access.</p>
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Choose Your Plan</h1>
+                <p className="text-base text-gray-600">Essentials and Pro include a 7-day free trial.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-              {LAUNCH_PLANS.map((plan) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {CURRENT_PLANS.map((plan) => (
                 <div key={plan.id} className="relative bg-white rounded-2xl border border-gray-200 p-6 lg:p-8 shadow-sm flex flex-col">
                   <div className="flex items-center justify-between mb-5">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                      plan.id === 'founder'
-                        ? 'bg-huttle-primary text-white'
-                        : 'bg-sky-50 text-sky-700 border border-sky-200'
-                    }`}>
-                      {plan.badge}
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-huttle-primary text-white">
+                      7-day free trial
                     </span>
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center shadow-lg`}>
-                      {plan.id === 'founder' ? <Award className="w-6 h-6 text-white" /> : <Users className="w-6 h-6 text-white" />}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-huttle-primary to-cyan-500 flex items-center justify-center shadow-lg">
+                      {plan.id === 'pro' ? <Award className="w-6 h-6 text-white" /> : <Users className="w-6 h-6 text-white" />}
                     </div>
                   </div>
 
@@ -603,9 +607,10 @@ export default function Subscription() {
 
                   <div className="mb-6">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-display font-bold text-gray-900">{formatMoney(plan.annualPrice)}</span>
-                      <span className="text-gray-500 font-medium">/year</span>
+                      <span className="text-4xl font-display font-bold text-gray-900">{formatMoney(plan.monthlyPrice)}</span>
+                      <span className="text-gray-500 font-medium">/month</span>
                     </div>
+                    <p className="text-sm text-green-700 font-medium mt-1">{formatMoney(plan.annualPrice)}/year with 15% annual savings</p>
                   </div>
 
                   <ul className="space-y-3 mb-6 flex-grow">
@@ -618,7 +623,7 @@ export default function Subscription() {
                   </ul>
 
                   <button
-                    onClick={() => handleCheckout(plan.id, 'annual')}
+                    onClick={() => handleCheckout(plan.id, 'monthly')}
                     disabled={loading !== null}
                     className="w-full py-3 rounded-xl font-semibold bg-[#01bad2] text-white shadow-md hover:bg-[#00ACC1] disabled:opacity-50 transition-all"
                   >
@@ -628,41 +633,11 @@ export default function Subscription() {
                         Processing...
                       </span>
                     ) : (
-                      `Choose ${plan.name}`
+                      'Start 7-Day Free Trial'
                     )}
                   </button>
                 </div>
               ))}
-            </div>
-
-            {/* Future plans */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm max-w-5xl mx-auto">
-              <div className="flex items-center gap-3 mb-6">
-                <CreditCard className="w-6 h-6 text-huttle-primary" />
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Future Public Pricing</h2>
-                  <p className="text-sm text-gray-600">After Founders and Builders close, these plans become available.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {FUTURE_PLANS.map((plan) => (
-                  <div key={plan.id} className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{plan.name}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{plan.description}</p>
-                    <p className="text-sm font-semibold text-gray-900">{formatMoney(plan.monthlyPrice)}/month</p>
-                    <p className="text-sm text-green-700 font-medium mb-4">{formatMoney(plan.annualPrice)}/year with 15% annual savings</p>
-                    <ul className="space-y-2">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-sm text-gray-600">
-                          <Check className="w-4 h-4 text-huttle-primary flex-shrink-0 mt-0.5" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-6 text-gray-500">
@@ -683,10 +658,11 @@ export default function Subscription() {
         isOpen={showCancelModal}
         onClose={() => setShowCancelModal(false)}
         onConfirm={confirmCancelSubscription}
-        onDowngrade={handleDowngrade}
         currentTier={userTier}
         isLoading={loading === 'cancel'}
         renewalDate={subscription?.currentPeriodEnd}
+        userId={user?.id}
+        planName={getTierDisplayName(userTier)}
       />
     </div>
   );

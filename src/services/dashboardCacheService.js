@@ -1,8 +1,12 @@
 import { supabase, trackUsage } from '../config/supabase';
 import { API_TIMEOUTS } from '../config/apiConfig';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 import { normalizeNiche, buildCacheKey, buildDashboardForYouCacheKey } from '../utils/normalizeNiche';
 import { retryFetch } from '../utils/retryFetch';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
+import { dashLog, dashWarn } from '../utils/dashboardDebugLog';
 
 // Ops: if Trending Now gets stuck on samples, run scripts/clean-poisoned-cache.sql
 
@@ -36,6 +40,38 @@ function coerceDashboardCacheDateKey(value) {
 
 const GROK_PROXY_URL = '/api/ai/grok';
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+/**
+ * 504 is deliberately absent. /api/ai/perplexity has maxDuration 60 and makes a
+ * single upstream call, so a 504 means the full budget was already spent — a
+ * retry cannot finish faster and just burns another slot against the route's
+ * 20-requests-per-minute limit, turning one timeout into a 429 for everyone.
+ */
+const PERPLEXITY_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503]);
+
+/**
+ * Collapses concurrent identical Perplexity-backed requests onto one promise.
+ * Two callers racing for the same cache key would otherwise both miss the warm
+ * cache and each pay for a generation.
+ */
+const inFlightPerplexityRequests = new Map();
+
+function dedupeInFlightRequest(key, startRequest) {
+  if (!key) return startRequest();
+
+  const pending = inFlightPerplexityRequests.get(key);
+  if (pending) {
+    dashLog('[Trending] Reusing in-flight request', { key });
+    return pending;
+  }
+
+  const promise = (async () => startRequest())()
+    .finally(() => {
+      inFlightPerplexityRequests.delete(key);
+    });
+
+  inFlightPerplexityRequests.set(key, promise);
+  return promise;
+}
 /** Mirrors api/ai/perplexity.js MODEL_CONFIG (log labels / parity only). */
 const MODEL_CONFIG_REF = {
   dashboard_trending: 'sonar',
@@ -305,7 +341,7 @@ function parsePerplexityResponse(text) {
 
   if (!text || typeof text !== 'string') {
     if (text != null) {
-      console.warn('[Perplexity] Response is not an array:', typeof text);
+      dashWarn('[Perplexity] Response is not an array:', typeof text);
     }
     return null;
   }
@@ -320,13 +356,13 @@ function parsePerplexityResponse(text) {
 
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) {
-      console.warn('[Perplexity] Response is not an array:', typeof parsed);
+      dashWarn('[Perplexity] Response is not an array:', typeof parsed);
       return null;
     }
 
     return parsed;
   } catch (err) {
-    console.warn(
+    dashWarn(
       '[Perplexity] JSON parse failed:',
       err.message,
       '\nRaw text:',
@@ -348,7 +384,7 @@ function parseTrendingResponse(raw) {
         if (Array.isArray(raw[key])) return raw[key];
       }
 
-      console.warn('[Trending] Got object not array, wrapping:', Object.keys(raw));
+      dashWarn('[Trending] Got object not array, wrapping:', Object.keys(raw));
       return [raw];
     }
 
@@ -369,17 +405,17 @@ function parseTrendingResponse(raw) {
     }
 
     if (typeof parsed === 'object' && parsed !== null) {
-      console.warn('[Trending] Got object not array, wrapping:', Object.keys(parsed));
+      dashWarn('[Trending] Got object not array, wrapping:', Object.keys(parsed));
       return [parsed];
     }
 
-    console.warn('[Trending] Unparseable response shape:', typeof parsed);
+    dashWarn('[Trending] Unparseable response shape:', typeof parsed);
     return null;
   } catch (err) {
     const rawPreview = typeof raw === 'string'
       ? raw.substring(0, 300)
       : JSON.stringify(raw ?? null)?.substring(0, 300);
-    console.warn('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
+    dashWarn('[Trending] JSON parse failed:', err.message, '\nRaw (first 300):', rawPreview);
     return null;
   }
 }
@@ -510,28 +546,28 @@ async function getWarmPlatformCache(cacheKey, platform, type, nicheContext = {})
   try {
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('payload, hit_count')
+      .select('payload, result_data, expires_at')
       .eq('cache_key', cacheKey)
       .is('user_id', null)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
 
     if (error) {
-      console.warn('[Cache Read Skipped]', error.message, error.code, cacheKey);
+      dashWarn('[Cache Read Skipped]', error.message, error.code, cacheKey);
       if (type === 'trending') {
-        console.log('[Trending] Cache check', { platform, niche, feature: type, hit: false });
+        dashLog('[Trending] Cache check', { platform, niche, feature: type, hit: false });
       }
       return null;
     }
 
-    const rowPayload = data?.payload;
+    const rowPayload = data?.payload || data?.result_data;
 
     if (type === 'trending') {
       const hit = Boolean(rowPayload) && isValidDashboardTrendingWarmPayload(rowPayload);
-      console.log('[Trending] Cache check', { platform, niche, feature: type, hit });
+      dashLog('[Trending] Cache check', { platform, niche, feature: type, hit });
       if (!data) return null;
       if (!hit) {
-        console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+        dashWarn('[TrendCache] Warm cache rejected — empty/invalid payload', {
           niche,
           platform,
           feature: type,
@@ -564,18 +600,19 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
 
   try {
     const currentPlatform = normalizePlatformValue(platform);
-    const currentDateStart = new Date(`${generatedDate}T00:00:00.000Z`).toISOString();
-    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__*__${type}`;
+    // SQL LIKE wildcard is %, not *. Prod schema truth: niche_content_cache has
+    // generated_date (and cache_date) — no generated_at, created_at unconfirmed.
+    const cacheKeyPattern = `${context.cacheNiche}__${currentPlatform}__${context.normalizedCity}__%__${type}`;
     const { data, error } = await supabase
       .from('niche_content_cache')
-      .select('cache_key, payload, generated_at')
+      .select('cache_key, payload, generated_date')
       .eq('niche', context.cacheNiche)
       .eq('platform', currentPlatform)
       .eq('feature', type)
       .is('user_id', null)
       .like('cache_key', cacheKeyPattern)
-      .lt('generated_at', currentDateStart)
-      .order('generated_at', { ascending: false })
+      .lt('generated_date', generatedDate)
+      .order('generated_date', { ascending: false })
       .limit(1);
 
     if (error || !Array.isArray(data) || data.length === 0) {
@@ -585,7 +622,7 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
     const [previousCache] = data;
     const prevPayload = previousCache.payload;
     if (type === 'trending' && !isValidDashboardTrendingWarmPayload(prevPayload)) {
-      console.warn('[TrendCache] Warm cache rejected — empty/invalid payload', {
+      dashWarn('[TrendCache] Warm cache rejected — empty/invalid payload', {
         niche: context.cacheNiche,
         platform,
         feature: type,
@@ -598,24 +635,19 @@ async function getPreviousDayPlatformCache(context, platform, type, generatedDat
   }
 }
 
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (error) {
-    console.warn('Could not get auth session for dashboard cache:', error);
-  }
-
-  return headers;
+/**
+ * Fail-closed auth headers: getSession → refreshSession once → typed
+ * AUTH_NOT_READY error. Never returns headers without Authorization, so no AI
+ * proxy call fires unauthenticated (the server would just 401).
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
-const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.`;
+const DASHBOARD_TRENDING_SYSTEM_PROMPT = `You are a real-time social media trend analyst specializing in content strategy for creators and small business owners. You have access to live web data. Return ONLY valid JSON — no markdown, no preamble, no explanation text before or after the JSON.
+
+${HUMAN_WRITING_RULES}`;
 
 function buildDashboardTrendingUserPrompt(platformLabel, nicheLabel, accountType) {
   return `Find the top 6 trending content topics RIGHT NOW on ${platformLabel} for the ${nicheLabel} niche. Focus on topics with real momentum in the last 7 days based on engagement data, hashtag velocity, and creator activity.
@@ -742,7 +774,7 @@ Return ONLY JSON: { "niche_angle": "...", "hook_starter": "..." }`;
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+          ...getGrokParams('dashboardWidget'),
           temperature: 0.2,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -869,7 +901,9 @@ function buildHashtagMessages(context, platform) {
   return [
     {
       role: 'system',
-      content: 'You are a real-time hashtag and keyword researcher for social media. You have live web access. Only return hashtags or keywords you can verify are real and actively used right now. Never invent hashtags.',
+      content: `You are a real-time hashtag and keyword researcher for social media. You have live web access. Only return hashtags or keywords you can verify are real and actively used right now. Never invent hashtags.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -890,48 +924,75 @@ async function requestPerplexityWidgetData(type, platform, context, headers, opt
   const MAX_RETRIES = 1;
   const modelForLog = type === 'trending' ? MODEL_CONFIG_REF.dashboard_trending : MODEL_CONFIG_REF.quick_scan;
 
+  const requestBody = JSON.stringify({
+    temperature: 0.2,
+    messages,
+    ...(type !== 'trending' && options?.searchContextSize
+      ? { search_context_size: options.searchContextSize }
+      : {}),
+    cache: {
+      key: cacheKey,
+      niche: context.cacheNiche,
+      platform: normalizePlatformValue(platform),
+      city: context.city || DEFAULT_CITY,
+      type,
+      ttlHours: 24,
+      forceRefresh: (type === 'hashtags' || type === 'trending_hashtags_widget')
+        ? Boolean(options.forceRefreshHashtags)
+        : Boolean(options.forceRefreshTrending),
+    },
+  });
+
+  let requestHeaders = headers;
+  let didAttempt401Recovery = false;
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
       if (type === 'trending') {
-        console.log('[Trending] Perplexity call firing', {
+        dashLog('[Trending] Perplexity call firing', {
           platform,
           niche: context.cacheNiche,
           model: modelForLog,
         });
       }
 
+      // Retries network errors + 408/425/429/500/502/503, but not 504.
       const response = await retryFetch(
         PERPLEXITY_PROXY_URL,
         {
           method: 'POST',
-          headers,
-          body: JSON.stringify({
-            temperature: 0.2,
-            messages,
-            ...(type !== 'trending' && options?.searchContextSize
-              ? { search_context_size: options.searchContextSize }
-              : {}),
-            cache: {
-              key: cacheKey,
-              niche: context.cacheNiche,
-              platform: normalizePlatformValue(platform),
-              city: context.city || DEFAULT_CITY,
-              type,
-              ttlHours: 24,
-              forceRefresh: (type === 'hashtags' || type === 'trending_hashtags_widget')
-                ? Boolean(options.forceRefreshHashtags)
-                : Boolean(options.forceRefreshTrending),
-            },
-          }),
+          headers: requestHeaders,
+          body: requestBody,
         },
         {
           timeoutMs: API_TIMEOUTS.STANDARD,
-          maxRetries: 0,
+          retryableStatusCodes: PERPLEXITY_RETRYABLE_STATUS_CODES,
         }
       );
 
       if (response.ok) {
         return response;
+      }
+
+      if (response.status === 504) {
+        console.warn(
+          '[Perplexity] Upstream timed out (504) — not retrying, a retry would only spend another rate-limit slot:',
+          platform,
+          type,
+        );
+        return null;
+      }
+
+      // One-shot 401 recovery: refresh the session, rebuild headers, retry once.
+      if (response.status === 401 && !didAttempt401Recovery) {
+        didAttempt401Recovery = true;
+        try {
+          requestHeaders = await getAuthHeaders({ forceRefresh: true });
+          continue;
+        } catch {
+          console.warn('[Perplexity] 401 with no recoverable session — using fallback:', platform, type);
+          return null;
+        }
       }
 
       if (response.status === 429) {
@@ -1163,17 +1224,30 @@ function buildFallbackAIInsights(context) {
   ];
 }
 
+/**
+ * Deduped entry point. The force-refresh flag is part of the dedupe key so a
+ * forced refresh never joins (and silently inherits) a cache-allowed request.
+ */
 async function fetchSingleTrendingSlice(variant, platform, context, headers, options, generatedDate) {
-  const messages = buildDashboardTrendingMessages(
-    platform,
-    context,
-    variant === 'global' ? 'global' : 'niche',
-  );
   const cacheKey = buildPerPlatformCacheKey(
     context,
     platform,
     variant === 'global' ? 'trending_v2_global' : 'trending_v2_niche',
     generatedDate,
+  );
+  const forceRefresh = Boolean(options.forceRefreshTrending);
+
+  return dedupeInFlightRequest(
+    `trending_slice::${cacheKey}::force=${forceRefresh}`,
+    () => fetchSingleTrendingSliceUncached(variant, platform, context, headers, options, generatedDate, cacheKey),
+  );
+}
+
+async function fetchSingleTrendingSliceUncached(variant, platform, context, headers, options, generatedDate, cacheKey) {
+  const messages = buildDashboardTrendingMessages(
+    platform,
+    context,
+    variant === 'global' ? 'global' : 'niche',
   );
   const forceRefresh = Boolean(options.forceRefreshTrending);
 
@@ -1215,7 +1289,7 @@ async function fetchSingleTrendingSlice(variant, platform, context, headers, opt
   const firstTitle = itemCount
     ? String(items[0]?.title || items[0]?.topic || items[0]?.name || '').slice(0, 80)
     : '';
-  console.log('[Trending] Perplexity response received', { platform, itemCount, firstTitle });
+  dashLog('[Trending] Perplexity response received', { platform, itemCount, firstTitle });
 
   return {
     items,
@@ -1252,7 +1326,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
     mergedRaw = await enrichTrendsWithGrokAdaptation(mergedRaw, context);
 
     const realPre = mergedRaw.filter((x) => !x._isSampleTrend).length;
-    console.log('[Trending] Merge result', {
+    dashLog('[Trending] Merge result', {
       platform,
       realCount: realPre,
       sampleCount: mergedRaw.length - realPre,
@@ -1305,7 +1379,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           'global',
           platform,
           false,
-          previousDayCache.generated_at,
+          previousDayCache.generated_date,
           nicheGlobal,
         ))
         .filter(Boolean);
@@ -1314,7 +1388,7 @@ async function fetchMergedTrendingForPlatform(platform, context, headers, option
           items: merged,
           fromCache: false,
           fromYesterday: true,
-          generatedAt: previousDayCache.generated_at,
+          generatedAt: previousDayCache.generated_date,
           fallbackMessage: 'Last updated from cache — tap refresh for latest.',
         };
       }
@@ -1347,6 +1421,15 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
   }
 
   const cacheKey = buildPerPlatformCacheKey(context, platform, type, generatedDate);
+  const forceRefresh = Boolean(options.forceRefreshHashtags);
+
+  return dedupeInFlightRequest(
+    `widget::${type}::${cacheKey}::force=${forceRefresh}`,
+    () => fetchPerPlatformHashtagData(type, platform, context, headers, options, generatedDate, cacheKey),
+  );
+}
+
+async function fetchPerPlatformHashtagData(type, platform, context, headers, options, generatedDate, cacheKey) {
   const forceRefresh = Boolean(options.forceRefreshHashtags);
   const messages = buildHashtagMessages(context, platform);
 
@@ -1381,7 +1464,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
     const parsed = Array.isArray(payload?.structuredData)
       ? payload.structuredData
       : payload?.structuredData
-        ? (console.warn('[Perplexity] Response is not an array, using parser fallback:', typeof payload.structuredData), null)
+        ? (dashWarn('[Perplexity] Response is not an array, using parser fallback:', typeof payload.structuredData), null)
         : parsePerplexityResponse(payload?.content || '');
 
     if (!Array.isArray(parsed)) {
@@ -1408,7 +1491,7 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
         items: ensureArray(previousDayCache.payload),
         fromCache: false,
         fromYesterday: true,
-        generatedAt: previousDayCache.generated_at || null,
+        generatedAt: previousDayCache.generated_date || null,
         fallbackMessage: 'From yesterday — updating now',
       };
     }
@@ -1421,49 +1504,6 @@ async function fetchPerPlatformWidgetData(type, platform, context, headers, opti
       fallbackMessage: 'Hashtags loading — refresh in a moment.',
     };
   }
-}
-
-async function fetchAllPlatformWidgets(platforms, context, headers, options = {}) {
-  const results = [];
-
-  for (const [index, platform] of platforms.entries()) {
-
-    try {
-      const trendingResult = await fetchPerPlatformWidgetData('trending', platform, context, headers, options);
-      const hashtagResult = await fetchPerPlatformWidgetData('hashtags', platform, context, headers, options);
-
-      results.push({
-        platform,
-        trendingResult,
-        hashtagResult,
-      });
-    } catch (error) {
-      console.warn(`[Dashboard] Failed to load ${platform}, using fallback widgets:`, error);
-      results.push({
-        platform,
-        trendingResult: {
-          items: [],
-          fromCache: false,
-          fromYesterday: false,
-          generatedAt: null,
-          fallbackMessage: 'Trends are refreshing — check back in a few minutes.',
-        },
-        hashtagResult: {
-          items: [],
-          fromCache: false,
-          fromYesterday: false,
-          generatedAt: null,
-          fallbackMessage: 'Hashtags loading — refresh in a moment.',
-        },
-      });
-    }
-
-    if (index < platforms.length - 1) {
-      await sleep(800);
-    }
-  }
-
-  return results;
 }
 
 function buildAIInsightsMessages(context) {
@@ -1479,7 +1519,9 @@ function buildAIInsightsMessages(context) {
   return [
     {
       role: 'system',
-      content: `${brandBlock}You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.`, // HUTTLE AI: brand context injected
+      content: `${brandBlock}You are a cautious social media strategist. You provide platform-aware recommendations, never fabricated statistics, and you frame all recommendations as benchmarks to test rather than guaranteed outcomes. Return valid JSON only.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
@@ -1523,7 +1565,7 @@ async function generateAIInsights(context, headers) { // HUTTLE AI: cache fix
         method: 'POST', // HUTTLE AI: cache fix
         headers, // HUTTLE AI: cache fix
         body: JSON.stringify({ // HUTTLE AI: cache fix
-          model: 'grok-4.1-fast-reasoning', // HUTTLE AI: cache fix
+          ...getGrokParams('dashboardWidget'), // HUTTLE AI: cache fix
           temperature: 0.2, // HUTTLE AI: cache fix
           messages: buildAIInsightsMessages(context), // HUTTLE AI: cache fix
         }), // HUTTLE AI: cache fix
@@ -1646,9 +1688,16 @@ export async function fetchDashboardTrendingHashtags({
     return { items: [], fromCache: false };
   }
 
-  const headers = await getAuthHeaders();
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const cacheKey = buildCacheKey('platform_wide', platform, 'global', generatedDate, 'trending_hashtags_widget');
+
+  return dedupeInFlightRequest(
+    `trending_hashtags_widget::${cacheKey}::force=${forceRefresh}`,
+    () => fetchDashboardTrendingHashtagsUncached(platform, cacheKey, forceRefresh),
+  );
+}
+
+async function fetchDashboardTrendingHashtagsUncached(platform, cacheKey, forceRefresh) {
   const cacheContext = {
     cacheNiche: 'platform_wide',
     normalizedCity: 'global',
@@ -1658,7 +1707,9 @@ export async function fetchDashboardTrendingHashtags({
   const messages = [
     {
       role: 'system',
-      content: 'You are a social media hashtag researcher. Follow instructions exactly. Return only a JSON array, no markdown.',
+      content: `You are a social media hashtag researcher. Follow instructions exactly. Return only a JSON array, no markdown.
+
+${HUMAN_WRITING_RULES}`,
     },
     {
       role: 'user',
@@ -1690,6 +1741,10 @@ export async function fetchDashboardTrendingHashtags({
         }
       }
     }
+
+    // Fail closed: throws AUTH_NOT_READY (caught below → fallback items) when
+    // no Bearer token can be acquired, instead of firing an unauthenticated call.
+    const headers = await getAuthHeaders();
 
     const response = await requestPerplexityWidgetData(
       'trending_hashtags_widget',
@@ -1783,26 +1838,29 @@ export async function fetchDashboardForYouHashtags({
     return { items: [], fromCache: false };
   }
 
-  const headers = await getAuthHeaders();
   const platform = normalizePlatformValue(primaryPlatform || 'instagram');
   const nicheKey = normalizeNiche(personalization.niche) || 'general';
   const cacheKey = buildDashboardForYouCacheKey(userId, generatedDate, personalization.niche, platform);
 
   try {
+    // Fail closed: throws AUTH_NOT_READY (caught below) when no token exists.
+    const headers = await getAuthHeaders();
     const response = await retryFetch(
       GROK_PROXY_URL,
       {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+          ...getGrokParams('dashboardWidget'),
           temperature: 0.35,
           personalized: true,
           forceCacheRefresh: Boolean(forceRefresh),
           messages: [
             {
               role: 'system',
-              content: 'You are a social media hashtag strategist. Follow the user instructions exactly. Return only a JSON array, no markdown or commentary.',
+              content: `You are a social media hashtag strategist. Follow the user instructions exactly. Return only a JSON array, no markdown or commentary.
+
+${HUMAN_WRITING_RULES}`,
             },
             {
               role: 'user',
@@ -1891,6 +1949,7 @@ function buildDashboardDataPayload(context, payload = {}) { // HUTTLE AI: cache 
   }); // HUTTLE AI: cache fix
 
   return { // HUTTLE AI: cache fix
+    niche: context.niche || context.brandProfile?.niche || null,
     trending_topics: ensureArray(payload.trendingTopics), // HUTTLE AI: cache fix
     hashtags_of_day: ensureArray(payload.hashtagsOfDay), // HUTTLE AI: cache fix
     ai_insights: normalizeInsights(payload.aiInsights), // HUTTLE AI: cache fix
@@ -1927,6 +1986,18 @@ function normalizeDashboardCacheRow(row, context) { // HUTTLE AI: cache fix
     brand_voice_nudge_copy: metadata.brand_voice_nudge_copy || context.brandVoiceNudgeCopy, // HUTTLE AI: cache fix
   }; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
+
+/**
+ * Upsert a daily_dashboard_cache row.
+ * @returns {Promise<{ error: object|null }>}
+ */
+async function upsertDashboardCacheRow(row) {
+  const { error } = await supabase
+    .from(DASHBOARD_CACHE_TABLE)
+    .upsert(row, { onConflict: 'user_id,generated_date' });
+
+  return { error: error || null };
+}
 
 function isMissingDashboardCacheColumnError(error) { // HUTTLE AI: cache fix
   const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase(); // HUTTLE AI: cache fix
@@ -1977,13 +2048,26 @@ function isDailyDashboardCacheStaleByLocalWeekday(cachedRow) {
   return cachedDay !== todayDay;
 }
 
+/**
+ * Read today's cache row.
+ *
+ * Returns a status alongside the row so callers can tell "this user has no row
+ * yet" (miss, expected, cheap) apart from "the read itself failed" (error,
+ * a real problem). Both used to collapse into null, which made a broken read
+ * look like a routine miss and silently trigger a paid regeneration.
+ *
+ * @returns {Promise<{ row: object|null, status: 'hit'|'miss'|'error' }>}
+ */
 async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI: cache fix
   if (!userId) {
-    return null;
+    return { row: null, status: 'error' };
   }
   // Must match writeDailyDashboardCache / generateDashboardData (local calendar + 6am roll), not UTC midnight.
   const dateKey = coerceDashboardCacheDateKey(generatedDateHint) ?? getDashboardGeneratedDate();
 
+  // dashboard_metadata exists in production (added 2026-08-25). The full
+  // select should succeed cleanly. Legacy and minimal selects stay as a read
+  // fallback only. Do not retry writes with a mutated payload.
   const fullSelect =
     'generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at';
 
@@ -2006,9 +2090,9 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
         return tryMinimalSelect();
       }
       console.warn('[Dashboard] Failed to read daily dashboard cache (legacy select):', fallbackResult.error);
-      return null;
+      return { row: null, status: 'error' };
     }
-    return fallbackResult.data || null;
+    return { row: fallbackResult.data || null, status: fallbackResult.data ? 'hit' : 'miss' };
   };
 
   const tryMinimalSelect = async () => {
@@ -2020,9 +2104,9 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
       .maybeSingle();
     if (minimalResult.error) {
       console.warn('[Dashboard] Failed to read daily dashboard cache (minimal select):', minimalResult.error);
-      return null;
+      return { row: null, status: 'error' };
     }
-    return minimalResult.data || null;
+    return { row: minimalResult.data || null, status: minimalResult.data ? 'hit' : 'miss' };
   };
 
   if (error) {
@@ -2033,7 +2117,7 @@ async function readDailyDashboardCache(userId, generatedDateHint) { // HUTTLE AI
     return tryLegacySelect();
   }
 
-  return data || null; // HUTTLE AI: cache fix
+  return { row: data || null, status: data ? 'hit' : 'miss' }; // HUTTLE AI: cache fix
 } // HUTTLE AI: cache fix
 
 export function hasPersistableTrendingTopics(trendingTopics) {
@@ -2049,6 +2133,16 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
   const dateKey = coerceDashboardCacheDateKey(generatedDate);
   if (!userId || !dateKey) {
     console.warn('[DashCache] Skipped daily cache write — invalid user or date key', { userId, generatedDate });
+    return false;
+  }
+
+  const niche = dashboardData.niche;
+  if (!userId || !niche) {
+    console.warn(
+      '[DashboardCache] Aborting cache write — userId or niche is missing. userId:', userId,
+      '| niche:', niche,
+      '| This prevents writing corrupt cache data that causes permanent cache misses for this user.'
+    );
     return false;
   }
 
@@ -2077,9 +2171,12 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     dashboardMetadata = {};
   }
 
-  const fullUpsertRow = {
+  // Prod schema truth (verified in live DB): daily_dashboard_cache has every
+  // column written below, including `niche` (added outside migrations).
+  const upsertRow = {
     user_id: userId,
     generated_date: dateKey,
+    niche: dashboardData.niche || null,
     trending_topics: dashboardData.trending_topics,
     hashtags_of_day: dashboardData.hashtags_of_day,
     ai_insights: dashboardData.ai_insights,
@@ -2089,47 +2186,17 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     created_at: dashboardData.created_at,
   };
 
-  const minimalUpsertRow = {
-    user_id: userId,
-    generated_date: dateKey,
-    trending_topics: dashboardData.trending_topics,
-    hashtags_of_day: dashboardData.hashtags_of_day,
-    ai_insights: dashboardData.ai_insights,
-    ai_insight: dashboardData.ai_insight,
-    created_at: dashboardData.created_at,
-  };
-
   try {
-    const { error } = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(fullUpsertRow, { onConflict: 'user_id,generated_date' });
+    const { error } = await upsertDashboardCacheRow(upsertRow);
 
-    if (!error) {
-      return true;
-    }
-
-    if (!isMissingDashboardCacheColumnError(error)) {
+    if (error) {
       console.warn(
-        '[Dashboard] Full daily_dashboard_cache upsert failed (will retry minimal):',
+        '[Dashboard] Failed to write daily dashboard cache:',
         error.code,
         error.message,
         error.details || '',
         error.hint || '',
         '(If code is 42501 or message mentions policy, ensure migrations include UPDATE … WITH CHECK on daily_dashboard_cache.)',
-      );
-    }
-
-    const fallbackResult = await supabase
-      .from(DASHBOARD_CACHE_TABLE)
-      .upsert(minimalUpsertRow, { onConflict: 'user_id,generated_date' });
-
-    if (fallbackResult.error) {
-      console.warn(
-        '[Dashboard] Failed to write daily dashboard cache:',
-        fallbackResult.error.code,
-        fallbackResult.error.message,
-        fallbackResult.error.details || '',
-        fallbackResult.error.hint || '',
       );
       return false;
     }
@@ -2140,6 +2207,50 @@ async function writeDailyDashboardCache(userId, generatedDate, dashboardData) { 
     return false;
   }
 } // HUTTLE AI: cache fix
+
+/**
+ * Write only the hashtags_of_day column to daily_dashboard_cache so the frontend
+ * receives each platform's hashtags via Supabase Realtime as soon as they are ready.
+ */
+async function updateCacheHashtags(userId, generatedDate, hashtagsOfDay, context) {
+  const dateKey = coerceDashboardCacheDateKey(generatedDate);
+  if (!userId || !dateKey) return;
+
+  try {
+    // Prod schema truth: daily_dashboard_cache has a `niche` column.
+    await upsertDashboardCacheRow({
+      user_id: userId,
+      generated_date: dateKey,
+      niche: context?.niche || null,
+      hashtags_of_day: hashtagsOfDay,
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('[DashCache] Incremental hashtag update failed:', err?.message || err);
+  }
+}
+
+const X_HASHTAG_BLOCKLIST_RE = /explorepage|fyp|instagood|instagram|reels|tiktok/i;
+const X_HASHTAG_MAX = 5;
+
+/**
+ * For X (Twitter), remove Instagram/TikTok-specific tags and cap at 5,
+ * preferring category "niche" over "growth".
+ */
+function filterHashtagsForPlatform(hashtags, platform) {
+  if (normalizePlatformValue(platform) !== 'twitter') return hashtags;
+
+  const cleaned = hashtags.filter((h) => {
+    const tag = h?.hashtag || '';
+    return !X_HASHTAG_BLOCKLIST_RE.test(tag);
+  });
+
+  if (cleaned.length <= X_HASHTAG_MAX) return cleaned;
+
+  const categoryOrder = { niche: 0, growth: 1 };
+  cleaned.sort((a, b) => (categoryOrder[a?.category] ?? 1) - (categoryOrder[b?.category] ?? 1));
+  return cleaned.slice(0, X_HASHTAG_MAX);
+}
 
 /**
  * YYYY-MM-DD key for daily dashboard cache: local calendar date, rolling at 6:00 AM in the user's timezone.
@@ -2186,17 +2297,24 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
 
   let generatedDate = coerceDashboardCacheDateKey(options.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   if (!isDashboardCacheDateKey(generatedDate)) {
-    generatedDate = new Date().toISOString().slice(0, 10);
+    generatedDate = getDashboardGeneratedDate();
   }
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
-  const cachedRow = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
+  const { row: cachedRow, status: cacheReadStatus } = await readDailyDashboardCache(userId, generatedDate); // HUTTLE AI: cache fix
 
   if (!cachedRow) { // HUTTLE AI: cache fix
+    if (cacheReadStatus === 'error') {
+      // Not a normal miss: the read failed, so we are about to pay for a
+      // regeneration that an existing row may already have covered.
+      console.warn('[Dashboard] daily_dashboard_cache read failed — regenerating (this costs a generation).');
+    } else {
+      dashLog('[Dashboard] daily_dashboard_cache miss — no row for today yet.');
+    }
     return { success: true, cacheHit: false, generatedDate, data: null }; // HUTTLE AI: cache fix
   } // HUTTLE AI: cache fix
 
   if (isDailyDashboardCacheStaleByLocalWeekday(cachedRow)) {
-    console.warn('[Dashboard] daily_dashboard_cache ignored — weekday mismatch vs today (will regenerate)');
+    dashWarn('[Dashboard] daily_dashboard_cache ignored — weekday mismatch vs today (will regenerate)');
     return { success: true, cacheHit: false, generatedDate, data: null };
   }
 
@@ -2220,7 +2338,7 @@ export async function getDashboardCache(userId, brandProfile, options = {}) { //
 
   const normalizedRow = normalizeDashboardCacheRow(cachedRow, context);
   if (!hasPersistableTrendingTopics(normalizedRow.trending_topics)) {
-    console.warn('[Dashboard] daily_dashboard_cache ignored — trending empty or all sample (will regenerate)');
+    dashWarn('[Dashboard] daily_dashboard_cache ignored — trending empty or all sample (will regenerate)');
     return { success: true, cacheHit: false, generatedDate, data: null };
   }
 
@@ -2273,36 +2391,79 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
 
   let generatedDate = coerceDashboardCacheDateKey(normalizedOptions.generatedDate) ?? getDashboardGeneratedDate(); // HUTTLE AI: cache fix
   if (!isDashboardCacheDateKey(generatedDate)) {
-    generatedDate = new Date().toISOString().slice(0, 10);
+    generatedDate = getDashboardGeneratedDate();
   }
-  const headers = await getAuthHeaders(); // HUTTLE AI: cache fix
+
+  // Fail closed: no Bearer token → do not fire AI proxy calls at all.
+  let headers;
+  try {
+    headers = await getAuthHeaders();
+  } catch (error) {
+    if (isAuthNotReadyError(error)) {
+      console.warn('[Dashboard] Auth token not ready, skipping dashboard generation');
+      return {
+        success: false,
+        errorType: 'auth_error',
+        errorMessage: 'Auth session is not ready yet.',
+      };
+    }
+    throw error;
+  }
+
   const context = buildDashboardBrandContext(brandProfile); // HUTTLE AI: cache fix
   const optionsWithGeneratedDate = { ...normalizedOptions, generatedDate }; // HUTTLE AI: cache fix
 
   try { // HUTTLE AI: cache fix
-    const platformResults = await fetchAllPlatformWidgets(context.selectedPlatforms, context, headers, optionsWithGeneratedDate); // HUTTLE AI: cache fix
+    const platformResults = [];
+    const allHashtags = [];
+    const allTrendingTopics = [];
+
+    for (const [index, platform] of context.selectedPlatforms.entries()) {
+      try {
+        const trendingResult = await fetchPerPlatformWidgetData('trending', platform, context, headers, optionsWithGeneratedDate);
+        const hashtagResult = await fetchPerPlatformWidgetData('hashtags', platform, context, headers, optionsWithGeneratedDate);
+
+        platformResults.push({ platform, trendingResult, hashtagResult });
+
+        const platformTrending = ensureArray(trendingResult.items).map((item) => ({
+          ...item,
+          from_cache: item.from_cache ?? trendingResult.fromCache,
+          generated_at: item.generated_at || trendingResult.generatedAt,
+          relevant_platform: item.relevant_platform || formatPlatformLabel(platform),
+          platform: item.platform || normalizePlatformValue(platform),
+        }));
+        allTrendingTopics.push(...platformTrending);
+
+        const platformHashtags = ensureArray(hashtagResult.items)
+          .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday))
+          .filter(Boolean);
+        allHashtags.push(...filterHashtagsForPlatform(platformHashtags, platform));
+
+        await updateCacheHashtags(userId, generatedDate, allHashtags, context);
+      } catch (error) {
+        console.warn(`[Dashboard] Failed to load ${platform}, using fallback widgets:`, error);
+        platformResults.push({
+          platform,
+          trendingResult: { items: [], fromCache: false, fromYesterday: false, generatedAt: null, fallbackMessage: 'Trends are refreshing — check back in a few minutes.' },
+          hashtagResult: { items: [], fromCache: false, fromYesterday: false, generatedAt: null, fallbackMessage: 'Hashtags loading — refresh in a moment.' },
+        });
+      }
+
+      if (index < context.selectedPlatforms.length - 1) {
+        await sleep(800);
+      }
+    }
+
     const [aiInsightsResult, dailyAlerts] = await Promise.all([ // HUTTLE AI: cache fix
       generateAIInsights(context, headers), // HUTTLE AI: cache fix
       fetchDailyAlerts(), // HUTTLE AI: cache fix
     ]); // HUTTLE AI: cache fix
 
-    const trendingTopics = platformResults.flatMap(({ platform, trendingResult }) =>
-      ensureArray(trendingResult.items).map((item) => ({
-        ...item,
-        from_cache: item.from_cache ?? trendingResult.fromCache,
-        generated_at: item.generated_at || trendingResult.generatedAt,
-        relevant_platform: item.relevant_platform || formatPlatformLabel(platform),
-        platform: item.platform || normalizePlatformValue(platform),
-      }))
-    );
+    const trendingTopics = allTrendingTopics;
 
     setCachedTrends(trendingTopics);
 
-    let hashtagsOfDay = platformResults.flatMap(({ platform, hashtagResult }) => // HUTTLE AI: cache fix
-      ensureArray(hashtagResult.items) // HUTTLE AI: cache fix
-        .map((item) => normalizeHashtagItem(item, platform, hashtagResult.fromCache, hashtagResult.generatedAt, hashtagResult.fromYesterday)) // HUTTLE AI: cache fix
-        .filter(Boolean) // HUTTLE AI: cache fix
-    ); // HUTTLE AI: cache fix
+    let hashtagsOfDay = allHashtags;
 
     if (hashtagsOfDay.length === 0) { // HUTTLE AI: cache fix
       hashtagsOfDay = buildHashtagFallbackItems(context.primaryPlatform) // HUTTLE AI: cache fix
@@ -2340,7 +2501,7 @@ export async function generateDashboardData(userId, brandProfile, options = {}) 
     }); // HUTTLE AI: cache fix
 
     const sampleItems = ensureArray(dashboardData.trending_topics).filter((t) => t._isSampleTrend).length;
-    console.log('[Trending] Final payload', {
+    dashLog('[Trending] Final payload', {
       totalItems: dashboardData.trending_topics.length,
       sampleItems,
       willWrite: hasPersistableTrendingTopics(dashboardData.trending_topics),
@@ -2392,7 +2553,7 @@ export async function deleteDashboardCache(userId) {
 
   let dateKey = coerceDashboardCacheDateKey(getDashboardGeneratedDate());
   if (!dateKey) {
-    dateKey = new Date().toISOString().slice(0, 10);
+    dateKey = getDashboardGeneratedDate();
   }
 
   try {

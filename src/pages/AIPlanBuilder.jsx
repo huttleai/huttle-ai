@@ -9,8 +9,9 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Plus,
   X,
+  Lock,
+  Sparkles,
 } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
@@ -19,6 +20,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { createJobDirectly, triggerN8nWebhook } from '../services/planBuilderAPI';
 import { supabase } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
+import RunCapMeter from '../components/RunCapMeter';
 import { AuthContext } from '../context/AuthContext';
 import {
   InstagramIconMono,
@@ -34,12 +36,18 @@ import {
   normalizePlatformLabelForIcon,
 } from '../components/SocialIcons';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import { useSearchParams, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { buildBrandContext } from '../utils/buildBrandContext';
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
 import { sanitizeAIOutput } from '../utils/textHelpers';
 import { getCachedTrends } from '../services/dashboardCacheService';
-import { parsePlanBuilderDisplayResult, normalizeN8nAlternatePlanToV2 } from '../utils/planBuilderJobResult';
+import {
+  parsePlanBuilderDisplayResult,
+  normalizeN8nAlternatePlanToV2,
+  resolvePlanContentMix,
+} from '../utils/planBuilderJobResult';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -47,12 +55,22 @@ import {
   normalizePlatformRulesKey,
 } from '../data/platformContentRules';
 
-const CONTENT_GOALS = [
-  'Grow followers',
-  'Drive traffic',
+const BUSINESS_GOALS = [
+  'Drive foot traffic',
+  'Drive Appointments',
+  'Book Consultations',
   'Generate leads',
   'Increase sales',
   'Build brand awareness',
+  'Grow online community',
+];
+
+const CREATOR_GOALS = [
+  'Grow followers',
+  'Build niche authority',
+  'Land brand deals',
+  'Increase engagement',
+  'Grow to monetization',
 ];
 
 const FOLLOWER_RANGE_OPTIONS = [
@@ -61,6 +79,138 @@ const FOLLOWER_RANGE_OPTIONS = [
   { value: '5K-50K', label: 'Established (5K–50K)' },
   { value: '50K+', label: 'Large (50K+)' },
 ];
+
+/**
+ * Default content-type distributions keyed by goal.
+ * Sent as `contentMixOverride` when the brand profile has no custom mix set,
+ * so Claude receives explicit guidance about what types of content to plan.
+ * `extraContext` (field #5) is forwarded alongside this so Claude can adapt
+ * when the user mentions a campaign, promo, or other special circumstance.
+ */
+const GOAL_CONTENT_MIX_HINTS = {
+  // ── Business goals ──────────────────────────────────────────────────────
+  'Drive foot traffic': {
+    'Behind the Scenes': 30,
+    'Product Spotlight': 25,
+    'Community & Local': 25,
+    'Social Proof': 20,
+  },
+  'Drive Appointments': {
+    'Social Proof': 30,
+    'Educational': 25,
+    'Behind the Scenes': 25,
+    'Direct Offer': 20,
+  },
+  'Book Consultations': {
+    'Educational': 35,
+    'Problem/Solution': 30,
+    'Social Proof': 25,
+    'Personal': 10,
+  },
+  'Generate leads': {
+    'Educational': 35,
+    'Problem/Solution': 30,
+    'Social Proof': 25,
+    'Direct Offer': 10,
+  },
+  'Increase sales': {
+    'Product Spotlight': 30,
+    'Social Proof': 25,
+    'Promotional': 25,
+    'Educational': 20,
+  },
+  'Build brand awareness': {
+    'Educational': 30,
+    'Entertaining': 25,
+    'Behind the Scenes': 25,
+    'Community': 20,
+  },
+  'Grow online community': {
+    'Community': 35,
+    'Entertaining': 25,
+    'Educational': 25,
+    'Behind the Scenes': 15,
+  },
+  // ── Creator goals ────────────────────────────────────────────────────────
+  'Grow followers': {
+    'Educational': 35,
+    'Entertaining': 30,
+    'Behind the Scenes': 20,
+    'Personal': 15,
+  },
+  'Build niche authority': {
+    'Educational': 40,
+    'Authority': 30,
+    'Behind the Scenes': 15,
+    'Social Proof': 15,
+  },
+  'Land brand deals': {
+    'Authority': 30,
+    'Lifestyle': 25,
+    'Educational': 25,
+    'Social Proof': 20,
+  },
+  'Increase engagement': {
+    'Entertaining': 35,
+    'Personal': 25,
+    'Educational': 25,
+    'Behind the Scenes': 15,
+  },
+  'Grow to monetization': {
+    'Educational': 30,
+    'Social Proof': 25,
+    'Promotional': 25,
+    'Personal': 20,
+  },
+};
+
+const TONE_CHIP_LABELS = {
+  bold: 'Bold',
+  raw_authentic: 'Raw & Authentic',
+  warm: 'Warm',
+  professional: 'Professional',
+  humorous: 'Humorous',
+  inspirational: 'Inspirational',
+  educational: 'Educational',
+  conversational: 'Conversational',
+  luxury: 'Luxury',
+  playful: 'Playful',
+  direct: 'Direct',
+  storytelling: 'Storytelling',
+};
+
+/** Map comma-separated segments that match tone chip labels back to DB keys (fallback when user edits the field). */
+function brandVoiceToneToPayload(input) {
+  const trimmed = typeof input === 'string' ? input.trim() : '';
+  if (!trimmed) return '';
+  return trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((seg) => {
+      if (Object.prototype.hasOwnProperty.call(TONE_CHIP_LABELS, seg)) return seg;
+      const fromLabel = Object.entries(TONE_CHIP_LABELS).find(([, label]) => label === seg)?.[0];
+      if (fromLabel) return fromLabel;
+      return seg;
+    })
+    .join(', ');
+}
+
+/** Keeps API payloads using raw tone keys when the field shows chip labels; handles unedited profile defaults safely. */
+function resolveBrandVoiceToneForPayload(input, brandProfile) {
+  const t = typeof input === 'string' ? input.trim() : '';
+  if (!t) return '';
+  const profileToneRaw = [brandProfile?.brandVoice, ...(brandProfile?.toneChips || [])]
+    .filter(Boolean)
+    .join(', ');
+  const displayVoice = (brandProfile?.toneChips || [])
+    .map((chip) => TONE_CHIP_LABELS[chip] || chip)
+    .join(', ');
+  const profileToneDisplay = [brandProfile?.brandVoice, displayVoice].filter(Boolean).join(', ');
+  if (t === profileToneDisplay.trim()) return profileToneRaw;
+  if (t === profileToneRaw.trim()) return profileToneRaw;
+  return brandVoiceToneToPayload(t);
+}
 
 const PLAN_BUILDER_PLATFORMS = [
   { id: 'instagram', name: 'Instagram', icon: InstagramIcon, monoIcon: InstagramIconMono },
@@ -99,8 +249,6 @@ function contentTypeBadgeProps(raw) {
   return { ...CONTENT_TYPE_BADGE.default, label: raw ? String(raw).slice(0, 24) : 'Post' };
 }
 
-const PILLAR_QUICK_ADD = ['Educational tips', 'Behind the scenes', 'Client results'];
-
 /** Supabase `jobs.id` is UUID; reject ISO dates and other strings that break Realtime filters */
 const PLAN_BUILDER_JOB_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,7 +256,7 @@ const PLAN_BUILDER_JOB_UUID_RE =
 /** Rotating button label while a plan job is running — signals progress, not a freeze. */
 const PLAN_BUILDER_LOADING_PHRASES = [
   'Analyzing your niche...',
-  'Mapping content pillars...',
+  'Mapping your content themes...',
   'Scheduling optimal times...',
   'Writing your plan...',
   'Building your strategy...',
@@ -258,34 +406,43 @@ function formatFullPlan(plan, displayDays) {
   return lines.join('\n').trim();
 }
 
-const MIX_DOT_EMOJI = {
-  Educational: '🔵',
-  Entertaining: '🟡',
-  Authority: '🟣',
-  Promotional: '🔴',
-  Personal: '🟢',
-  Post: '⚪',
-};
+// Soft, distinct index-based colors for content mix — always use by position so
+// no two entries ever share a color regardless of what labels the AI returns.
+const MIX_PALETTE = [
+  '#93C5FD', // soft blue
+  '#FCD34D', // soft amber
+  '#C4B5FD', // soft violet
+  '#6EE7B7', // soft emerald
+  '#FCA5A5', // soft rose
+  '#7DD3FC', // soft sky
+  '#FDB97D', // soft orange
+  '#A5B4FC', // soft indigo
+  '#86EFAC', // soft green
+  '#F0ABFC', // soft fuchsia
+];
 
-const MIX_BAR_COLOR = {
-  Educational: 'bg-blue-400',
-  Entertaining: 'bg-amber-400',
-  Authority: 'bg-purple-400',
-  Promotional: 'bg-rose-400',
-  Personal: 'bg-green-400',
-};
+const MIX_LABEL_LOWERCASE = new Set(['and', 'or', 'the', 'of', 'in', 'a', 'an', 'to', 'for', 'with', 'at', 'by', 'from']);
 
-function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
+function formatContentMixLabel(raw) {
+  return String(raw)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(' ')
+    .map((word, i) => {
+      const lower = word.toLowerCase();
+      if (i > 0 && MIX_LABEL_LOWERCASE.has(lower)) return lower;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+function PlanBuilderPostCard({ post, dayNum, dayLabel, userId, showToast }) {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [hashtagsExpanded, setHashtagsExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [savingVault, setSavingVault] = useState(false);
   const [savedVault, setSavedVault] = useState(false);
   const [copiedPost, setCopiedPost] = useState(false);
-
-  useEffect(() => {
-    if (batchSaved) setSavedVault(true);
-  }, [batchSaved]);
 
   const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || 'Platform';
   const borderC = PLATFORM_CARD_BORDER[platLabel] || '#64748b';
@@ -337,24 +494,25 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
     }
     setSavingVault(true);
     try {
-      const result = await saveToVault(userId, {
-        ...buildContentVaultPayload({
-          name: `${platLabel} — Day ${dayNum}`,
-          contentText: formatPostVaultBody(post),
-          contentType: 'plan',
-          toolSource: 'ai_plan_builder',
-          toolLabel: 'AI Plan Builder',
-          topic: (post.hook || '').slice(0, 80),
-          platform: post.platform,
-          description: 'Saved from AI Plan Builder',
-          metadata: {
-            day: dayNum,
-            contentType: post.contentType ?? '',
-            bestTime: post.postTime ?? '',
-          },
-        }),
-        type: 'plan_builder',
-      });
+      const postSnippet = sanitizeAIOutput(
+        String(post.hook || post.caption || post.topic || '').replace(/\s+/g, ' ').trim()
+      ).slice(0, 60);
+      const result = await saveToVault(userId, buildContentVaultPayload({
+        name: `${dayLabel} - ${platLabel}${postSnippet ? ` - ${postSnippet}` : ''}`,
+        contentText: formatPostVaultBody(post),
+        contentType: 'plan',
+        toolSource: 'ai_plan_builder',
+        toolLabel: 'AI Plan Builder',
+        topic: postSnippet,
+        platform: post.platform,
+        description: `AI Plan Builder | ${dayLabel} | ${platLabel}`,
+        metadata: {
+          day: dayNum,
+          day_label: dayLabel,
+          contentType: post.contentType ?? '',
+          bestTime: post.postTime ?? '',
+        },
+      }));
       if (result.success) setSavedVault(true);
       else showToast(result.error || 'Could not save to vault', 'error');
     } catch (e) {
@@ -480,7 +638,7 @@ function PlanBuilderPostCard({ post, dayNum, userId, showToast, batchSaved }) {
                     : 'bg-[#01BAD2] text-white hover:bg-[#0199b0]'
                 }`}
               >
-                {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to vault'}
+                {savedVault ? 'Saved ✓' : savingVault ? 'Saving…' : 'Save to Vault'}
               </button>
               {hasFullDetailsContent && (
                 <button
@@ -616,22 +774,32 @@ const isFailed = (job) => {
  */
 export default function AIPlanBuilder() {
   const { showToast } = useToast();
-  const { brandProfile, brandFetchComplete } = useBrand();
+  const { brandProfile, brandFetchComplete, isCreator } = useBrand();
   const { getTierDisplayName, userTier } = useSubscription();
-  const planUsage = useAIUsage('planBuilder');
+  // selectedPeriod is declared below — we switch the tracked feature key
+  // dynamically so 7-day vs 14-day runs are counted under the correct cap.
+  // (Hook is re-called each render; featureName change triggers a usage refresh.)
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
 
-  const [selectedGoal, setSelectedGoal] = useState(CONTENT_GOALS[0]);
+  const CONTENT_GOALS = isCreator ? CREATOR_GOALS : BUSINESS_GOALS;
+
+  const [selectedGoal, setSelectedGoal] = useState('');
+  useEffect(() => {
+    if (!brandFetchComplete) return;
+    setSelectedGoal(CONTENT_GOALS[0]);
+  }, [brandFetchComplete, isCreator]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedPeriod, setSelectedPeriod] = useState(7);
+  const planFeatureKey = selectedPeriod === 14 ? 'planBuilder14Day' : 'planBuilder7Day';
+  const planUsage = useAIUsage(planFeatureKey);
+  const canAccess14Day = ['pro', 'founder', 'builder'].includes(userTier);
+  const [show14DayUpgrade, setShow14DayUpgrade] = useState(false);
   const [postingFreqMode, setPostingFreqMode] = useState('5');
   const [postingFreqCustom, setPostingFreqCustom] = useState(5);
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [nicheInput, setNicheInput] = useState('');
   const [targetAudienceInput, setTargetAudienceInput] = useState('');
   const [brandVoiceToneInput, setBrandVoiceToneInput] = useState('');
-  const [contentPillars, setContentPillars] = useState([]);
-  const [pillarDraft, setPillarDraft] = useState('');
   const [followerRange, setFollowerRange] = useState('0-500');
   const [extraContext, setExtraContext] = useState('');
   const [optionalOpen, setOptionalOpen] = useState(false);
@@ -641,16 +809,14 @@ export default function AIPlanBuilder() {
   const [generationError, setGenerationError] = useState(null);
   const [editingInputs, setEditingInputs] = useState(true);
   const [savingAllVault, setSavingAllVault] = useState(false);
-  const [batchSavedKeys, setBatchSavedKeys] = useState(new Set());
-  const [allSavedCount, setAllSavedCount] = useState(0);
+  const [savedFullPlan, setSavedFullPlan] = useState(false);
 
   useEffect(() => {
-    setBatchSavedKeys(new Set());
-    setAllSavedCount(0);
+    setSavedFullPlan(false);
   }, [generatedPlan]);
 
   const [currentJobId, setCurrentJobId] = useState(null);
-  const [jobStatus, setJobStatus] = useState(null);
+  const [, setJobStatus] = useState(null);
   const [loadingPhraseIndex, setLoadingPhraseIndex] = useState(0);
 
   const resolvedPostingFrequency = useMemo(() => {
@@ -664,7 +830,10 @@ export default function AIPlanBuilder() {
     if (!brandFetchComplete) return;
     setNicheInput((prev) => (prev.trim() ? prev : (brandProfile?.niche || '')));
     setTargetAudienceInput((prev) => (prev.trim() ? prev : (brandProfile?.targetAudience ? String(brandProfile.targetAudience) : '')));
-    const tone = [brandProfile?.brandVoice, ...(brandProfile?.toneChips || [])].filter(Boolean).join(', ');
+    const displayVoice = (brandProfile?.toneChips || [])
+      .map((t) => TONE_CHIP_LABELS[t] || t)
+      .join(', ');
+    const tone = [brandProfile?.brandVoice, displayVoice].filter(Boolean).join(', ');
     setBrandVoiceToneInput((prev) => (prev.trim() ? prev : tone));
   }, [brandFetchComplete, brandProfile]);
 
@@ -704,7 +873,7 @@ export default function AIPlanBuilder() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('goal');
     setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, CONTENT_GOALS]);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -734,7 +903,7 @@ export default function AIPlanBuilder() {
       if (typeof planData === 'string') {
         try {
           planData = JSON.parse(planData);
-        } catch (_) {
+        } catch {
           /* leave as string — safeParse in planBuilderJobResult will handle it */
         }
       }
@@ -749,7 +918,7 @@ export default function AIPlanBuilder() {
       if (typeof payload === 'string') {
         try {
           payload = JSON.parse(payload);
-        } catch (_) {
+        } catch {
           /* leave as string — safeParse in planBuilderJobResult will handle it */
         }
       }
@@ -793,6 +962,7 @@ export default function AIPlanBuilder() {
     }
 
     let resolved = false;
+    let cancelled = false;
 
     const resolveJob = (job) => {
       if (resolved) return;
@@ -805,6 +975,13 @@ export default function AIPlanBuilder() {
       resolved = true;
       handleJobFailedRef.current(error);
     };
+
+    // Tracks the most recent status we've observed for this job from
+    // either Realtime or the polling fallback. Used *only* by the
+    // 5-min soft timeout below to pick between a "never started"
+    // (queued) and "still generating" (running/unknown) message.
+    // Never influences isFailed/isComplete gating.
+    let latestStatus = null;
 
     const channel = supabase
       .channel(`plan-job-${jobId}`)
@@ -821,6 +998,7 @@ export default function AIPlanBuilder() {
           console.log('[PlanBuilder] Realtime UPDATE:', job.status, 'progress:', job.progress, JSON.stringify(job));
 
           setJobStatus(job.status);
+          latestStatus = job.status;
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
@@ -832,27 +1010,41 @@ export default function AIPlanBuilder() {
           }
         }
       )
-      .subscribe((status, err) => {
+      .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('[PlanBuilder] Realtime subscribed for job', jobId);
         }
       });
 
-    let pollIntervalId = null;
-    const pollStartId = window.setTimeout(() => {
-      pollIntervalId = window.setInterval(async () => {
-        if (resolved) return;
-        try {
-          const { data: job, error } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('id', jobId)
-            .maybeSingle();
+    // Bounded, capped-exponential polling fallback. Realtime
+    // (postgres_changes above) remains the primary path; this only
+    // recovers from a missed UPDATE event. Cadence mirrors the
+    // SubscriptionContext retry philosophy (small steps, capped).
+    // The 5-minute soft timeout below is the hard bound and is
+    // unchanged by this schedule.
+    const POLL_BACKOFF_MS = [2000, 3000, 5000, 8000, 13000];
+    const POLL_BACKOFF_CAP_MS = 15000;
+    const getNextPollDelay = (attempt) =>
+      POLL_BACKOFF_MS[attempt] ?? POLL_BACKOFF_CAP_MS;
 
-          if (error) {
-            return;
-          }
-          if (!job) return;
+    let pollTimerId = null;
+    let pollAttempt = 0;
+
+    const runPoll = async () => {
+      if (resolved || cancelled) return;
+      try {
+        const { data: job, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', jobId)
+          .maybeSingle();
+
+        // Must bail out after await: cleanup clears the next timer while this
+        // invocation is suspended, so chaining would otherwise continue forever.
+        if (cancelled || resolved) return;
+
+        if (!error && job) {
+          latestStatus = job.status;
 
           if (isFailed(job)) {
             rejectJob(job.error || 'Plan generation failed');
@@ -861,22 +1053,42 @@ export default function AIPlanBuilder() {
 
           if (isComplete(job)) {
             resolveJob(job);
+            return;
           }
-        } catch (e) {
-          console.error('[PlanBuilder] Poll error', e);
         }
-      }, 2000);
+      } catch (e) {
+        console.error('[PlanBuilder] Poll error', e);
+      }
+
+      if (resolved || cancelled) return;
+      pollAttempt += 1;
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(pollAttempt));
+    };
+
+    const pollStartId = window.setTimeout(() => {
+      if (cancelled || resolved) return;
+      pollTimerId = window.setTimeout(runPoll, getNextPollDelay(0));
     }, 2000);
 
     const softTimeoutId = window.setTimeout(() => {
-      if (resolved) return;
-      rejectJob('This is taking longer than expected. Your plan may still be generating — check back in a few minutes.');
+      if (cancelled || resolved) return;
+      // Differentiate "never picked up" (still queued after 5 min) from
+      // "picked up but slow" (running or unknown). Only the queued
+      // branch uses a new message; every other case preserves the
+      // existing string exactly, so UX regressions for already-running
+      // jobs are impossible by construction.
+      const stalledQueuedMessage =
+        "Your plan hasn't started yet — our queue is taking longer than usual. Please try again in a few minutes.";
+      const stalledRunningMessage =
+        'This is taking longer than expected. Your plan may still be generating — check back in a few minutes.';
+      rejectJob(latestStatus === 'queued' ? stalledQueuedMessage : stalledRunningMessage);
     }, 300000);
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       window.clearTimeout(pollStartId);
-      if (pollIntervalId != null) window.clearInterval(pollIntervalId);
+      if (pollTimerId != null) window.clearTimeout(pollTimerId);
       window.clearTimeout(softTimeoutId);
     };
   }, [currentJobId]);
@@ -885,25 +1097,6 @@ export default function AIPlanBuilder() {
     setSelectedPlatforms((prev) =>
       prev.includes(platformName) ? prev.filter((p) => p !== platformName) : [...prev, platformName]
     );
-  };
-
-  const addPillar = () => {
-    const t = pillarDraft.trim();
-    if (!t) return;
-    if (contentPillars.length >= 5) {
-      showToast('Maximum 5 content pillars', 'warning');
-      return;
-    }
-    if (contentPillars.some((p) => p.toLowerCase() === t.toLowerCase())) {
-      setPillarDraft('');
-      return;
-    }
-    setContentPillars((p) => [...p, t]);
-    setPillarDraft('');
-  };
-
-  const removePillar = (idx) => {
-    setContentPillars((p) => p.filter((_, i) => i !== idx));
   };
 
   const resetToForm = () => {
@@ -917,17 +1110,18 @@ export default function AIPlanBuilder() {
       showToast('Please select at least one platform', 'error');
       return;
     }
-    if (contentPillars.length < 1) {
-      showToast('Add at least one content pillar', 'error');
+
+    // Server-side enforcement (FIX 6) also rejects this, but fail fast in UI.
+    if (selectedPeriod === 14 && !canAccess14Day) {
+      showToast('14-day plans require Pro or above. Upgrade to unlock.', 'warning');
       return;
     }
 
-    if (!planUsage.canGenerate) {
-      showToast("You've reached your monthly Plan Builder limit. Resets on the 1st.", 'warning');
+    const gate = await planUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Plan Builder limit.", 'warning');
       return;
     }
-
-    await planUsage.trackFeatureUsage({ platforms: selectedPlatforms, goal: selectedGoal });
 
     setGenerationError(null);
     setIsGenerating(true);
@@ -962,6 +1156,15 @@ export default function AIPlanBuilder() {
         })
         .join('\n\n');
 
+      const locationFull = (() => {
+        const parts = [
+          brandProfile?.city,
+          brandProfile?.locationState,
+          brandProfile?.country && brandProfile.country !== 'US' ? brandProfile.country : null,
+        ].filter(Boolean);
+        return parts.length ? parts.join(', ') : null;
+      })();
+
       const { jobId: createdJobId, error: createError } = await createJobDirectly({
         contentGoal: selectedGoal,
         timePeriod: selectedPeriod,
@@ -969,8 +1172,7 @@ export default function AIPlanBuilder() {
         platformFocus: platformsArray,
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
-        brandVoiceTone: brandVoiceToneInput.trim(),
-        contentPillars,
+        brandVoiceTone: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         followerRange,
         extraContext: extraContext.trim() || null,
         trendContext,
@@ -978,6 +1180,24 @@ export default function AIPlanBuilder() {
         businessName: brandProfile?.businessName || brandProfile?.brandName || '',
         brandName: brandProfile?.brandName || '',
         website: brandProfile?.website || '',
+        profileType: brandProfile?.profileType || 'brand_business',
+        firstName: brandProfile?.firstName || null,
+        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
+        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
+        isLocalBusiness: brandProfile?.isLocalBusiness || false,
+        city: brandProfile?.city || null,
+        locationState: brandProfile?.locationState || null,
+        country: brandProfile?.country || 'US',
+        locationFull,
+        audienceLocationType: brandProfile?.audienceLocationType || null,
+        audiencePainPoint: brandProfile?.audiencePainPoint || null,
+        audienceActionTrigger: brandProfile?.audienceActionTrigger || null,
+        toneChips: brandProfile?.toneChips || [],
+        writingStyle: brandProfile?.writingStyle || null,
+        primaryOffer: brandProfile?.primaryOffer || null,
+        conversionGoal: brandProfile?.conversionGoal || null,
+        subNiche: brandProfile?.subNiche || null,
+        followerCount: brandProfile?.followerCount || null,
       });
 
       if (createError || !createdJobId) {
@@ -1001,30 +1221,64 @@ export default function AIPlanBuilder() {
       });
 
       const brandBlock = buildBrandContext(brandProfile, { first_name: user?.user_metadata?.first_name });
-      const { success: webhookSuccess, error: webhookError } = await triggerN8nWebhook(jobId, {
+      // IMPORTANT: This field must be mapped to the AI Plan Builder n8n
+      // workflow system message node. Verify in n8n that the AI Agent
+      // system message references: {{ $json.brand_story_context }}
+      // Without this, getBrandStoryContext output never reaches the model.
+      const brandStoryContext = getBrandStoryContext(brandProfile); // HUTTLE AI: userBrandType-based content philosophy
+      const {
+        success: webhookSuccess,
+        error: webhookError,
+        terminal: webhookTerminal,
+      } = await triggerN8nWebhook(jobId, {
         contentGoal: selectedGoal,
         timePeriod: String(selectedPeriod),
         postingFrequency: resolvedPostingFrequency,
         platformFocus: platformsArray,
         niche: nicheInput.trim() || brandProfile?.niche || 'general',
         targetAudience: targetAudienceInput.trim(),
-        brandVoiceTone: brandVoiceToneInput.trim(),
-        contentPillars,
+        brandVoiceTone: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         followerRange,
         extraContext: extraContext.trim() || null,
-        brandVoice: brandVoiceToneInput.trim(),
+        brandVoice: resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile),
         brandContext: brandBlock,
+        brandStoryContext, // HUTTLE AI: userBrandType-based content philosophy
         trendContext,
         platform_rules_block: platformRulesBlock,
         platforms_list: platformsArray.join(', '),
+        profileType: brandProfile?.profileType,
+        firstName: brandProfile?.firstName,
+        businessPrimaryGoal: brandProfile?.businessPrimaryGoal || null,
+        creatorMonetizationPath: brandProfile?.creatorMonetizationPath || null,
+        isLocalBusiness: brandProfile?.isLocalBusiness || false,
+        city: brandProfile?.city || null,
+        audienceLocationType: brandProfile?.audienceLocationType || 'local',
+        contentMixOverride: brandProfile?.contentMix || GOAL_CONTENT_MIX_HINTS[selectedGoal] || null,
+        audiencePainPoint: brandProfile?.audiencePainPoint || null,
+        audienceActionTrigger: brandProfile?.audienceActionTrigger || null,
+        toneChips: brandProfile?.toneChips || [],
+        writingStyle: brandProfile?.writingStyle || null,
+        primaryOffer: brandProfile?.primaryOffer || null,
+        conversionGoal: brandProfile?.conversionGoal || null,
+        subNiche: brandProfile?.subNiche || null,
+        followerCount: brandProfile?.followerCount || null,
       });
 
       if (!webhookSuccess) {
         console.error('[PlanBuilder] n8n webhook trigger failed:', webhookError);
+        if (webhookTerminal) {
+          const failMsg = webhookError || 'Plan generation could not start. Please try again later.';
+          setGenerationError(failMsg);
+          showToast(failMsg, 'error');
+          setIsGenerating(false);
+          setCurrentJobId(null);
+          return;
+        }
+
         try {
           const { generateContentPlan } = await import('../services/grokAPI');
           const grokResult = await generateContentPlan(
-            `${selectedGoal} on ${platformsArray.join(', ')}. Brand voice: ${brandVoiceToneInput || 'engaging'}`,
+            `${selectedGoal} on ${platformsArray.join(', ')}. Brand voice: ${resolveBrandVoiceToneForPayload(brandVoiceToneInput, brandProfile) || 'engaging'}`,
             brandProfile,
             selectedPeriod,
             { platformRulesBlock }
@@ -1054,6 +1308,7 @@ export default function AIPlanBuilder() {
       }
 
       showToast('Your AI plan is being generated...', 'info');
+      await planUsage.refreshUsage();
     } catch (error) {
       console.error('handleGeneratePlan error:', error);
       setIsGenerating(false);
@@ -1077,19 +1332,55 @@ export default function AIPlanBuilder() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 font-plan-body text-[#0C1220] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-12 max-w-full overflow-x-hidden">
-      <div className="mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
-        <div className="flex items-center gap-3 md:gap-4 py-2">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm">
-            <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
+      <div className="pt-6 md:pt-0 mb-5 pb-1 md:mb-6 md:pb-1.5 max-w-7xl">
+        <div className="flex items-start justify-between gap-3 md:gap-4 py-2">
+          <div className="flex items-center gap-3 md:gap-4 min-w-0">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white flex items-center justify-center border border-gray-200/80 shadow-sm flex-shrink-0">
+              <Wand2 className="w-6 h-6 md:w-7 md:h-7 text-[#01BAD2]" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-plan-display font-bold text-[#0C1220]">
+                AI Plan Builder
+              </h1>
+              <p className="text-sm md:text-base text-gray-500 font-plan-body">
+                {isCreator
+                  ? 'Plan content that grows your personal brand'
+                  : 'Generate your content strategy'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-plan-display font-bold text-[#0C1220]">
-              AI Plan Builder
-            </h1>
-            <p className="text-sm md:text-base text-gray-500 font-plan-body">
-              Generate your content strategy
-            </p>
+          <div className="hidden sm:flex flex-col items-end gap-1 flex-shrink-0 mt-2">
+            <RunCapMeter
+              featureKey="planBuilder7Day"
+              tier={userTier}
+              featureLabel="7-day plans"
+              compact
+            />
+            {canAccess14Day && (
+              <RunCapMeter
+                featureKey="planBuilder14Day"
+                tier={userTier}
+                featureLabel="14-day plans"
+                compact
+              />
+            )}
           </div>
+        </div>
+        <div className="sm:hidden mt-2 flex flex-col gap-1">
+          <RunCapMeter
+            featureKey="planBuilder7Day"
+            tier={userTier}
+            featureLabel="7-day plans"
+            compact
+          />
+          {canAccess14Day && (
+            <RunCapMeter
+              featureKey="planBuilder14Day"
+              tier={userTier}
+              featureLabel="14-day plans"
+              compact
+            />
+          )}
         </div>
       </div>
 
@@ -1166,18 +1457,57 @@ export default function AIPlanBuilder() {
                     Time Period
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {[7, 14].map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={() => setSelectedPeriod(d)}
-                        className={`${pillBase} px-4 py-2 min-w-[100px] flex-1 sm:flex-none ${selectedPeriod === d ? pillActive : pillInactive}`}
-                      >
-                        {d} Days
-                      </button>
-                    ))}
+                    {[7, 14].map((d) => {
+                      const locked = d === 14 && !canAccess14Day;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          disabled={isGenerating}
+                          onClick={() => {
+                            if (locked) {
+                              setShow14DayUpgrade(true);
+                              return;
+                            }
+                            setShow14DayUpgrade(false);
+                            setSelectedPeriod(d);
+                          }}
+                          aria-disabled={locked}
+                          className={`${pillBase} relative px-4 py-2 min-w-[100px] flex-1 sm:flex-none ${
+                            locked
+                              ? 'border border-gray-200 bg-gray-50 text-gray-400 opacity-70 hover:bg-gray-50'
+                              : selectedPeriod === d
+                                ? pillActive
+                                : pillInactive
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            {locked && <Lock className="h-3.5 w-3.5" />}
+                            {d} Days
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {show14DayUpgrade && !canAccess14Day && (
+                    <div className="mt-2 rounded-lg border border-huttle-primary/30 bg-huttle-primary/5 p-3">
+                      <div className="flex items-start gap-2">
+                        <Sparkles className="h-4 w-4 mt-0.5 text-huttle-primary flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">14-Day Plans — Pro</p>
+                          <p className="mt-0.5 text-xs text-gray-600">
+                            Plan two full weeks of content at once. Upgrade to unlock.
+                          </p>
+                          <Link
+                            to="/billing"
+                            className="mt-2 inline-flex items-center gap-1 rounded-md bg-huttle-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-huttle-primary-dark"
+                          >
+                            Upgrade Now
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
@@ -1297,74 +1627,7 @@ export default function AIPlanBuilder() {
                 </div>
               </StepSection>
 
-              <StepSection n={4} title="Content Pillars">
-                <p className="text-xs text-gray-500">
-                  3–5 themes you post about (min 1, max 5).
-                </p>
-                <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-[#01BAD2]/25 focus-within:border-[#01BAD2]">
-                  <input
-                    type="text"
-                    value={pillarDraft}
-                    disabled={isGenerating}
-                    onChange={(e) => setPillarDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addPillar())}
-                    placeholder="Add a pillar..."
-                    className="flex-1 min-w-0 border-0 px-4 py-2.5 text-sm focus:ring-0"
-                  />
-                  <button
-                    type="button"
-                    disabled={isGenerating}
-                    onClick={addPillar}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center border-l border-gray-200 bg-gray-50 text-[#01BAD2] hover:bg-[#01BAD2]/10"
-                    aria-label="Add pillar"
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-1 mb-0">
-                  {PILLAR_QUICK_ADD.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      disabled={isGenerating}
-                      onClick={() => {
-                        if (contentPillars.length >= 5) {
-                          showToast('Maximum 5 content pillars', 'warning');
-                          return;
-                        }
-                        if (contentPillars.some((p) => p.toLowerCase() === s.toLowerCase())) return;
-                        setContentPillars((prev) => [...prev, s]);
-                      }}
-                      className="text-xs font-medium text-[#01BAD2] underline-offset-2 hover:underline"
-                    >
-                      + {s}
-                    </button>
-                  ))}
-                </div>
-                {contentPillars.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {contentPillars.map((p, i) => (
-                      <span
-                        key={`${p}-${i}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-[#01BAD2]/20 bg-[#01BAD2]/8 px-3 py-1 text-sm text-[#0C1220]"
-                      >
-                        {p}
-                        <button
-                          type="button"
-                          disabled={isGenerating}
-                          className="rounded-full p-0.5 text-gray-500 hover:bg-[#01BAD2]/15 hover:text-[#0C1220]"
-                          onClick={() => removePillar(i)}
-                          aria-label={`Remove ${p}`}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </StepSection>
-
-              <StepSection n={5} title="Follower Range">
+              <StepSection n={4} title="Follower Range">
                 <div className="relative">
                   <select
                     value={followerRange}
@@ -1382,7 +1645,7 @@ export default function AIPlanBuilder() {
                 </div>
               </StepSection>
 
-              <StepSection n={6} title="Optional Context">
+              <StepSection n={5} title="Optional Context">
                 <button
                   type="button"
                   disabled={isGenerating}
@@ -1410,6 +1673,7 @@ export default function AIPlanBuilder() {
 
             <div className="border-t border-gray-200 pt-6 space-y-3">
               <p className="text-center text-sm text-gray-600 font-plan-body">{generateButtonSummary}</p>
+              <GenerationAction>
               <button
                 type="button"
                 onClick={handleGeneratePlan}
@@ -1430,6 +1694,7 @@ export default function AIPlanBuilder() {
                   </>
                 )}
               </button>
+              </GenerationAction>
               {isGenerating ? (
                 <p className="text-center text-sm text-gray-400">
                   This takes 60–90 seconds. Grab a coffee ☕
@@ -1518,17 +1783,13 @@ export default function AIPlanBuilder() {
           overview?.strategy ||
           'Your content plan';
 
-        const mix = overview.contentMix && typeof overview.contentMix === 'object' ? overview.contentMix : {};
-        const mixEntries = [
-          ['Educational', mix.educational],
-          ['Entertaining', mix.entertaining],
-          ['Authority', mix.authority],
-          ['Promotional', mix.promotional],
-          ['Personal', mix.personal],
-        ].filter(([, val]) => Number(val) > 0);
-        const mixTotal = mixEntries.reduce((s, [, n]) => s + Number(n), 0) || 1;
+        const mix = resolvePlanContentMix(
+          overview.contentMix,
+          plan.summary?.contentMix
+        );
+        const mixEntries = Object.entries(mix).filter(([, val]) => Number(val) > 0);
 
-        const keyThemes = extractKeyThemesForDisplay(plan, contentPillars);
+        const keyThemes = extractKeyThemesForDisplay(plan, []);
         const optimalMap = extractOptimalTimesMap(plan);
         const filteredOptimalEntries = optimalMap
           ? Object.entries(optimalMap).filter(([plat]) => {
@@ -1557,7 +1818,7 @@ export default function AIPlanBuilder() {
             .then(() => showToast('Full plan copied to clipboard', 'success'));
         };
 
-        const handleSaveAllVault = async () => {
+        const handleSaveFullPlan = async () => {
           if (!user?.id) {
             showToast('Sign in to save to your vault', 'warning');
             return;
@@ -1567,61 +1828,51 @@ export default function AIPlanBuilder() {
             return;
           }
           setSavingAllVault(true);
-          let saved = 0;
-          const newKeys = new Set();
           try {
-            for (let di = 0; di < displayDays.length; di += 1) {
-              const day = displayDays[di];
-              const dayNum = Number(day?.day) || di + 1;
-              const posts = getDayPosts(day);
-              for (let pi = 0; pi < posts.length; pi += 1) {
-                const post = posts[pi];
-                const platLabel = normalizePlatformLabelForIcon(post.platform) || post.platform || '';
-                const result = await saveToVault(user.id, {
-                  ...buildContentVaultPayload({
-                    name: `${platLabel} — Day ${dayNum} (${pi + 1})`,
-                    contentText: formatPostVaultBody(post),
-                    contentType: 'plan',
-                    toolSource: 'ai_plan_builder',
-                    toolLabel: 'AI Plan Builder',
-                    topic: (post.hook || '').slice(0, 80),
-                    platform: post.platform,
-                    description: 'Saved from AI Plan Builder',
-                    metadata: {
-                      day: dayNum,
-                      contentType: post.contentType ?? '',
-                      bestTime: post.postTime ?? '',
-                    },
-                  }),
-                  type: 'plan_builder',
-                });
-                if (result.success) {
-                  saved += 1;
-                  newKeys.add(`${di}-${pi}`);
-                }
-              }
+            const dateLabels = displayDays
+              .map((day, index) => getDayDisplayLabel(day, index))
+              .filter(Boolean);
+            const dateRangeLabel = dateLabels.length > 1
+              ? `${dateLabels[0]} to ${dateLabels[dateLabels.length - 1]}`
+              : (dateLabels[0] || `${selectedPeriod} Days`);
+            const result = await saveToVault(user.id, buildContentVaultPayload({
+              name: `${niche || 'Content'} Plan - ${dateRangeLabel}`,
+              contentText: formatFullPlan(plan, displayDays),
+              contentType: 'plan',
+              toolSource: 'ai_plan_builder',
+              toolLabel: 'AI Plan Builder',
+              topic: niche || planTitle,
+              platform: '',
+              description: `AI Plan Builder | ${dateRangeLabel} | ${subtitlePlatforms}`,
+              metadata: {
+                goal: selectedGoal,
+                period_days: selectedPeriod,
+                total_posts: totalPosts,
+                platforms: platformList,
+                user_id: user.id,
+                saved_at: new Date().toISOString(),
+                date_range: dateRangeLabel,
+              },
+            }));
+            if (!result.success) {
+              throw new Error(result.error || 'Could not save full plan');
             }
-            if (saved > 0) {
-              setAllSavedCount(saved);
-              setBatchSavedKeys(newKeys);
-              showToast(`${saved} posts saved to your Content Vault`, 'success');
-            } else {
-              showToast('Could not save posts to vault', 'error');
-            }
+            setSavedFullPlan(true);
+            showToast('Saved to vault ✓', 'success');
           } catch (err) {
-            console.error('[AIPlanBuilder] save all vault:', err);
-            showToast('Could not save posts to vault', 'error');
+            console.error('[AIPlanBuilder] save full plan vault:', err);
+            showToast('Could not save full plan to vault', 'error');
           } finally {
             setSavingAllVault(false);
           }
         };
 
-        const saveAllBtnClass = allSavedCount > 0
+        const saveAllBtnClass = savedFullPlan
           ? 'rounded-xl bg-green-50 border border-green-200 px-4 py-2.5 text-sm font-semibold text-green-700'
           : 'rounded-xl bg-[#01BAD2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0199b0] disabled:opacity-60';
-        const saveAllBtnText = allSavedCount > 0
-          ? `Saved ${allSavedCount} posts ✓`
-          : savingAllVault ? 'Saving…' : 'Save all to vault';
+        const saveAllBtnText = savedFullPlan
+          ? 'Saved ✓'
+          : savingAllVault ? 'Saving…' : 'Save Full Plan';
 
         return (
           <>
@@ -1639,7 +1890,7 @@ export default function AIPlanBuilder() {
                         {sanitizeAIOutput(planTitle)}
                       </h2>
                       <p className="mt-2 text-sm text-gray-500">
-                        {selectedPeriod}-Day {subtitlePlatforms} Strategy{niche ? ` for ${niche}` : ''}
+                        {selectedPeriod}-Day {subtitlePlatforms} {isCreator ? 'Creator Plan' : 'Strategy'}{niche ? ` for ${niche}` : ''}
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700">
@@ -1664,8 +1915,8 @@ export default function AIPlanBuilder() {
                       {user?.id && (
                         <button
                           type="button"
-                          onClick={handleSaveAllVault}
-                          disabled={savingAllVault || allSavedCount > 0 || totalPosts === 0}
+                          onClick={handleSaveFullPlan}
+                          disabled={savingAllVault || savedFullPlan || totalPosts === 0}
                           className={saveAllBtnClass}
                         >
                           {saveAllBtnText}
@@ -1686,22 +1937,31 @@ export default function AIPlanBuilder() {
                           Content mix
                         </p>
                         <div className="space-y-1 text-xs text-gray-800">
-                          {mixEntries.map(([label, val]) => (
-                            <p key={label}>
-                              <span>{MIX_DOT_EMOJI[label] || '⚪'}</span>{' '}
-                              <span className="font-medium">{label}</span>{' '}
-                              <span className="text-gray-500">{Math.round((Number(val) / mixTotal) * 100)}%</span>
-                            </p>
-                          ))}
+                          {mixEntries.map(([label, val], idx) => {
+                            const displayLabel = formatContentMixLabel(label);
+                            const color = MIX_PALETTE[idx % MIX_PALETTE.length];
+                            return (
+                              <p key={label} className="flex items-center gap-1.5">
+                                <span
+                                  className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <span className="font-medium">{displayLabel}</span>{' '}
+                                <span className="text-gray-500">{Math.round(Number(val))}%</span>
+                              </p>
+                            );
+                          })}
                         </div>
                         <div className="flex rounded-full overflow-hidden h-2 w-full mt-3">
-                          {mixEntries.map(([label, val]) => (
-                            <div
-                              key={label}
-                              style={{ width: `${Math.round((Number(val) / mixTotal) * 100)}%` }}
-                              className={MIX_BAR_COLOR[label] || 'bg-gray-300'}
-                            />
-                          ))}
+                          {mixEntries.map(([label, val], idx) => {
+                            const color = MIX_PALETTE[idx % MIX_PALETTE.length];
+                            return (
+                              <div
+                                key={label}
+                                style={{ width: `${Math.round(Number(val))}%`, backgroundColor: color }}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1791,9 +2051,9 @@ export default function AIPlanBuilder() {
                             <PlanBuilderPostCard
                               post={post}
                               dayNum={dayNum}
+                              dayLabel={getDayDisplayLabel(day, di)}
                               userId={user?.id}
                               showToast={showToast}
-                              batchSaved={batchSavedKeys.has(`${di}-${pi}`)}
                             />
                           </Motion.div>
                         ))}
@@ -1802,6 +2062,10 @@ export default function AIPlanBuilder() {
                   );
                 })}
               </div>
+
+              <p className="text-xs text-gray-400 text-center pt-2">
+                AI-generated suggestions. Results may vary — review before publishing.
+              </p>
             </div>
 
             {/* Sticky Bottom Bar */}
@@ -1828,10 +2092,10 @@ export default function AIPlanBuilder() {
                   {user?.id && (
                     <button
                       type="button"
-                      onClick={handleSaveAllVault}
-                      disabled={savingAllVault || allSavedCount > 0 || totalPosts === 0}
+                      onClick={handleSaveFullPlan}
+                      disabled={savingAllVault || savedFullPlan || totalPosts === 0}
                       className={
-                        allSavedCount > 0
+                        savedFullPlan
                           ? 'rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm font-semibold text-green-700'
                           : 'rounded-xl bg-[#01BAD2] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0199b0] disabled:opacity-60'
                       }

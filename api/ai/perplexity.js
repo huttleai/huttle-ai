@@ -5,7 +5,7 @@
  * All AI requests go through this proxy instead of exposing keys in client-side code.
  * 
  * Required environment variables:
- * - PERPLEXITY_API_KEY: Your Perplexity API key (NOT prefixed with VITE_)
+ * - PERPLEXITY_API_KEY: Your Perplexity API key (server-side only; do not use VITE_ vars)
  *
  * DEV NOTE — common failures:
  * - 401 from Perplexity: invalid PERPLEXITY_API_KEY → set in .env (see .env.example; server loads via dotenv in local-api-server).
@@ -15,13 +15,17 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { getGrokParams } from '../../src/config/grokConfig.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
-  process.env.PERPLEXITY_API_KEY ||
-  process.env.VITE_PERPLEXITY_API_KEY;
+  typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
+    ? process.env.PERPLEXITY_API_KEY.trim()
+    : null;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 
 /** Perplexity chat models — resolve only via {@link resolveModelFromRequest}; do not hardcode elsewhere in this file. */
@@ -136,9 +140,10 @@ function validateTrendingCacheWritePayload(cachePayload) {
 }
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user (more restrictive for Perplexity)
@@ -276,7 +281,9 @@ async function getCachedPerplexityResult(cacheConfig, cacheAccess) {
 
   return {
     resultData: data.payload ?? data.result_data,
-    generatedAt: data.generated_at,
+    // Prod schema truth: niche_content_cache has generated_date and cache_date
+    // (no generated_at, and created_at is unconfirmed — do not depend on it).
+    generatedAt: data.generated_date || data.cache_date,
   };
 }
 
@@ -305,17 +312,44 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
   const now = new Date();
   const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
   const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+  // Prod schema truth (verified in live DB): niche_content_cache columns are
+  // cache_key, niche, platform, feature, user_type, result_data, cache_date,
+  // generated_date, expires_at, payload, user_id, hit_count. There is NO
+  // generated_at, and created_at is unconfirmed — never write or read those.
+  const cacheDateKey = now.toISOString().split('T')[0];
   const cacheRow = {
     cache_key: cacheConfig.key,
     niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'trending',
+    cache_date: cacheDateKey,
+    generated_date: cacheDateKey,
     payload: cachePayload,
-    generated_at: now.toISOString(),
+    result_data: cachePayload,
     expires_at: expiresAt.toISOString(),
     hit_count: 0,
     user_id: cacheAccess?.userId || null,
   };
+
+  const VALID_CACHE_COLUMNS = new Set([
+    'id', 'cache_key', 'feature', 'niche', 'platform',
+    'user_type', 'cache_date', 'generated_date', 'payload', 'hit_count',
+    'expires_at', 'user_id', 'result_data',
+  ]);
+
+  const invalidFields = Object.keys(cacheRow).filter(
+    (k) => !VALID_CACHE_COLUMNS.has(k),
+  );
+
+  if (invalidFields.length > 0) {
+    console.error(
+      '[NicheCache] WRITE ABORTED — payload contains invalid columns:',
+      invalidFields,
+      '| These columns do not exist in niche_content_cache and will',
+      'cause a 400. Remove them from the payload.',
+    );
+    return null;
+  }
 
   const scopedLookupQuery = applyCacheUserScope(
     supabase
@@ -582,50 +616,25 @@ export default async function handler(req, res) {
     const requestedCache = req.body?.cache;
     const requireRealtime = Boolean(req.body?.requireRealtime);
 
-    // If Perplexity key is still missing after VITE_ fallback, try Grok as a last resort
-    if (!PERPLEXITY_API_KEY) {
-      if (requestedCache?.key || requireRealtime) {
-        logError('perplexity.missing_api_key_for_cached_dashboard_request');
-        return res.status(500).json({ error: 'Perplexity is required for live research requests.' });
-      }
+    if (!PERPLEXITY_API_KEY && (requestedCache?.key || requireRealtime)) {
+      logError('perplexity.missing_api_key_for_cached_dashboard_request');
+      return res.status(500).json({ error: 'Perplexity is required for live research requests.' });
+    }
 
-      logError('perplexity.missing_api_key_using_grok_fallback');
-      const grokKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
-      if (!grokKey) {
-        return res.status(500).json({ error: 'AI service not configured' });
-      }
-      const { messages: fallbackMessages, temperature: fallbackTemp = 0.2 } = req.body;
-      if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
-        return res.status(400).json({ error: 'Messages array is required' });
-      }
-      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: 'grok-3-fast' });
-      const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
-        body: JSON.stringify({
-          model: 'grok-3-fast',
-          messages: normalizeMessagesForUpstream(fallbackMessages),
-          temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2),
-        }),
+    if (!supabase) {
+      logError('perplexity.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
       });
-      devAiProxyLog('perplexity (no key) ← xAI Grok fallback response', { status: grokRes.status, ok: grokRes.ok });
-      if (!grokRes.ok) {
-        const grokErrText = await grokRes.text();
-        console.error('[PERPLEXITY GROK-FALLBACK RAW]', grokRes.status, grokErrText); // TODO: remove after QA
-        return res.status(502).json({ error: 'AI service error. Please try again.' });
-      }
-      const grokData = await grokRes.json();
-      return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
     }
 
     // Authenticate user
     let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
+    const token = parseBearerToken(req.headers.authorization);
+
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (!error && user) {
         userId = user.id;
       }
@@ -657,6 +666,15 @@ export default async function handler(req, res) {
       });
     }
 
+    const billingFeature = resolveRouteBillingFeature('perplexity', req);
+    const usageGate = await assertCanGenerate(supabase, {
+      userId,
+      featureKey: billingFeature,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
+    }
+
     // Extract request parameters
     const { messages, temperature = 0.2, cache, web_search_options: webSearchOptions } = req.body;
     const cacheAccess = buildCacheAccessContext(req.body, userId);
@@ -678,6 +696,7 @@ export default async function handler(req, res) {
           usage: { cached: true },
           cached: true,
           generatedAt: cachedResult.generatedAt,
+          billing: { feature: billingFeature, creditsCharged: 0 },
         });
       }
     }
@@ -707,6 +726,53 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
     }
 
+    const normalizedMessages = normalizeMessagesForUpstream(messages);
+
+    if (!PERPLEXITY_API_KEY) {
+      logError('perplexity.missing_api_key_using_grok_fallback');
+      const grokKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
+      if (!grokKey) {
+        return res.status(500).json({ error: 'AI service not configured' });
+      }
+      const grokFallbackParams = getGrokParams('perplexityGrokFallback');
+      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: grokFallbackParams.model });
+      const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
+        body: JSON.stringify({
+          ...grokFallbackParams,
+          messages: normalizedMessages,
+          temperature: safeTemperature,
+        }),
+      });
+      devAiProxyLog('perplexity (no key) ← xAI Grok fallback response', { status: grokRes.status, ok: grokRes.ok });
+      if (!grokRes.ok) {
+        const grokErrText = await grokRes.text();
+        console.error('[PERPLEXITY GROK-FALLBACK RAW]', grokRes.status, grokErrText);
+        return res.status(502).json({ error: 'AI service error. Please try again.' });
+      }
+      const grokData = await grokRes.json();
+      const fallbackUsage = await recordGenerationUsage(supabase, {
+        userId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'perplexity', fallback: 'grok' },
+      });
+      if (!fallbackUsage.ok) {
+        logError('perplexity.usage_record_failed', { userId, error: fallbackUsage.error });
+      }
+      return res.status(200).json({
+        success: true,
+        content: grokData.choices?.[0]?.message?.content || '',
+        citations: [],
+        usage: grokData.usage,
+        billing: {
+          feature: billingFeature,
+          creditsCharged: fallbackUsage.creditsLogged,
+        },
+      });
+    }
+
     if (cache?.key) {
       console.log(`[Cache MISS] Fresh Perplexity fetch:
   niche: ${cache.niche || 'small business'}
@@ -716,7 +782,6 @@ export default async function handler(req, res) {
     }
 
     // Forward request to Perplexity API
-    const normalizedMessages = normalizeMessagesForUpstream(messages);
     devAiProxyLog('perplexity → Perplexity request', { model: safeModel, messageCount: normalizedMessages.length });
 
     console.log('[Perplexity] Request', {
@@ -869,6 +934,16 @@ export default async function handler(req, res) {
     if (shouldPersistCache) {
       await setCachedPerplexityResult(cache, cachePayload, cacheAccess);
     }
+
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'perplexity' },
+    });
+    if (!usageRecord.ok) {
+      logError('perplexity.usage_record_failed', { userId, error: usageRecord.error });
+    }
     
     return res.status(200).json({
       success: true,
@@ -878,6 +953,10 @@ export default async function handler(req, res) {
       usage: data.usage,
       cached: false,
       generatedAt: new Date().toISOString(),
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

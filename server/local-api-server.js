@@ -44,8 +44,19 @@ app.use(cors({
   allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization']
 }));
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+function isStripeWebhookPath(req) {
+  const path = (req.path || req.originalUrl || '').split('?')[0];
+  return path === '/api/stripe-webhook';
+}
+
+app.use((req, res, next) => {
+  if (isStripeWebhookPath(req)) return next();
+  express.json({ limit: '2mb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (isStripeWebhookPath(req)) return next();
+  express.urlencoded({ extended: true })(req, res, next);
+});
 
 // Helper to load and wrap serverless function
 async function loadHandler(relativePath) {
@@ -65,8 +76,12 @@ async function loadHandler(relativePath) {
         url: req.url,
         headers: req.headers,
         query: req.query,
-        body: req.body
+        body: req.body,
+        on: req.on?.bind(req),
+        read: req.read?.bind(req),
+        [Symbol.asyncIterator]: req[Symbol.asyncIterator]?.bind(req),
       };
+
       
       const vercelRes = {
         status: (code) => {
@@ -89,6 +104,46 @@ async function loadHandler(relativePath) {
   }
 }
 
+async function loadWebOrNodeHandler(relativePath) {
+  const absolutePath = join(process.cwd(), relativePath);
+  const fileUrl = pathToFileURL(absolutePath).href;
+  const module = await import(fileUrl);
+
+  if (typeof module.POST === 'function') {
+    return async (req, res) => {
+      if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+      }
+      const rawBody = Buffer.concat(chunks);
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (value == null) continue;
+        headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
+      }
+      const request = new Request(`http://${HOST}:${PORT}${req.originalUrl || req.url}`, {
+        method: req.method,
+        headers,
+        body: rawBody,
+        duplex: 'half',
+      });
+      const response = await module.POST(request);
+      res.status(response.status);
+      response.headers.forEach((value, key) => {
+        res.setHeader(key, value);
+      });
+      const buf = Buffer.from(await response.arrayBuffer());
+      res.send(buf);
+    };
+  }
+
+  return loadHandler(relativePath);
+}
+
 // Load API routes dynamically
 async function setupRoutes() {
   // Use relative paths from project root
@@ -105,6 +160,8 @@ async function setupRoutes() {
   // Other AI routes
   app.all('/api/ai/grok', await loadHandler('api/ai/grok.js'));
   app.all('/api/ai/perplexity', await loadHandler('api/ai/perplexity.js'));
+  // Same handler, separate function in production for a longer runtime budget.
+  app.all('/api/ai/perplexity-deep-dive', await loadHandler('api/ai/perplexity-deep-dive.js'));
   
   // Plan Builder routes
   app.all('/api/plan-builder-proxy', await loadHandler('api/plan-builder-proxy.js'));
@@ -137,16 +194,16 @@ async function setupRoutes() {
       res.status(503).json({ error: 'Stripe not configured', details: 'Install stripe package to enable subscriptions' });
     });
   }
-  
+
   try {
-    app.all('/api/stripe-webhook', await loadHandler('api/stripe-webhook.js'));
+    app.all('/api/stripe-webhook', await loadWebOrNodeHandler('api/stripe-webhook.js'));
   } catch (error) {
     console.warn('⚠️  Stripe webhook route skipped:', error.message);
     app.all('/api/stripe-webhook', (req, res) => {
       res.status(503).json({ error: 'Stripe not configured', details: 'Install stripe package to enable subscriptions' });
     });
   }
-  
+
   try {
     app.all('/api/subscription-status', await loadHandler('api/subscription-status.js'));
   } catch (error) {

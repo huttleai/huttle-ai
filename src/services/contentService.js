@@ -120,7 +120,9 @@ export async function saveToVault(userId, itemData = {}) {
       console.error('[saveToVault] Supabase insert failed:', error.code, error.message, error.details || '', error.hint || '');
 
       let errorMessage = error.message;
-      if (error.message?.includes('foreign key') || error.message?.includes('violates')) {
+      if (error.code === '23514') {
+        errorMessage = 'Could not save — content type not recognized. Please contact support.';
+      } else if (error.message?.includes('foreign key') || error.message?.includes('violates foreign key')) {
         errorMessage = 'Database setup error: user record may be missing. Please contact support.';
       } else if (error.code === '42P01') {
         errorMessage = 'Content library table not found. Please run the database migration.';

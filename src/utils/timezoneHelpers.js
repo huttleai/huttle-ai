@@ -47,7 +47,7 @@ export function formatInUserTimezone(isoDate, userTimezone, options = {}) {
  * @param {string} userTimezone - Target timezone
  * @returns {string} ISO 8601 string
  */
-export function convertToUserTimezone(date, time, userTimezone) {
+export function convertToUserTimezone(date, time, _userTimezone) {
   if (!date || !time) return '';
   
   try {

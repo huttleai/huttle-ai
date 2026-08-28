@@ -173,15 +173,15 @@ export const FAQSection = () => {
     },
     {
       question: "What happens when the Founding Member offer ends?",
-      answer: "On March 1, the price becomes $249/yr (Builders Club) for 10 days. After March 10, regular Pro pricing is $357/yr. Your founding rate stays locked forever — it never increases, no matter what."
+      answer: "Founders Club is now closed. Current Essentials and Pro plans are available with a 7-day free trial."
     },
     {
       question: "Can we cancel anytime?",
       answer: "Absolutely. Cancel from your account settings whenever you want. No hoops to jump through, no hidden fees, no awkward phone calls. Your access continues until the end of your billing period."
     },
     {
-      question: "Is there a money-back guarantee?",
-      answer: "Yes. Founders Club and Builders Club include a 14-day money-back guarantee. If Huttle AI is not right for you, email hello@huttleai.com within 14 days for a full refund."
+      question: "Is there a free trial?",
+      answer: "Yes. Essentials and Pro include a 7-day free trial. Cancel before the trial ends and you will not be charged."
     },
     {
       question: "What platforms does Huttle AI support?",

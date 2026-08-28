@@ -1,16 +1,21 @@
 /**
  * Stripe Webhook Handler
- * 
+ *
  * Handles Stripe webhook events to sync subscription status with your database.
- * Also adds Founders Club members to Mailchimp when they complete checkout.
- * 
+ * Routes new members to the correct Mailchimp audience based on their subscription tier:
+ *   - pro       â MAILCHIMP_PRO_AUDIENCE_ID       (Pro Members)
+ *   - essentials â MAILCHIMP_ESSENTIALS_AUDIENCE_ID (Essentials Members)
+ *   - builder   â MAILCHIMP_BUILDERS_AUDIENCE_ID   (Legacy Annual)
+ *
  * Required environment variables:
  * - STRIPE_SECRET_KEY: Your Stripe secret key
  * - STRIPE_WEBHOOK_SECRET: Your Stripe webhook signing secret
  * - SUPABASE_URL: Your Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Your Supabase service role key
- * - MAILCHIMP_FOUNDERS_API_KEY: Your Mailchimp API key (optional)
- * - MAILCHIMP_FOUNDERS_AUDIENCE_ID: Your Mailchimp Founders Club audience ID (optional)
+ * - MAILCHIMP_API_KEY: Your Mailchimp API key (optional â also accepts legacy MAILCHIMP_FOUNDERS_API_KEY)
+ * - MAILCHIMP_PRO_AUDIENCE_ID: Mailchimp audience ID for Pro Members (optional)
+ * - MAILCHIMP_ESSENTIALS_AUDIENCE_ID: Mailchimp audience ID for Essentials Members (optional)
+ * - MAILCHIMP_BUILDERS_AUDIENCE_ID: Mailchimp audience ID for legacy annual members (optional)
  */
 
 import Stripe from 'stripe';
@@ -19,22 +24,32 @@ import { logError, logInfo, logWarn } from './_utils/observability.js';
 import { resolvePlanId } from './_utils/stripePlans.js';
 import { maybeSendTrialReminder } from './_utils/trialReminderUtils.js';
 import { toIsoDate } from './_utils/billing.js';
+import {
+  getRawBody,
+  throwIfError,
+  verifyAndDispatch,
+  sendWebhookResult,
+} from './_utils/stripeWebhook.js';
+import { sendCancellationVoluntaryEmail } from './emails/send-cancellation-voluntary.js';
+import { sendTrialStartedEmail } from './emails/send-trial-started.js';
+import { sendTrialExpiredEmail } from './emails/send-trial-expired.js';
+import { sendSubscriptionConfirmedEmail } from './emails/send-subscription-confirmed.js';
+import { sendPaymentFailedEmail } from './emails/send-payment-failed.js';
 
 // Validate required environment variables at startup
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Log warnings for missing config (helps with debugging in Vercel logs)
 if (!STRIPE_SECRET_KEY) {
-  console.error('❌ CRITICAL: STRIPE_SECRET_KEY is not configured');
+  console.error('â CRITICAL: STRIPE_SECRET_KEY is not configured');
 }
 if (!STRIPE_WEBHOOK_SECRET) {
-  console.error('❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not configured');
+  console.error('â CRITICAL: STRIPE_WEBHOOK_SECRET is not configured');
 }
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ CRITICAL: Supabase credentials are not configured');
+  console.error('â CRITICAL: Supabase credentials are not configured');
 }
 
 // Initialize clients only if credentials are available
@@ -42,52 +57,83 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const endpointSecret = STRIPE_WEBHOOK_SECRET;
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-// Mailchimp configuration (optional)
-const MAILCHIMP_FOUNDERS_API_KEY = process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
-const MAILCHIMP_FOUNDERS_AUDIENCE_ID = process.env.MAILCHIMP_FOUNDERS_AUDIENCE_ID || '';
-const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_FOUNDERS_API_KEY.split('-')[1] || 'us22';
+// Mailchimp configuration
+// Accept new MAILCHIMP_API_KEY first; fall back to legacy MAILCHIMP_FOUNDERS_API_KEY for zero-downtime deploy.
+const MAILCHIMP_API_KEY = process.env.MAILCHIMP_API_KEY || process.env.MAILCHIMP_FOUNDERS_API_KEY || '';
+const MAILCHIMP_SERVER_PREFIX = MAILCHIMP_API_KEY.split('-')[1] || 'us22';
 
-// Disable body parsing - we need the raw body for webhook verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
+// Per-tier audience IDs â set each one in Vercel environment variables.
+const MAILCHIMP_AUDIENCE_IDS = {
+  pro:        process.env.MAILCHIMP_PRO_AUDIENCE_ID || '',
+  essentials: process.env.MAILCHIMP_ESSENTIALS_AUDIENCE_ID || '',
+  builder:    process.env.MAILCHIMP_BUILDERS_AUDIENCE_ID || '',
 };
 
-// Helper to get raw body
-async function getRawBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  }
-  return Buffer.concat(chunks);
+// Human-readable tier labels used in the TIER merge tag and Mailchimp tags.
+const TIER_LABELS = {
+  pro:        'Pro',
+  essentials: 'Essentials',
+  builder:    'Legacy Annual',
+};
+
+function normaliseStatus(stripeStatus) {
+  const map = {
+    active: 'active',
+    canceled: 'cancelled',
+    cancelled: 'cancelled',
+    past_due: 'past_due',
+    unpaid: 'unpaid',
+    incomplete: 'incomplete',
+    incomplete_expired: 'incomplete_expired',
+    trialing: 'trialing',
+  };
+  return map[stripeStatus] ?? stripeStatus;
 }
 
-// Add member to Mailchimp Founders Club
-async function addToFoundersClub(email, firstName = '', lastName = '') {
-  // Skip if Mailchimp is not configured
-  if (!MAILCHIMP_FOUNDERS_API_KEY || !MAILCHIMP_FOUNDERS_AUDIENCE_ID) {
-    console.warn('Mailchimp Founders Club not configured, skipping...');
+// `export const config = { api: { bodyParser: false } }` is Next.js Pages Router
+// syntax and has no effect on this Vite + Vercel `/api` function. Raw bytes are
+// read via the Web Handler (`POST(request).text()`) or getRawBody() below.
+
+/**
+ * Add a new subscriber to the Mailchimp audience that matches their subscription tier.
+ * Passes email, first name, last name, and a TIER merge tag so Mailchimp automations
+ * can personalise messaging per tier.
+ *
+ * Silently skips (with a warning) if Mailchimp credentials or the audience ID for the
+ * given tier are not configured â so a missing env var never blocks checkout processing.
+ */
+async function addToMailchimpByTier(email, firstName = '', lastName = '', tier = '') {
+  const audienceId = MAILCHIMP_AUDIENCE_IDS[tier];
+  const tierLabel  = TIER_LABELS[tier] || tier;
+
+  if (!MAILCHIMP_API_KEY) {
+    console.warn('Mailchimp API key not configured, skipping audience add...');
+    return { success: false, skipped: true };
+  }
+
+  if (!audienceId) {
+    console.warn(`No Mailchimp audience ID configured for tier "${tier}", skipping...`);
     return { success: false, skipped: true };
   }
 
   try {
-    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_FOUNDERS_AUDIENCE_ID}/members`;
-    
+    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${audienceId}/members`;
+
     const memberData = {
       email_address: email,
       status: 'subscribed',
       merge_fields: {
         FNAME: firstName,
         LNAME: lastName,
+        TIER: tierLabel,
       },
-      tags: ['Founders Club', 'Stripe Checkout']
+      tags: [tierLabel, 'Stripe Checkout'],
     };
 
     const response = await fetch(mailchimpUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_FOUNDERS_API_KEY}`).toString('base64')}`,
+        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_API_KEY}`).toString('base64')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(memberData),
@@ -96,61 +142,91 @@ async function addToFoundersClub(email, firstName = '', lastName = '') {
     const data = await response.json();
 
     if (!response.ok) {
-      // Member already exists is not an error
+      // A 400 with title "Member Exists" is not an error â idempotent.
       if (data.title === 'Member Exists') {
         return { success: true, alreadyExists: true };
       }
-      console.error('Mailchimp error:', data);
+      console.error(`Mailchimp error (tier=${tier}):`, data);
       return { success: false, error: data.detail };
     }
 
+    logInfo('stripe_webhook.mailchimp_added', { email, tier, audienceId });
     return { success: true };
   } catch (error) {
-    console.error('Error adding to Founders Club:', error);
+    console.error(`Error adding to Mailchimp (tier=${tier}):`, error);
     return { success: false, error: error.message };
   }
 }
 
-async function hasProcessedEvent(eventId) {
-  if (!eventId || !supabase) return false;
-
-  const { data, error } = await supabase
-    .from('stripe_webhook_events')
-    .select('event_id')
-    .eq('event_id', eventId)
-    .maybeSingle();
-
-  if (error && error.code !== 'PGRST116') {
-    logWarn('stripe_webhook.idempotency_check_failed', { eventId, error: error.message });
-    return false;
+/**
+ * Post a cancellation notification to Slack.
+ * Always called on customer.subscription.deleted, regardless of cancellation type.
+ * Requires SLACK_WEBHOOK_URL environment variable; silently skips if not configured.
+ */
+async function postCancellationToSlack({ email, plan, days, reason }) {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    logWarn('stripe_webhook.cancellation_slack_skipped', { reason: 'SLACK_WEBHOOK_URL not configured' });
+    return;
   }
 
-  return Boolean(data?.event_id);
+  const text = `❌ Cancellation: ${email} cancelled ${plan} after ${days} days. Reason: ${reason}`;
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    logWarn('stripe_webhook.cancellation_slack_error', { status: response.status });
+  }
 }
 
-async function markEventProcessed(eventId, eventType) {
-  if (!eventId || !supabase) return false;
-
-  const { error } = await supabase
-    .from('stripe_webhook_events')
-    .upsert(
-      {
-        event_id: eventId,
-        event_type: eventType || 'unknown',
-        processed_at: new Date().toISOString(),
-      },
-      {
-        onConflict: 'event_id',
-        ignoreDuplicates: true,
-      }
-    );
-
-  if (error) {
-    logError('stripe_webhook.idempotency_mark_failed', { eventId, error: error.message });
-    return false;
+/**
+ * Post a payment failure notification to the Slack SLACK_WEBHOOK_ERRORS channel.
+ * This is distinct from the Resend transactional email sent to the customer.
+ * Silently skips if SLACK_WEBHOOK_ERRORS is not configured.
+ */
+async function postPaymentFailedToSlack({ email, tier, amountDue, timestamp }) {
+  const webhookUrl = process.env.SLACK_WEBHOOK_ERRORS;
+  if (!webhookUrl) {
+    logWarn('stripe_webhook.payment_failed_slack_skipped', { reason: 'SLACK_WEBHOOK_ERRORS not configured' });
+    return;
   }
 
-  return true;
+  const amountFormatted = amountDue != null ? `$${(amountDue / 100).toFixed(2)}` : 'unknown';
+  const text = `⚠️ Payment Failed: ${email} | tier: ${tier || 'unknown'} | amount: ${amountFormatted} | ${timestamp}`;
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    logWarn('stripe_webhook.payment_failed_slack_post_error', { status: response.status });
+  }
+}
+
+async function syncUsersSubscriptionTier(userId, tier, eventId, context) {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      subscription_tier: tier,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId);
+
+  if (error) {
+    logError('stripe_webhook.users_subscription_tier_sync_failed', {
+      eventId,
+      userId,
+      context,
+      error: error.message,
+    });
+    throwIfError(error, `Failed to sync users.subscription_tier (${context})`);
+  }
 }
 
 async function updateSubscriptionRecord({
@@ -160,18 +236,60 @@ async function updateSubscriptionRecord({
   customerName = null,
 }) {
   const priceId = subscription.items.data[0]?.price?.id;
+  const status = normaliseStatus(subscription.status);
   const plan = resolvePlanId({
     planId: subscription.metadata?.planId,
     metadataPlanId: subscription.metadata?.plan,
     priceId,
   });
 
+  // Cross-user safety check: refuse to overwrite another user's subscription
+  // row if this customer_id or subscription_id is already bound to a different
+  // user_id in our database. This prevents a misconfigured or corrupted
+  // customer mapping from silently hijacking another account's billing state.
+  const { data: existingBySubId } = await supabase
+    .from('subscriptions')
+    .select('user_id, stripe_customer_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .maybeSingle();
+
+  if (existingBySubId && existingBySubId.user_id && existingBySubId.user_id !== userId) {
+    logError('stripe_webhook.cross_user_subscription_conflict', {
+      incomingUserId: userId,
+      existingUserId: existingBySubId.user_id,
+      subscriptionId: subscription.id,
+      customerId,
+    });
+    throw new Error(
+      `Stripe subscription ${subscription.id} is already bound to a different user — aborting sync.`
+    );
+  }
+
+  const { data: existingByCustomerId } = await supabase
+    .from('subscriptions')
+    .select('user_id')
+    .eq('stripe_customer_id', customerId)
+    .neq('user_id', userId)
+    .maybeSingle();
+
+  if (existingByCustomerId?.user_id) {
+    logError('stripe_webhook.cross_user_customer_conflict', {
+      incomingUserId: userId,
+      existingUserId: existingByCustomerId.user_id,
+      customerId,
+      subscriptionId: subscription.id,
+    });
+    throw new Error(
+      `Stripe customer ${customerId} is already bound to user ${existingByCustomerId.user_id} — refusing to rebind to ${userId}.`
+    );
+  }
+
   const payload = {
     user_id: userId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: customerId,
     tier: plan,
-    status: subscription.status,
+    status,
     current_period_start: toIsoDate(subscription.current_period_start),
     current_period_end: toIsoDate(subscription.current_period_end),
     trial_start: subscription.trial_start ? toIsoDate(subscription.trial_start) : null,
@@ -220,50 +338,10 @@ async function updateSubscriptionRecord({
   return plan;
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+async function dispatchStripeEvent(event) {
+  logInfo('stripe_webhook.received', { eventType: event.type, eventId: event.id });
 
-  // Validate required services are configured
-  if (!stripe) {
-    console.error('❌ Stripe webhook called but STRIPE_SECRET_KEY is not configured');
-    return res.status(500).json({ error: 'Payment service not configured' });
-  }
-  if (!endpointSecret) {
-    console.error('❌ Stripe webhook called but STRIPE_WEBHOOK_SECRET is not configured');
-    return res.status(500).json({ error: 'Webhook verification not configured' });
-  }
-  if (!supabase) {
-    console.error('❌ Stripe webhook called but Supabase is not configured');
-    return res.status(500).json({ error: 'Database service not configured' });
-  }
-
-  try {
-    const rawBody = await getRawBody(req);
-    const sig = req.headers['stripe-signature'];
-
-    let event;
-
-    try {
-      event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
-    } catch (err) {
-      console.error('Webhook signature verification failed:', err.message);
-      return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-    }
-
-    logInfo('stripe_webhook.received', { eventType: event.type, eventId: event.id });
-
-    if (await hasProcessedEvent(event.id)) {
-      logInfo('stripe_webhook.duplicate_ignored', { eventId: event.id });
-      return res.status(200).json({ received: true, duplicate: true });
-    }
-
-    // Handle the event
-    // Each case is wrapped in its own try/catch so that a processing error
-    // never causes a non-200 response. Stripe retries on non-200 responses,
-    // which would cause duplicate processing of already-handled events.
-    switch (event.type) {
+  switch (event.type) {
       case 'checkout.session.completed': {
         try {
           const session = event.data.object;
@@ -272,7 +350,18 @@ export default async function handler(req, res) {
           const subscriptionId = session.subscription;
           const customerEmail = session.customer_email || session.customer_details?.email;
 
-          // Setup-mode sessions are payment method updates — sync new card and move on.
+          console.log('[checkout.session.completed] received', {
+            eventId: event.id,
+            sessionId: session.id,
+            mode: session.mode,
+            customerId,
+            subscriptionId,
+            hasClientReferenceId: Boolean(session.client_reference_id),
+            hasMetadataUserId: Boolean(session.metadata?.supabase_user_id),
+            customerEmail,
+          });
+
+          // Setup-mode sessions are payment method updates â sync new card and move on.
           if (session.mode === 'setup' && customerId && session.setup_intent) {
             try {
               const setupIntent = await stripe.setupIntents.retrieve(session.setup_intent);
@@ -299,18 +388,37 @@ export default async function handler(req, res) {
               }
             } catch (setupErr) {
               logError('stripe_webhook.setup_session_error', { eventId: event.id, error: setupErr.message });
+              throw setupErr;
             }
             break;
           }
 
-          if (!customerId) break;
+          if (!customerId) {
+            throw new Error('checkout.session.completed is missing customer id');
+          }
 
-          // Resolve the Supabase user — prefer the user_id embedded in checkout
-          // metadata (most reliable), then fall back to email lookup.
-          let userId = session.metadata?.supabase_user_id || null;
+          // Resolve the Supabase user. Priority order:
+          // 1. client_reference_id — dedicated Stripe field set at session creation (most reliable)
+          // 2. session.metadata.supabase_user_id — stamped in metadata as a belt-and-suspenders backup
+          // 3. Email lookup — last resort for sessions created before client_reference_id was added
+          let userId = session.client_reference_id || session.metadata?.supabase_user_id || null;
           let customerName = session.customer_details?.name || '';
 
+          console.log('[checkout.session.completed] user resolution', {
+            eventId: event.id,
+            sessionId: session.id,
+            customerId,
+            subscriptionId,
+            source: session.client_reference_id
+              ? 'client_reference_id'
+              : session.metadata?.supabase_user_id
+              ? 'metadata'
+              : 'email_fallback',
+            userId,
+          });
+
           if (!userId && customerEmail) {
+            console.log('[checkout.session.completed] falling back to email lookup', { eventId: event.id, customerEmail });
             const { data: userList, error: userLookupError } = await supabase.auth.admin.listUsers({
               filter: `email.eq.${customerEmail}`,
               page: 1,
@@ -318,14 +426,15 @@ export default async function handler(req, res) {
             });
             if (userLookupError) {
               logError('stripe_webhook.checkout_user_lookup_failed', { eventId: event.id, customerId, error: userLookupError.message });
-              break;
+              throwIfError(userLookupError, 'checkout email lookup failed');
             }
             userId = userList?.users?.[0]?.id ?? null;
+            console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
           }
 
           if (!userId) {
-            logWarn('stripe_webhook.checkout_no_user_found', { eventId: event.id, customerId, customerEmail });
-            break;
+            logError('stripe_webhook.checkout_no_user_found', { eventId: event.id, customerId, customerEmail });
+            throw new Error('Could not resolve Supabase user for checkout.session.completed');
           }
 
           const nameParts = customerName.split(' ');
@@ -333,79 +442,98 @@ export default async function handler(req, res) {
           const lastName = nameParts.slice(1).join(' ') || '';
 
           // Backfill the stripe_customer_id on user_profile for future lookups.
-          try {
-            await supabase.from('user_profile').upsert({
-              user_id: userId,
-              stripe_customer_id: customerId,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
-          } catch (profileErr) {
-            logError('stripe_webhook.checkout_profile_upsert_failed', { eventId: event.id, userId, error: profileErr.message });
-          }
+          console.log('[checkout.session.completed] backfilling user_profile', { eventId: event.id, userId, customerId });
+          const { error: profileErr } = await supabase.from('user_profile').upsert({
+            user_id: userId,
+            stripe_customer_id: customerId,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+          throwIfError(profileErr, 'user_profile upsert failed');
 
           if (subscriptionId) {
-            try {
-              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-              const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
+            console.log('[checkout.session.completed] syncing subscription record', { eventId: event.id, userId, subscriptionId });
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
+            console.log('[checkout.session.completed] subscription synced successfully', { eventId: event.id, userId, plan });
 
-              try {
-                // Check the secure_account_email_sent guard before sending any
-                // account-setup email and mark it sent atomically. This prevents
-                // duplicate "Secure My Account" emails when Stripe retries the
-                // checkout.session.completed event or when the webhook processes
-                // multiple events for the same user.
-                // NOTE: The actual invite email is sent via Supabase admin
-                // (inviteUserByEmail) from an external tool, not from this webhook.
-                // This flag is the shared idempotency guard for that external sender.
-                // Supabase dashboard > Auth > URL Configuration > Redirect URLs must
-                // include https://huttleai.com/secure-account in the allowed list.
-                const { data: userRow, error: userFetchErr } = await supabase
-                  .from('users')
-                  .select('secure_account_email_sent')
-                  .eq('id', userId)
-                  .maybeSingle();
+            const { data: userRow, error: userFetchErr } = await supabase
+              .from('users')
+              .select('secure_account_email_sent')
+              .eq('id', userId)
+              .maybeSingle();
 
-                const alreadySentInvite = userRow?.secure_account_email_sent === true;
+            const alreadySentInvite = userRow?.secure_account_email_sent === true;
 
-                const { error: usersTierError } = await supabase
-                  .from('users')
-                  .update({
-                    subscription_tier: plan,
-                    // Only set to true on the first checkout — mark that the invite
-                    // email should be (or already has been) sent exactly once.
-                    ...(!alreadySentInvite && { secure_account_email_sent: false }),
-                  })
-                  .eq('id', userId);
-                if (usersTierError) {
-                  logError('stripe_webhook.users_subscription_tier_sync_failed', {
-                    eventId: event.id,
-                    userId,
-                    context: 'checkout.session.completed',
-                    error: usersTierError.message,
-                  });
-                }
-
-                if (userFetchErr) {
-                  logError('stripe_webhook.users_invite_flag_fetch_failed', { eventId: event.id, userId, error: userFetchErr.message });
-                }
-              } catch (usersTierErr) {
-                logError('stripe_webhook.users_subscription_tier_sync_failed', {
-                  eventId: event.id,
-                  userId,
-                  context: 'checkout.session.completed',
-                  error: usersTierErr.message,
-                });
-              }
-
-              if (plan === 'pro' || plan === 'founder' || plan === 'builder') {
-                await addToFoundersClub(customerEmail, firstName, lastName);
-              }
-            } catch (subErr) {
-              logError('stripe_webhook.checkout_subscription_sync_failed', { eventId: event.id, userId, subscriptionId, error: subErr.message });
+            if (userFetchErr) {
+              logError('stripe_webhook.users_invite_flag_fetch_failed', { eventId: event.id, userId, error: userFetchErr.message });
             }
+
+            await syncUsersSubscriptionTier(userId, plan, event.id, 'checkout.session.completed');
+
+            // Send secure account invite email and flip flag to true only after
+            // confirmed send. If the send fails, leave the flag as false so it is retried.
+            if (!alreadySentInvite && customerEmail) {
+              try {
+                const appUrl = process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://huttleai.com';
+                const resendApiKey = process.env.RESEND_API_KEY;
+
+                if (resendApiKey) {
+                  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+                    type: 'recovery',
+                    email: customerEmail,
+                    options: { redirectTo: `${appUrl}/secure-account` },
+                  });
+
+                  if (linkError) {
+                    logError('stripe_webhook.secure_account_link_failed', { eventId: event.id, userId, error: linkError.message });
+                  } else if (linkData?.properties?.action_link) {
+                    const emailRes = await fetch('https://api.resend.com/emails', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${resendApiKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        from: 'Huttle AI <hello@huttleai.com>',
+                        to: [customerEmail],
+                        subject: 'Secure your Huttle AI account',
+                        html: `<p>Hi ${firstName || 'there'},</p><p>Your Huttle AI subscription is active. Click below to set up your password and access your dashboard.</p><p><a href="${linkData.properties.action_link}" style="background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Secure My Account &rarr;</a></p><p style="color:#6b7280;font-size:14px;">This link expires in 24 hours. If you did not make this purchase, contact us at hello@huttleai.com.</p>`,
+                      }),
+                    });
+
+                    if (emailRes.ok) {
+                      console.log('[checkout.session.completed] secure_account_email sent, setting flag to true', { eventId: event.id, userId });
+                      const { error: flagError } = await supabase
+                        .from('users')
+                        .update({ secure_account_email_sent: true, updated_at: new Date().toISOString() })
+                        .eq('id', userId);
+                      if (flagError) {
+                        logError('stripe_webhook.secure_account_flag_update_failed', { eventId: event.id, userId, error: flagError.message });
+                      }
+                    } else {
+                      logError('stripe_webhook.secure_account_email_send_failed', { eventId: event.id, userId, status: emailRes.status });
+                    }
+                  }
+                } else {
+                  logWarn('stripe_webhook.secure_account_email_skipped', { reason: 'RESEND_API_KEY not configured', eventId: event.id, userId });
+                }
+              } catch (secureEmailErr) {
+                logError('stripe_webhook.secure_account_email_error', { eventId: event.id, userId, error: secureEmailErr.message });
+              }
+            }
+
+            // Route new member to the correct Mailchimp audience by tier.
+            // Supported tiers: 'pro', 'essentials', 'builder'.
+            // 'founder' plan is retired — no audience ID will be found, call is a no-op.
+            if (plan === 'pro' || plan === 'essentials' || plan === 'builder') {
+              await addToMailchimpByTier(customerEmail, firstName, lastName, plan);
+            }
+          } else {
+            console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
           }
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -426,7 +554,6 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          // Find user by Stripe customer ID
           const { data: profile, error: profileError } = await supabase
             .from('user_profile')
             .select('user_id')
@@ -435,42 +562,205 @@ export default async function handler(req, res) {
 
           if (profileError && profileError.code !== 'PGRST116') {
             logError('stripe_webhook.subscription_updated_profile_lookup_failed', { eventId: event.id, customerId, error: profileError.message });
-            break;
+            throwIfError(profileError, 'subscription profile lookup failed');
           }
 
-          if (profile) {
-            const tier = await updateSubscriptionRecord({
-              userId: profile.user_id,
-              customerId,
-              subscription,
-            });
-
-            if (event.type === 'customer.subscription.updated') {
+          // Fallback: if user_profile has no mapping yet (e.g. row was never
+          // backfilled), trust the subscription.metadata.supabase_user_id that
+          // the create-checkout-session endpoint stamped when it was created.
+          // The Stripe customer's own metadata is a last-resort tiebreaker.
+          let resolvedUserId = profile?.user_id || null;
+          if (!resolvedUserId) {
+            const metadataUserId = subscription.metadata?.supabase_user_id || null;
+            if (metadataUserId) {
+              resolvedUserId = metadataUserId;
+              logInfo('stripe_webhook.subscription_user_from_metadata', {
+                eventId: event.id,
+                customerId,
+                userId: metadataUserId,
+              });
+            } else {
               try {
-                const { error: usersTierError } = await supabase
-                  .from('users')
-                  .update({ subscription_tier: tier })
-                  .eq('id', profile.user_id);
-                if (usersTierError) {
-                  logError('stripe_webhook.users_subscription_tier_sync_failed', {
+                const customer = await stripe.customers.retrieve(customerId);
+                if (!customer.deleted && customer.metadata?.supabase_user_id) {
+                  resolvedUserId = customer.metadata.supabase_user_id;
+                  logInfo('stripe_webhook.subscription_user_from_customer_metadata', {
                     eventId: event.id,
-                    userId: profile.user_id,
-                    context: 'customer.subscription.updated',
-                    error: usersTierError.message,
+                    customerId,
+                    userId: resolvedUserId,
                   });
                 }
-              } catch (usersTierErr) {
-                logError('stripe_webhook.users_subscription_tier_sync_failed', {
+              } catch (custErr) {
+                logWarn('stripe_webhook.customer_metadata_lookup_failed', {
                   eventId: event.id,
-                  userId: profile.user_id,
-                  context: 'customer.subscription.updated',
-                  error: usersTierErr.message,
+                  customerId,
+                  error: custErr.message,
                 });
               }
             }
           }
+
+          if (resolvedUserId) {
+            const tier = await updateSubscriptionRecord({
+              userId: resolvedUserId,
+              customerId,
+              subscription,
+            });
+
+            // Backfill user_profile mapping once we know the user — future
+            // webhooks will then resolve via the fast path above.
+            if (!profile) {
+              const { error: backfillErr } = await supabase.from('user_profile').upsert({
+                user_id: resolvedUserId,
+                stripe_customer_id: customerId,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'user_id' });
+              throwIfError(backfillErr, 'user_profile backfill failed');
+            }
+
+            await syncUsersSubscriptionTier(resolvedUserId, tier, event.id, event.type);
+
+            // ── Transactional emails ─────────────────────────────────────────
+            // Fetch customer email and profile for email sends
+            try {
+              const customerObj = await stripe.customers.retrieve(customerId);
+              const customerEmail = customerObj.deleted ? null : customerObj.email;
+              const { data: emailProfile } = await supabase
+                .from('user_profile')
+                .select('first_name')
+                .eq('user_id', resolvedUserId)
+                .maybeSingle();
+              const firstName = emailProfile?.first_name || '';
+              const previousStatus = event.data.previous_attributes?.status;
+              const currentStatus = subscription.status;
+              const planName = TIER_LABELS[tier] || tier || 'Pro';
+
+              if (customerEmail) {
+                // Email 2: Trial Started — subscription.created with status trialing
+                if (event.type === 'customer.subscription.created' && currentStatus === 'trialing') {
+                  try {
+                    const trialEndDate = subscription.trial_end
+                      ? new Date(subscription.trial_end * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : '';
+                    await sendTrialStartedEmail({ email: customerEmail, firstName, planName, trialEndDate });
+                    logInfo('stripe_webhook.trial_started_email_sent', { eventId: event.id, userId: resolvedUserId });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.trial_started_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+
+                // Email 4: Trial Expired — trial ended without converting (status went from trialing to something non-active)
+                if (
+                  event.type === 'customer.subscription.updated' &&
+                  previousStatus === 'trialing' &&
+                  currentStatus !== 'active'
+                ) {
+                  try {
+                    await sendTrialExpiredEmail({ email: customerEmail, firstName, planName });
+                    logInfo('stripe_webhook.trial_expired_email_sent', { eventId: event.id, userId: resolvedUserId });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.trial_expired_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+
+                // Emails 5a/5b/5c: Subscription Confirmed — trial converted or new paid sub
+                if (
+                  event.type === 'customer.subscription.updated' &&
+                  currentStatus === 'active' &&
+                  (previousStatus === 'trialing' || previousStatus === 'incomplete')
+                ) {
+                  try {
+                    const nextBillingDate = subscription.current_period_end
+                      ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : '';
+                    const priceData = subscription.items.data[0]?.price;
+                    const rawAmount = priceData?.unit_amount ? `$${(priceData.unit_amount / 100).toFixed(0)}` : '';
+                    const billingInterval = priceData?.recurring?.interval || 'month';
+                    await sendSubscriptionConfirmedEmail({
+                      email: customerEmail,
+                      firstName,
+                      tier,
+                      nextBillingDate,
+                      amount: rawAmount,
+                      billingInterval,
+                    });
+                    logInfo('stripe_webhook.subscription_confirmed_email_sent', { eventId: event.id, userId: resolvedUserId, tier });
+                  } catch (emailErr) {
+                    logWarn('stripe_webhook.subscription_confirmed_email_failed', { eventId: event.id, error: emailErr.message });
+                  }
+                }
+              }
+            } catch (emailFetchErr) {
+              logWarn('stripe_webhook.email_fetch_failed', { eventId: event.id, error: emailFetchErr.message });
+            }
+            // ── End transactional emails ─────────────────────────────────────
+
+          } else {
+            logWarn('stripe_webhook.subscription_updated_no_user_found', {
+              eventId: event.id,
+              customerId,
+              subscriptionId: subscription.id,
+            });
+            if (event.type === 'customer.subscription.created') {
+              throw new Error(`Could not resolve user for subscription ${subscription.id}`);
+            }
+          }
+
+          // Targeted status + period sync by stripe_subscription_id.
+          // Runs for customer.subscription.updated regardless of whether user resolution
+          // succeeded above, so past_due / unpaid transitions are never silently dropped.
+          // Applies status normalisation (e.g. 'canceled' -> 'cancelled') before writing.
+          if (event.type === 'customer.subscription.updated') {
+            try {
+              const stripeSubId = subscription.id;
+              const { data: existingSub } = await supabase
+                .from('subscriptions')
+                .select('stripe_subscription_id')
+                .eq('stripe_subscription_id', stripeSubId)
+                .maybeSingle();
+
+              if (!existingSub) {
+                if (!resolvedUserId) {
+                  throw new Error(`No subscriptions row for stripe_subscription_id=${stripeSubId}`);
+                }
+                console.warn(`[customer.subscription.updated] No subscriptions row for stripe_subscription_id=${stripeSubId} — possible orphaned record`);
+              } else {
+                const mappedStatus = normaliseStatus(subscription.status);
+                const { error: statusSyncError } = await supabase
+                  .from('subscriptions')
+                  .update({
+                    status: mappedStatus,
+                    current_period_start: toIsoDate(subscription.current_period_start),
+                    current_period_end: toIsoDate(subscription.current_period_end),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('stripe_subscription_id', stripeSubId);
+
+                if (statusSyncError) {
+                  logError('stripe_webhook.subscription_status_sync_failed', {
+                    eventId: event.id,
+                    subscriptionId: stripeSubId,
+                    mappedStatus,
+                    error: statusSyncError.message,
+                  });
+                  throwIfError(statusSyncError, 'subscription status sync failed');
+                } else {
+                  logInfo('stripe_webhook.subscription_status_synced', {
+                    eventId: event.id,
+                    subscriptionId: stripeSubId,
+                    stripeStatus: subscription.status,
+                    mappedStatus,
+                  });
+                }
+              }
+            } catch (syncErr) {
+              logError('stripe_webhook.subscription_status_sync_error', { eventId: event.id, error: syncErr.message });
+              throw syncErr;
+            }
+          }
         } catch (err) {
           logError('stripe_webhook.subscription_updated_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -480,39 +770,144 @@ export default async function handler(req, res) {
           const subscription = event.data.object;
           const customerId = subscription.customer;
 
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('user_profile')
-            .select('user_id')
+            .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
+          if (profileError && profileError.code !== 'PGRST116') {
+            throwIfError(profileError, 'subscription deleted profile lookup failed');
+          }
 
-          if (profile) {
-            // Reset tier to 'free' so paid-feature gates fail immediately.
-            // cancelled_at may not exist yet on older schemas — fall back gracefully.
-            const deletionPayload = {
-              tier: 'free',
-              status: 'canceled',
-              cancel_at_period_end: false,
-              updated_at: new Date().toISOString(),
-              cancelled_at: new Date().toISOString(),
-            };
-
-            let { error: delError } = await supabase
+          let userId = profile?.user_id || null;
+          if (!userId && subscription.id) {
+            const { data: subById, error: subByIdError } = await supabase
               .from('subscriptions')
-              .update(deletionPayload)
-              .eq('user_id', profile.user_id);
+              .select('user_id')
+              .eq('stripe_subscription_id', subscription.id)
+              .maybeSingle();
+            throwIfError(subByIdError, 'subscription deleted lookup by stripe_subscription_id failed');
+            userId = subById?.user_id || null;
+          }
+          if (!userId && customerId) {
+            const { data: subByCustomer, error: subByCustomerError } = await supabase
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_customer_id', customerId)
+              .maybeSingle();
+            throwIfError(subByCustomerError, 'subscription deleted lookup by stripe_customer_id failed');
+            userId = subByCustomer?.user_id || null;
+          }
 
-            if (delError?.message?.toLowerCase().includes('cancelled_at')) {
-              const { cancelled_at: _ca, ...fallback } = deletionPayload;
-              delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', profile.user_id)).error;
-            }
+          if (!userId) {
+            throw new Error(`Could not resolve user for deleted subscription ${subscription.id}`);
+          }
 
-            if (delError) {
-              logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId: profile.user_id, error: delError.message });
+          const deletionPayload = {
+            tier: 'free',
+            status: normaliseStatus(subscription.status || 'canceled'),
+            cancel_at_period_end: false,
+            updated_at: new Date().toISOString(),
+            cancelled_at: new Date().toISOString(),
+          };
+
+          let { error: delError } = await supabase
+            .from('subscriptions')
+            .update(deletionPayload)
+            .eq('user_id', userId);
+
+          if (delError?.message?.toLowerCase().includes('cancelled_at')) {
+            const { cancelled_at: _ca, ...fallback } = deletionPayload;
+            delError = (await supabase.from('subscriptions').update(fallback).eq('user_id', userId)).error;
+          }
+
+          if (delError) {
+            logError('stripe_webhook.subscription_deleted_update_failed', { eventId: event.id, userId, error: delError.message });
+            throwIfError(delError, 'Failed to reset subscriptions row on deletion');
+          }
+
+          await syncUsersSubscriptionTier(userId, 'free', event.id, 'customer.subscription.deleted');
+
+          let userEmail = null;
+          const firstName = profile?.first_name || 'there';
+
+          try {
+            const customer = await stripe.customers.retrieve(customerId);
+            userEmail = customer.deleted ? null : customer.email;
+          } catch (custErr) {
+            logWarn('stripe_webhook.subscription_deleted_customer_fetch_failed', {
+              eventId: event.id,
+              error: custErr.message,
+            });
+          }
+
+          const priceId = subscription.items.data[0]?.price?.id;
+          const planId = resolvePlanId({
+            planId: subscription.metadata?.planId,
+            metadataPlanId: subscription.metadata?.plan,
+            priceId,
+          });
+          const planName = TIER_LABELS[planId] || planId || 'Pro';
+
+          const startedAt = subscription.start_date || subscription.created;
+          const endedAt = subscription.ended_at || Math.floor(Date.now() / 1000);
+          const daysSubscribed = Math.max(0, Math.floor((endedAt - startedAt) / 86400));
+
+          const cancellationReason = subscription.cancellation_details?.reason;
+
+          const slackReason = cancellationReason === 'payment_failed'
+            ? 'payment_failed'
+            : cancellationReason === 'payment_disputed'
+            ? 'disputed'
+            : 'voluntary';
+
+          try {
+            await postCancellationToSlack({
+              email: userEmail || customerId,
+              plan: planName,
+              days: daysSubscribed,
+              reason: slackReason,
+            });
+          } catch (slackErr) {
+            logWarn('stripe_webhook.cancellation_slack_failed', {
+              eventId: event.id,
+              error: slackErr.message,
+            });
+          }
+
+          if (cancellationReason === 'payment_failed' || cancellationReason === 'payment_disputed') {
+            logInfo('stripe_webhook.cancellation_email_skipped', {
+              eventId: event.id,
+              userId,
+              reason: cancellationReason,
+            });
+          } else if (userEmail) {
+            try {
+              const accessEndDate = subscription.current_period_end
+                ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : null;
+
+              await sendCancellationVoluntaryEmail({
+                email: userEmail,
+                firstName,
+                planName,
+                accessEndDate,
+              });
+            } catch (emailErr) {
+              logWarn('stripe_webhook.cancellation_email_failed', {
+                eventId: event.id,
+                userId,
+                error: emailErr.message,
+              });
             }
           }
         } catch (err) {
           logError('stripe_webhook.subscription_deleted_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
@@ -521,32 +916,90 @@ export default async function handler(req, res) {
         try {
           const invoice = event.data.object;
           const customerId = invoice.customer;
+          const stripeSubId = invoice.subscription;
 
-          // Find user by Stripe customer ID (maybeSingle to avoid crash if profile missing)
+          // Defensive null check: confirm the subscription row exists before updating.
+          // Warns on orphaned records so we can catch data-integrity issues early.
+          if (stripeSubId) {
+            const { data: existingSub } = await supabase
+              .from('subscriptions')
+              .select('stripe_subscription_id')
+              .eq('stripe_subscription_id', stripeSubId)
+              .maybeSingle();
+
+            if (!existingSub) {
+              throw new Error(`No subscriptions row for stripe_subscription_id=${stripeSubId}`);
+            }
+          }
+
           const { data: profile } = await supabase
             .from('user_profile')
-            .select('user_id')
+            .select('user_id, first_name')
             .eq('stripe_customer_id', customerId)
             .maybeSingle();
 
           if (profile) {
-            await supabase
+            const { error: pastDueError } = await supabase
               .from('subscriptions')
               .update({
                 status: 'past_due',
                 updated_at: new Date().toISOString(),
               })
               .eq('user_id', profile.user_id);
+            throwIfError(pastDueError, 'invoice.payment_failed status update failed');
+
+            // Slack alert to SLACK_WEBHOOK_ERRORS — distinct from the Resend customer email below
+            try {
+              const slackCustomer = await stripe.customers.retrieve(customerId);
+              const slackEmail = slackCustomer.deleted ? customerId : (slackCustomer.email || customerId);
+              const { data: slackSubRow } = await supabase
+                .from('subscriptions')
+                .select('tier')
+                .eq('user_id', profile.user_id)
+                .maybeSingle();
+              await postPaymentFailedToSlack({
+                email: slackEmail,
+                tier: slackSubRow?.tier || 'unknown',
+                amountDue: invoice.amount_due,
+                timestamp: new Date().toISOString(),
+              });
+            } catch (slackErr) {
+              logWarn('stripe_webhook.payment_failed_slack_error', { eventId: event.id, error: slackErr.message });
+            }
+
+            // Email 8: Payment Failed — only on the first attempt; Stripe handles retries 2+
+            if (invoice.attempt_count === 1) {
+              try {
+                const customer = await stripe.customers.retrieve(customerId);
+                const customerEmail = customer.deleted ? null : customer.email;
+                if (customerEmail) {
+                  const { data: subRow } = await supabase
+                    .from('subscriptions')
+                    .select('tier')
+                    .eq('user_id', profile.user_id)
+                    .maybeSingle();
+                  const planName = TIER_LABELS[subRow?.tier] || subRow?.tier || 'Pro';
+                  await sendPaymentFailedEmail({
+                    email: customerEmail,
+                    firstName: profile.first_name || '',
+                    planName,
+                  });
+                  logInfo('stripe_webhook.payment_failed_email_sent', { eventId: event.id, userId: profile.user_id });
+                }
+              } catch (emailErr) {
+                logWarn('stripe_webhook.payment_failed_email_error', { eventId: event.id, error: emailErr.message });
+              }
+            }
+          } else {
+            throw new Error('Could not resolve user for invoice.payment_failed');
           }
         } catch (err) {
           logError('stripe_webhook.invoice_payment_failed_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
 
-      // invoice.paid fires on every invoice that transitions to paid, including
-      // annual renewals. This is the canonical event for clearing past_due state
-      // and refreshing billing period dates after every successful renewal.
       case 'invoice.paid': {
         try {
           const invoice = event.data.object;
@@ -559,7 +1012,6 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (profile && invoice.subscription) {
-            // Fetch the live subscription to get accurate period dates.
             let periodStart = invoice.period_start ? toIsoDate(invoice.period_start) : null;
             let periodEnd = invoice.period_end ? toIsoDate(invoice.period_end) : null;
 
@@ -586,17 +1038,18 @@ export default async function handler(req, res) {
 
             if (paidError) {
               logError('stripe_webhook.invoice_paid_update_failed', { eventId: event.id, userId: profile.user_id, error: paidError.message });
+              throwIfError(paidError, 'invoice.paid subscription update failed');
             }
+          } else if (invoice.subscription) {
+            throw new Error('Could not resolve user for invoice.paid');
           }
         } catch (err) {
           logError('stripe_webhook.invoice_paid_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
 
-      // invoice.payment_succeeded is a narrower event than invoice.paid — it only
-      // fires when a payment attempt succeeds (not for manual invoice-paid marks).
-      // Keep both for full coverage; period dates are refreshed here too.
       case 'invoice.payment_succeeded': {
         try {
           const invoice = event.data.object;
@@ -616,38 +1069,97 @@ export default async function handler(req, res) {
               ...(invoice.period_end && { current_period_end: toIsoDate(invoice.period_end) }),
             };
 
-            await supabase
+            const { error: succeededError } = await supabase
               .from('subscriptions')
               .update(updatePayload)
               .eq('user_id', profile.user_id);
+            throwIfError(succeededError, 'invoice.payment_succeeded subscription update failed');
           }
         } catch (err) {
           logError('stripe_webhook.invoice_payment_succeeded_error', { eventId: event.id, error: err.message });
+          throw err;
         }
         break;
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        logInfo('stripe_webhook.unhandled_event_type', { eventType: event.type, eventId: event.id });
     }
-
-    // Best-effort idempotency mark. If the write fails (e.g. table not yet
-    // migrated), log a warning but still return 200 so Stripe does not retry
-    // an event we already processed successfully.
-    const marked = await markEventProcessed(event.id, event.type);
-    if (!marked) {
-      logWarn('stripe_webhook.idempotency_mark_failed', { eventId: event.id, eventType: event.type });
-    }
-
-    return res.status(200).json({ received: true });
-  } catch (error) {
-    // Only signature verification failures (400) and config errors (500) should
-    // reach here — those are returned above before any event processing begins.
-    // Any error that escapes the per-event try/catch is unexpected; log it and
-    // still return 200 so Stripe does not retry an event we may have partially
-    // processed.
-    logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
-    return res.status(200).json({ received: true, error: 'Internal processing error — logged for review' });
-  }
 }
 
+async function runWebhook({ rawBody, signature, method }) {
+  if (method && method !== 'POST') {
+    return { status: 405, body: { error: 'Method not allowed' } };
+  }
+
+  if (!stripe) {
+    console.error('Stripe webhook called but STRIPE_SECRET_KEY is not configured');
+    return { status: 500, body: { error: 'Payment service not configured' } };
+  }
+  if (!endpointSecret) {
+    console.error('Stripe webhook called but STRIPE_WEBHOOK_SECRET is not configured');
+    return { status: 500, body: { error: 'Webhook verification not configured' } };
+  }
+  if (!supabase) {
+    console.error('Stripe webhook called but Supabase is not configured');
+    return { status: 500, body: { error: 'Database service not configured' } };
+  }
+
+  const result = await verifyAndDispatch({
+    rawBody,
+    signature,
+    stripe,
+    endpointSecret,
+    supabase,
+    dispatch: dispatchStripeEvent,
+  });
+
+  if (result.body?.duplicate) {
+    logInfo('stripe_webhook.duplicate_ignored', { eventId: result.event?.id });
+  }
+
+  if (result.cause) {
+    logError('stripe_webhook.processing_failed', {
+      eventId: result.event?.id,
+      eventType: result.event?.type,
+      error: result.cause?.message ?? String(result.cause),
+    });
+  }
+
+  if (result.releaseError) {
+    logError('stripe_webhook.idempotency_release_failed', {
+      eventId: result.event?.id,
+      error: result.releaseError.message,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Vercel Web Handler. `request.text()` is the documented way to get the exact
+ * bytes Stripe signed on Vite `/api` functions (the Next.js bodyParser config
+ * export is ignored here).
+ */
+export async function POST(request) {
+  const rawBody = Buffer.from(await request.text());
+  const signature = request.headers.get('stripe-signature');
+  const result = await runWebhook({ rawBody, signature, method: 'POST' });
+  return sendWebhookResult(result, null);
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const rawBody = await getRawBody(req);
+    const signature = req.headers['stripe-signature'];
+    const result = await runWebhook({ rawBody, signature, method: req.method });
+    return sendWebhookResult(result, res);
+  } catch (error) {
+    logError('stripe_webhook.unhandled_error', { error: error?.message ?? String(error) });
+    return res.status(500).json({ error: 'Webhook processing failed' });
+  }
+}

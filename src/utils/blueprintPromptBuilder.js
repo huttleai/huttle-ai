@@ -27,7 +27,19 @@ export function buildN8nSystemPrompt(context) {
     niche = '{{niche}}',
     target_audience = '{{target_audience}}',
     brand_voice_tone = '{{brand_voice_tone}}',
+    profile_type,
+    profileType,
   } = context;
+
+  // TODO: Pass profile_type from caller context (see bleed audit)
+  // profile_type must be forwarded by the n8n caller — fallback is 'brand_business'
+  const resolvedProfileType = profile_type || profileType || 'brand_business';
+  const isCreator = resolvedProfileType === 'solo_creator' || resolvedProfileType === 'creator';
+  const isBusiness = !isCreator;
+
+  const profileIdentityBlock = isCreator
+    ? `USER PROFILE: SOLO CREATOR\nThis user is building a personal brand around their content niche. They are NOT a business owner. Blueprint outputs must reflect personal-brand growth strategy: audience building, content authority, monetization path, and creator voice.\n\n`
+    : `USER PROFILE: BRAND / BUSINESS\nThis user is a business owner using social media to grow their business. Blueprint outputs must reflect business goals: awareness, foot traffic, sales, loyalty, and community. Content must promote THE BUSINESS — not generic niche topics.\n\n`;
 
   const platformRules = getPlatformPromptRule(platform);
   const platformRulesBlock = platformRules ? `\n\n${platformRules}\n` : '';
@@ -39,7 +51,7 @@ export function buildN8nSystemPrompt(context) {
     return `      "${s}": { /* relevant sub-fields for ${s.replace(/_/g, ' ')} */ }`;
   }).join(',\n');
 
-  return `You are generating a ${content_type} blueprint for ${platform}. Everything you produce must be structured, written, and optimized specifically for this format. Do not include any content that is not relevant to a ${content_type}.
+  return `${profileIdentityBlock}You are generating a ${content_type} blueprint for ${platform}. Everything you produce must be structured, written, and optimized specifically for this format. Do not include any content that is not relevant to a ${content_type}.
 
 CONTEXT:
 - Blueprint Label: ${blueprint_label}
@@ -47,7 +59,9 @@ CONTEXT:
 - Goal: ${goal}
 - Niche: ${niche}
 - Target Audience: ${target_audience}
-- Brand Voice/Tone: ${brand_voice_tone}
+- ${isBusiness ? 'Brand' : 'Creator'} Voice/Tone: ${brand_voice_tone}
+- Profile Type: ${isBusiness ? 'Brand / Business' : 'Solo Creator'}
+- Content Purpose: ${isBusiness ? 'Promote the business and drive customers to take action' : 'Build personal brand authority and grow your audience'}
 
 STRICT EXCLUSION RULES:
 NEVER include these sections in your response: ${excluded_sections.join(', ')}.
@@ -65,7 +79,7 @@ ${weightExample}
   "sections": {
 ${sectionSchemaHints}
   },
-  "what_makes_this_viral": "<string: 2-3 sentences explaining why this blueprint is built to perform>",
+  "what_makes_this_viral": "<string: 2-3 sentences explaining why this blueprint is built to perform for ${isBusiness ? 'a business' : 'a creator'}>",
   "pro_tips": ["<string>", "<string>", "<string>"]
 }
 

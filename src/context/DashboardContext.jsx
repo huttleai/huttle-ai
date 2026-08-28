@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef } from 'react'; // HUTTLE AI: cache fix
 import { safeReadJson, safeWriteJson } from '../utils/storageHelpers'; // HUTTLE AI: cache fix
 import { getDashboardGeneratedDate } from '../services/dashboardCacheService'; // HUTTLE AI: cache fix
+import { dashWarn } from '../utils/dashboardDebugLog';
  // HUTTLE AI: cache fix
 export const DashboardContext = createContext(null); // HUTTLE AI: cache fix
 const DASHBOARD_SESSION_VERSION = 'v1'; // HUTTLE AI: cache fix
@@ -43,7 +44,7 @@ export function DashboardProvider({ children }) { // HUTTLE AI: cache fix
     try { // HUTTLE AI: cache fix
       sessionStorage.removeItem(buildDashboardStorageKey(userId)); // HUTTLE AI: cache fix
     } catch (error) { // HUTTLE AI: cache fix
-      console.warn('[DashboardContext] Failed to clear session snapshot:', error); // HUTTLE AI: cache fix
+      dashWarn('[DashboardContext] Failed to clear session snapshot:', error); // HUTTLE AI: cache fix
     } // HUTTLE AI: cache fix
   }, []); // HUTTLE AI: cache fix
  // HUTTLE AI: cache fix

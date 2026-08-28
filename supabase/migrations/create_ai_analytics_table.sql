@@ -26,12 +26,16 @@ CREATE INDEX IF NOT EXISTS idx_ai_analytics_user_timestamp ON ai_analytics(user_
 ALTER TABLE ai_analytics ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can only see their own analytics
+-- GUARDED 2026-08-26: DROP POLICY IF EXISTS added so re-running does not fail
+-- with "policy already exists". Policy definitions are unchanged.
+DROP POLICY IF EXISTS "Users can view own analytics" ON ai_analytics;
 CREATE POLICY "Users can view own analytics"
   ON ai_analytics
   FOR SELECT
   USING ((SELECT auth.uid()) = user_id);
 
 -- RLS Policy: System can insert analytics (service role)
+DROP POLICY IF EXISTS "Service role can insert analytics" ON ai_analytics;
 CREATE POLICY "Service role can insert analytics"
   ON ai_analytics
   FOR INSERT

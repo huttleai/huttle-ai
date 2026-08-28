@@ -18,10 +18,22 @@
  */
 
 import { supabase } from '../config/supabase';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getAuthReadyHeaders } from '../utils/authReady';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 // N8N Webhook URL for Plan Builder (via serverless proxy to avoid CORS)
 const N8N_PLAN_BUILDER_WEBHOOK_URL = '/api/plan-builder-proxy';
+
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. No plan-builder proxy fetch fires without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
+}
 
 function safeJsonParse(value) {
   try {
@@ -52,6 +64,24 @@ function safeJsonParse(value) {
  * @param {string|null} [params.extraContext]
  * @param {string} [params.trendContext]
  * @param {string} [params.platform_rules_block]
+ * @param {string} [params.profileType]
+ * @param {string|null} [params.firstName]
+ * @param {string|null} [params.businessPrimaryGoal]
+ * @param {string|null} [params.creatorMonetizationPath]
+ * @param {boolean} [params.isLocalBusiness]
+ * @param {string|null} [params.city]
+ * @param {string|null} [params.locationState]
+ * @param {string} [params.country]
+ * @param {string|null} [params.locationFull]
+ * @param {string|null} [params.audienceLocationType]
+ * @param {string|null} [params.audiencePainPoint]
+ * @param {string|null} [params.audienceActionTrigger]
+ * @param {string[]} [params.toneChips]
+ * @param {string|null} [params.writingStyle]
+ * @param {string|null} [params.primaryOffer]
+ * @param {string|null} [params.conversionGoal]
+ * @param {string|null} [params.subNiche]
+ * @param {string|null} [params.followerCount]
  * @returns {Promise<{jobId?: string, error?: Error}>}
  */
 export async function createJobDirectly({
@@ -70,6 +100,24 @@ export async function createJobDirectly({
   businessName = '',
   brandName = '',
   website = '',
+  profileType,
+  firstName = null,
+  businessPrimaryGoal = null,
+  creatorMonetizationPath = null,
+  isLocalBusiness = false,
+  city = null,
+  locationState = null,
+  country = 'US',
+  locationFull = null,
+  audienceLocationType = null,
+  audiencePainPoint = null,
+  audienceActionTrigger = null,
+  toneChips = [],
+  writingStyle = null,
+  primaryOffer = null,
+  conversionGoal = null,
+  subNiche = null,
+  followerCount = null,
 }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -106,6 +154,24 @@ export async function createJobDirectly({
           businessName: typeof businessName === 'string' ? businessName : '',
           brandName: typeof brandName === 'string' ? brandName : '',
           website: typeof website === 'string' ? website : '',
+          profileType: profileType ?? 'brand_business',
+          firstName: firstName ?? null,
+          businessPrimaryGoal: businessPrimaryGoal ?? null,
+          creatorMonetizationPath: creatorMonetizationPath ?? null,
+          isLocalBusiness: Boolean(isLocalBusiness),
+          city: city ?? null,
+          locationState: locationState ?? null,
+          country: country ?? 'US',
+          locationFull: locationFull ?? null,
+          audienceLocationType: audienceLocationType ?? null,
+          audiencePainPoint: audiencePainPoint ?? null,
+          audienceActionTrigger: audienceActionTrigger ?? null,
+          toneChips: Array.isArray(toneChips) ? toneChips : [],
+          writingStyle: writingStyle ?? null,
+          primaryOffer: primaryOffer ?? null,
+          conversionGoal: conversionGoal ?? null,
+          subNiche: subNiche ?? null,
+          followerCount: followerCount ?? null,
         },
         created_at: new Date().toISOString()
       })
@@ -148,7 +214,7 @@ export async function createJobDirectly({
  * @param {string[]} formData.platformFocus - Selected platforms array
  * @param {string} formData.brandVoice - Brand voice description
  * @param {number} retries - Number of retry attempts (default: 2)
- * @returns {Promise<{success: boolean, error?: string}>}
+ * @returns {Promise<{success: boolean, error?: string, status?: number, terminal?: boolean}>}
  */
 export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
   // Validate webhook URL is configured
@@ -180,6 +246,12 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
     extraContext: formData.extraContext ?? null,
     brandVoice: formData.brandVoice || formData.brandVoiceTone || '',
     brandContext: typeof formData.brandContext === 'string' ? formData.brandContext : '',
+    // IMPORTANT: This field must be mapped to the AI Plan Builder n8n
+    // workflow system message node. Verify in n8n that the AI Agent
+    // system message references: {{ $json.brand_story_context }}
+    // Without this, getBrandStoryContext output never reaches the model.
+    brand_story_context: typeof formData.brandStoryContext === 'string' ? formData.brandStoryContext : '',
+    brandStoryContext: typeof formData.brandStoryContext === 'string' ? formData.brandStoryContext : '', // HUTTLE AI: userBrandType-based content philosophy
     trendContext: formData.trendContext || '',
     platform_rules_block: typeof formData.platform_rules_block === 'string' ? formData.platform_rules_block : '',
     platforms_list:
@@ -188,12 +260,30 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
         : Array.isArray(platformFocus)
           ? platformFocus.join(', ')
           : '',
+    profileType: formData.profileType ?? null,
+    firstName: formData.firstName ?? null,
+    businessPrimaryGoal: formData.businessPrimaryGoal ?? null,
+    creatorMonetizationPath: formData.creatorMonetizationPath ?? null,
+    isLocalBusiness: formData.isLocalBusiness ?? false,
+    city: formData.city ?? null,
+    audienceLocationType: formData.audienceLocationType ?? null,
+    contentMixOverride: formData.contentMixOverride ?? null,
+    audiencePainPoint: formData.audiencePainPoint ?? null,
+    audienceActionTrigger: formData.audienceActionTrigger ?? null,
+    toneChips: Array.isArray(formData.toneChips) ? formData.toneChips : [],
+    writingStyle: formData.writingStyle ?? null,
+    primaryOffer: formData.primaryOffer ?? null,
+    conversionGoal: formData.conversionGoal ?? null,
+    subNiche: formData.subNiche ?? null,
+    followerCount: formData.followerCount ?? null,
+    human_writing_rules: HUMAN_WRITING_RULES,
   };
 
   if (import.meta.env.DEV) {
     console.log('[PlanBuilder] n8n webhook payload (keys + sizes):', {
       ...payload,
       brandContext: payload.brandContext ? `${payload.brandContext.slice(0, 120)}…` : '',
+      brandStoryContext: payload.brandStoryContext ? `${payload.brandStoryContext.slice(0, 120)}…` : '',
       platform_rules_block: payload.platform_rules_block
         ? `${payload.platform_rules_block.slice(0, 160)}…`
         : '',
@@ -202,19 +292,9 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // Include auth headers for the proxy endpoint
-      const requestHeaders = { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          requestHeaders['Authorization'] = `Bearer ${session.access_token}`;
-        }
-      } catch (e) {
-        console.warn('[PlanBuilder] Could not get auth session:', e.message);
-      }
+      // Include auth headers for the proxy endpoint (fail closed)
+      const requestHeaders = await getAuthHeaders();
+      requestHeaders.Accept = 'application/json';
 
       const response = await fetch(N8N_PLAN_BUILDER_WEBHOOK_URL, {
         method: 'POST',
@@ -240,14 +320,23 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
 
       // If not OK, get error details
       const errorText = await response.text().catch(() => 'No error details');
+      const errorPayload = safeJsonParse(errorText);
+      const errorMessage =
+        errorPayload?.message ||
+        errorPayload?.error ||
+        'Unable to generate your plan right now. Please try again.';
       console.warn(`[PlanBuilder] n8n webhook returned status ${response.status}, attempt ${attempt + 1}`);
       console.warn(`[PlanBuilder] Error response:`, errorText.substring(0, 200));
-      
-      // If it's a client error (4xx), don't retry
-      if (response.status >= 400 && response.status < 500) {
-        console.error(`[PlanBuilder] Client error (${response.status}), stopping retries`);
-        return { success: false, error: 'Unable to generate your plan right now. Please try again.' };
-      }
+
+      // A server response means the proxy handled the attempt. Retrying a
+      // claimed job would either replay n8n or mask the original failure.
+      const isTerminal = response.status >= 400 && response.status < 500;
+      return {
+        success: false,
+        error: errorMessage,
+        status: response.status,
+        terminal: isTerminal,
+      };
     } catch (err) {
       console.error(`[PlanBuilder] ====== FETCH ERROR (Attempt ${attempt + 1}) ======`);
       console.error(`[PlanBuilder] Error name:`, err.name);
@@ -291,19 +380,11 @@ export async function triggerN8nWebhook(jobId, formData = {}, retries = 2) {
  */
 export async function createPlanBuilderJob({ goal, period, platforms, niche, brandVoiceId }) {
   try {
-    // Get auth token
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error('Not authenticated');
-    }
+    const headers = await getAuthHeaders();
 
     const response = await fetch(`${API_BASE_URL}/create-plan-builder-job`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
+      headers,
       body: JSON.stringify({
         goal,
         period,
@@ -341,17 +422,11 @@ export async function createPlanBuilderJob({ goal, period, platforms, niche, bra
  */
 export async function getJobStatus(jobId) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error('Not authenticated');
-    }
+    const headers = await getAuthHeaders();
 
     const response = await fetch(`${API_BASE_URL}/get-job-status?jobId=${jobId}`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`
-      }
+      headers
     });
 
     const data = await response.json();

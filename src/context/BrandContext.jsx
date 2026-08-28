@@ -10,9 +10,55 @@ export const BrandContext = createContext();
  * those live on `user_preferences` and will cause PostgREST 400 / schema errors if selected from `user_profile`.
  */
 const USER_PROFILE_SELECT =
-  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification';
+  'user_id,first_name,profile_type,creator_archetype,brand_name,social_handle,niche,sub_niche,city,location_state,country,industry,target_audience,brand_voice_preference,preferred_platforms,content_goals,audience_pain_point,audience_action_trigger,tone_chips,writing_style,example_post,content_to_post,content_to_avoid,follower_count,primary_offer,conversion_goal,content_persona,monetization_goal,show_up_style,content_strengths,biggest_challenge,hook_style_preference,emotional_triggers,has_seen_welcome_notification,business_primary_goal,creator_monetization_path,is_local_business,audience_location_type,content_mix,posting_frequency,audience_stage';
 
 const QUERY_TIMEOUT_MS = 5000;
+
+function getBrandCacheKey(userId) {
+  return userId ? `brandData:${userId}` : null;
+}
+
+function clearLegacyBrandCache() {
+  try {
+    localStorage.removeItem('brandData');
+  } catch {
+    // ignore storage access failures
+  }
+}
+
+function clearBrandCacheForUser(userId) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage access failures
+  }
+}
+
+function readBrandCacheForUser(userId) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeBrandCacheForUser(userId, data) {
+  const key = getBrandCacheKey(userId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // ignore storage access failures
+  }
+}
 
 function createEmptyBrandData() {
   return {
@@ -25,6 +71,8 @@ function createEmptyBrandData() {
     subNiche: '',
     contentFocus: '',
     city: '',
+    locationState: null,
+    country: 'US',
     industry: '',
     growthStage: '',
     creatorType: null,
@@ -51,6 +99,16 @@ function createEmptyBrandData() {
     emotionalTriggers: [],
     /** true = already shown or legacy user; false = new profile, eligible for one-time welcome notification */
     hasSeenWelcomeNotification: true,
+    businessPrimaryGoal: null,
+    creatorMonetizationPath: null,
+    isLocalBusiness: false,
+    audienceLocationType: null,
+    contentMix: null,
+    postingFrequency: '',
+    audienceStage: '',
+    userBrandType: '',
+    brandVibes: [],
+    contentFocusPillars: [],
   };
 }
 
@@ -64,9 +122,32 @@ function isBusinessProfileType(profileType) {
 }
 
 function normalizeProfileTypeForDb(profileType) {
-  const p = String(profileType || '').toLowerCase();
-  if (p === 'creator' || p === 'solo_creator') return 'creator';
-  return 'business';
+  const p = String(profileType || '').toLowerCase().trim();
+  if (p === 'solo_creator' || p === 'creator') return 'solo_creator';
+  if (p === 'brand_business' || p === 'business' || p === 'brand' || p === 'business_owner' || p === 'hybrid') return 'brand_business';
+  return 'brand_business';
+}
+
+function deriveUserBrandTypeFromProfileType(profileType) {
+  const p = String(profileType || '').toLowerCase().trim();
+  if (p === 'solo_creator' || p === 'creator') return 'solo_creator';
+  if (p === 'brand_business' || p === 'brand' || p === 'business') return 'business_owner';
+  return 'hybrid';
+}
+
+/** Values persisted in `user_preferences.user_brand_type` — not derived from profile_type. */
+const EXPLICIT_USER_BRAND_TYPE_VALUES = new Set(['solo_creator', 'business_owner', 'hybrid']);
+
+/**
+ * @param {unknown} rawUserBrandType — literal `user_brand_type` from user_preferences (before merge fallbacks).
+ * @returns {boolean}
+ */
+function computeHasExplicitBrandType(rawUserBrandType) {
+  if (rawUserBrandType == null) return false;
+  if (typeof rawUserBrandType !== 'string') return false;
+  const t = rawUserBrandType.trim().toLowerCase();
+  if (!t) return false;
+  return EXPLICIT_USER_BRAND_TYPE_VALUES.has(t);
 }
 
 export function useBrand() {
@@ -82,14 +163,19 @@ export function useBrand() {
     loading: context.loading,
     brandFetchComplete: context.brandFetchComplete,
     // Convenience helpers for profile type
-    isCreator: context.brandData?.profileType === 'creator',
+    isCreator: context.brandData?.profileType === 'creator' ||
+               context.brandData?.profileType === 'solo_creator',
     isBrand: isBusinessProfileType(context.brandData?.profileType),
+    hasExplicitBrandType: context.hasExplicitBrandType,
   };
 }
 
 export function BrandProvider({ children }) {
-  const { user } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const { user } = authContext || {};
   const [brandData, setBrandData] = useState(createEmptyBrandData);
+  /** True only when `user_preferences.user_brand_type` is set in DB to a known Brand Voice value (not derived). */
+  const [hasExplicitBrandType, setHasExplicitBrandType] = useState(false);
   /** Background profile fetch — never used to block primary UI; optional spinners only. */
   const [loading, setLoading] = useState(false);
   /** True after first fetch attempt finishes (success, timeout, or error) for the current user. */
@@ -109,14 +195,17 @@ export function BrandProvider({ children }) {
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     prevUserIdRef.current = userId;
+    clearLegacyBrandCache();
 
     if (prevId && userId && prevId !== userId) {
-      localStorage.removeItem('brandData');
+      clearBrandCacheForUser(prevId);
       setBrandData(createEmptyBrandData());
+      setHasExplicitBrandType(false);
       setBrandFetchComplete(false);
     } else if (!userId && prevId) {
-      localStorage.removeItem('brandData');
+      clearBrandCacheForUser(prevId);
       setBrandData(createEmptyBrandData());
+      setHasExplicitBrandType(false);
       setBrandFetchComplete(true);
     }
   }, [userId]);
@@ -125,13 +214,10 @@ export function BrandProvider({ children }) {
     let isActive = true;
 
     const applyLocalBrandFallback = () => {
-      const savedBrand = localStorage.getItem('brandData');
-      if (!savedBrand || !isActive) return;
-
-      try {
-        setBrandData(JSON.parse(savedBrand));
-      } catch (error) {
-        console.warn('[Brand] Could not parse cached brand data:', error.message);
+      if (!user?.id || !isActive) return;
+      const cachedBrand = readBrandCacheForUser(user.id);
+      if (cachedBrand) {
+        setBrandData(cachedBrand);
       }
     };
 
@@ -143,13 +229,11 @@ export function BrandProvider({ children }) {
     /** After a failed profile fetch/insert, prefer cached brand data so the UI is not wiped. */
     const applyFetchFailureFallback = () => {
       if (!isActive) return;
-      const savedBrand = localStorage.getItem('brandData');
-      if (savedBrand) {
-        try {
-          setBrandData(JSON.parse(savedBrand));
+      if (user?.id) {
+        const cachedBrand = readBrandCacheForUser(user.id);
+        if (cachedBrand) {
+          setBrandData(cachedBrand);
           return;
-        } catch (e) {
-          console.warn('[Brand] Could not parse cached brand data after fetch failure:', e.message);
         }
       }
       applyEmptyBrandFallback();
@@ -167,6 +251,15 @@ export function BrandProvider({ children }) {
       creatorType: userPreferences.creator_type
         ? normalizeOptionalEnum(userPreferences.creator_type)
         : baseData.creatorType,
+      userBrandType: userPreferences.user_brand_type
+        ? String(userPreferences.user_brand_type)
+        : (baseData.userBrandType || deriveUserBrandTypeFromProfileType(baseData.profileType)),
+      brandVibes: Array.isArray(userPreferences.brand_vibes)
+        ? userPreferences.brand_vibes
+        : (baseData.brandVibes || []),
+      contentFocusPillars: Array.isArray(userPreferences.content_focus_pillars)
+        ? userPreferences.content_focus_pillars
+        : (baseData.contentFocusPillars || []),
     });
 
     const fetchBrandData = async () => {
@@ -223,6 +316,8 @@ export function BrandProvider({ children }) {
             subNiche: data.sub_niche || '',
             contentFocus: '',
             city: data.city || '',
+            locationState: data.location_state || null,
+            country: data.country || 'US',
             industry: data.industry ? formatEnumLabel(data.industry) : '',
             growthStage: '',
             creatorType: null,
@@ -250,6 +345,16 @@ export function BrandProvider({ children }) {
             hookStylePreference: data.hook_style_preference ? normalizeOptionalEnum(data.hook_style_preference) : '',
             emotionalTriggers: data.emotional_triggers || [],
             hasSeenWelcomeNotification: data.has_seen_welcome_notification !== false,
+            businessPrimaryGoal: data.business_primary_goal || null,
+            creatorMonetizationPath: data.creator_monetization_path || null,
+            isLocalBusiness: data.is_local_business || false,
+            audienceLocationType: data.audience_location_type || null,
+            contentMix: data.content_mix || null,
+            postingFrequency: data.posting_frequency || '',
+            audienceStage: data.audience_stage || '',
+            userBrandType: '',
+            brandVibes: [],
+            contentFocusPillars: [],
           };
 
           const mergedData = userPreferences
@@ -258,13 +363,14 @@ export function BrandProvider({ children }) {
 
           if (isActive) {
             setBrandData(mergedData);
+            setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
           }
-          localStorage.setItem('brandData', JSON.stringify(mergedData));
+          writeBrandCacheForUser(user.id, mergedData);
         } else {
           console.info('[Brand] No profile row found, inserting default for user:', user.id);
           const { error: insertError } = await supabase
             .from('user_profile')
-            .upsert({ user_id: user.id, profile_type: 'brand' }, { onConflict: 'user_id' });
+            .upsert({ user_id: user.id, profile_type: 'brand' }, { onConflict: 'user_id', ignoreDuplicates: true });
 
           if (insertError) {
             console.warn('[Brand] Default row insert failed (non-critical):', insertError.message);
@@ -274,9 +380,10 @@ export function BrandProvider({ children }) {
           if (isActive && userPreferences) {
             setBrandData((current) => {
               const merged = mergePreferencesIntoBrandData(current, userPreferences);
-              localStorage.setItem('brandData', JSON.stringify(merged));
+              writeBrandCacheForUser(user.id, merged);
               return merged;
             });
+            setHasExplicitBrandType(computeHasExplicitBrandType(userPreferences?.user_brand_type));
           }
         }
       } catch (error) {
@@ -300,11 +407,13 @@ export function BrandProvider({ children }) {
   }, [userId, reloadTrigger]);
 
   const updateBrandData = useCallback(async (newData) => {
-    const updated = { ...brandDataRef.current, ...newData };
+    const existing = brandDataRef.current;
+    const updates = newData;
+    const updated = { ...existing, ...updates };
     setBrandData(updated);
     brandDataRef.current = updated;
 
-    localStorage.setItem('brandData', JSON.stringify(updated));
+    writeBrandCacheForUser(user?.id, updated);
 
     if (user?.id) {
       try {
@@ -316,6 +425,8 @@ export function BrandProvider({ children }) {
           brand_name: updated.brandName || null,
           social_handle: updated.handle || null,
           city: updated.city || null,
+          location_state: updates.locationState ?? existing.locationState,
+          country: updates.country ?? existing.country,
           industry: updated.industry
             ? normalizeOptionalEnum(updated.industry) || String(updated.industry).trim() || null
             : null,
@@ -342,6 +453,13 @@ export function BrandProvider({ children }) {
           biggest_challenge: normalizeOptionalEnum(updated.biggestChallenge) || null,
           hook_style_preference: normalizeOptionalEnum(updated.hookStylePreference) || null,
           emotional_triggers: updated.emotionalTriggers || [],
+          business_primary_goal: updated.businessPrimaryGoal || null,
+          creator_monetization_path: updated.creatorMonetizationPath || null,
+          is_local_business: typeof updated.isLocalBusiness === 'boolean' ? updated.isLocalBusiness : false,
+          audience_location_type: updated.audienceLocationType || null,
+          content_mix: updated.contentMix || null,
+          posting_frequency: updated.postingFrequency || null,
+          audience_stage: updated.audienceStage || null,
           updated_at: new Date().toISOString(),
         };
 
@@ -370,6 +488,11 @@ export function BrandProvider({ children }) {
           content_focus: nicheForPrefs,
           target_audience: updated.targetAudience || null,
           platforms: Array.isArray(updated.platforms) ? updated.platforms : [],
+          user_brand_type: updated.userBrandType || null,
+          brand_vibes: Array.isArray(updated.brandVibes) ? updated.brandVibes : [],
+          content_focus_pillars: Array.isArray(updated.contentFocusPillars)
+            ? updated.contentFocusPillars
+            : [],
         });
 
         if (!prefResult?.success) {
@@ -379,6 +502,8 @@ export function BrandProvider({ children }) {
             preferencesError: prefResult?.error || 'Could not sync preferences (growth stage, creator type, etc.)',
           };
         }
+
+        setHasExplicitBrandType(computeHasExplicitBrandType(updated.userBrandType));
 
         return { success: true };
       } catch (error) {
@@ -393,7 +518,8 @@ export function BrandProvider({ children }) {
   const resetBrandData = useCallback(async () => {
     const resetData = createEmptyBrandData();
     setBrandData(resetData);
-    localStorage.removeItem('brandData');
+    clearLegacyBrandCache();
+    clearBrandCacheForUser(user?.id);
 
     if (user?.id) {
       try {
@@ -449,13 +575,14 @@ export function BrandProvider({ children }) {
   const value = useMemo(
     () => ({
       brandData,
+      hasExplicitBrandType,
       updateBrandData,
       resetBrandData,
       refreshBrandData,
       loading,
       brandFetchComplete,
     }),
-    [brandData, updateBrandData, resetBrandData, refreshBrandData, loading, brandFetchComplete]
+    [brandData, hasExplicitBrandType, updateBrandData, resetBrandData, refreshBrandData, loading, brandFetchComplete]
   );
 
   return (

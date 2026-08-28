@@ -7,6 +7,8 @@ import { useContent } from '../context/ContentContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildBrandContext, getBrandVoice, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
 import LoadingSpinner from '../components/LoadingSpinner';
 import UpgradeModal from '../components/UpgradeModal';
 import { buildContentVaultPayload } from '../utils/contentVault';
@@ -51,7 +53,7 @@ const REPURPOSER_EXAMPLES = [
     }
   }
 ];
-import { supabase } from '../config/supabase';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 import { saveToVault } from '../services/contentService';
 
 const FORMAT_OPTIONS = [
@@ -77,7 +79,7 @@ export default function ContentRepurposer() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
   const { checkFeatureAccess } = useSubscription();
-  const { saveGeneratedContent, setDraft } = useContent();
+  const { setDraft } = useContent();
   const navigate = useNavigate();
 
   const [originalContent, setOriginalContent] = useState('');
@@ -122,18 +124,16 @@ export default function ContentRepurposer() {
       const niche = getNiche(brandData);
       const audience = getTargetAudience(brandData);
 
-      // Get auth headers
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers = { 'Content-Type': 'application/json' };
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
+      // Fail closed: never call the Grok proxy without a real Bearer token.
+      const headers = await getAuthReadyHeaders();
 
-      const response = await fetch(GROK_PROXY_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'grok-4.1-fast-reasoning',
+      const requestBody = JSON.stringify({
+          ...getGrokParams('contentRepurposer'),
+          // 4096: worst case is one 5000-char Facebook/YouTube post (~1300
+          // tokens) plus hashtags, tips, and hooks (~400), and reasoning_effort
+          // 'low' bills reasoning tokens as output on top of that. 4096 covers
+          // that with margin while halving the server's blanket 8192 ceiling.
+          max_tokens: 4096,
           messages: [
             {
               role: 'system',
@@ -142,7 +142,9 @@ export default function ContentRepurposer() {
 BRAND PROFILE:
 ${brandContext}
 
-IMPORTANT: All repurposed content must match the brand voice and appeal to the target audience. Maintain brand consistency across all formats.`
+IMPORTANT: All repurposed content must match the brand voice and appeal to the target audience. Maintain brand consistency across all formats.
+
+${HUMAN_WRITING_RULES}`
             },
             {
               role: 'user',
@@ -171,8 +173,25 @@ Format as JSON with fields: content, hashtags, tips, hooks`
             }
           ],
           temperature: 0.7,
-        })
       });
+
+      const postRepurposeRequest = (requestHeaders) => fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: requestBody,
+      });
+
+      let response = await postRepurposeRequest(headers);
+
+      // One-shot 401 recovery: refresh the session and retry once.
+      if (response.status === 401) {
+        try {
+          const refreshedHeaders = await getAuthReadyHeaders({ forceRefresh: true });
+          response = await postRepurposeRequest(refreshedHeaders);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -210,7 +229,12 @@ Format as JSON with fields: content, hashtags, tips, hooks`
 
     } catch (error) {
       console.error('Repurposing error:', error);
-      addToast('Failed to repurpose content. Please try again.', 'error');
+      addToast(
+        isAuthNotReadyError(error)
+          ? 'Your session is still reconnecting. Please try again in a moment.'
+          : 'Failed to repurpose content. Please try again.',
+        'error'
+      );
     } finally {
       setIsRepurposing(false);
     }

@@ -1,12 +1,13 @@
 const LAUNCH_PRICE_IDS = [
   process.env.STRIPE_PRICE_FOUNDER_ANNUAL,
   process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL,
-  process.env.STRIPE_PRICE_BUILDERS_ANNUAL,
-  process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL,
   process.env.STRIPE_PRICE_BUILDER_ANNUAL,
   process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL,
 ].filter(Boolean);
 
+// `builder` (Builders Club) is closed to new signups — no price is offered for
+// it in getPriceIdForPlan. The alias, price-id lookup, and display name below
+// are retained on purpose so existing legacy subscriptions still resolve.
 const PLAN_ALIASES = {
   essentials: 'essentials',
   essentials_monthly: 'essentials',
@@ -44,8 +45,6 @@ export function getPlanFromPriceId(priceId) {
     [process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]: 'pro',
     [process.env.STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
     [process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]: 'founder',
-    [process.env.STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
-    [process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL]: 'builder',
     [process.env.STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
     [process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL]: 'builder',
   };
@@ -69,17 +68,39 @@ export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
     founder: {
       annual: process.env.STRIPE_PRICE_FOUNDER_ANNUAL || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL || null,
     },
-    builder: {
-      annual:
-        process.env.STRIPE_PRICE_BUILDER_ANNUAL ||
-        process.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL ||
-        process.env.STRIPE_PRICE_BUILDERS_ANNUAL ||
-        process.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL ||
-        null,
-    },
   };
 
   return priceMap[normalizedPlanId]?.[billingCycle] || null;
+}
+
+/**
+ * Price IDs that may be purchased through Checkout. Founders/Builders annual
+ * prices stay in getPlanFromPriceId / getPriceIdForPlan so existing members
+ * still resolve, but they must not be sold as new Checkout sessions.
+ */
+const PURCHASABLE_CHECKOUT_PRICE_ENV_KEYS = [
+  ['STRIPE_PRICE_ESSENTIALS_MONTHLY', 'VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY'],
+  ['STRIPE_PRICE_ESSENTIALS_ANNUAL', 'VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL'],
+  ['STRIPE_PRICE_PRO_MONTHLY', 'VITE_STRIPE_PRICE_PRO_MONTHLY'],
+  ['STRIPE_PRICE_PRO_ANNUAL', 'VITE_STRIPE_PRICE_PRO_ANNUAL'],
+];
+
+export function getPurchasableCheckoutPriceIds() {
+  const ids = new Set();
+  for (const keys of PURCHASABLE_CHECKOUT_PRICE_ENV_KEYS) {
+    for (const key of keys) {
+      const value = process.env[key];
+      if (typeof value === 'string' && value.trim()) {
+        ids.add(value.trim());
+      }
+    }
+  }
+  return ids;
+}
+
+export function isPurchasableCheckoutPriceId(priceId) {
+  if (!priceId || typeof priceId !== 'string') return false;
+  return getPurchasableCheckoutPriceIds().has(priceId.trim());
 }
 
 export function resolvePlanId({ planId, metadataPlanId, priceId }) {
@@ -102,7 +123,7 @@ export function getPlanDisplayName(planId) {
   const labels = {
     essentials: 'Essentials',
     pro: 'Pro',
-    builder: 'Builders Club',
+    builder: 'Legacy Annual',
     founder: 'Founders Club',
   };
 

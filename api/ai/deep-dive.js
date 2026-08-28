@@ -1,17 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
-  process.env.PERPLEXITY_API_KEY ||
-  process.env.VITE_PERPLEXITY_API_KEY;
-// TODO: Move to server-side PERPLEXITY_API_KEY in Vercel dashboard for production security.
+  typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
+    ? process.env.PERPLEXITY_API_KEY.trim()
+    : null;
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
 const MODEL = 'sonar-pro';
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 function parseStructuredJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
@@ -179,6 +184,7 @@ function buildMessages({ topic, niche, platform, targetAudience, brandVoice, bra
   const nicheLabel = niche || 'general creator';
   const audienceLabel = targetAudience || 'general audience';
   const brandVoiceLabel = brandVoice || 'clear, practical, creator-friendly';
+  const storyContext = getBrandStoryContext(brandData); // HUTTLE AI: userBrandType-based content philosophy
   const brandBlock = buildCreatorBrandBlock(brandData, brandData); // HUTTLE AI: brand context injected
   const nicheFocusSuffix = niche && targetAudience
     ? `\n\nFocus results relevant to ${niche} creators targeting ${targetAudience}.`
@@ -187,7 +193,9 @@ function buildMessages({ topic, niche, platform, targetAudience, brandVoice, bra
   return [
     {
       role: 'system',
-      content: `${brandBlock}You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.`, // HUTTLE AI: brand context injected
+      content: `${storyContext ? `${storyContext}\n\n` : ''}${brandBlock}You are a professional social media trend analyst. Your goal is to deliver the most accurate, real-time, and up-to-date trend intelligence available on the web right now. Never rely on training data alone — always use web search to ground every finding in current data. Analyze trend momentum, platform-specific signals, content format performance, and emerging creator behavior. Provide specific, actionable insights a content creator can use immediately.
+
+${HUMAN_WRITING_RULES}`, // HUTTLE AI: brand context injected
     },
     {
       role: 'user',
@@ -197,11 +205,12 @@ function buildMessages({ topic, niche, platform, targetAudience, brandVoice, bra
 }
 
 async function getAuthenticatedUserId(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !supabase) return null;
+  if (!supabase) return null;
+
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) return null;
 
   try {
-    const token = authHeader.replace('Bearer ', '');
     const {
       data: { user },
       error,
@@ -231,9 +240,25 @@ export default async function handler(req, res) {
     });
   }
 
+  if (!supabase) {
+    console.error('[deep-dive] Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)');
+    return res.status(503).json({
+      error: 'Authentication service not configured on the server.',
+    });
+  }
+
   const authenticatedUserId = await getAuthenticatedUserId(req);
   if (!authenticatedUserId) {
     return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const billingFeature = resolveRouteBillingFeature('deep-dive', req);
+  const usageGate = await assertCanGenerate(supabase, {
+    userId: authenticatedUserId,
+    featureKey: billingFeature,
+  });
+  if (!usageGate.ok) {
+    return sendUsageGateRejection(res, usageGate);
   }
 
   try {
@@ -324,11 +349,25 @@ export default async function handler(req, res) {
         }
       );
 
+      const usageRecord = await recordGenerationUsage(supabase, {
+        userId: authenticatedUserId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'deep-dive' },
+      });
+      if (!usageRecord.ok) {
+        console.error('[deep-dive] Failed to record usage:', usageRecord.error);
+      }
+
       return res.status(200).json({
         success: true,
         report,
         citations,
         metadata,
+        billing: {
+          feature: billingFeature,
+          creditsCharged: usageRecord.creditsLogged,
+        },
       });
     } catch (error) {
       clearTimeout(timeoutId);

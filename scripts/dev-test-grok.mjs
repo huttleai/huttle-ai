@@ -1,19 +1,13 @@
 /**
- * Minimal xAI Grok check (direct API, same env vars as api/ai/grok.js).
+ * Minimal xAI Grok check (direct API, same model source as api/ai/grok.js).
  * Fails fast with clear output.
  *
  *   node scripts/dev-test-grok.mjs
  */
 import 'dotenv/config';
+import { getGrokParams } from '../src/config/grokConfig.js';
 
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
-const DEFAULT_GROK_MODEL = 'grok-4-1-fast-non-reasoning';
-
-function resolveModel() {
-  const a = typeof process.env.GROK_CHAT_MODEL === 'string' ? process.env.GROK_CHAT_MODEL.trim() : '';
-  const b = typeof process.env.GROK_MODEL === 'string' ? process.env.GROK_MODEL.trim() : '';
-  return a || b || DEFAULT_GROK_MODEL;
-}
 
 const apiKey = typeof process.env.GROK_API_KEY === 'string' ? process.env.GROK_API_KEY.trim() : '';
 if (!apiKey) {
@@ -21,9 +15,10 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const model = resolveModel();
+const { model, reasoning_effort } = getGrokParams('caption');
 const body = {
   model,
+  reasoning_effort,
   temperature: 0.3,
   max_completion_tokens: 64,
   messages: [

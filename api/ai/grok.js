@@ -9,13 +9,20 @@
  *
  * DEV NOTE — common failures:
  * - 401/403 from xAI: wrong or expired GROK_API_KEY → rotate in .env (local-api-server loads via dotenv) or Vercel env.
- * - 400 invalid model: set GROK_CHAT_MODEL / GROK_MODEL to a current id (see xAI docs); default here is grok-4-1-fast-non-reasoning.
+ * - 400 invalid model: the model id lives in src/config/grokConfig.js (GROK_MODEL) — the only place it may be changed.
  * - 401 from this proxy (JSON): no Supabase session → pass Authorization: Bearer <access_token> from the logged-in app.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { GROK_MODEL } from '../../src/config/grokConfig.js';
+import {
+  assertCanGenerate,
+  sendUsageGateRejection,
+  resolveRouteBillingFeature,
+  recordGenerationUsage,
+} from '../_utils/usageGate.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
 const _rawGrokKey = process.env.GROK_API_KEY;
@@ -23,53 +30,7 @@ const GROK_API_KEY =
   typeof _rawGrokKey === 'string' && _rawGrokKey.trim() ? _rawGrokKey.trim() : null;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
-/**
- * Default chat model when env is unset. xAI’s current catalog centers on Grok 4.x;
- * legacy aliases like grok-3-latest often return 400 invalid model.
- * @see https://docs.x.ai/docs/models
- */
-const DEFAULT_GROK_MODEL = 'grok-4-1-fast-non-reasoning';
-
-function resolveGrokModelId() {
-  const fromChat = typeof process.env.GROK_CHAT_MODEL === 'string' ? process.env.GROK_CHAT_MODEL.trim() : '';
-  const fromLegacy = typeof process.env.GROK_MODEL === 'string' ? process.env.GROK_MODEL.trim() : '';
-  const nonReasoning = typeof process.env.GROK_MODEL_NON_REASONING === 'string' ? process.env.GROK_MODEL_NON_REASONING.trim() : '';
-  const fromFast = typeof process.env.GROK_FAST_MODEL === 'string' ? process.env.GROK_FAST_MODEL.trim() : '';
-  const raw = fromChat || fromLegacy || nonReasoning || fromFast || DEFAULT_GROK_MODEL;
-  return normalizeGrokModelIdAliases(raw);
-}
-
-/** Allow only xAI-style model ids from the client; no other semantics in the proxy. */
-function sanitizeUpstreamModelId(raw) {
-  if (typeof raw !== 'string') return null;
-  const s = raw.trim();
-  if (!s || s.length > 96) return null;
-  // xAI ids: grok-4-1-fast-non-reasoning, grok-3, grok-2-vision-1212, etc.
-  if (!/^grok-[a-zA-Z0-9._-]+$/.test(s)) return null;
-  return s;
-}
-
-/**
- * Map common typos / legacy spellings to ids xAI accepts (hyphenated 4-1, not 4.1).
- * @param {string} modelId
- */
-function normalizeGrokModelIdAliases(modelId) {
-  if (typeof modelId !== 'string') return modelId;
-  const t = modelId.trim();
-  if (!t) return t;
-  const lower = t.toLowerCase();
-  const map = new Map([
-    ['grok-4.1-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4.1-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-    ['grok-4.1-fast', 'grok-4-1-fast'],
-    ['grok-4-fast-reasoning', 'grok-4-1-fast-reasoning'],
-    ['grok-4-fast-non-reasoning', 'grok-4-1-fast-non-reasoning'],
-  ]);
-  if (map.has(lower)) return map.get(lower);
-  if (/^grok-4\.1-/i.test(t)) return t.replace(/^grok-4\.1-/i, 'grok-4-1-');
-  if (/grok-4\.1/i.test(t)) return t.replace(/grok-4\.1/gi, 'grok-4-1');
-  return t;
-}
+const VALID_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high']);
 
 function summarizeXaiErrorBody(errorText) {
   const raw = String(errorText || '').trim();
@@ -105,9 +66,10 @@ function setGrokCorsHeaders(res) {
 }
 
 // Initialize Supabase for auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per user
@@ -195,7 +157,9 @@ async function getCachedGrokResult(cacheConfig, cacheAccess) {
 
   return {
     resultData: data.payload ?? data.result_data,
-    generatedAt: data.generated_at,
+    // Prod schema truth: niche_content_cache has generated_date and cache_date
+    // (no generated_at, and created_at is unconfirmed — do not depend on it).
+    generatedAt: data.generated_date || data.cache_date,
   };
 }
 
@@ -209,17 +173,44 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
   const now = new Date();
   const ttlHours = Number(cacheConfig.ttlHours) > 0 ? Number(cacheConfig.ttlHours) : 24;
   const expiresAt = new Date(now.getTime() + ttlHours * 60 * 60 * 1000);
+  // Prod schema truth (verified in live DB): niche_content_cache columns are
+  // cache_key, niche, platform, feature, user_type, result_data, cache_date,
+  // generated_date, expires_at, payload, user_id, hit_count. There is NO
+  // generated_at, and created_at is unconfirmed — never write or read those.
+  const cacheDateKey = now.toISOString().split('T')[0];
   const cacheRow = {
     cache_key: cacheConfig.key,
     niche: cacheConfig.niche?.toLowerCase?.().replace(/\s+/g, '_') || 'small_business',
     platform: cacheConfig.platform || 'instagram',
     feature: cacheConfig.type || 'grok',
+    cache_date: cacheDateKey,
+    generated_date: cacheDateKey,
     payload: cachePayload,
-    generated_at: now.toISOString(),
+    result_data: cachePayload,
     expires_at: expiresAt.toISOString(),
     hit_count: 0,
     user_id: cacheAccess?.userId || null,
   };
+
+  const VALID_CACHE_COLUMNS = new Set([
+    'id', 'cache_key', 'feature', 'niche', 'platform',
+    'user_type', 'cache_date', 'generated_date', 'payload', 'hit_count',
+    'expires_at', 'user_id', 'result_data',
+  ]);
+
+  const invalidFields = Object.keys(cacheRow).filter(
+    (k) => !VALID_CACHE_COLUMNS.has(k),
+  );
+
+  if (invalidFields.length > 0) {
+    console.error(
+      '[NicheCache] WRITE ABORTED — payload contains invalid columns:',
+      invalidFields,
+      '| These columns do not exist in niche_content_cache and will',
+      'cause a 400. Remove them from the payload.',
+    );
+    return null;
+  }
 
   const { data: existingRow, error: lookupError } = await applyCacheUserScope(
     supabase
@@ -301,14 +292,25 @@ export default async function handler(req, res) {
       });
     }
 
+    if (!supabase) {
+      logError('grok.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: true,
+        code: 'AUTH_SERVICE_MISCONFIGURED',
+        message: 'Authentication service not configured on the server.',
+      });
+    }
+
     // Authenticate user
     let userId = null;
     const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
+    const bearerMatch =
+      typeof authHeader === 'string' ? /^Bearer\s+(\S+)/i.exec(authHeader.trim()) : null;
+    const token = bearerMatch ? bearerMatch[1] : null;
+
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (!error && user) {
         userId = user.id;
       }
@@ -343,6 +345,14 @@ export default async function handler(req, res) {
     }
 
     const rawBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const billingFeature = resolveRouteBillingFeature('grok', req);
+    const usageGate = await assertCanGenerate(supabase, {
+      userId,
+      featureKey: billingFeature,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate, { grokStyle: true });
+    }
     const debugStep =
       typeof rawBody.grok_debug_fullpost_step === 'string'
         ? rawBody.grok_debug_fullpost_step.trim().slice(0, 64)
@@ -378,7 +388,7 @@ export default async function handler(req, res) {
       targetAudience,
       brandContext,
       forceCacheRefresh,
-      model: clientModelRaw,
+      reasoning_effort: reasoningEffortRaw,
     } = rawBody;
 
     if (!messages || !Array.isArray(messages)) {
@@ -403,8 +413,10 @@ export default async function handler(req, res) {
       }
     }
 
-    const clientSanitized = sanitizeUpstreamModelId(clientModelRaw);
-    const safeModel = normalizeGrokModelIdAliases(clientSanitized || resolveGrokModelId());
+    // Model is server-owned (src/config/grokConfig.js); client model strings are ignored.
+    const safeReasoningEffort = VALID_REASONING_EFFORTS.has(reasoningEffortRaw)
+      ? reasoningEffortRaw
+      : 'none';
     const cacheAccess = buildCacheAccessContext({
       personalized,
       targetAudience,
@@ -426,36 +438,20 @@ export default async function handler(req, res) {
           ...formatCachedResponse(cachedResult.resultData),
           cached: true,
           generatedAt: cachedResult.generatedAt,
+          billing: { feature: billingFeature, creditsCharged: 0 },
         });
       }
     }
 
     const normalizedMessages = normalizeMessagesForUpstream(messages);
-    const serverPreferredModel = normalizeGrokModelIdAliases(resolveGrokModelId());
-
-    /** If env + client agree on one invalid id, still try known-good default last. */
-    const modelCandidates = [];
-    const pushModel = (id) => {
-      const m = normalizeGrokModelIdAliases(typeof id === 'string' ? id.trim() : '');
-      if (!m || modelCandidates.includes(m)) return;
-      modelCandidates.push(m);
-    };
-    pushModel(safeModel);
-    pushModel(serverPreferredModel);
-    pushModel(DEFAULT_GROK_MODEL);
 
     const runUpstreamOnce = async (modelId) => {
-      const isReasoningModel =
-        typeof modelId === 'string'
-        && modelId.includes('reasoning')
-        && !modelId.includes('non-reasoning');
       const upstreamBody = {
         model: modelId,
         messages: normalizedMessages,
+        temperature: safeTemperature,
+        reasoning_effort: safeReasoningEffort,
       };
-      if (!isReasoningModel) {
-        upstreamBody.temperature = safeTemperature;
-      }
       // xAI deprecates max_tokens in favor of max_completion_tokens for /v1/chat/completions
       if (typeof max_tokens === 'number' && max_tokens > 0 && max_tokens <= 8192) {
         upstreamBody.max_completion_tokens = max_tokens;
@@ -478,19 +474,13 @@ export default async function handler(req, res) {
       });
     };
 
-    logInfo('grok.upstream_call', { models: modelCandidates, messageCount: normalizedMessages.length });
+    logInfo('grok.upstream_call', { models: [GROK_MODEL], messageCount: normalizedMessages.length });
 
-    let response;
-    let lastErrorText = '';
+    const response = await runUpstreamOnce(GROK_MODEL);
+    devAiProxyLog('grok ← xAI response', { model: GROK_MODEL, status: response.status, ok: response.ok });
 
-    for (let ci = 0; ci < modelCandidates.length; ci += 1) {
-      const modelId = modelCandidates[ci];
-      response = await runUpstreamOnce(modelId);
-      devAiProxyLog('grok ← xAI response', { model: modelId, status: response.status, ok: response.ok });
-
-      if (response.ok) break;
-
-      lastErrorText = await response.text();
+    if (!response.ok) {
+      const lastErrorText = await response.text();
       console.error('[GROK UPSTREAM RAW]', response.status, lastErrorText); // TODO: remove after QA
 
       if (fpbGrokHookDevLogEnabled && isFpbGrokHookRequest && response.status >= 400) {
@@ -505,7 +495,7 @@ export default async function handler(req, res) {
         logError('grok.upstream_error', {
           status: response.status,
           snippet: (lastErrorText || '').slice(0, 280),
-          model: modelId,
+          model: GROK_MODEL,
         });
         return res.status(502).json({
           error: true,
@@ -515,25 +505,16 @@ export default async function handler(req, res) {
         });
       }
 
-      if (response.status === 400 && ci < modelCandidates.length - 1) {
-        devAiProxyLog('grok upstream 400; trying next model candidate', {
-          attempted: modelId,
-          next: modelCandidates[ci + 1],
-          snippet: summarizeXaiErrorBody(lastErrorText),
-        });
-        continue;
-      }
-
       logError('grok.upstream_error', {
         status: response.status,
         snippet: (lastErrorText || '').slice(0, 280),
-        model: modelId,
+        model: GROK_MODEL,
       });
       if (debugFullPost) {
         logError('grok.debug_fullpost_upstream', {
           status: response.status,
           snippet: (lastErrorText || '').slice(0, 500),
-          model: modelId,
+          model: GROK_MODEL,
         });
       }
       if (response.status === 400) {
@@ -555,14 +536,6 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!response.ok) {
-      return res.status(502).json({
-        error: true,
-        code: 'GROK_UPSTREAM_ERROR',
-        message: 'AI service error. Please try again.',
-      });
-    }
-
     const data = await response.json();
     
     const payload = {
@@ -575,10 +548,24 @@ export default async function handler(req, res) {
       await setCachedGrokResult(cache, payload, cacheAccess);
     }
 
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'grok' },
+    });
+    if (!usageRecord.ok) {
+      logError('grok.usage_record_failed', { userId, error: usageRecord.error });
+    }
+
     return res.status(200).json({
       ...payload,
       cached: false,
       generatedAt: new Date().toISOString(),
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

@@ -61,17 +61,20 @@ export function BorderBeamButton({
   className = "",
   onClick,
   disabled = false,
-  beamSize = 150,
+  beamSize: _beamSize = 150,
   beamDuration = 8,
   colorFrom = "#01bad2",
   colorTo = "#2B8FC7",
+  ...buttonProps
 }) {
   return (
     <>
       <button
+        type="button"
         onClick={onClick}
         disabled={disabled}
         className={`relative overflow-hidden transition-transform duration-200 ${disabled ? '' : 'hover:scale-[1.02] active:scale-[0.98]'} ${className}`}
+        {...buttonProps}
       >
         {/* Animated border beam - CSS only */}
         <div className="absolute inset-0 rounded-[inherit]">

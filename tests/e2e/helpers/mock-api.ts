@@ -179,7 +179,7 @@ function buildContentRemixResponse(mode: string) {
       },
     ],
     metadata: {
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-5',
       requestedMode: mode,
       normalizedMode: mode === 'sales' ? 'sales_conversion' : 'viral_reach',
       platformCount: 2,

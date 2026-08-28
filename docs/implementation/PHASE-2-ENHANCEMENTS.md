@@ -134,7 +134,7 @@ export async function generateTrendIdeas(brandData, trendData, userHistory = nul
         'Authorization': `Bearer ${GROK_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'grok-4-fast-reasoning',
+        ...getGrokParams('featureKey'), // model + reasoning_effort from src/config/grokConfig.js
         messages: [
           {
             role: 'system',

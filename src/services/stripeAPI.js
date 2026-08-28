@@ -8,7 +8,9 @@
  * - Usage tracking for AI generations
  */
 
-import { supabase } from '../config/supabase';
+import { trackPixelEvent } from '../utils/metaPixel';
+import { retryFetch } from '../utils/retryFetch';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
@@ -92,23 +94,13 @@ export function simulateDemoCheckout(planId) {
 }
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error. Billing endpoints are never called without
+ * a real Bearer token.
+ * @param {{ forceRefresh?: boolean }} [options]
  */
-async function getAuthHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch {
-    console.warn('Could not get auth session for Stripe request');
-  }
-  
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -136,6 +128,16 @@ export function openStripeCheckoutTab() {
   return w;
 }
 
+export function closeCheckoutTab(targetWindow) {
+  if (targetWindow && !targetWindow.closed) {
+    try {
+      targetWindow.close();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export const SUBSCRIPTION_PLANS = {
   ESSENTIALS: {
     id: 'essentials',
@@ -145,14 +147,12 @@ export const SUBSCRIPTION_PLANS = {
     priceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL || '',
     features: {
-      aiGenerations: 150,
+      aiGenerations: 200,
       storageGB: 5,
       features: [
-        'All core Huttle AI tools',
-        '150 AI generations/month',
-        '5GB storage',
-        'AI Plan Builder',
-        'Full Trend Lab access',
+        'All AI Power Tools',
+        '200 AI generations/month',
+        'Content Vault',
         'Email Support'
       ]
     }
@@ -161,7 +161,7 @@ export const SUBSCRIPTION_PLANS = {
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 39,
-    annualPrice: 397.8,
+    annualPrice: 398,
     priceId: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {
@@ -171,33 +171,16 @@ export const SUBSCRIPTION_PLANS = {
         'Everything in Essentials',
         '600 AI generations/month',
         '25GB storage',
-        'Content Repurposer',
-        'Trend Forecaster',
-        'Huttle Agent',
+        'Trend Lab',
+        'Full Ignite Engine access',
         'Priority Email Support'
       ]
     }
   },
-  BUILDER: {
-    id: 'builder',
-    name: 'Builders Club',
-    monthlyPrice: null,
-    annualPrice: 249,
-    priceId: null,
-    annualPriceId: import.meta.env.VITE_STRIPE_PRICE_BUILDER_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_BUILDERS_ANNUAL || '',
-    features: {
-      aiGenerations: 800,
-      storageGB: 25,
-      features: [
-        'Everything in Pro',
-        '800 AI generations/month',
-        '25GB storage',
-        'Locked-in Builders pricing',
-        'All future Pro features included',
-        'Priority support'
-      ]
-    }
-  },
+  // Builders Club ("builder") is intentionally absent: it is closed to new
+  // signups, so listing it here only inlined VITE_STRIPE_PRICE_BUILDER_ANNUAL
+  // into the client bundle for a plan nobody can buy. Existing legacy
+  // subscriptions are still recognized server-side in api/_utils/stripePlans.js.
   FOUNDER: {
     id: 'founder',
     name: 'Founders Club',
@@ -215,7 +198,7 @@ export const SUBSCRIPTION_PLANS = {
         'Locked-in Founders pricing forever',
         'All future features included',
         'Priority support',
-        'Founders Club badge'
+        'Early access to new features'
       ]
     }
   }
@@ -238,8 +221,12 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       throw new Error('Invalid plan selected');
     }
 
-    // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; Founders/Builders are annual-only
-    // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL / BUILDER_ANNUAL). Never send monthly for those.
+    if (plan.id === 'founder' || plan.id === 'builder') {
+      throw new Error('This plan is not available for new purchases. Choose Essentials or Pro.');
+    }
+
+    // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; Founders Club is annual-only
+    // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL). Never send monthly for those.
     const monthlyPriceMissing =
       plan.monthlyPrice == null || !plan.priceId || String(plan.priceId).trim() === '';
     const effectiveBillingCycle = monthlyPriceMissing ? 'annual' : billingCycle;
@@ -247,12 +234,28 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       effectiveBillingCycle === 'annual' ? plan.annualPriceId : plan.priceId;
 
     // Demo mode: Simulate checkout when this plan has no price ID, or when
-    // Essentials/Pro are unset (app-wide demo). Founder/Builder only need their own annual price.
+    // Essentials/Pro are unset (app-wide demo). Founders Club only needs its own annual price.
     if (!priceId) {
+      closeCheckoutTab(targetWindow);
       return simulateDemoCheckout(planId);
     }
-    if (planId !== 'founder' && planId !== 'builder' && isDemoMode()) {
+    if (isDemoMode()) {
+      closeCheckoutTab(targetWindow);
       return simulateDemoCheckout(planId);
+    }
+
+    // Fire Meta Pixel InitiateCheckout before redirecting to Stripe so the
+    // event is attributed to this user gesture on our domain (Stripe's hosted
+    // checkout lives on checkout.stripe.com and cannot run our Pixel).
+    const checkoutValue =
+      effectiveBillingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+    if (typeof checkoutValue === 'number' && Number.isFinite(checkoutValue)) {
+      trackPixelEvent('InitiateCheckout', {
+        value: checkoutValue,
+        currency: 'USD',
+        content_name: plan.name,
+        content_category: effectiveBillingCycle === 'annual' ? 'Annual' : 'Monthly',
+      });
     }
 
     // Call your backend API to create a checkout session
@@ -314,10 +317,16 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       openedInNewTab: Boolean(targetWindow),
     };
   } catch (error) {
+    closeCheckoutTab(targetWindow);
+    const needsAuth = isAuthNotReadyError(error);
+    const message = needsAuth
+      ? 'Sign in to start your trial.'
+      : (error.message || 'Could not start checkout. Please try again.');
     console.error('Stripe Checkout Error:', error.message);
     return {
       success: false,
-      error: error.message
+      needsAuth,
+      error: message,
     };
   }
 }
@@ -556,25 +565,45 @@ export async function getSubscriptionStatus(options = {}) {
   const { signal } = options;
 
   try {
-    const headers = await getAuthHeaders();
-    if (!headers.Authorization) {
-      return buildSubscriptionStatusResult({
-        unauthorized: true,
-        statusCode: 401,
-        plan: null,
-        tier: null,
-        status: 'inactive',
-        degraded: false,
-      });
+    let headers;
+    try {
+      headers = await getAuthHeaders();
+    } catch (error) {
+      if (isAuthNotReadyError(error)) {
+        // No token in hand — never call the billing endpoint unauthenticated.
+        // Retryable: this is a session race, not a confirmed unauthenticated user.
+        return buildSubscriptionStatusResult({
+          shouldRetry: true,
+          error: 'Auth session is not ready yet.',
+        });
+      }
+      throw error;
     }
+
+    const fetchStatus = (requestHeaders) => retryFetch(
+      '/api/subscription-status',
+      {
+        method: 'GET',
+        headers: requestHeaders,
+        signal,
+      },
+      { timeoutMs: 15000 },
+    );
 
     let response;
     try {
-      response = await fetch('/api/subscription-status', {
-        method: 'GET',
-        headers,
-        signal,
-      });
+      response = await fetchStatus(headers);
+
+      // One-shot 401 recovery: refresh the session and retry once before
+      // treating the user as unauthenticated.
+      if (response.status === 401) {
+        try {
+          const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+          response = await fetchStatus(refreshedHeaders);
+        } catch {
+          // Refresh failed — fall through with the original 401 response.
+        }
+      }
     } catch (error) {
       if (error?.name === 'AbortError') {
         return buildSubscriptionStatusResult({

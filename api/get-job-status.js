@@ -36,7 +36,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Missing authorization header' });
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const bearerMatch = /^Bearer\s+(\S+)/i.exec(String(authHeader).trim());
+    const token = bearerMatch ? bearerMatch[1] : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Invalid authorization header' });
+    }
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {

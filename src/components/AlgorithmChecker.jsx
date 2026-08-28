@@ -6,6 +6,7 @@ import {
   useMemo,
 } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import {
   Check,
   Copy,
@@ -32,6 +33,7 @@ import { BrandContext } from '../context/BrandContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { callClaudeAPI } from '../services/claudeAPI';
+import { CLAUDE_MAX_TOKENS } from '../config/claudeConfig';
 import { saveToVault, CONTENT_VAULT_UPDATED_EVENT } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 
@@ -504,7 +506,9 @@ export default function AlgorithmChecker({
 
     const system = `You are an elite social media strategist specializing in ${nicheLine} content on ${platformLabel}. You analyze content with the precision of someone who has studied thousands of top-performing posts in this niche and knows exactly what the algorithm rewards right now.
 
-When you rewrite or expand copy, it must read like a real human wrote it in one sitting—natural rhythm, contractions where appropriate, and the same rough edges as strong organic posts. Never sound like generic AI or corporate marketing boilerplate.`;
+When you rewrite or expand copy, it must read like a real human wrote it in one sitting—natural rhythm, contractions where appropriate, and the same rough edges as strong organic posts. Never sound like generic AI or corporate marketing boilerplate.
+
+${HUMAN_WRITING_RULES}`;
 
     const userMsg = `Analyze this ${platformLabel} ${ctTitle} content for a ${nicheLine} brand targeting ${
       targetAudienceDisplay || 'a broad engaged audience'
@@ -549,7 +553,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
           { role: 'user', content: userMsg },
         ],
         0.35,
-        { max_tokens: 700 },
+        { max_tokens: CLAUDE_MAX_TOKENS.algorithmChecker },
       );
       const parsed = parseClaudeJson(data.content);
       if (!parsed || typeof parsed !== 'object') {
@@ -557,7 +561,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
       }
       setLayer2Results(parsed);
       setClaudeUnavailable(false);
-    } catch (e) {
+    } catch {
       console.log('AlgorithmChecker: Claude enhancement unavailable');
       setClaudeUnavailable(true);
       setLayer2Results(null);
@@ -719,7 +723,7 @@ adjustedScore must be 0, 0.5, or 1 only.`;
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
                 Algorithm Alignment scores how well your content matches each
                 platform's ranking signals. Layer 1 is instant rules; Layer 2
-                adds niche-aware semantic review via Claude.
+                adds niche-aware semantic review.
               </span>
             </span>
           </div>
@@ -1086,6 +1090,10 @@ adjustedScore must be 0, 0.5, or 1 only.`;
             )}
 
             <p className="text-[11px] text-gray-400">Signals last updated: {lastUpdated}</p>
+
+            <p className="text-xs text-gray-400">
+              AI-generated analysis. Platform algorithms change frequently — treat as guidance, not a guarantee.
+            </p>
           </Motion.div>
         )}
       </AnimatePresence>

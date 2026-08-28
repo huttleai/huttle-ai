@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Huttle AI — Full Read-Only Reconnaissance Audit</title>
+<style>
+  :root {
+    --ink: #0C1220;
+    --muted: #4b5563;
+    --line: #e5e7eb;
+    --teal: #01BAD2;
+    --teal-dark: #0a7a8a;
+    --live: #047857;
+    --live-bg: #ecfdf5;
+    --dead: #b45309;
+    --dead-bg: #fffbeb;
+    --bad: #b91c1c;
+    --bad-bg: #fef2f2;
+    --ok: #047857;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+  }
+  @page { size: letter; margin: 0.7in 0.7in 0.85in 0.7in; }
+  .cover {
+    page-break-after: always;
+    min-height: 9.2in;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border-top: 8px solid var(--teal);
+    padding-top: 48px;
+  }
+  .kicker {
+    color: var(--teal-dark);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  h1 { font-size: 27px; line-height: 1.2; margin: 12px 0 8px; }
+  .subtitle { font-size: 13pt; color: var(--muted); max-width: 42em; margin: 0 0 28px; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 28px;
+    max-width: 620px;
+    font-size: 10.5pt;
+  }
+  .meta-grid dt { color: var(--muted); font-size: 9pt; text-transform: uppercase; letter-spacing: 0.06em; }
+  .meta-grid dd { margin: 0 0 8px; font-weight: 600; }
+  .verdict-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 28px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+  .badge {
+    display: inline-block;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .badge-ok { background: var(--live-bg); color: var(--live); }
+  .badge-note { background: #eff6ff; color: #1d4ed8; }
+  .badge-warn { background: var(--dead-bg); color: var(--dead); }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); }
+  h2 {
+    font-size: 15.5pt;
+    margin: 26px 0 10px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 12pt; margin: 16px 0 6px; }
+  h4 { font-size: 10.5pt; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px; padding-left: 1.2em; }
+  li { margin-bottom: 4px; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 9.2pt;
+    background: #f3f4f6;
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  pre {
+    background: #f3f4f6;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 8.3pt;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 8px 0 14px;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.6pt; margin: 8px 0 16px; }
+  th, td { border: 1px solid var(--line); padding: 6px 7px; text-align: left; vertical-align: top; }
+  th {
+    background: #f8fafc;
+    font-size: 7.8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #374151;
+  }
+  .note {
+    background: #f8fafc;
+    border-left: 3px solid var(--teal);
+    padding: 10px 12px;
+    margin: 10px 0 14px;
+    font-size: 10.3pt;
+  }
+  .okbox {
+    background: var(--live-bg);
+    border-left: 3px solid var(--live);
+    padding: 10px 12px;
+    margin: 10px 0 14px;
+    font-size: 10.3pt;
+  }
+  .warnbox {
+    background: var(--dead-bg);
+    border-left: 3px solid var(--dead);
+    padding: 10px 12px;
+    margin: 10px 0 14px;
+    font-size: 10.3pt;
+  }
+  .badbox {
+    background: var(--bad-bg);
+    border-left: 3px solid var(--bad);
+    padding: 10px 12px;
+    margin: 10px 0 14px;
+    font-size: 10.3pt;
+  }
+  .footer-note { color: var(--muted); font-size: 9pt; margin-top: 24px; }
+  .break { page-break-before: always; }
+  .mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 8pt; word-break: break-all; }
+  .section-kicker { color: var(--teal-dark); font-weight: 700; font-size: 9.5pt; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 2px; }
+  .toc { columns: 2; column-gap: 32px; font-size: 9.5pt; }
+  .toc li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+
+  <section class="cover">
+    <div>
+      <div class="kicker">Read-only reconnaissance audit</div>
+      <h1>Huttle AI Codebase Audit — Grok 4.3 Migration, Billing, Tier Limits, Dashboard &amp; Migration State</h1>
+      <p class="subtitle">Full-repo read-only review answering the Section A&ndash;E questions on Grok cost controls, Stripe/subscription write paths, Plan Builder tier gating, dashboard cache behavior, and migration drift. Zero code changes made.</p>
+      <dl class="meta-grid">
+        <dt>Product</dt><dd>Huttle AI</dd>
+        <dt>Date</dt><dd>25 August 2026, 22:07 (America/New_York)</dd>
+        <dt>Branch checked out</dt><dd class="mono" style="font-weight:600">main</dd>
+        <dt>HEAD</dt><dd class="mono" style="font-weight:600">a1f3674 (2026&#8209;08&#8209;25 21:56 &#8209;04:00)</dd>
+        <dt>Method</dt><dd>Static read-only review (grep/read/git show); no checkout switches, no writes</dd>
+        <dt>Classification</dt><dd>Internal / staff engineer</dd>
+      </dl>
+      <div class="verdict-row">
+        <div class="card">
+          <span class="badge badge-bad">Premise correction</span>
+          <h3 style="margin-top:8px">Branch context is wrong</h3>
+          <p><code>grok-4.3-migration</code> is <strong>not</strong> an unmerged preview branch. It was merged into <code>main</code> via PR&nbsp;#96 (<code>4f036d1</code>). <code>main</code> is strictly ahead by 8 commits &mdash; there is no separate branch state to diff.</p>
+        </div>
+        <div class="card">
+          <span class="badge badge-ok">Verified</span>
+          <h3 style="margin-top:8px">Grok cost controls are sound</h3>
+          <p>Every Grok call site is forced through a single <code>getGrokParams(featureKey)</code> helper. Reasoning effort is never omitted, and the client-supplied <code>model</code> field is logged but never used &mdash; no allowlist gap exists because there is nothing to allowlist.</p>
+        </div>
+        <div class="card">
+          <span class="badge badge-warn">Gap found</span>
+          <h3 style="margin-top:8px"><code>tier_feature_limits</code> is dead weight</h3>
+          <p>Zero application code and zero migrations reference the <code>tier_feature_limits</code> table. The Aug&nbsp;25 <code>essentials_trial</code>/<code>pro_trial</code> rows added to it have no functional effect on enforcement.</p>
+        </div>
+      </div>
+    </div>
+    <p class="footer-note">No application source was edited. No files were modified prior to this report. All findings are cited to exact file paths and line numbers as they existed at HEAD <span class="mono">a1f3674</span> on <code>main</code>.</p>
+  </section>
+
+  <h2>Contents</h2>
+  <ul class="toc">
+    <li>Branch-context correction</li>
+    <li>A1&mdash;Reasoning effort coverage</li>
+    <li>A2&mdash;Model strings</li>
+    <li>A3&mdash;Max tokens per feature</li>
+    <li>A4&mdash;Client-supplied model (security)</li>
+    <li>A5&mdash;Full Post Builder cost &amp; routing</li>
+    <li>B1&mdash;<code>subscriptions</code> writers</li>
+    <li>B2&mdash;Stripe webhook handler</li>
+    <li>B3&mdash;Checkout session creation</li>
+    <li>B4&mdash;Trial reminder cron</li>
+    <li>B5&mdash;Hardcoded price IDs</li>
+    <li>C1&mdash;14&#8209;day Plan Builder gating</li>
+    <li>C2&mdash;Credit-checking module</li>
+    <li>D1&mdash;Dashboard cache read query</li>
+    <li>D2&mdash;Perplexity timeout / retry</li>
+    <li>D3&mdash;<code>signOut()</code> call sites</li>
+    <li>E1&mdash;Ten most recent migrations</li>
+    <li>E2&mdash;Migration references vs. Aug 25 prod changes</li>
+    <li>Summary of corrections</li>
+  </ul>
+
+  <h2 class="break">Branch-context correction &mdash; read this first</h2>
+  <p>The audit brief states that <code>grok-4.3-migration</code> is a preview branch containing unmerged work. This is factually incorrect:</p>
+  <pre>git merge-base main grok-4.3-migration &rarr; a8b37b7 (tip of grok-4.3-migration)
+git log main..grok-4.3-migration        &rarr; empty (zero commits unique to migration)
+git log grok-4.3-migration..main        &rarr; 8 commits, starting with the merge commit itself</pre>
+  <pre>a1f3674 perf(niche-intel): give deep research its own runtime budget
+92b785c fix(full-post): drop degraded-mode notices that fired on every run
+c22e745 test(qa): add verification harness for the 2026-08-25 audit fixes
+4c76ace fix(subscription): log the real reason a database read failed
+13f7e9e fix(ignite): stop discarding slow n8n briefs and rendering raw null
+3b9423b fix(full-post): stop duplicating the hook and CTA in the saved post
+75d4437 fix(billing): resolve start and renewal dates from the subscription item
+6bc93c8 fix(niche-intel): surface run failures instead of reverting to empty state
+4f036d1 Merge pull request #96 from huttleai/grok-4.3-migration
+a8b37b7 feat(ai): migrate all Grok call sites to grok-4.3 with per-feature reasoning effort</pre>
+  <p><code>main</code> = <code>grok-4.3-migration</code> + 8 additional post-merge commits. There is no separate preview state to diff; every finding below applies identically to both labels since they share the same lineage. All answers are given once, against <code>main</code>.</p>
+
+  <h2 class="break">Section A &mdash; Grok 4.3 migration</h2>
+
+  <div class="section-kicker">A1 &middot; Highest cost priority</div>
+  <h3>Reasoning effort coverage</h3>
+  <p>Reasoning effort is <strong>never omitted</strong>. Every call site is forced through <code>getGrokParams(featureKey)</code> in <code>src/config/grokConfig.js:23-52,61-81</code>, which returns <code>{ model, reasoning_effort }</code> from a hardcoded map or throws in dev / logs+defaults to <code>'none'</code> in prod for an unrecognized key. No call site skips this helper.</p>
+  <table>
+    <thead><tr><th>Reasoning effort</th><th>Feature keys</th></tr></thead>
+    <tbody>
+      <tr><td><code>'none'</code> (17)</td><td>caption, hookBuilder, hashtag, cta, contentQualityScorer, visualBrainstorm, dashboardWidget, optimizeTimes, performancePrediction, voiceTranscriptPolish, captionVariations, <strong>humanizerScore</strong>, trendIdeas, improveContent, visualIdeas, autoImprovePhrase, perplexityGrokFallback</td></tr>
+      <tr><td><code>'low'</code> (8)</td><td><strong>fullPostBuilder</strong>, contentRemix, igniteEngine, contentRepurposer, contentPlan, platformRemixes, audienceInsights, nicheIntel</td></tr>
+    </tbody>
+  </table>
+  <p>Comment at <code>src/config/grokConfig.js:21</code>: <em>&ldquo;This pass uses only 'none' and 'low' &mdash; do not add 'medium'/'high' without approval.&rdquo;</em> Server-side, <code>api/ai/grok.js:377,403-405</code> re-validates the echoed <code>reasoning_effort</code> against <code>{none,low,medium,high}</code> and defaults to <code>'none'</code> on anything else.</p>
+  <div class="okbox"><strong>No cost risk found.</strong> No Grok call site bypasses <code>getGrokParams</code>.</div>
+
+  <div class="section-kicker">A2</div>
+  <h3>Model strings</h3>
+  <p>Exactly one Grok model string exists in the entire repository:</p>
+  <pre>15:15:src/config/grokConfig.js
+export const GROK_MODEL = 'grok-4.3';</pre>
+  <p><code>grok-4-1-fast-reasoning</code> and every other legacy Grok 2/3/4 slug &mdash; <strong>NOT FOUND</strong> anywhere in <code>src/</code>, <code>api/</code>, or <code>scripts/</code>. All nine call sites (<code>api/ai/grok.js</code>, <code>src/services/grokAPI.js</code>, <code>src/services/perplexityAPI.js</code>, <code>src/services/optimizeTimesAPI.js</code>, <code>src/services/dashboardCacheService.js</code> &times;3, <code>src/pages/IgniteEngine.jsx</code>, <code>src/pages/ContentRepurposer.jsx</code>) resolve the model exclusively via <code>getGrokParams(featureKey)</code>.</p>
+
+  <div class="section-kicker">A4 &middot; Security</div>
+  <h3>Client-supplied model</h3>
+  <p>The premise is half right and the important half is wrong: the client-supplied <code>model</code> field is received and logged, but <strong>never used</strong>.</p>
+  <pre>402:405:api/ai/grok.js
+    // Model is server-owned (src/config/grokConfig.js); client model strings are ignored.
+    const safeReasoningEffort = VALID_REASONING_EFFORTS.has(reasoningEffortRaw)
+      ? reasoningEffortRaw
+      : 'none';</pre>
+  <pre>357:365:api/ai/grok.js
+    if (debugFullPost) {
+      logInfo('grok.debug_fullpost_request', {
+        hasModel: Boolean(rawBody.model),
+        clientModelRaw: rawBody.model,   // logged for debugging only
+        ...</pre>
+  <pre>462:464:api/ai/grok.js
+    logInfo('grok.upstream_call', { models: [GROK_MODEL], messageCount: normalizedMessages.length });
+    const response = await runUpstreamOnce(GROK_MODEL);   // server constant, not rawBody.model</pre>
+  <div class="note">There is no allowlist because there is nothing to allowlist &mdash; the client-supplied value is dead input. This is a correction, not a gap: no fix is needed.</div>
+
+  <div class="section-kicker">A3</div>
+  <h3>Max tokens per feature</h3>
+  <table>
+    <thead><tr><th>Feature / call site</th><th>File : line</th><th>max_tokens</th><th>featureKey</th></tr></thead>
+    <tbody>
+      <tr><td>Hook Builder (standalone)</td><td>grokAPI.js:1612,1622</td><td>none set</td><td>hookBuilder</td></tr>
+      <tr><td>Full Post &mdash; hooks (Grok fallback)</td><td>grokAPI.js:1741-1746</td><td>1024</td><td>fullPostBuilder</td></tr>
+      <tr><td>Caption (standalone)</td><td>grokAPI.js:1042,1052</td><td>4096</td><td>caption</td></tr>
+      <tr><td>Full Post &mdash; caption</td><td>grokAPI.js:1034</td><td>8192</td><td>fullPostBuilder</td></tr>
+      <tr><td>Full Post &mdash; caption_enhance (Grok fallback)</td><td>grokAPI.js:1151-1152</td><td>4096</td><td>fullPostBuilder</td></tr>
+      <tr><td>CTA Suggester (standalone)</td><td>grokAPI.js:1943 (non-FPB)</td><td>4096</td><td>cta</td></tr>
+      <tr><td>Full Post &mdash; cta</td><td>grokAPI.js:1943 (FPB)</td><td>4096</td><td>fullPostBuilder</td></tr>
+      <tr><td>Hashtag Generator (standalone)</td><td>grokAPI.js:2256 (non-FPB)</td><td>4096</td><td>hashtag</td></tr>
+      <tr><td>Full Post &mdash; hashtags (Grok fallback)</td><td>grokAPI.js:2256 (FPB)</td><td>4096</td><td>fullPostBuilder</td></tr>
+      <tr><td>Quality Scorer (standalone)</td><td>grokAPI.js:1248-1251 (non-FPB)</td><td>4096</td><td>contentQualityScorer</td></tr>
+      <tr><td>Full Post &mdash; quality_score (Grok fallback)</td><td>grokAPI.js:1248-1251 (FPB)</td><td>4096</td><td>fullPostBuilder</td></tr>
+      <tr><td>Humanizer (standalone &amp; Full Post, Grok fallback)</td><td>grokAPI.js:3305</td><td>2048</td><td>humanizerScore (never upgraded to fullPostBuilder &mdash; see line 3304)</td></tr>
+      <tr><td>Ignite Engine</td><td>IgniteEngine.jsx:1464</td><td>none set</td><td>igniteEngine</td></tr>
+      <tr><td>Optimize Posting Times</td><td>optimizeTimesAPI.js:210</td><td>none set</td><td>optimizeTimes</td></tr>
+      <tr><td>Dashboard widgets (3 sites)</td><td>dashboardCacheService.js:744,1503,1781</td><td>none set</td><td>dashboardWidget</td></tr>
+      <tr><td>Content Repurposer</td><td>ContentRepurposer.jsx:131</td><td>none set</td><td>contentRepurposer</td></tr>
+    </tbody>
+  </table>
+  <p>Server ceiling regardless of client value: <code>api/ai/grok.js:441</code> caps at <code>max_tokens &le; 8192</code> before forwarding as xAI&rsquo;s <code>max_completion_tokens</code>; client-side <code>grokAPI.js:545</code> independently caps at <code>Math.min(n, 8192)</code>. The four features with no explicit <code>max_tokens</code> (Ignite Engine, Optimize Times, dashboardWidget, Content Repurposer) send no field at all &mdash; whatever xAI's server-side default is for <code>grok-4.3</code> applies, and that default is not defined anywhere in this repo.</p>
+
+  <div class="section-kicker">A5</div>
+  <h3>Full Post Builder cost &amp; routing</h3>
+  <p>The authoritative source is a comment in the component itself, and it <strong>contradicts</strong> the premise that all 7 steps are pure sequential Grok calls:</p>
+  <pre>58:58:src/pages/FullPostBuilder.jsx
+ * Unchanged routing summary: Hooks Claude&rarr;Grok&rarr;Hook Builder; Caption Grok; Enhance Claude&rarr;Grok;
+ * Hashtags Perplexity sonar&rarr;quick_scan&rarr;Grok; CTA Grok; Quality Claude&rarr;Grok; Human Claude&rarr;Grok;
+ * Algorithm local checklist (AlgorithmChecker).</pre>
+  <table>
+    <thead><tr><th>Step</th><th>Primary</th><th>Grok fallback (featureKey / max_tokens)</th><th>Calls Perplexity?</th></tr></thead>
+    <tbody>
+      <tr><td>hooks</td><td>Claude &mdash; <code>generateFullPostHooksWithClaude</code> (FullPostBuilder.jsx:655)</td><td>fullPostBuilder / 1024 (grokAPI.js:1649-1759)</td><td>No</td></tr>
+      <tr><td>caption</td><td><strong>Grok only</strong> &mdash; <code>generateCaption</code> (FullPostBuilder.jsx:767)</td><td>fullPostBuilder / 8192 (grokAPI.js:1034,1038)</td><td>No</td></tr>
+      <tr><td>caption_enhance</td><td>Claude &mdash; <code>enhanceCaptionWithClaude</code> (FullPostBuilder.jsx:844)</td><td>fullPostBuilder / 4096 (grokAPI.js:1112-1157)</td><td>No</td></tr>
+      <tr><td>hashtags</td><td><strong>Perplexity</strong> &mdash; <code>generateFullPostHashtagsGrounded</code> (FullPostBuilder.jsx:918; Sonar full_post_hashtags &rarr; quick_scan)</td><td>fullPostBuilder / 4096, only if Perplexity insufficient (FullPostBuilder.jsx:939-955)</td><td><strong>Yes &mdash; primary</strong>, not fallback</td></tr>
+      <tr><td>cta</td><td><strong>Grok only</strong> &mdash; <code>generateStyledCTAs</code> (FullPostBuilder.jsx:1019, fullPostBuilder/4096)</td><td>n/a</td><td>No (Perplexity CTA research explicitly skipped when fullPostBuilder&#8202;=&#8202;true, grokAPI.js:1843)</td></tr>
+      <tr><td>quality_score</td><td>Claude &mdash; <code>scoreContentQuality</code> calls <code>callClaudeAPI</code> first (grokAPI.js:1259)</td><td>fullPostBuilder / 4096</td><td>No</td></tr>
+      <tr><td>humanizer</td><td>Claude &mdash; <code>scoreHumanness</code> (grokAPI.js:3312-3327)</td><td>humanizerScore / 2048 (effort stays 'none', deliberately not upgraded &mdash; grokAPI.js:3304)</td><td>No</td></tr>
+      <tr><td>(extra, not in the &ldquo;7&rdquo;)</td><td>Algorithm Checker &mdash; local rules-based checklist</td><td>n/a &mdash; no AI call</td><td>No</td></tr>
+    </tbody>
+  </table>
+  <p>Of the 7 named steps, only 3 (caption, cta, and whichever fallback path fires) are Grok in the <em>primary</em> path; 4 have Claude or Perplexity as primary with Grok only firing on failure.</p>
+  <div class="okbox"><strong>Credits per run:</strong> <code>FULL_POST_BUILDER_CREDITS_PER_RUN = FEATURE_CREDIT_COSTS.fullPostBuilderRuns = 4</code> (creditConfig.js:56, re-exported supabase.js:154). Charged <strong>once per session</strong> at the hooks step (FullPostBuilder.jsx:621) &mdash; confirmed by the in-app copy: <em>&ldquo;Each run uses 4 credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs&rdquo;</em> (FullPostBuilder.jsx:1446). Monthly run cap: <code>fullPostBuilderRuns: { essentials: 15, pro: 40, founder: 40, builder: 40 }</code> (creditConfig.js:77).</div>
+
+  <h2 class="break">Section B &mdash; Subscription &amp; billing</h2>
+
+  <div class="section-kicker">B1</div>
+  <h3>Writers of <code>public.subscriptions</code></h3>
+  <p>All write paths are in-repo Vercel functions &mdash; no n8n-only writer found.</p>
+  <table>
+    <thead><tr><th>File : line</th><th>Op</th><th>Trigger</th><th>Key columns</th></tr></thead>
+    <tbody>
+      <tr><td>stripe-webhook.js:331-333 (updateSubscriptionRecord)</td><td>upsert onConflict user_id</td><td>checkout.session.completed; customer.subscription.created/updated</td><td>tier, status, current_period_start/end, trial_start, trial_end, cancel_at_period_end, cancelled_at, customer_name</td></tr>
+      <tr><td>stripe-webhook.js:853-861</td><td>update</td><td>customer.subscription.updated (targeted sync)</td><td>status, current_period_start/end</td></tr>
+      <tr><td>stripe-webhook.js:910-918</td><td>update</td><td>customer.subscription.deleted</td><td>tier:'free', status, cancel_at_period_end:false, cancelled_at</td></tr>
+      <tr><td>stripe-webhook.js:1041-1047</td><td>update</td><td>invoice.payment_failed</td><td>status:'past_due'</td></tr>
+      <tr><td>stripe-webhook.js:1129-1132</td><td>update</td><td>invoice.paid</td><td>status:'active', current_period_start/end, cancel_at_period_end:false</td></tr>
+      <tr><td>stripe-webhook.js:1163-1166</td><td>update</td><td>invoice.payment_succeeded</td><td>status:'active', current_period_start/end</td></tr>
+      <tr><td>cancel-subscription.js:138-145</td><td>update</td><td>user-initiated cancellation</td><td>cancel_at_period_end, status</td></tr>
+      <tr><td>change-subscription-plan.js:185-195</td><td>update</td><td>user-initiated plan change</td><td>tier, status, current_period_start/end, cancel_at_period_end, cancelled_at:null</td></tr>
+      <tr><td>_utils/billing.js:152-155 (syncStripeCustomerId)</td><td>update</td><td>called from checkout/portal flows</td><td>stripe_customer_id</td></tr>
+    </tbody>
+  </table>
+  <div class="warnbox">This contradicts the assumption that live traffic only reaches n8n endpoints + a Supabase Edge Function writing the <code>stripe</code> schema. Code cannot confirm which endpoint is actually registered in the live Stripe dashboard &mdash; but the repo unambiguously contains a fully built webhook handler that writes <code>public.subscriptions</code> directly.</div>
+
+  <div class="section-kicker">B2</div>
+  <h3>Stripe webhook handler</h3>
+  <p><strong>Found:</strong> <code>api/stripe-webhook.js</code>, a standard Vercel serverless function (<code>bodyParser: false</code> at lines 88-92 for raw-body signature verification).</p>
+  <ul>
+    <li><strong>Signature verification:</strong> yes &mdash; <code>stripe.webhooks.constructEvent(rawBody, sig, endpointSecret)</code> at line 394, 400 on failure.</li>
+    <li><strong>Registered events:</strong> checkout.session.completed, customer.subscription.trial_will_end, customer.subscription.created, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed, invoice.paid, invoice.payment_succeeded (switch at line 407).</li>
+    <li><strong>Idempotency:</strong> a <code>stripe_webhook_events</code> table (lines 218-258).</li>
+  </ul>
+
+  <div class="section-kicker">B3</div>
+  <h3>Checkout Session creation</h3>
+  <pre>161:173:api/create-checkout-session.js
+    const subscriptionData = {
+      metadata: baseMetadata,
+      ...(!isLaunchPricingPlan &amp;&amp; !isAnnualBilling
+        ? {
+            trial_period_days: 7,
+            trial_settings: {
+              end_behavior: {
+                missing_payment_method: 'cancel',
+              },
+            },
+          }
+        : {}),
+    };</pre>
+  <ul>
+    <li><code>trial_period_days</code>: <strong>7</strong> &mdash; only for non-launch (Essentials/Pro), non-annual (monthly) plans.</li>
+    <li><code>payment_method_collection</code>: <code>'always'</code> (line 182).</li>
+    <li><code>trial_settings.end_behavior.missing_payment_method</code>: <code>'cancel'</code> (line 168).</li>
+  </ul>
+  <p>Matches the note that all four live prices have <code>trial_period_days: null</code> at the Price object level &mdash; the 7-day trial is entirely session-level.</p>
+
+  <div class="section-kicker">B4</div>
+  <h3><code>/api/trial-reminder-cron</code></h3>
+  <ul>
+    <li><strong>Cron schedule</strong> (vercel.json:13-16): <code>"0 13 * * *"</code> &mdash; daily at 13:00 UTC.</li>
+    <li><strong>Columns queried:</strong> <code>subscriptions.stripe_subscription_id</code> filtered by <code>status='trialing'</code>, <code>trial_end</code> not null, within a 73h window (lines 39-45) &mdash; it does query <code>trial_end</code>, consistent with the cited production failure.</li>
+    <li><strong>Emails triggered:</strong> via <code>maybeSendTrialReminder</code> (trialReminderUtils.js:107-152) &rarr; <code>sendTrialWarningEmail</code>, gated to 3-day or 1-day remaining.</li>
+  </ul>
+  <div class="badbox"><strong>Adjacent findings (not asked, but material):</strong>
+    <ul style="margin-bottom:0">
+      <li>The migration that creates <code>trial_end</code> already exists in the repo &mdash; <code>supabase/migrations/20260311180000_add_trial_reminders_and_subscription_trial_fields.sql:1-3</code>, dated March 2026. If production still lacks the column, this is migration drift (never actually applied to prod), not a missing migration.</li>
+      <li>Separate bug: the DB constraint only allows <code>reminder_type IN ('trial_2_days','trial_1_day')</code> (same migration, line 13), but <code>trialReminderUtils.js:118</code> writes <code>'trial_3_days'</code> for the 3-day case &mdash; a value the CHECK constraint would reject.</li>
+    </ul>
+  </div>
+
+  <div class="section-kicker">B5</div>
+  <h3>Hardcoded Stripe price IDs</h3>
+  <p>No price IDs are hardcoded in application source &mdash; all four live prices come from env vars (<code>stripeAPI.js:145-197</code>, <code>create-checkout-session.js:144-149</code>, <code>_utils/stripePlans.js:35-46</code>).</p>
+  <div class="warnbox"><strong>Flagged &mdash; a 5th price ID not in the four-price list, found in the local (git-ignored) <code>.env</code>:</strong>
+  <pre>.env:52: VITE_STRIPE_PRICE_BUILDER_ANNUAL=price_1TG2ZjA1egFQU8JhYu8V9N2r</pre>
+  Consumed at <code>stripeAPI.js:177</code> as the &ldquo;Legacy Annual&rdquo; / Builder tier price, referenced in <code>_utils/stripePlans.js:45</code> and present in the built client bundle. Confirmed not git-tracked (<code>git ls-files .env</code> returns nothing). <code>.env.example</code> only lists placeholder <code>price_xxx_*</code> values and doesn&rsquo;t even declare a <code>BUILDER_ANNUAL</code> var name. No n8n config JSON in the repo contains price IDs.</div>
+
+  <h2 class="break">Section C &mdash; Tier limits</h2>
+
+  <div class="section-kicker">C1 &middot; Highest priority</div>
+  <h3>14-day Plan Builder gating</h3>
+  <div class="okbox"><strong>A) GATED to Pro</strong> at <code>api/create-plan-builder-job.js:106</code> (duplicated at <code>api/plan-builder-proxy.js:420</code>).</div>
+  <pre>103:116:api/create-plan-builder-job.js
+    // 3a. 14-day tier gate — Essentials cannot request 14-day plans.
+    //     Matches creditConfig.PLAN_BUILDER_14DAY_TIERS on the client.
+    const isFourteenDay = Number(period) === 14;
+    if (isFourteenDay &amp;&amp; !PLAN_BUILDER_14DAY_ALLOWED_TIERS.includes(userTier)) {
+      ...
+      return res.status(403).json({
+        error: 'tier_restricted',
+        message: '14-day plans require Pro or above.',
+      });
+    }</pre>
+  <p><code>PLAN_BUILDER_14DAY_ALLOWED_TIERS = ['pro','founder','builder']</code> (planBuilderLimits.js:27), mirrored client-side by <code>PLAN_BUILDER_14DAY_TIERS</code> (creditConfig.js:111). Belt-and-suspenders: <code>PLAN_BUILDER_14DAY_MONTHLY_BY_TIER.essentials = 0</code> (planBuilderLimits.js:20), so even a bypassed tier check still resolves <code>cap: 0</code> and 403s.</p>
+  <p>This is a hardcoded array/tier check &mdash; <strong>not</strong> derived from the <code>tier_feature_limits</code> table. A repo-wide search for <code>tier_feature_limits</code> returns zero matches in <code>src/</code>, <code>api/</code>, or <code>supabase/migrations/</code>.</p>
+
+  <div class="section-kicker">C2</div>
+  <h3>Credit-checking module</h3>
+  <p>Module: <code>src/hooks/useAIUsage.js</code> + <code>src/config/creditConfig.js</code>, mirrored server-side in <code>api/create-plan-builder-job.js</code> / <code>api/plan-builder-proxy.js</code>.</p>
+  <ul>
+    <li><strong>Run caps or total_credits only?</strong> Both, as a two-step gate (useAIUsage.js:24-31): Step A is a per-feature monthly run cap from <code>FEATURE_RUN_CAPS[featureName][userTier]</code> (creditConfig.js:62-83), checked first; Step B is the shared credit pool.</li>
+    <li><strong>Tier key during a trial:</strong> <code>userTier</code> comes straight from <code>subscriptions.tier</code> (plain value: essentials/pro/founder/builder). Trial state is a <em>separate</em> boolean, <code>isTrialing = subscription?.status === 'trialing'</code> (SubscriptionContext.jsx:583) &mdash; the tier string is never mutated for trial state.</li>
+    <li><strong>Any path writing a <code>_trial</code>-suffixed tier?</strong> <strong>No.</strong> <code>resolvePlanId()</code> (stripePlans.js:79, map at 9-21) only resolves to essentials/pro/builder/founder. A repo-wide search for <code>_trial</code> as a tier literal returns zero matches in any <code>.js</code>/<code>.jsx</code> file.</li>
+  </ul>
+  <div class="badbox"><strong>Conclusion:</strong> the 12 per-feature caps added for <code>essentials_trial</code>/<code>pro_trial</code> directly in the <code>tier_feature_limits</code> table on 2026-08-25 have <strong>zero effect</strong> on enforcement &mdash; no application code reads that table, and no code path ever produces a tier value of <code>essentials_trial</code>/<code>pro_trial</code> to look up in the first place. <code>FEATURE_RUN_CAPS</code> in <code>creditConfig.js</code> is the real, hardcoded, and only source of per-feature caps.</div>
+
+  <h2 class="break">Section D &mdash; Dashboard &amp; auth</h2>
+
+  <div class="section-kicker">D1</div>
+  <h3><code>daily_dashboard_cache</code> read query</h3>
+  <pre>2017:2025:src/services/dashboardCacheService.js
+  const fullSelect =
+    'generated_date, trending_topics, hashtags_of_day, ai_insight, ai_insights, daily_alerts, dashboard_metadata, created_at';
+
+  const { data, error } = await supabase
+    .from(DASHBOARD_CACHE_TABLE)
+    .select(fullSelect)
+    .eq('user_id', userId)
+    .eq('generated_date', dateKey)
+    .maybeSingle();</pre>
+  <p>This row read is <strong>per-user</strong>. The <em>trending widget cache</em> (a separate table, <code>niche_content_cache</code>) is <strong>per-niche</strong>: its key is built with no <code>user_id</code> component (<code>buildPerPlatformCacheKey</code>, lines 490-498), and the code comment states directly: <em>&ldquo;Perplexity proxy writes with user_id null for dashboard trending/hashtags so all accounts in the same niche reuse one payload.&rdquo;</em></p>
+  <p><strong>Strip-and-retry block</strong> (dashboardCacheService.js:1932-1959):</p>
+  <pre>1948:1958:src/services/dashboardCacheService.js
+    const badColumn = isMissingColumn ? parseMissingColumnName(error) : null;
+    if (!badColumn || !(badColumn in currentRow) || badColumn === 'user_id' || badColumn === 'generated_date') {
+      return { error };
+    }
+    console.warn(`[Dashboard] daily_dashboard_cache upsert: stripping unknown column "${badColumn}" and retrying.`);
+    const { [badColumn]: _removed, ...rest } = currentRow;
+    currentRow = rest;
+  }
+  return { error: new Error('daily_dashboard_cache upsert failed after stripping unknown columns.') };</pre>
+  <p>The read side has its own three-tier fallback: <code>fullSelect</code> (includes <code>dashboard_metadata</code>) &rarr; legacy select (drops it) &rarr; minimal select (drops it and <code>ai_insights</code>), lines 2010-2056.</p>
+  <div class="warnbox"><strong>Conflict for Section E:</strong> the repo&rsquo;s own most recent migration, <code>20260719014640_reconcile_production_cache_schema_baseline.sql:27-28</code>, explicitly <strong>drops</strong> <code>dashboard_metadata</code> because it was &ldquo;confirmed absent from production.&rdquo; The live code above still actively selects it as first choice, with fallbacks built to survive its absence &mdash; an internal gap between migration history and defensive code, predating the Aug 25 changes.</div>
+
+  <div class="section-kicker">D2</div>
+  <h3><code>/api/ai/perplexity</code> timeout / concurrency / retry</h3>
+  <ul>
+    <li><strong>maxDuration:</strong> 60 seconds (vercel.json:34-36).</li>
+    <li><strong>Upstream call pattern:</strong> exactly one <code>fetch(PERPLEXITY_API_URL, ...)</code> per invocation (perplexity.js:783-788) &mdash; no internal loop.</li>
+    <li><strong>Server-side retry/backoff:</strong> <strong>NOT FOUND</strong> &mdash; no retry loop around the upstream fetch inside the route itself.</li>
+    <li><strong>Client-side retry/backoff:</strong> yes &mdash; <code>src/utils/retryFetch.js:21</code>, configured via <code>apiConfig.js:8-12</code> (MAX_RETRIES:2, BASE_DELAY_MS:750, retryable on 408/425/429/500/502/503/504, exponential backoff + jitter). This wraps some client call sites but never runs inside the serverless function, and a 504 from hitting the 60s wall would itself be retried &mdash; compounding rather than fixing a 429 problem, since each retry consumes another slot against the route&rsquo;s own 20/min rate limit (perplexity.js:148).</li>
+  </ul>
+
+  <div class="section-kicker">D3</div>
+  <h3><code>supabase.auth.signOut()</code> call sites</h3>
+  <pre>566:588:src/context/AuthContext.jsx
+  const logout = async () => {
+    try {
+      // Local scope clears persisted session first so refresh-token work stops immediately
+      await supabase.auth.signOut({ scope: 'local' });
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      ...
+      return { success: true };
+    } catch (error) {
+      console.error('Logout error:', error);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });</pre>
+  <p>Only call sites in the repo, both inside the single <code>logout()</code> function in <code>AuthContext.jsx</code>. This is only invoked by explicit user action &mdash; no call to <code>logout()</code> was found gated on subscription status, cancellation, or payment failure. Cancellation/payment-failure flows (<code>stripe-webhook.js</code>, <code>cancel-subscription.js</code>) only touch the <code>subscriptions</code> table and never call sign-out.</p>
+  <div class="okbox">No forced sign-out on billing events found.</div>
+
+  <h2 class="break">Section E &mdash; Migration state</h2>
+
+  <div class="section-kicker">E1</div>
+  <h3>Ten most recent migrations (by actual git commit date)</h3>
+  <p>Three legacy files without timestamp prefixes sort last alphabetically but are actually the <em>oldest</em> (January 2026) &mdash; ranked here by true git history, not filename sort.</p>
+  <table>
+    <thead><tr><th>Date</th><th>File</th></tr></thead>
+    <tbody>
+      <tr><td>2026-07-18</td><td>20260719014640_reconcile_production_cache_schema_baseline.sql</td></tr>
+      <tr><td>2026-04-25</td><td>20260425120000_expand_subscription_status_constraint.sql</td></tr>
+      <tr><td>2026-03-31</td><td>20260331120000_add_audience_stage_to_user_profile.sql</td></tr>
+      <tr><td>2026-03-30</td><td>20260330130000_add_secure_account_email_sent.sql</td></tr>
+      <tr><td>2026-03-30</td><td>20260330120000_daily_dashboard_cache_update_policy_with_check.sql</td></tr>
+      <tr><td>2026-03-27</td><td>20260327120000_add_post_kits_kit_slots.sql</td></tr>
+      <tr><td>2026-03-24</td><td>20260323120000_add_has_seen_welcome_notification.sql</td></tr>
+      <tr><td>2026-03-24</td><td>20260320120000_add_missing_user_profile_columns.sql</td></tr>
+      <tr><td>2026-03-20</td><td>20260320150000_user_preferences_rls_fix.sql</td></tr>
+      <tr><td>2026-03-19</td><td>20260319200000_user_profile_upsert_rls_with_check.sql</td></tr>
+    </tbody>
+  </table>
+  <p>The newest migration in the repo predates 2026-08-25 by over five weeks &mdash; there is nothing in the repo from the date the production changes were made.</p>
+
+  <div class="section-kicker">E2</div>
+  <h3>Migration references vs. the Aug 25 production changes</h3>
+  <ul>
+    <li><strong><code>subscriptions.trial_end</code>:</strong> found, but only in the older <code>20260311180000_add_trial_reminders_and_subscription_trial_fields.sql:1-3</code> (adds the column). No migration drops it. Unrelated to the Aug 25 change; if this migration was genuinely never run in prod, re-running it would <em>fix</em>, not duplicate, the gap.</li>
+    <li><strong><code>daily_dashboard_cache.dashboard_metadata</code>:</strong> found &mdash; and it&rsquo;s the opposite of helpful. <code>20260719014640_reconcile_production_cache_schema_baseline.sql:27-28</code> explicitly <strong>drops</strong> this column, asserting it&rsquo;s &ldquo;confirmed absent from production.&rdquo; If it was added back to prod directly on 2026-08-25, a future re-run of this migration would <strong>actively conflict</strong> with that out-of-band change.</li>
+    <li><strong><code>tier_feature_limits</code> rows for <code>essentials_trial</code>/<code>pro_trial</code>:</strong> <strong>NOT FOUND.</strong> No migration file references this table at all &mdash; it isn&rsquo;t created, altered, or seeded anywhere in <code>supabase/migrations/</code>. It exists only in production, entirely outside repo history. A future migration would need a from-scratch <code>CREATE TABLE IF NOT EXISTS</code> with no baseline to build on.</li>
+  </ul>
+
+  <h2 class="break">Summary of corrections to the audit brief</h2>
+  <ol>
+    <li><strong>Grok model is not client-controlled.</strong> <code>clientModelRaw</code> is logged for debugging but the upstream call always uses the server-owned <code>GROK_MODEL</code> constant. No allowlist exists because there&rsquo;s nothing for it to gate.</li>
+    <li><strong><code>grok-4.3-migration</code> is already merged</strong> (PR #96) &mdash; <code>main</code> is strictly ahead, not a separate unmerged branch.</li>
+    <li><strong>Full Post Builder is not &ldquo;7 sequential Grok steps.&rdquo;</strong> 4 of the 7 named steps have Claude or Perplexity as the primary call, with Grok only as a fallback on failure.</li>
+    <li><strong>14-day Plan Builder access is Pro-gated in code</strong> (<code>create-plan-builder-job.js:106</code>), independent of and not derived from <code>tier_feature_limits</code>.</li>
+    <li><strong><code>tier_feature_limits</code> is read by zero application code and zero migrations.</strong> The Aug 25 <code>essentials_trial</code>/<code>pro_trial</code> rows have no functional effect; <code>FEATURE_RUN_CAPS</code> in <code>creditConfig.js</code> is the real, hardcoded enforcement source, and it doesn&rsquo;t recognize <code>_trial</code>-suffixed tiers (which no code path produces anyway).</li>
+    <li><strong><code>subscriptions.trial_end</code> migration already exists in the repo</strong> (March 2026) &mdash; the production error suggests it was never applied there, not that a migration is missing.</li>
+    <li>A repo migration (<code>20260719014640</code>) already <strong>removed</strong> <code>dashboard_metadata</code> on the assumption production lacked it &mdash; now stale/contradicted if production has that column again.</li>
+  </ol>
+
+  <p class="footer-note">End of report. Generated from a static, read-only review of <code>main</code> @ <span class="mono">a1f3674</span>. No files were changed, no migrations were run, no branches were checked out, and no destructive or write commands were issued during this audit.</p>
+
+</body>
+</html>

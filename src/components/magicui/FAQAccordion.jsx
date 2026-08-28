@@ -43,7 +43,7 @@ export function FAQAccordion({
   );
 }
 
-function FAQItem({ question, answer, isOpen, onToggle, index }) {
+function FAQItem({ question, answer, isOpen, onToggle, index: _index }) {
   return (
     <div
       className={`

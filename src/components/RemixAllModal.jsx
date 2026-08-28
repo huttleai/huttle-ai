@@ -87,7 +87,7 @@ export default function RemixAllModal({ isOpen, onClose, originalContent, post =
       setCopiedPlatform(platformId);
       showToast('Copied to clipboard!', 'success');
       setTimeout(() => setCopiedPlatform(null), 2000);
-    } catch (error) {
+    } catch {
       showToast('Failed to copy', 'error');
     }
   };

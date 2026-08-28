@@ -927,7 +927,7 @@ export default function ContentLibrary() {
       <div className="mx-auto w-full max-w-7xl">
 
         {/* ── PAGE HEADER — matches all other pages ── */}
-        <div className="mb-6 md:mb-8">
+        <div className="pt-6 md:pt-0 mb-6 md:mb-8">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
               <FolderOpen className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />

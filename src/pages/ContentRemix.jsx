@@ -10,8 +10,10 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { getToastDisclaimer } from '../components/AIDisclaimer';
 import usePreferredPlatforms from '../hooks/usePreferredPlatforms';
 import useAIUsage from '../hooks/useAIUsage';
-import AIUsageMeter from '../components/AIUsageMeter';
-import { Link, useSearchParams } from 'react-router-dom';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
+import RunCapMeter from '../components/RunCapMeter';
+import { useSubscription } from '../context/SubscriptionContext';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { saveToVault } from '../services/contentService';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
@@ -120,8 +122,11 @@ export default function ContentRemix() {
   const { user } = useContext(AuthContext);
   const { addToast: showToast } = useToast();
   const { platforms: brandVoicePlatforms, hasPlatformsConfigured } = usePreferredPlatforms();
+  const { userTier } = useSubscription();
   const remixUsage = useAIUsage('contentRemix');
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const prefill = location.state;
 
   // Step tracking
   const [currentStep, setCurrentStep] = useState(1);
@@ -129,7 +134,7 @@ export default function ContentRemix() {
   // Step 1: Source platform + input
   const [selectedSourcePlatform, setSelectedSourcePlatform] = useState('');
   const [showSourceValidation, setShowSourceValidation] = useState(false);
-  const [remixInput, setRemixInput] = useState('');
+  const [remixInput, setRemixInput] = useState(prefill?.prefillContent || '');
 
   // Step 2: Goal
   const [remixGoal, setRemixGoal] = useState('viral');
@@ -357,8 +362,9 @@ export default function ContentRemix() {
       showToast('Please log in to use remix features', 'error');
       return;
     }
-    if (!remixUsage.canGenerate) {
-      showToast('You\'ve reached your monthly Content Remix limit. Resets on the 1st.', 'warning');
+    const gate = await remixUsage.checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || "You've reached your monthly Content Remix limit.", 'warning');
       return;
     }
 
@@ -383,16 +389,13 @@ export default function ContentRemix() {
       .join('\n\n');
 
     const applyRemixSuccess = async (raw, sections, fromFallback) => {
-      const usage = await remixUsage.trackFeatureUsage({ mode: remixGoal });
+      await remixUsage.refreshUsage();
       const polishGen = ++remixPolishGenRef.current;
       setRemixResults({ raw, sections });
       setUsedAiFallback(Boolean(fromFallback));
       const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
       showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
       setCurrentStep(4);
-      if (!usage.allowed) {
-        showToast('Your remix is ready, but we could not record this run against your plan limits. Refresh usage if the meter looks off.', 'warning');
-      }
 
       setIsPolishingRemix(true);
       (async () => {
@@ -624,29 +627,36 @@ export default function ContentRemix() {
 
       <div className="relative z-10 max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Shuffle className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+        <div className="pt-6 md:pt-0 mb-6 md:mb-8">
+          <div className="flex items-start justify-between gap-3 md:gap-4">
+            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+                <Shuffle className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
+                  Content Remix Studio
+                </h1>
+                <p className="text-sm md:text-base text-gray-500">
+                  Transform your text content into fresh posts for every platform
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">
-                Content Remix Studio
-              </h1>
-              <p className="text-sm md:text-base text-gray-500">
-                Transform your text content into fresh posts for every platform
-              </p>
-            </div>
-          </div>
-          {/* Per-feature usage meter */}
-          <div className="mt-3">
-            <AIUsageMeter
-              used={remixUsage.featureUsed}
-              limit={remixUsage.featureLimit}
-              label="Remixes this month"
+            <RunCapMeter
+              featureKey="contentRemix"
+              tier={userTier}
+              featureLabel="Content Remix runs"
               compact
+              className="hidden sm:inline-flex flex-shrink-0 mt-2"
             />
           </div>
+          <RunCapMeter
+            featureKey="contentRemix"
+            tier={userTier}
+            featureLabel="Content Remix runs"
+            compact
+            className="sm:hidden mt-2"
+          />
         </div>
 
         {/* Step Progress — compact on mobile */}
@@ -953,6 +963,7 @@ export default function ContentRemix() {
               >
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
+              <GenerationAction>
               <button
                 onClick={handleRemix}
                 disabled={!canRemix || isLoading}
@@ -970,6 +981,7 @@ export default function ContentRemix() {
                   </>
                 )}
               </button>
+              </GenerationAction>
             </div>
           </div>
         )}
@@ -1116,6 +1128,10 @@ export default function ContentRemix() {
                 {copiedId === 'all' ? 'Copied All!' : 'Copy All Content'}
               </button>
             </div>
+
+            <p className="text-xs text-gray-400 text-center pt-1">
+              AI-assisted output. Final review recommended before publishing.
+            </p>
           </div>
         )}
 

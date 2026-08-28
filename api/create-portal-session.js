@@ -12,17 +12,16 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { authenticateBillingRequest, getAppUrl, resolveBillingContext } from './_utils/billing.js';
+import { authenticateBillingRequest, getAppUrl, resolveBillingContext, validateReturnUrl } from './_utils/billing.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(
-      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    )
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
 export default async function handler(req, res) {
@@ -53,6 +52,16 @@ export default async function handler(req, res) {
     const { user_id: requestedUserId, return_url: returnUrl } = req.body ?? {};
     if (requestedUserId && requestedUserId !== authResult.user.id) {
       return res.status(403).json({ error: 'You can only manage your own billing account' });
+    }
+
+    // SECURITY: prevent open-redirect via Stripe return_url. Validate AFTER
+    // authentication so unauthenticated probes can't enumerate behavior.
+    const returnUrlCheck = validateReturnUrl(returnUrl);
+    if (!returnUrlCheck.valid) {
+      return res.status(400).json({
+        error: 'Invalid return URL',
+        code: 'INVALID_RETURN_URL',
+      });
     }
 
     const { customerId } = await resolveBillingContext({

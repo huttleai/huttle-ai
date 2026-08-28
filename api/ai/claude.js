@@ -10,13 +10,16 @@
  * DEV NOTE — common failures:
  * - 503 "coming soon" from this proxy: ANTHROPIC_API_KEY missing → add to .env for local-api-server.
  * - 401 from this proxy: valid Supabase Bearer token required (log in via the app).
- * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is claude-sonnet-4-6.
+ * - 4xx from Anthropic upstream: model not enabled or invalid → check Anthropic dashboard; default model is CLAUDE_MODEL in src/config/claudeConfig.js.
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
+import { CLAUDE_MAX_TOKENS, resolveClaudeModel } from '../../src/config/claudeConfig.js';
 
 const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
@@ -27,25 +30,10 @@ if (!ANTHROPIC_API_KEY) {
   console.warn('ANTHROPIC_API_KEY not set — Claude features will not work');
 }
 
-// Primary Messages API id (alias). Client may still send legacy snapshot strings; we normalize upstream.
-// To upgrade: change DEFAULT_CLAUDE_MODEL and aliases below.
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
-
-const CLAUDE_MODEL_ALIASES = {
-  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
-};
-
-function resolveUpstreamClaudeModel(requested) {
-  const r = typeof requested === 'string' ? requested.trim() : '';
-  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
-  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
-  return DEFAULT_CLAUDE_MODEL;
-}
-
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user
@@ -71,13 +59,19 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'This feature is coming soon. Check back shortly.' });
     }
 
+    if (!supabase) {
+      logError('claude.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
+      });
+    }
+
     let userId = null;
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && supabase) {
-      const token = authHeader.replace('Bearer ', '');
+    const token = parseBearerToken(req.headers.authorization);
+
+    if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+
       if (!error && user) {
         userId = user.id;
       }
@@ -106,15 +100,22 @@ export default async function handler(req, res) {
       });
     }
 
-    const { messages, temperature = 0.7, model, max_tokens: maxTokensBody } = req.body;
+    const billingFeature = resolveRouteBillingFeature('claude', req);
+    const usageGate = await assertCanGenerate(supabase, {
+      userId,
+      featureKey: billingFeature,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
+    }
+
+    const { messages, model, max_tokens: maxTokensBody } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    const safeModel = resolveUpstreamClaudeModel(model);
-
-    const safeTemperature = Math.min(Math.max(Number(temperature) || 0.7, 0), 2);
+    const safeModel = resolveClaudeModel(model);
 
     if (messages.length > 20) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
@@ -132,14 +133,14 @@ export default async function handler(req, res) {
 
     const requestedMax =
       maxTokensBody != null && maxTokensBody !== ''
-        ? Math.min(8192, Math.max(64, Number(maxTokensBody) || 4096))
-        : 4096;
+        ? Math.min(8192, Math.max(64, Number(maxTokensBody) || CLAUDE_MAX_TOKENS.default))
+        : CLAUDE_MAX_TOKENS.default;
 
+    // Anthropic deprecated `temperature` for the current Claude model; sending it returns a 400.
     const requestBody = {
       model: safeModel,
       messages: filteredMessages,
       max_tokens: requestedMax,
-      temperature: safeTemperature,
     };
 
     if (systemPrompt) {
@@ -170,11 +171,28 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'claude' },
+    });
+    if (!usageRecord.ok) {
+      logError('claude.usage_record_failed', { userId, error: usageRecord.error });
+    }
     
     return res.status(200).json({
       success: true,
-      content: data.content?.[0]?.text || '',
-      usage: data.usage
+      // Join all text blocks; the current Claude model can return non-text blocks first.
+      content: (Array.isArray(data.content)
+        ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
+        : '') || '',
+      usage: data.usage,
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

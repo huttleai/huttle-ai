@@ -83,11 +83,12 @@ export default function Profile() {
   };
 
   const displayName = formatDisplayName(defaultFullName);
-  const isFoundingMember = ['founders', 'founder', 'builder', 'builders'].includes(userTier);
+  const isFoundingMember = ['founders', 'founder'].includes(userTier);
+  const isBuilderMember = ['builder', 'builders'].includes(userTier);
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
-      <div className="mb-6 md:mb-8">
+      <div className="pt-6 md:pt-0 mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
             <User className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
@@ -115,6 +116,11 @@ export default function Profile() {
                 {isFoundingMember && (
                   <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
                     🏆 FOUNDING MEMBER
+                  </span>
+                )}
+                {isBuilderMember && (
+                  <span className="inline-flex items-center rounded-full border border-[#01BAD2]/40 bg-[#01BAD2]/10 px-2.5 py-1 text-xs font-semibold text-[#008fa3]">
+                    LEGACY ANNUAL
                   </span>
                 )}
               </div>

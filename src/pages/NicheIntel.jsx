@@ -2,15 +2,16 @@ import { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Search, TrendingUp, Lightbulb, Target, Zap, ArrowRight, RefreshCw,
-  Copy, Check, Sparkles, Lock, FolderPlus,
+  Copy, Check, Sparkles, Lock, FolderPlus, AlertCircle,
 } from 'lucide-react';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
 import PlatformSelector from '../components/PlatformSelector';
 import UpgradeModal from '../components/UpgradeModal';
-import AIUsageMeter from '../components/AIUsageMeter';
+import RunCapMeter from '../components/RunCapMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
 import { researchNicheContent } from '../services/perplexityAPI';
 import { analyzeNiche } from '../services/grokAPI';
@@ -21,6 +22,7 @@ import { buildContentVaultPayload } from '../utils/contentVault';
 import { AuthContext } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { supabase } from '../config/supabase';
+import { FEATURE_RUN_CAPS } from '../config/creditConfig';
 
 const MOMENTUM_COLORS = {
   Rising: 'bg-emerald-100 text-emerald-700',
@@ -39,6 +41,16 @@ function nicheIntelResearchStatusMessages(platform) {
   ];
 }
 
+/**
+ * Client-side ceiling for a full Niche Intel run.
+ *
+ * The research leg runs on `/api/ai/perplexity-deep-dive` (120s of Vercel
+ * runtime) and the analysis leg on `/api/ai/grok` (30s), so this sits above the
+ * combined server budget: the proxies get to return their own errors, and a
+ * hung request still cannot leave the spinner up indefinitely.
+ */
+const NICHE_INTEL_RUN_TIMEOUT_MS = 165000;
+
 const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
   'Synthesizing themes, hook patterns, and content gaps…',
   'Shaping original ideas that fit your brand voice…',
@@ -49,10 +61,14 @@ const NICHE_INTEL_ANALYZE_STATUS_MESSAGES = [
 export default function NicheIntel() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { checkFeatureAccess } = useSubscription();
+  const { getFeatureLimit, userTier } = useSubscription();
   const { addToast } = useToast();
   const navigate = useNavigate();
-  const { featureUsed, featureLimit, trackFeatureUsage, canGenerate } = useAIUsage('nicheIntel');
+  const {
+    checkCanGenerate,
+    canGenerate,
+    refreshUsage,
+  } = useAIUsage('nicheIntel');
 
   const [nicheQuery, setNicheQuery] = useState('');
   const [platform, setPlatform] = useState('instagram');
@@ -61,6 +77,8 @@ export default function NicheIntel() {
   const [loadingPhase, setLoadingPhase] = useState(null);
   const [loadingDetailIndex, setLoadingDetailIndex] = useState(0);
   const [analysis, setAnalysis] = useState(null);
+  /** Persistent failure surface: `{ title, message }`. Toasts auto-dismiss after 4s, which is far shorter than a run. */
+  const [runError, setRunError] = useState(null);
   const [copiedIdea, setCopiedIdea] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [savedIdeaId, setSavedIdeaId] = useState(null);
@@ -69,7 +87,7 @@ export default function NicheIntel() {
   const userEditedNicheRef = useRef(false);
   const cacheRestoredRef = useRef(false);
 
-  const hasAccess = checkFeatureAccess('niche-intel');
+  const hasAccess = getFeatureLimit('nicheIntel') > 0;
   const analysisStorageKey = useMemo(
     () => (user?.id ? `nicheIntelAnalysis:${user.id}` : null),
     [user?.id],
@@ -146,8 +164,9 @@ export default function NicheIntel() {
   }, [loading, loadingPhase, loadingDetailIndex, researchStatusList]);
 
   const handleAnalyze = async () => {
-    if (!canGenerate) {
-      addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
+    const gate = await checkCanGenerate();
+    if (!gate.allowed) {
+      addToast(gate.message || "You've reached your monthly Niche Intel limit.", 'warning');
       return;
     }
 
@@ -156,6 +175,19 @@ export default function NicheIntel() {
     setLoading(true);
     setLoadingPhase('research');
     setAnalysis(null);
+    setRunError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), NICHE_INTEL_RUN_TIMEOUT_MS);
+    /** Distinguishes our own timeout from an upstream abort. */
+    let timedOut = false;
+    controller.signal.addEventListener('abort', () => { timedOut = true; }, { once: true });
+
+    /** Surface a failure that survives longer than a toast. */
+    const failRun = (title, message) => {
+      setRunError({ title, message });
+      addToast(message, 'error');
+    };
 
     try {
       let { data: { session } } = await supabase.auth.getSession();
@@ -166,30 +198,33 @@ export default function NicheIntel() {
         accessToken = session?.access_token ?? null;
       }
       if (!accessToken) {
-        addToast('Please log in to run Niche Intel.', 'error');
+        failRun('Session expired', 'Please log in again to run Niche Intel.');
         return;
       }
 
-      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData, { accessToken });
+      const researchRes = await researchNicheContent(resolvedQuery, platform, brandData, {
+        accessToken,
+        signal: controller.signal,
+      });
       if (!researchRes.success) {
-        addToast('Research failed. Try again.', 'error');
+        if (timedOut || researchRes.aborted) {
+          failRun(
+            'This run took too long',
+            'Live research did not come back in time. This usually clears on a second attempt.',
+          );
+        } else {
+          failRun('Research failed', 'We could not pull live data for your niche. Try again.');
+        }
         return;
       }
 
       setLoadingPhase('analyze');
-      const analysisRes = await analyzeNiche(researchRes.research, brandData, platform);
+      const analysisRes = await analyzeNiche(researchRes.research, brandData, platform, {
+        signal: controller.signal,
+      });
       if (analysisRes.success && analysisRes.analysis) {
-        const usage = await trackFeatureUsage({
-          query: resolvedQuery,
-          platform,
-          cachedResearch: Boolean(researchRes.cached),
-        });
-
-        if (!usage.allowed) {
-          addToast('You\'ve reached your monthly Niche Intel limit. Resets on the 1st.', 'warning');
-          return;
-        }
-
+        // Show the already-successful analysis regardless of usage refresh
+        // outcome. Credits are recorded on the server for this route.
         setAnalysis(analysisRes.analysis);
         if (analysisStorageKey) {
           try {
@@ -206,13 +241,28 @@ export default function NicheIntel() {
             console.error('[NicheIntel] Could not persist analysis cache', e);
           }
         }
+
+        await refreshUsage();
+      } else if (timedOut || analysisRes.aborted) {
+        failRun(
+          'This run took too long',
+          'The analysis step did not come back in time. This usually clears on a second attempt.',
+        );
       } else {
-        addToast('Analysis failed. Try again.', 'error');
+        failRun('Analysis failed', 'We pulled the research but could not build your report. Try again.');
       }
     } catch (e) {
       console.error('[NicheIntel] Analyze error', e);
-      addToast('Something went wrong. Try again.', 'error');
+      if (timedOut || e?.name === 'AbortError' || e?.name === 'TimeoutError') {
+        failRun(
+          'This run took too long',
+          'We stopped waiting after a couple of minutes. This usually clears on a second attempt.',
+        );
+      } else {
+        failRun('Something went wrong', 'We could not finish this run. Try again.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
       setLoadingPhase(null);
     }
@@ -314,8 +364,8 @@ export default function NicheIntel() {
   // Upgrade prompt for non-Pro users
   if (!hasAccess) {
     return (
-      <div className="flex-1 ml-0 md:ml-12 lg:ml-64 pt-16 md:pt-20 p-4 md:p-8">
-        <div className="max-w-2xl mx-auto">
+      <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
+        <div className="max-w-2xl mx-auto pt-6 md:pt-0">
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20 border border-black" style={{ background: 'linear-gradient(135deg, rgba(1, 186, 210, 1) 0%, rgba(59, 130, 246, 1) 100%)' }}>
               <Search className="w-8 h-8 text-white" />
@@ -350,7 +400,9 @@ export default function NicheIntel() {
               <Lock className="w-4 h-4" />
               Upgrade to Pro to Unlock
             </button>
-            <p className="text-xs text-gray-400 mt-3">Pro: 5 analyses/month &bull; Founders: 10 analyses/month</p>
+            <p className="text-xs text-gray-400 mt-3">
+              Pro: {FEATURE_RUN_CAPS.nicheIntel.pro} analyses/month &bull; Founders: {FEATURE_RUN_CAPS.nicheIntel.founder} analyses/month
+            </p>
           </Motion.div>
           <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} feature="nicheIntel" featureName="Niche Content Intelligence" />
         </div>
@@ -371,24 +423,32 @@ export default function NicheIntel() {
       )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
-              <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+        <div className="pt-6 md:pt-0 mb-6 md:mb-8">
+          <div className="flex items-start justify-between gap-3 md:gap-4">
+            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
+                <Search className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
+                <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-gray-900">Niche Intel</h1>
-              <p className="text-sm md:text-base text-gray-500">Discover what&rsquo;s working in your niche</p>
-            </div>
-          </div>
-          <div className="mt-3">
-            <AIUsageMeter
-              used={featureUsed}
-              limit={featureLimit}
-              label="Analyses this month"
+            <RunCapMeter
+              featureKey="nicheIntel"
+              tier={userTier}
+              featureLabel="Niche Intel runs"
               compact
+              className="hidden sm:inline-flex flex-shrink-0 mt-2"
             />
           </div>
+          <RunCapMeter
+            featureKey="nicheIntel"
+            tier={userTier}
+            featureLabel="Niche Intel runs"
+            compact
+            className="sm:hidden mt-2"
+          />
         </div>
 
         {/* Input Panel */}
@@ -435,6 +495,7 @@ export default function NicheIntel() {
               )}
             </div>
             <PlatformSelector value={platform} onChange={setPlatform} showTips={false} />
+            <GenerationAction>
             <button
               onClick={handleAnalyze}
               disabled={loading || !canGenerate}
@@ -446,11 +507,50 @@ export default function NicheIntel() {
                 <><Search className="w-4 h-4" /> Analyze Now</>
               )}
             </button>
+            </GenerationAction>
           </div>
         </div>
 
+        {/* Run failure — persists until the next run, unlike a toast */}
+        {runError && !loading && (
+          <Motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4"
+            role="alert"
+            data-testid="niche-intel-error"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-900">{runError.title}</p>
+                <p className="mt-1 text-sm text-red-800">{runError.message}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={loading || !canGenerate}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="niche-intel-retry"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Try again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRunError(null)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Motion.div>
+        )}
+
         {/* Brand Context */}
-        {!analysis && !loading && brandData?.niche && (
+        {!analysis && !loading && !runError && brandData?.niche && (
           <div className="mb-6 bg-huttle-50 rounded-xl border border-huttle-100 p-4">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <Zap className="w-4 h-4 text-huttle-primary" />
@@ -608,7 +708,7 @@ export default function NicheIntel() {
         </AnimatePresence>
 
         {/* Empty State */}
-        {!analysis && !loading && (
+        {!analysis && !loading && !runError && (
           <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-400">
             <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-sm">Enter your niche and hit Analyze to discover content intelligence</p>

@@ -57,6 +57,10 @@ const EXACT_MAPPINGS = {
   'monetize': 'Monetize Content',
   'boost_engagement': 'Boost Engagement',
   'grow_following': 'Grow My Following',
+  'drive_appointments': 'Drive Appointments',
+  'book_consultations': 'Book Consultations',
+  'book_appointment': 'Book an Appointment',
+  'schedule_consultation': 'Schedule a Consultation',
   
   // Creator focuses
   'lifestyle': 'Lifestyle & Daily Life',
@@ -204,7 +208,7 @@ export function formatEnumArray(values) {
         if (Array.isArray(parsed)) {
           return parsed.map(formatEnumLabel).filter(Boolean).join(', ');
         }
-      } catch (e) {
+      } catch {
         // Not valid JSON, treat as comma-separated
       }
     }
@@ -282,7 +286,7 @@ export function normalizeEnumArray(values) {
         if (Array.isArray(parsed)) {
           return parsed.map(normalizeEnumValue).filter(Boolean).join(', ');
         }
-      } catch (e) {
+      } catch {
         // Ignore and treat as a plain string below
       }
     }

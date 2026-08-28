@@ -7,12 +7,14 @@
  */
 
 import Stripe from 'stripe';
+import { parseBearerToken } from './_utils/billing.js';
 
 export default async function handler(req, res) {
   // SECURITY: Require admin secret to access this endpoint
   // This prevents information disclosure about Stripe configuration
   const ADMIN_SECRET = process.env.CRON_SECRET;
-  const providedSecret = req.headers['x-cron-secret'] || req.headers['authorization']?.replace('Bearer ', '');
+  const providedSecret =
+    req.headers['x-cron-secret'] || parseBearerToken(req.headers['authorization'] ?? req.headers.authorization);
 
   if (!ADMIN_SECRET) {
     return res.status(403).json({ error: 'Endpoint not configured' });

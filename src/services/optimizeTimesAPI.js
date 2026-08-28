@@ -7,23 +7,20 @@
  */
 
 import { buildBrandContext, getNiche, getTargetAudience } from '../utils/brandContextBuilder';
-import { supabase } from '../config/supabase';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getAuthReadyHeaders } from '../utils/authReady';
+import { getGrokParams } from '../config/grokConfig';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
- * Get auth headers for API requests
+ * Get auth headers for API requests. Fail closed: throws AUTH_NOT_READY
+ * instead of returning headers without Authorization. Callers already fall
+ * back to rule-based optimization when the AI request throws.
  */
-async function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    }
-  } catch (e) { /* ignore */ }
-  return headers;
+async function getAuthHeaders(options = {}) {
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -118,9 +115,9 @@ export async function generateOptimalTimes(brandData, posts) {
   const platforms = [...new Set(posts.flatMap(p => p.platforms || []))];
   
   // Get brand context
-  const niche = getNiche(brandData, 'general');
-  const audience = getTargetAudience(brandData, 'general audience');
-  const brandContext = buildBrandContext(brandData);
+  void getNiche(brandData, 'general');
+  void getTargetAudience(brandData, 'general audience');
+  void buildBrandContext(brandData);
 
   try {
     // Try AI-powered optimization first
@@ -182,7 +179,9 @@ You must return a valid JSON response with this exact structure:
     }
   ],
   "reasoning": "overall strategy explanation"
-}`;
+}
+
+${HUMAN_WRITING_RULES}`;
 
   const userPrompt = `Analyze and optimize posting times for this brand:
 
@@ -206,19 +205,33 @@ REQUIREMENTS:
 Return ONLY valid JSON matching the structure specified.`;
 
   const headers = await getAuthHeaders();
-  
-  const response = await fetch(GROK_PROXY_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'grok-4.1-fast-reasoning',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-    })
+
+  const requestBody = JSON.stringify({
+    ...getGrokParams('optimizeTimes'),
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.3,
   });
+
+  const postOptimizeRequest = (requestHeaders) => fetch(GROK_PROXY_URL, {
+    method: 'POST',
+    headers: requestHeaders,
+    body: requestBody,
+  });
+
+  let response = await postOptimizeRequest(headers);
+
+  // One-shot 401 recovery: refresh the session and retry once.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders({ forceRefresh: true });
+      response = await postOptimizeRequest(refreshedHeaders);
+    } catch {
+      // Refresh failed — fall through with the original 401 response.
+    }
+  }
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
@@ -299,10 +312,9 @@ function generateFallbackOptimization(posts, brandData) {
  * @returns {Object} Optimal time recommendation
  */
 export function getOptimalTimeForPlatform(platform, contentType = 'post', brandData = null) {
+  void brandData;
   const platformData = PLATFORM_BEST_TIMES[platform] || PLATFORM_BEST_TIMES.Instagram;
-  const industry = brandData?.industry?.toLowerCase() || 'default';
-  const industryTiming = INDUSTRY_TIMING[industry] || INDUSTRY_TIMING.default;
-  
+
   // Get base best time
   let bestTime = platformData.bestTimes[0];
   

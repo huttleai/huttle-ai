@@ -9,10 +9,8 @@ import { AuthContext } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import useAIUsage from '../hooks/useAIUsage';
+import { ReadOnlyGenerateCta } from '../components/ReadOnlyGenerateCta';
 import PlatformSelector from '../components/PlatformSelector';
-import AlgorithmChecker from '../components/AlgorithmChecker';
-import HumanizerScore from '../components/HumanizerScore';
-import ScoreBadge from '../components/ScoreBadge';
 import UpgradeModal from '../components/UpgradeModal';
 import AIUsageMeter from '../components/AIUsageMeter';
 import { AIDisclaimerFooter } from '../components/AIDisclaimer';
@@ -34,11 +32,13 @@ import { saveToVault } from '../services/contentService';
 import { getPlatform } from '../utils/platformGuidelines';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { buildContentVaultPayload } from '../utils/contentVault';
+import { assembleFullPost } from '../utils/fullPostAssembly';
 import { getPromptBrandProfile } from '../utils/brandContextBuilder';
 import { enhanceCaptionWithClaude, generateFullPostHooksWithClaude } from '../services/claudeAPI';
 import { generateFullPostHashtagsGrounded } from '../services/perplexityAPI';
 import { getHashtagMaxForPlatform, getMinAcceptableHashtagCountForPlatform } from '../data/platformContentRules';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { extractField } from '../utils/parseAIResponse';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { checkAlgorithmAlignment } from '../data/algorithmSignals';
 import {
@@ -106,6 +106,7 @@ const GOALS = [
   { id: 'followers', label: 'Grow followers' },
   { id: 'engagement', label: 'Drive engagement' },
   { id: 'leads', label: 'Generate leads' },
+  { id: 'book_appointment', label: 'Drive Appointments' },
   { id: 'sales', label: 'Make a sale' },
 ];
 
@@ -115,6 +116,7 @@ function resolveClaudeHookGoalLabel(goalId, fallbackLabel) {
     followers: 'Build a follower base of people who match your ideal client',
     engagement: 'Educate skeptical beginners and drive comments, saves, and shares',
     leads: 'Book consultations and capture qualified leads',
+    book_appointment: 'Drive appointment bookings with a clear, frictionless booking CTA — specific availability, platform-native next step (DM, profile link, call)',
     sales: 'Sell treatment packages and convert interest into bookings',
   };
   return map[goalId] || fallbackLabel;
@@ -248,9 +250,18 @@ function parseHashtagsFromResponse(text) {
 export default function FullPostBuilder() {
   const { brandData } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { checkFeatureAccess } = useSubscription();
+  const { checkFeatureAccess, isReadOnly } = useSubscription();
   const { addToast } = useToast();
-  const { featureUsed, featureLimit, trackFeatureUsage } = useAIUsage('fullPostBuilderRuns');
+  const {
+    featureUsed,
+    featureLimit,
+    overallUsed,
+    overallLimit,
+    creditsPerRun,
+    trackFeatureUsage,
+    checkCanGenerate,
+    refreshUsage,
+  } = useAIUsage('fullPostBuilderRuns');
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -280,13 +291,10 @@ export default function FullPostBuilder() {
 
   // Step 3 state
   const [caption, setCaption] = useState('');
+  const [captionLength, setCaptionLength] = useState('long');
   const [loadingCaption, setLoadingCaption] = useState(false);
   const [loadingCaptionEnhancement, setLoadingCaptionEnhancement] = useState(false);
-  const [captionStreamlinedNotice, setCaptionStreamlinedNotice] = useState(null);
-  const [hashtagStreamlinedNotice, setHashtagStreamlinedNotice] = useState(null);
-  const [ctaStreamlinedNotice, setCtaStreamlinedNotice] = useState(null);
   const [hashtagStepError, setHashtagStepError] = useState(null);
-  const [qualityScoreNotice, setQualityScoreNotice] = useState(null);
 
   // Step 4 state
   const [hashtags, setHashtags] = useState([]);
@@ -298,14 +306,7 @@ export default function FullPostBuilder() {
   const [loadingCTAs, setLoadingCTAs] = useState(false);
   const [customCtaDraft, setCustomCtaDraft] = useState('');
 
-  // Score state
-  const [qualityScore, setQualityScore] = useState(null);
-  const [humanScore, setHumanScore] = useState(null);
-  const [algorithmScore, setAlgorithmScore] = useState(null);
-  const [loadingQuality, setLoadingQuality] = useState(false);
   const [savedPartIds, setSavedPartIds] = useState({});
-  /** Bumps when entering the final panel so score widgets remount and recompute from latest assembly. */
-  const [scoreSessionKey, setScoreSessionKey] = useState(0);
 
   const hasAccess = checkFeatureAccess('full-post-builder');
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}:${user?.id || 'guest'}`, [user?.id]);
@@ -319,7 +320,6 @@ export default function FullPostBuilder() {
   const hashtagReqIdRef = useRef(0);
   const enhanceReqIdRef = useRef(0);
   const ctaReqIdRef = useRef(0);
-  const scoringReqIdRef = useRef(0);
   const captionTextareaRef = useRef(null);
   const wizardRef = useRef({});
   const assembledPostRef = useRef('');
@@ -368,9 +368,6 @@ export default function FullPostBuilder() {
         setCtas([]);
         setSelectedCTA(null);
         setShowFinalPanel(false);
-        setQualityScore(null);
-        setHumanScore(null);
-        setAlgorithmScore(null);
         navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
         hasHydratedRef.current = true;
         return;
@@ -416,9 +413,6 @@ export default function FullPostBuilder() {
           setCurrentStep(0);
         }
         setShowFinalPanel(false);
-        setQualityScore(null);
-        setHumanScore(null);
-        setAlgorithmScore(null);
       } else if (draft?.topic) {
         setHooks(Array.isArray(draft.hooks) ? draft.hooks : []);
         setSelectedHook(draft?.selectedHook || null);
@@ -514,10 +508,15 @@ export default function FullPostBuilder() {
     };
   }, [platform]);
 
-  const assembledPost = useMemo(() => {
-    const hashtagStr = hashtags.map((h) => h.tag).join(' ');
-    return [selectedHook, caption, hashtagStr, selectedCTA?.cta].filter(Boolean).join('\n\n');
-  }, [selectedHook, caption, hashtags, selectedCTA]);
+  const assembledPost = useMemo(
+    () => assembleFullPost({
+      hook: selectedHook,
+      caption,
+      hashtags,
+      cta: selectedCTA?.cta,
+    }),
+    [selectedHook, caption, hashtags, selectedCTA],
+  );
 
   useEffect(() => {
     assembledPostRef.current = assembledPost;
@@ -529,6 +528,7 @@ export default function FullPostBuilder() {
     goal,
     selectedHook,
     caption,
+    captionLength,
     hashtags,
     selectedCTA,
     brandData,
@@ -544,23 +544,17 @@ export default function FullPostBuilder() {
     }
     if (fromStep <= 2) {
       setCaption('');
-      setCaptionStreamlinedNotice(null);
     }
     if (fromStep <= 3) {
       setHashtags([]);
-      setHashtagStreamlinedNotice(null);
       setHashtagStepError(null);
     }
     if (fromStep <= 4) {
       setCtas([]);
       setSelectedCTA(null);
       setCustomCtaDraft('');
-      setCtaStreamlinedNotice(null);
     }
     setShowFinalPanel(false);
-    setQualityScore(null);
-    setHumanScore(null);
-    setAlgorithmScore(null);
   };
 
   const goToStep = (step) => {
@@ -619,15 +613,21 @@ export default function FullPostBuilder() {
 
       const chargeOnceIfNeeded = async () => {
         if (hooksRunPaidRef.current) return true;
+        const gate = await checkCanGenerate();
+        if (!gate.allowed) {
+          addToast(gate.message || 'AI limit reached', 'warning');
+          return false;
+        }
         const usage = await trackFeatureUsage({
           step: 'hooks',
-          overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
+          overallCredits: 0,
         });
         if (!usage.allowed) {
           addToast('AI limit reached', 'warning');
           return false;
         }
         hooksRunPaidRef.current = true;
+        await refreshUsage();
         return true;
       };
 
@@ -754,7 +754,7 @@ export default function FullPostBuilder() {
   };
 
   // Step 3: Generate caption
-  const handleGenerateCaption = async ({ forceFresh = false } = {}) => {
+  const handleGenerateCaption = async ({ forceFresh = false, captionLengthValue } = {}) => {
     const w = wizardRef.current;
     if (!w.selectedHook) return;
     const rid = ++captionReqIdRef.current;
@@ -762,11 +762,11 @@ export default function FullPostBuilder() {
       console.debug('[FullPostBuilder] caption generate start', { rid, forceFresh });
     }
     setLoadingCaption(true);
-    setCaptionStreamlinedNotice(null);
     try {
       let captionText;
       const tc = trendingContextRef.current;
       const goalLabel = GOALS.find((g) => g.id === w.goal)?.label || w.goal;
+      const resolvedCaptionLength = captionLengthValue ?? w.captionLength ?? 'long';
       const res = await generateCaption({
         topic: w.topic,
         platform: w.platform,
@@ -780,6 +780,7 @@ export default function FullPostBuilder() {
         fullPostBuilder: true,
         forceFreshRegeneration: forceFresh ? makeFreshRegenNonce('cap') : undefined,
         fullPostBuilderCaptionHints: fpbAiSnippets.captionHints,
+        captionLength: resolvedCaptionLength,
       });
       if (rid !== captionReqIdRef.current) {
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale caption response ignored', rid);
@@ -792,18 +793,20 @@ export default function FullPostBuilder() {
         return;
       }
       if (res.success) {
-        captionText = String(
-          res.captionVariants?.[0]?.caption
-          || res.caption
-          || ''
-        )
+        // res.captionVariants?.[0]?.caption is the happy path when the service parsed correctly.
+        // extractField guards the fallback: if res.caption is a raw JSON string (service parse
+        // failed and returned data.content verbatim), extract the .caption field from it rather
+        // than rendering the entire JSON array to the user. If res.caption is already plain text
+        // the JSON.parse inside extractField throws and returns the plain text as the fallback.
+        const variantCaption = res.captionVariants?.[0]?.caption ?? '';
+        const fallbackCaption = variantCaption || extractField(res.caption, 'caption', res.caption ?? '');
+        captionText = String(fallbackCaption || '')
           .trim()
           .replace(/^\d+\.\s+/, '');
       }
 
       if (captionText) {
         setCaption(captionText);
-        setCaptionStreamlinedNotice(res.streamlined ? 'Using streamlined caption generation right now.' : null);
         resetDownstream(3);
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] caption generate success', { rid });
       } else {
@@ -910,7 +913,6 @@ export default function FullPostBuilder() {
     }
     setLoadingHashtags(true);
     setHashtagStepError(null);
-    setHashtagStreamlinedNotice(null);
     try {
       const goalLabel = GOALS.find((g) => g.id === w.goal)?.label || w.goal;
       const nicheKw = Array.isArray(brandData?.niche) ? brandData.niche.filter(Boolean).join(', ') : (brandData?.niche || '');
@@ -972,9 +974,6 @@ export default function FullPostBuilder() {
           addToast(msg, 'warning');
         } else {
           setHashtags(next);
-          setHashtagStreamlinedNotice(
-            res.streamlined ? 'Using streamlined hashtag generation right now.' : 'Hashtags grounded with live search where available.',
-          );
           resetDownstream(4);
           if (import.meta.env.DEV) console.debug('[FullPostBuilder] hashtags generate success', { rid });
         }
@@ -1019,7 +1018,6 @@ export default function FullPostBuilder() {
       console.debug('[FullPostBuilder] CTA generate start', { rid, forceFresh });
     }
     setLoadingCTAs(true);
-    setCtaStreamlinedNotice(null);
     try {
       const res = await generateStyledCTAs({
         promoting: w.topic,
@@ -1039,7 +1037,6 @@ export default function FullPostBuilder() {
         setCtas(res.ctas.slice(0, 5));
         setSelectedCTA(null);
         setCustomCtaDraft('');
-        setCtaStreamlinedNotice(res.streamlined ? 'Using streamlined CTA generation right now.' : null);
         if (import.meta.env.DEV) console.debug('[FullPostBuilder] CTA generate success', { rid });
       } else {
         const bucket = classifyGrokFailure(res || {});
@@ -1061,52 +1058,6 @@ export default function FullPostBuilder() {
     }
   };
 
-  const runScoring = useCallback(async () => {
-    const post = assembledPostRef.current;
-    if (!String(post || '').trim()) return;
-    const rid = ++scoringReqIdRef.current;
-    if (import.meta.env.DEV) {
-      console.debug('[FullPostBuilder] score recompute start', { rid });
-    }
-    setLoadingQuality(true);
-    setQualityScoreNotice(null);
-    try {
-      const w = wizardRef.current;
-      const res = await scoreContentQuality(post, w.brandData, {
-        fullPostBuilder: true,
-        platform: w.platform,
-      });
-      if (rid !== scoringReqIdRef.current) {
-        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale score response ignored', rid);
-        return;
-      }
-      if (res.success) {
-        if (res.score?.overall != null) {
-          setQualityScore(res.score.overall);
-        } else {
-          try {
-            const parsed = typeof res.analysis === 'string' ? JSON.parse(res.analysis.match(/\{[\s\S]*\}/)?.[0] || '{}') : res.analysis;
-            const n = parsed.totalScore ?? parsed.overallScore ?? parsed.overall;
-            if (n != null) setQualityScore(n);
-          } catch { /* keep previous quality score */ }
-        }
-        if (import.meta.env.DEV) console.debug('[FullPostBuilder] score recompute success', { rid });
-      } else if (res.code === 'SCORING_UNAVAILABLE') {
-        setQualityScoreNotice('Quality scoring is temporarily unavailable. Your post is still ready to copy.');
-      }
-    } catch {
-      if (rid !== scoringReqIdRef.current) {
-        if (import.meta.env.DEV) console.debug('[FullPostBuilder] stale score error ignored', rid);
-        return;
-      }
-      setQualityScoreNotice('Quality scoring is temporarily unavailable. Your post is still ready to copy.');
-      if (import.meta.env.DEV) console.debug('[FullPostBuilder] score recompute fail', { rid });
-    } finally {
-      if (rid === scoringReqIdRef.current) {
-        setLoadingQuality(false);
-      }
-    }
-  }, []);
 
   const runDevFpSmokeTest = useCallback(async () => {
     const SMOKE_TOPIC = 'microneedling for acne scars';
@@ -1309,12 +1260,6 @@ export default function FullPostBuilder() {
     }
   }, [brandData]);
 
-  useEffect(() => {
-    if (!showFinalPanel) return;
-    const post = assembledPostRef.current;
-    if (!String(post || '').trim()) return;
-    void runScoring();
-  }, [showFinalPanel, assembledPost, runScoring]);
 
   useEffect(() => {
     if (currentStep !== 2 || !captionTextareaRef.current) return;
@@ -1330,13 +1275,10 @@ export default function FullPostBuilder() {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
       if (nextStep === 1 && hooks.length === 0) void handleGenerateHooks();
-      if (nextStep === 2 && !caption && selectedHook) void handleGenerateCaption({ forceFresh: false });
+      // Caption step: do NOT auto-generate — let the user choose Short/Long first, then click Generate.
       if (nextStep === 3 && hashtags.length === 0) void handleGenerateHashtags({ forceFresh: false });
       if (nextStep === 4 && ctas.length === 0) void handleGenerateCTAs({ forceFresh: false });
     } else {
-      setHumanScore(null);
-      setAlgorithmScore(null);
-      setScoreSessionKey((k) => k + 1);
       setShowFinalPanel(true);
     }
   };
@@ -1473,7 +1415,7 @@ export default function FullPostBuilder() {
   const topicPreview = topic.trim() || (Array.isArray(brandData?.niche) ? brandData.niche[0] : brandData?.niche) || 'your niche';
 
   return (
-    <div className="flex-1 min-h-screen bg-gray-50 border border-black shadow-[0_4px_12px_0_rgba(0,0,0,0.15)] ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 sm:px-6 lg:px-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       {loadingHooks && (
         <LoadingSpinner
           fullScreen
@@ -1483,7 +1425,7 @@ export default function FullPostBuilder() {
       )}
       <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
+        <div className="pt-6 md:pt-0 mb-6 md:mb-8">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
               <PenLine className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />
@@ -1497,13 +1439,17 @@ export default function FullPostBuilder() {
             <AIUsageMeter
               used={featureUsed}
               limit={featureLimit}
+              poolUsed={overallUsed}
+              poolLimit={overallLimit}
+              creditsPerRun={creditsPerRun}
               label="Full Post runs this month"
               compact
             />
             <p className="mt-1 text-xs text-gray-500">
-              Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} AI credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
+              Each run uses {FULL_POST_BUILDER_CREDITS_PER_RUN} credits when hooks generate; caption, hashtags, and CTA steps in the same session do not charge extra runs.
             </p>
           </div>
+          {isReadOnly && <ReadOnlyGenerateCta className="mt-4" />}
           {import.meta.env.DEV && FPB_DEV_SMOKE_UI_ENABLED && (
             <div className="mt-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
               <button
@@ -1817,11 +1763,45 @@ export default function FullPostBuilder() {
               {/* Step 3: Caption */}
               {currentStep === 2 && (
                 <div className="space-y-4 mt-4">
-                  {loadingCaption ? (
-                    <div className="space-y-2">
-                      <div className="h-32 rounded-xl bg-gray-100 animate-pulse" />
+                  {/* Caption length toggle */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Caption style:</span>
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCaptionLength('short');
+                          if (caption) void handleGenerateCaption({ forceFresh: true, captionLengthValue: 'short' });
+                        }}
+                        disabled={loadingCaption}
+                        className={`px-3 py-1.5 transition-colors ${captionLength === 'short' ? 'bg-huttle-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        Short
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCaptionLength('long');
+                          if (caption) void handleGenerateCaption({ forceFresh: true, captionLengthValue: 'long' });
+                        }}
+                        disabled={loadingCaption}
+                        className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${captionLength === 'long' ? 'bg-huttle-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        Long
+                      </button>
                     </div>
-                  ) : (
+                    {captionLength === 'short' && (
+                      <span className="text-xs text-gray-400">1–2 sentences</span>
+                    )}
+                  </div>
+                  {loadingCaption ? (
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-huttle-primary/20 bg-huttle-primary/5 py-10">
+                      <RefreshCw className="w-6 h-6 text-huttle-primary animate-spin" />
+                      <p className="text-sm font-medium text-huttle-primary">
+                        Generating {captionLength === 'short' ? 'short' : 'long'} caption…
+                      </p>
+                    </div>
+                  ) : caption ? (
                     <>
                       <textarea
                         ref={captionTextareaRef}
@@ -1844,17 +1824,26 @@ export default function FullPostBuilder() {
                         </span>
                       </div>
                     </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleGenerateCaption({ forceFresh: false })}
+                      disabled={!selectedHook}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-huttle-primary/30 bg-huttle-primary/5 px-4 py-8 text-sm font-medium text-huttle-primary hover:bg-huttle-primary/10 hover:border-huttle-primary/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generate {captionLength === 'short' ? 'short' : 'long'} caption
+                    </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerateCaption({ forceFresh: true })}
-                    disabled={loadingCaption || !selectedHook}
-                    className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingCaption ? 'animate-spin' : ''}`} /> Regenerate caption
-                  </button>
-                  {captionStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{captionStreamlinedNotice}</p>
+                  {caption && (
+                    <button
+                      type="button"
+                      onClick={() => void handleGenerateCaption({ forceFresh: true })}
+                      disabled={loadingCaption || !selectedHook}
+                      className="flex items-center gap-1.5 text-sm text-huttle-primary hover:text-huttle-primary-dark font-medium"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingCaption ? 'animate-spin' : ''}`} /> Regenerate caption
+                    </button>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -1890,14 +1879,10 @@ export default function FullPostBuilder() {
                       {hashtagStepError}
                     </div>
                   )}
-                  {hashtagStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{hashtagStreamlinedNotice}</p>
-                  )}
                   {loadingHashtags ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-10 rounded-lg bg-gray-100 animate-pulse" />
-                      ))}
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-huttle-primary/20 bg-huttle-primary/5 py-10">
+                      <RefreshCw className="w-6 h-6 text-huttle-primary animate-spin" />
+                      <p className="text-sm font-medium text-huttle-primary">Generating hashtags…</p>
                     </div>
                   ) : hashtags.length > 0 ? (
                     <div className="space-y-1.5">
@@ -1950,14 +1935,10 @@ export default function FullPostBuilder() {
               {/* Step 5: CTA */}
               {currentStep === 4 && (
                 <div className="space-y-4 mt-4">
-                  {ctaStreamlinedNotice && (
-                    <p className="text-xs text-gray-500">{ctaStreamlinedNotice}</p>
-                  )}
                   {loadingCTAs ? (
-                    <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
-                      ))}
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-huttle-primary/20 bg-huttle-primary/5 py-10">
+                      <RefreshCw className="w-6 h-6 text-huttle-primary animate-spin" />
+                      <p className="text-sm font-medium text-huttle-primary">Generating CTAs…</p>
                     </div>
                   ) : ctas.length > 0 ? (
                     <div className="space-y-2">
@@ -2083,41 +2064,6 @@ export default function FullPostBuilder() {
         {/* Final Output Panel */}
         {showFinalPanel && (
           <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            {/* Score Badges */}
-            <div className="flex flex-wrap items-center gap-3">
-              <ScoreBadge
-                key={`quality-${scoreSessionKey}`}
-                label="Quality"
-                score={qualityScore}
-                icon={Sparkles}
-                loading={loadingQuality}
-                thresholds={{ green: 80, teal: 60, amber: 40 }}
-              />
-              <HumanizerScore
-                key={`human-${scoreSessionKey}`}
-                content={caption}
-                platform={platform}
-                onScoreChange={setHumanScore}
-                onTrackUsage={(meta) => trackFeatureUsage({ ...meta, incrementFeatureCounter: false, overallCredits: 1 })}
-                onContentUpdate={(nextContent) => { setCaption(nextContent); }}
-                compact
-                autoRun
-                hideInput
-                fullPostBuilderContext
-              />
-              <AlgorithmChecker
-                key={`algo-${scoreSessionKey}`}
-                content={assembledPost}
-                platform={platform}
-                onScoreChange={setAlgorithmScore}
-                compact
-                hideInput
-              />
-            </div>
-            {qualityScoreNotice && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">{qualityScoreNotice}</p>
-            )}
-
             {/* Platform Badge */}
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-1 bg-gray-100 rounded-lg text-xs font-medium text-gray-600">

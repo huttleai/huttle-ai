@@ -24,6 +24,19 @@ const TIER_CONFIG = {
 };
 
 export default function HashtagStrategySection({ data, sectionNumber }) {
+  const [copiedTag, setCopiedTag] = useState(null);
+
+  const handleCopyTag = async (tag) => {
+    const formatted = tag.startsWith('#') ? tag : `#${tag}`;
+    try {
+      await navigator.clipboard.writeText(formatted);
+      setCopiedTag(formatted);
+      setTimeout(() => setCopiedTag(null), 1500);
+    } catch {
+      // silent fail — secondary shortcut action
+    }
+  };
+
   if (!data) return null;
 
   const tiers = data.tiers || {};
@@ -39,15 +52,18 @@ export default function HashtagStrategySection({ data, sectionNumber }) {
     return (
       <BlueprintSectionWrapper icon="#️⃣" title="Hashtag Strategy" sectionNumber={sectionNumber}>
         <div className="flex flex-wrap gap-2">
-          {flatHashtags.map((tag, i) => (
-            <span
-              key={i}
-              className="px-3 py-1.5 bg-emerald-50 border border-emerald-200/60 rounded-full text-xs font-semibold text-emerald-700 cursor-pointer hover:scale-105 transition-transform"
-              onClick={() => navigator.clipboard.writeText(tag.startsWith('#') ? tag : `#${tag}`)}
-            >
-              {tag.startsWith('#') ? tag : `#${tag}`}
-            </span>
-          ))}
+          {flatHashtags.map((tag, i) => {
+            const formatted = tag.startsWith('#') ? tag : `#${tag}`;
+            return (
+              <span
+                key={i}
+                className="px-3 py-1.5 bg-emerald-50 border border-emerald-200/60 rounded-full text-xs font-semibold text-emerald-700 cursor-pointer hover:scale-105 transition-transform"
+                onClick={() => handleCopyTag(tag)}
+              >
+                {copiedTag === formatted ? 'Copied!' : formatted}
+              </span>
+            );
+          })}
         </div>
         <CopyTierButton hashtags={flatHashtags} label="Copy All" />
       </BlueprintSectionWrapper>
@@ -85,15 +101,18 @@ export default function HashtagStrategySection({ data, sectionNumber }) {
               </div>
               <p className="text-[10px] text-gray-500 mb-2">{config.desc}</p>
               <div className="flex flex-wrap gap-1.5">
-                {hashtags.map((tag, i) => (
-                  <span
-                    key={i}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c.text} bg-white/80 border ${c.border} cursor-pointer hover:scale-105 transition-transform`}
-                    onClick={() => navigator.clipboard.writeText(tag.startsWith('#') ? tag : `#${tag}`)}
-                  >
-                    {tag.startsWith('#') ? tag : `#${tag}`}
-                  </span>
-                ))}
+                {hashtags.map((tag, i) => {
+                  const formatted = tag.startsWith('#') ? tag : `#${tag}`;
+                  return (
+                    <span
+                      key={i}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c.text} bg-white/80 border ${c.border} cursor-pointer hover:scale-105 transition-transform`}
+                      onClick={() => handleCopyTag(tag)}
+                    >
+                      {copiedTag === formatted ? 'Copied!' : formatted}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           );

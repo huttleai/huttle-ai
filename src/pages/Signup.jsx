@@ -1,8 +1,15 @@
 import { useState, useContext, useMemo, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { UserPlus, Mail, Lock, Loader, Check, X, Sparkles, Calendar, TrendingUp, Zap, Eye, EyeOff } from 'lucide-react';
+import {
+  captureCheckoutIntentFromLocation,
+  getCheckoutLoginPath,
+  getPendingPlanLabel,
+  normalizeCheckoutIntent,
+  resumePendingCheckoutAfterAuth,
+} from '../utils/publicCheckout';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -18,6 +25,16 @@ export default function Signup() {
   const { signup } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const pendingCheckout = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return normalizeCheckoutIntent(params.get('plan'), params.get('billing'));
+  }, [location.search]);
+  const pendingPlanLabel = getPendingPlanLabel(pendingCheckout?.planId);
+
+  useEffect(() => {
+    captureCheckoutIntentFromLocation();
+  }, []);
 
   // Check if password is unique enough (matches Supabase's server-side check)
   const checkPasswordUniqueness = async (passwordToCheck) => {
@@ -202,12 +219,27 @@ export default function Signup() {
       first_name: firstName || undefined,
       full_name: firstName || undefined,
     });
-    setLoading(false);
 
     if (result.success) {
-      addToast('Account created! Let’s personalize your dashboard.', 'success');
+      const checkoutResult = await resumePendingCheckoutAfterAuth();
+      if (checkoutResult.resumed && checkoutResult.success) {
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+      if (checkoutResult.resumed && checkoutResult.needsAuth) {
+        addToast('Account created. Confirm your email, then start your trial from Pricing.', 'success');
+      } else if (checkoutResult.resumed && !checkoutResult.success) {
+        addToast(
+          checkoutResult.error || 'Account created, but checkout could not start. You can start your trial from Pricing.',
+          'error'
+        );
+      } else {
+        addToast('Account created! Let’s personalize your dashboard.', 'success');
+      }
       navigate('/onboarding');
     } else {
+      setLoading(false);
       const errorMessage = result.error || 'Failed to create account';
 
       // Supabase returns code "weak_password" with reason "pwned" when the
@@ -316,9 +348,15 @@ export default function Signup() {
           {/* Welcome Text */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Create your account</h2>
-            <p className="text-gray-500 text-sm">Choose Founders Club or Builders Club after signup</p>
+            <p className="text-gray-500 text-sm">
+              {pendingPlanLabel
+                ? `Create your account to start your 7-day ${pendingPlanLabel} trial.`
+                : 'Choose Essentials or Pro after signup'}
+            </p>
             <p className="text-gray-400 text-xs mt-2">
-              Huttle AI is currently paid-only. Create your account, then pick the launch plan that fits you.
+              {pendingPlanLabel
+                ? 'No credit card needed. You can cancel anytime during the trial.'
+                : 'Start with a 7-day free trial, then keep the plan that fits you.'}
             </p>
           </div>
 
@@ -526,7 +564,10 @@ export default function Signup() {
           </div>
 
           {/* Login Link */}
-          <Link to="/dashboard/login" className="block w-full btn-secondary py-2.5 text-center text-sm">
+          <Link
+            to={getCheckoutLoginPath(pendingCheckout?.planId, pendingCheckout?.billingCycle)}
+            className="block w-full btn-secondary py-2.5 text-center text-sm"
+          >
             Sign in instead
           </Link>
 

@@ -1,14 +1,15 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  AtSign,
   Briefcase,
+  Calendar,
   Check,
   ChevronLeft,
   ChevronRight,
   Facebook,
   Instagram,
   Loader2,
-  MapPin,
   Sparkles,
   TrendingUp,
   Twitter,
@@ -20,130 +21,123 @@ import { AuthContext } from '../context/AuthContext';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 10;
 const MAX_PLATFORM_SELECTIONS = 4;
+const MAX_VIBE_SELECTIONS = 3;
+const MAX_PILLAR_SELECTIONS = 2;
 
-const CREATOR_TYPES = [
-  {
-    value: 'brand_business',
-    title: 'Brand / Business',
-    subtitle: 'Marketing a business, service, or company',
-    icon: Briefcase,
-  },
+const USER_BRAND_TYPES = [
   {
     value: 'solo_creator',
-    title: 'Solo Creator',
-    subtitle: 'Growing your personal brand or following',
-    icon: Sparkles,
+    emoji: '🎤',
+    title: "I'm the brand",
+    subtitle: 'Your name, face, and story are the product',
+  },
+  {
+    value: 'business_owner',
+    emoji: '🏪',
+    title: 'I run a business',
+    subtitle: 'Coffee shop, salon, agency, studio — any kind',
+  },
+  {
+    value: 'hybrid',
+    emoji: '🚀',
+    title: "I'm building both",
+    subtitle: 'Your name and your business grow together',
   },
 ];
 
-const GROWTH_STAGES = [
-  {
-    value: 'just_starting_out',
-    title: 'Just Starting Out',
-    subtitle: '0 - 1K followers',
-  },
-  {
-    value: 'building_momentum',
-    title: 'Building Momentum',
-    subtitle: '1K - 10K followers',
-  },
-  {
-    value: 'established',
-    title: 'Established',
-    subtitle: '10K - 100K followers',
-  },
-  {
-    value: 'large_audience',
-    title: 'Large Audience',
-    subtitle: '100K+ followers',
-  },
+const BRAND_VIBES_OPTIONS = [
+  { label: 'Authentic & Raw' },
+  { label: 'Professional & Polished' },
+  { label: 'Bold & Edgy' },
+  { label: 'Warm & Community-Focused' },
+  { label: 'Fun & Playful' },
+  { label: 'Educational & Informative' },
+  { label: 'Aspirational & Inspiring' },
+  { label: 'Luxe & Elevated' },
+];
+
+const CONTENT_FOCUS_PILLARS_OPTIONS = [
+  { label: 'My customers & community' },
+  { label: 'My life running my business' },
+  { label: 'Behind the scenes' },
+  { label: 'Products & services in action' },
+  { label: 'Education & tips' },
+  { label: 'Personal stories & journey' },
+  { label: 'Trends & pop culture' },
+];
+
+const BUSINESS_GOAL_OPTIONS = [
+  { value: 'drive_sales', label: 'Drive more sales' },
+  { value: 'increase_foot_traffic', label: 'Increase foot traffic' },
+  { value: 'drive_appointments', label: 'Drive Appointments', description: 'Get more bookings and fill your calendar' },
+  { value: 'book_consultations', label: 'Book Consultations', description: 'Turn followers into discovery calls and consults' },
+  { value: 'build_community', label: 'Build a loyal community' },
+  { value: 'grow_online_presence', label: 'Grow my online presence' },
+  { value: 'build_brand_awareness', label: 'Build brand awareness' },
+  { value: 'launch_product', label: 'Launch a new product or service' },
+];
+
+const AUDIENCE_LOCATION_OPTIONS = [
+  { value: 'mostly_local', label: 'Mostly local — people near my location' },
+  { value: 'mostly_online', label: 'Mostly online — could be anywhere' },
+  { value: 'split_evenly', label: 'Both — a mix of local and online' },
+];
+
+const CREATOR_MONETIZATION_OPTIONS = [
+  { value: 'brand_deals', label: 'Land brand deals and sponsorships' },
+  { value: 'digital_products', label: 'Sell digital products or courses' },
+  { value: 'coaching', label: 'Offer coaching or consulting' },
+  { value: 'affiliate', label: 'Grow affiliate income' },
+  { value: 'community_membership', label: 'Build a paid community or membership' },
+  { value: 'not_yet_monetizing', label: "I'm just starting — figuring it out" },
+];
+
+const AUDIENCE_STAGE_OPTIONS = [
+  { value: 'early', title: 'Just starting', subtitle: 'Under 1,000 followers' },
+  { value: 'growing', title: 'Growing', subtitle: '1K to 10K followers' },
+  { value: 'established', title: 'Established', subtitle: '10K+ followers' },
 ];
 
 const PLATFORM_OPTIONS = [
   { value: 'instagram', label: 'Instagram', icon: Instagram },
   { value: 'tiktok', label: 'TikTok', icon: Video },
   { value: 'facebook', label: 'Facebook', icon: Facebook },
+  { value: 'x', label: 'X (Twitter)', icon: Twitter },
   { value: 'youtube', label: 'YouTube', icon: Youtube },
-  { value: 'x', label: 'X', icon: Twitter },
 ];
 
-const TONE_CHIPS_OPTIONS = [
-  { value: 'professional', label: 'Professional' },
-  { value: 'conversational', label: 'Conversational' },
-  { value: 'inspirational', label: 'Inspirational' },
-  { value: 'educational', label: 'Educational' },
-  { value: 'bold', label: 'Bold' },
-  { value: 'warm', label: 'Warm' },
+const POSTING_FREQUENCY_OPTIONS = [
+  { value: 'light', label: '1–2 times per week' },
+  { value: 'moderate', label: '3–4 times per week' },
+  { value: 'aggressive', label: '5–7 times per week' },
+  { value: 'heavy', label: 'Multiple times per day' },
 ];
 
-const FOLLOWER_COUNT_OPTIONS = [
-  { value: 'under_500', label: 'Under 500' },
-  { value: '500_2k', label: '500–2K' },
-  { value: '2k_10k', label: '2K–10K' },
-  { value: '10k_50k', label: '10K–50K' },
-  { value: '50k_plus', label: '50K+' },
+const STEP_LABELS = [
+  'Type', 'Name', 'Setup', 'Niche',
+  'Vibe', 'Feed', 'Goal', 'Audience',
+  'Platforms', 'Posting',
 ];
-
-const CONVERSION_GOAL_OPTIONS = [
-  { value: 'book_appointment', label: 'Book an appointment' },
-  { value: 'dm_us', label: 'DM us' },
-  { value: 'visit_website', label: 'Visit website' },
-  { value: 'buy_now', label: 'Buy now' },
-  { value: 'get_quote', label: 'Get a quote' },
-  { value: 'join_list', label: 'Join a list' },
-];
-
-const CONTENT_PERSONA_OPTIONS = [
-  { value: 'the_expert', label: 'The Expert' },
-  { value: 'the_entertainer', label: 'The Entertainer' },
-  { value: 'the_motivator', label: 'The Motivator' },
-  { value: 'the_documenter', label: 'The Documenter' },
-  { value: 'the_educator', label: 'The Educator' },
-  { value: 'the_storyteller', label: 'The Storyteller' },
-];
-
-const STEP_LABELS = ['Type', 'Niche', 'Stage', 'Audience', 'Platforms', 'Tone', 'Goals', 'City'];
 
 const defaultFormData = {
-  creator_type: '',
+  user_brand_type: '',
+  full_name: '',
+  business_name: '',
+  creator_handle: '',
   niche: '',
-  growth_stage: 'building_momentum',
+  brand_vibes: [],
+  content_focus_pillars: [],
   target_audience: '',
-  audience_pain_point: '',
+  business_primary_goal: '',
+  audience_location_type: '',
+  is_local_business: false,
   platforms: [],
-  follower_count: '',
-  tone_chips: [],
-  conversion_goal: '',
-  content_persona: '',
-  city: '',
+  creator_monetization_path: '',
+  audience_stage: '',
+  posting_frequency: '',
 };
-
-function countWords(value) {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
-
-function getProfileType(creatorType) {
-  return creatorType === 'brand_business' ? 'business' : 'creator';
-}
-
-function getFirstNameFromUser(user) {
-  const candidates = [
-    user?.user_metadata?.first_name,
-    user?.user_metadata?.name,
-    user?.user_metadata?.full_name,
-    user?.email?.split('@')[0],
-  ];
-
-  const rawValue = candidates.find((value) => typeof value === 'string' && value.trim());
-  if (!rawValue) return null;
-
-  return rawValue.trim().split(' ')[0].replace(/^@+/, '') || null;
-}
 
 function FieldLabel({ children }) {
   return <label className="mb-2 block text-sm font-semibold text-slate-700">{children}</label>;
@@ -159,62 +153,28 @@ export default function OnboardingQuiz({ onComplete }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
 
-  const isBrandBusiness = formData.creator_type === 'brand_business';
+  const isSoloCreator = formData.user_brand_type === 'solo_creator';
   const progress = (step / TOTAL_STEPS) * 100;
-  const audienceWordCount = useMemo(() => countWords(formData.target_audience), [formData.target_audience]);
 
-  const nicheCopy = isBrandBusiness
-    ? {
-        title: 'What is your business niche?',
-        placeholder: 'e.g., Med Spa, Real Estate, Fitness Coaching, Restaurant, E-commerce',
-        helper: 'This personalizes your trends, hashtags, and content ideas',
-      }
-    : {
-        title: 'What do you create content about?',
-        placeholder: 'e.g., Fitness, Travel, Food, Gaming, Fashion, Lifestyle, Beauty, Finance',
-        helper: 'Your main topic or passion - be specific for better results',
-      };
-
-  const audienceCopy = isBrandBusiness
-    ? {
-        title: 'Who is your ideal customer?',
-        placeholder:
-          'e.g., Women 30-55 seeking anti-aging treatments in Atlanta, First-time homebuyers under 40, Small business owners needing accounting help',
-        helper: 'The more specific, the better your AI content',
-      }
-    : {
-        title: 'Who is your audience?',
-        placeholder:
-          'e.g., Busy moms who want quick healthy meals, College students interested in personal finance, Fitness beginners who are intimidated by the gym',
-        helper: "Describe who you're talking to - age, interest, situation",
-      };
+  const derivedProfileType = isSoloCreator ? 'solo_creator' : 'brand_business';
 
   const validateCurrentStep = (currentStep = step) => {
-    if (currentStep === 1 && !formData.creator_type) {
-      addToast('Choose how you will use Huttle AI to continue.', 'warning');
+    if (currentStep === 1 && !formData.user_brand_type) {
+      addToast('Choose how you describe yourself to continue.', 'warning');
       return false;
     }
-
-    if (currentStep === 2 && !formData.niche.trim()) {
+    if (currentStep === 2 && !formData.full_name.trim()) {
+      addToast('Enter your name to continue.', 'warning');
+      return false;
+    }
+    if (currentStep === 4 && !formData.niche.trim()) {
       addToast('Tell us your niche so we can personalize your dashboard.', 'warning');
       return false;
     }
-
-    if (currentStep === 4 && !formData.target_audience.trim()) {
-      addToast('Describe your audience before continuing.', 'warning');
-      return false;
-    }
-
-    if (currentStep === 5 && formData.platforms.length === 0) {
+    if (currentStep === 9 && formData.platforms.length === 0) {
       addToast('Select at least one primary platform.', 'warning');
       return false;
     }
-
-    if (currentStep === 6 && formData.tone_chips.length === 0) {
-      addToast('Select at least one tone to continue.', 'warning');
-      return false;
-    }
-
     return true;
   };
 
@@ -229,22 +189,48 @@ export default function OnboardingQuiz({ onComplete }) {
 
   const handlePlatformToggle = (platformValue) => {
     const isSelected = formData.platforms.includes(platformValue);
-
     if (!isSelected && formData.platforms.length >= MAX_PLATFORM_SELECTIONS) {
       addToast(`Choose up to ${MAX_PLATFORM_SELECTIONS} platforms to stay focused.`, 'warning');
       return;
     }
-
     setFormData((prev) => ({
       ...prev,
       platforms: isSelected
-        ? prev.platforms.filter((value) => value !== platformValue)
+        ? prev.platforms.filter((v) => v !== platformValue)
         : [...prev.platforms, platformValue],
     }));
   };
 
-  const handleSubmit = async ({ skipCity = false } = {}) => {
-    if (!validateCurrentStep(5)) return;
+  const handleVibeToggle = (label) => {
+    const isSelected = formData.brand_vibes.includes(label);
+    if (!isSelected && formData.brand_vibes.length >= MAX_VIBE_SELECTIONS) {
+      addToast(`Choose up to ${MAX_VIBE_SELECTIONS} vibes.`, 'warning');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      brand_vibes: isSelected
+        ? prev.brand_vibes.filter((v) => v !== label)
+        : [...prev.brand_vibes, label],
+    }));
+  };
+
+  const handlePillarToggle = (label) => {
+    const isSelected = formData.content_focus_pillars.includes(label);
+    if (!isSelected && formData.content_focus_pillars.length >= MAX_PILLAR_SELECTIONS) {
+      addToast(`Choose up to ${MAX_PILLAR_SELECTIONS} feed pillars.`, 'warning');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      content_focus_pillars: isSelected
+        ? prev.content_focus_pillars.filter((v) => v !== label)
+        : [...prev.content_focus_pillars, label],
+    }));
+  };
+
+  const handleSubmit = async ({ skipPosting = false } = {}) => {
+    if (!validateCurrentStep(9)) return;
 
     if (!user?.id) {
       addToast('Please log in again to finish onboarding.', 'error');
@@ -252,18 +238,10 @@ export default function OnboardingQuiz({ onComplete }) {
     }
 
     const nowIso = new Date().toISOString();
-    const nextCityValue = skipCity ? '' : formData.city.trim();
-    const nextFormData = {
-      ...formData,
-      city: nextCityValue,
-      niche: formData.niche.trim(),
-      target_audience: formData.target_audience.trim(),
-      audience_pain_point: formData.audience_pain_point.trim(),
-      growth_stage: formData.growth_stage || 'building_momentum',
-    };
-
-    const firstName = getFirstNameFromUser(user) || null;
-    const profileType = getProfileType(nextFormData.creator_type);
+    const postingFrequency = skipPosting ? '' : formData.posting_frequency;
+    const isLocal =
+      formData.audience_location_type === 'mostly_local' ||
+      formData.audience_location_type === 'split_evenly';
 
     setIsSaving(true);
     setIsSuccessState(false);
@@ -284,20 +262,25 @@ export default function OnboardingQuiz({ onComplete }) {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          firstName,
-          profileType,
-          brandName: null,
-          creatorType: nextFormData.creator_type,
-          niche: nextFormData.niche,
-          growthStage: nextFormData.growth_stage,
-          targetAudience: nextFormData.target_audience,
-          audiencePainPoint: nextFormData.audience_pain_point || null,
-          platforms: nextFormData.platforms,
-          followerCount: nextFormData.follower_count || null,
-          toneChips: nextFormData.tone_chips || [],
-          conversionGoal: nextFormData.conversion_goal || null,
-          contentPersona: nextFormData.content_persona || null,
-          city: nextCityValue || null,
+          firstName: formData.full_name.trim() || null,
+          userBrandType: formData.user_brand_type,
+          profileType: derivedProfileType,
+          creatorType: derivedProfileType,
+          brandName: !isSoloCreator ? (formData.business_name.trim() || null) : null,
+          creatorHandle: isSoloCreator ? (formData.creator_handle.trim() || null) : null,
+          niche: formData.niche.trim() || null,
+          targetAudience: formData.target_audience.trim() || null,
+          brandVibes: formData.brand_vibes,
+          contentFocusPillars: formData.content_focus_pillars,
+          platforms: formData.platforms,
+          businessPrimaryGoal: !isSoloCreator ? (formData.business_primary_goal || null) : null,
+          audienceLocationType: !isSoloCreator ? (formData.audience_location_type || null) : null,
+          isLocalBusiness: !isSoloCreator ? isLocal : false,
+          creatorMonetizationPath: isSoloCreator
+            ? (formData.creator_monetization_path || null)
+            : null,
+          audienceStage: isSoloCreator ? (formData.audience_stage || null) : null,
+          postingFrequency: postingFrequency || null,
           quizCompletedAt: nowIso,
           onboardingStep: TOTAL_STEPS,
         }),
@@ -310,22 +293,39 @@ export default function OnboardingQuiz({ onComplete }) {
       }
 
       localStorage.setItem('brandData', JSON.stringify({
-        firstName: firstName || '',
-        profileType,
-        brandName: '',
-        niche: nextFormData.niche,
-        contentFocus: nextFormData.niche,
-        growthStage: nextFormData.growth_stage,
-        creatorType: nextFormData.creator_type,
-        targetAudience: nextFormData.target_audience,
-        audiencePainPoint: nextFormData.audience_pain_point,
-        platforms: nextFormData.platforms,
-        followerCount: nextFormData.follower_count,
-        toneChips: nextFormData.tone_chips,
-        conversionGoal: nextFormData.conversion_goal,
-        contentPersona: nextFormData.content_persona,
-        city: nextCityValue,
+        firstName: formData.full_name.trim() || '',
+        userBrandType: formData.user_brand_type,
+        profileType: derivedProfileType,
+        brandName: !isSoloCreator ? formData.business_name.trim() : '',
+        handle: isSoloCreator ? formData.creator_handle.trim() : '',
+        niche: formData.niche.trim(),
+        contentFocus: formData.niche.trim(),
+        brandVibes: formData.brand_vibes,
+        contentFocusPillars: formData.content_focus_pillars,
+        targetAudience: formData.target_audience.trim(),
+        platforms: formData.platforms,
+        businessPrimaryGoal: !isSoloCreator ? formData.business_primary_goal : null,
+        audienceLocationType: !isSoloCreator ? formData.audience_location_type : 'mostly_online',
+        isLocalBusiness: !isSoloCreator ? isLocal : false,
+        creatorMonetizationPath: isSoloCreator ? formData.creator_monetization_path : null,
+        audienceStage: isSoloCreator ? formData.audience_stage : null,
       }));
+
+      // Bug 1 Fix: write onboarding_completed = true to public.users before redirect.
+      // Must fire before the navigate call. Non-fatal — a failure is logged but does not block.
+      try {
+        const { error: onboardingFlagError } = await supabase
+          .from('users')
+          .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
+        if (onboardingFlagError) {
+          console.error('[Onboarding] Failed to set onboarding_completed on users table:', onboardingFlagError);
+        } else {
+          console.log('[Onboarding] onboarding_completed = true written to users for:', user.id);
+        }
+      } catch (flagErr) {
+        console.error('[Onboarding] Error writing onboarding_completed flag:', flagErr);
+      }
 
       refreshBrandData?.();
       setIsSuccessState(true);
@@ -333,7 +333,7 @@ export default function OnboardingQuiz({ onComplete }) {
       await new Promise((resolve) => setTimeout(resolve, 700));
 
       if (onComplete) {
-        const completionResult = await onComplete(nextFormData);
+        const completionResult = await onComplete(formData);
         if (completionResult?.success === false) {
           throw new Error(completionResult.error || 'Could not finish onboarding.');
         }
@@ -351,42 +351,46 @@ export default function OnboardingQuiz({ onComplete }) {
   };
 
   const renderStepContent = () => {
+    // Step 1: What best describes you? (userBrandType — required, no skip)
     if (step === 1) {
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            How will you use Huttle AI?
+            What best describes you?
           </h2>
-          <p className="mb-6 text-slate-500">This helps us personalize everything for you</p>
+          <p className="mb-6 text-slate-500">
+            This shapes every piece of content we generate for you
+          </p>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {CREATOR_TYPES.map((option) => {
-              const Icon = option.icon;
-              const isSelected = formData.creator_type === option.value;
-
+          <div className="grid grid-cols-1 gap-4">
+            {USER_BRAND_TYPES.map((option) => {
+              const isSelected = formData.user_brand_type === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, creator_type: option.value }))}
-                  className={`relative min-h-[150px] rounded-2xl border-2 p-5 text-left transition-all ${
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, user_brand_type: option.value }))
+                  }
+                  className={`relative flex items-center gap-5 rounded-2xl border-2 p-5 text-left transition-all ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-lg'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
                   }`}
                 >
                   <div
-                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${
-                      isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600'
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-3xl ${
+                      isSelected ? 'bg-huttle-primary/10' : 'bg-slate-50'
                     }`}
                   >
-                    <Icon className="h-6 w-6" />
+                    {option.emoji}
                   </div>
-                  <h3 className="mb-1 text-lg font-bold text-slate-900">{option.title}</h3>
-                  <p className="text-sm leading-6 text-slate-500">{option.subtitle}</p>
-
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900">{option.title}</h3>
+                    <p className="text-sm leading-6 text-slate-500">{option.subtitle}</p>
+                  </div>
                   {isSelected && (
-                    <div className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-huttle-primary text-white">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-huttle-primary text-white">
                       <Check className="h-3.5 w-3.5" />
                     </div>
                   )}
@@ -398,43 +402,347 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
+    // Step 2: Name
     if (step === 2) {
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            {nicheCopy.title}
+            What's your name?
           </h2>
-          <p className="mb-6 text-slate-500">{nicheCopy.helper}</p>
+          <p className="mb-6 text-slate-500">We'll use this to personalize your experience</p>
 
-          <FieldLabel>{isBrandBusiness ? 'Business Niche' : 'Content Focus'}</FieldLabel>
+          <FieldLabel>Your Name</FieldLabel>
           <input
             type="text"
-            value={formData.niche}
-            onChange={(event) => setFormData((prev) => ({ ...prev, niche: event.target.value }))}
-            placeholder={nicheCopy.placeholder}
+            value={formData.full_name}
+            onChange={(event) =>
+              setFormData((prev) => ({ ...prev, full_name: event.target.value }))
+            }
+            placeholder="e.g. Alex Johnson"
             className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
           />
         </div>
       );
     }
 
+    // Step 3: Business Name (business/hybrid) or Creator Handle (solo_creator)
     if (step === 3) {
+      if (!isSoloCreator) {
+        return (
+          <div className="animate-fadeIn">
+            <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+              What's your business called?
+            </h2>
+            <p className="mb-6 text-slate-500">We'll use this throughout your dashboard</p>
+
+            <FieldLabel>Business Name</FieldLabel>
+            <input
+              type="text"
+              value={formData.business_name}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, business_name: event.target.value }))
+              }
+              placeholder="e.g. Bloom Coffee Co., FitLife Studio"
+              className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+            />
+          </div>
+        );
+      }
+
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            Where are you right now?
+            What's your creator name or handle?
           </h2>
-          <p className="mb-6 text-slate-500">We'll tailor your strategy to your current stage</p>
+          <p className="mb-6 text-slate-500">This is how your audience knows you</p>
+
+          <FieldLabel>Creator Name or Handle</FieldLabel>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
+              <AtSign className="h-5 w-5" />
+            </div>
+            <input
+              type="text"
+              value={formData.creator_handle}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, creator_handle: event.target.value }))
+              }
+              placeholder="@yourcreatorname"
+              className="w-full rounded-2xl border-2 border-slate-200 py-3.5 pl-12 pr-4 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // Step 4: Niche / Business Type + Target Audience
+    if (step === 4) {
+      const nicheTitle = !isSoloCreator
+        ? 'What kind of business is it?'
+        : "What's your content niche?";
+      const nichePlaceholder = !isSoloCreator
+        ? 'e.g. Coffee shop, fitness studio, law firm...'
+        : 'e.g. Personal finance, travel photography, fitness...';
+      const nicheHelper = !isSoloCreator
+        ? 'This personalizes your trends, hashtags, and content ideas'
+        : 'Your main topic or passion — be specific for better results';
+      const nicheLabel = !isSoloCreator ? 'Business Type' : 'Content Niche';
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            {nicheTitle}
+          </h2>
+          <p className="mb-6 text-slate-500">{nicheHelper}</p>
+
+          <FieldLabel>{nicheLabel}</FieldLabel>
+          <input
+            type="text"
+            value={formData.niche}
+            onChange={(event) =>
+              setFormData((prev) => ({ ...prev, niche: event.target.value }))
+            }
+            placeholder={nichePlaceholder}
+            className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+          />
+
+          <div className="mt-5">
+            <FieldLabel>Target Audience</FieldLabel>
+            <input
+              type="text"
+              value={formData.target_audience}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, target_audience: event.target.value }))
+              }
+              placeholder={
+                !isSoloCreator
+                  ? 'e.g. Busy moms, local homeowners, small biz owners...'
+                  : 'e.g. Aspiring photographers, new entrepreneurs...'
+              }
+              className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
+            />
+            <p className="mt-1 text-sm text-slate-400">Who are you creating content for?</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 5: What's your vibe? (brandVibes — multi-select max 3)
+    if (step === 5) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What's your vibe?
+          </h2>
+          <p className="mb-2 text-slate-500">
+            How do you want your content to feel? Pick up to {MAX_VIBE_SELECTIONS}.
+          </p>
+          <div className="mb-4 flex justify-end">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              {formData.brand_vibes.length}/{MAX_VIBE_SELECTIONS}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {BRAND_VIBES_OPTIONS.map((option) => {
+              const isSelected = formData.brand_vibes.includes(option.label);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => handleVibeToggle(option.label)}
+                  className={`flex items-center justify-between gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="text-sm font-semibold leading-5 text-slate-900">
+                    {option.label}
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // Step 6: What do you want your feed to feel like? (contentFocusPillars — multi-select max 2)
+    if (step === 6) {
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What do you want your feed to feel like?
+          </h2>
+          <p className="mb-2 text-slate-500">
+            What content types fit your brand best? Pick up to {MAX_PILLAR_SELECTIONS}.
+          </p>
+          <div className="mb-4 flex justify-end">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              {formData.content_focus_pillars.length}/{MAX_PILLAR_SELECTIONS}
+            </span>
+          </div>
 
           <div className="space-y-3">
-            {GROWTH_STAGES.map((option) => {
-              const isSelected = formData.growth_stage === option.value;
+            {CONTENT_FOCUS_PILLARS_OPTIONS.map((option) => {
+              const isSelected = formData.content_focus_pillars.includes(option.label);
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => handlePillarToggle(option.label)}
+                  className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                  {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
+    // Step 7: Primary Goal (business/hybrid) or Monetization Path (solo_creator)
+    if (step === 7) {
+      if (!isSoloCreator) {
+        return (
+          <div className="animate-fadeIn">
+            <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+              What's the #1 thing you want your social media to do?
+            </h2>
+            <p className="mb-6 text-slate-500">We'll tune your content strategy around this</p>
+
+            <div className="space-y-3">
+              {BUSINESS_GOAL_OPTIONS.map((option) => {
+                const isSelected = formData.business_primary_goal === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, business_primary_goal: option.value }))
+                    }
+                    className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                      isSelected
+                        ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                    {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            What's your goal with your content?
+          </h2>
+          <p className="mb-6 text-slate-500">We'll tune your content strategy around this</p>
+
+          <div className="space-y-3">
+            {CREATOR_MONETIZATION_OPTIONS.map((option) => {
+              const isSelected = formData.creator_monetization_path === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, growth_stage: option.value }))}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      creator_monetization_path: option.value,
+                    }))
+                  }
+                  className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    isSelected
+                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                  {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // Step 8: Audience Location (business/hybrid) or Audience Stage (solo_creator)
+    if (step === 8) {
+      if (!isSoloCreator) {
+        return (
+          <div className="animate-fadeIn">
+            <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+              Where is most of your target audience?
+            </h2>
+            <p className="mb-6 text-slate-500">
+              Helps us target content and hashtags for your reach
+            </p>
+
+            <div className="space-y-3">
+              {AUDIENCE_LOCATION_OPTIONS.map((option) => {
+                const isSelected = formData.audience_location_type === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        audience_location_type: option.value,
+                        is_local_business:
+                          option.value === 'mostly_local' || option.value === 'split_evenly',
+                      }))
+                    }
+                    className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                      isSelected
+                        ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                    {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
+            How would you describe your audience right now?
+          </h2>
+          <p className="mb-6 text-slate-500">
+            We'll tailor your growth strategy to your current stage
+          </p>
+
+          <div className="space-y-3">
+            {AUDIENCE_STAGE_OPTIONS.map((option) => {
+              const isSelected = formData.audience_stage === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, audience_stage: option.value }))
+                  }
                   className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
                     isSelected
                       ? 'border-huttle-primary bg-huttle-50 shadow-md'
@@ -461,54 +769,14 @@ export default function OnboardingQuiz({ onComplete }) {
       );
     }
 
-    if (step === 4) {
-      const hasAudienceDepth = audienceWordCount >= 10;
-
+    // Step 9: Platforms
+    if (step === 9) {
       return (
         <div className="animate-fadeIn">
           <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            {audienceCopy.title}
-          </h2>
-          <p className="mb-6 text-slate-500">{audienceCopy.helper}</p>
-
-          <FieldLabel>{isBrandBusiness ? 'Ideal Customer' : 'Audience Description'}</FieldLabel>
-          <textarea
-            rows={3}
-            value={formData.target_audience}
-            onChange={(event) =>
-              setFormData((prev) => ({ ...prev, target_audience: event.target.value }))
-            }
-            placeholder={audienceCopy.placeholder}
-            className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-          />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="text-slate-500">Aim for at least 10 words</span>
-            <span className={hasAudienceDepth ? 'text-emerald-600' : 'text-slate-400'}>
-              {audienceWordCount} words
-            </span>
-          </div>
-
-          <div className="mt-6">
-            <FieldLabel>Their biggest pain point?</FieldLabel>
-            <input
-              type="text"
-              value={formData.audience_pain_point}
-              onChange={(event) =>
-                setFormData((prev) => ({ ...prev, audience_pain_point: event.target.value }))
-              }
-              placeholder="e.g., They want results but don't know where to start"
-              className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3.5 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 5) {
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            Which platforms matter most right now?
+            {!isSoloCreator
+              ? 'Which platforms do you want to post on?'
+              : 'Which platforms do you want to create content for?'}
           </h2>
           <p className="mb-6 text-slate-500">
             Choose 1 to 4 platforms so your dashboard stays focused
@@ -550,174 +818,46 @@ export default function OnboardingQuiz({ onComplete }) {
               );
             })}
           </div>
-
-          <div className="mt-6">
-            <FieldLabel>Your current following (approx)?</FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              {FOLLOWER_COUNT_OPTIONS.map((option) => {
-                const isSelected = formData.follower_count === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, follower_count: option.value }))}
-                    className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all border-2 ${
-                      isSelected
-                        ? 'border-huttle-primary bg-huttle-50 text-huttle-primary shadow-sm'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       );
     }
 
-    if (step === 6) {
-      const MAX_TONE = 3;
-      const handleToneToggle = (value) => {
-        setFormData((prev) => {
-          const current = prev.tone_chips;
-          if (current.includes(value)) {
-            return { ...prev, tone_chips: current.filter((v) => v !== value) };
-          }
-          if (current.length >= MAX_TONE) {
-            addToast(`Pick up to ${MAX_TONE} tones.`, 'warning');
-            return prev;
-          }
-          return { ...prev, tone_chips: [...current, value] };
-        });
-      };
-
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            How would you describe your tone?
-          </h2>
-          <p className="mb-6 text-slate-500">Select up to 3 that feel like you</p>
-
-          <div className="flex flex-wrap gap-3">
-            {TONE_CHIPS_OPTIONS.map((option) => {
-              const isSelected = formData.tone_chips.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => handleToneToggle(option.value)}
-                  className={`px-5 py-3 rounded-2xl text-sm font-semibold transition-all border-2 ${
-                    isSelected
-                      ? 'border-huttle-primary bg-huttle-50 text-huttle-primary shadow-md'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  {option.label}
-                  {isSelected && <Check className="ml-2 inline h-4 w-4" />}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-            <span>Select 1–3</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
-              {formData.tone_chips.length}/{MAX_TONE}
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 7) {
-      if (isBrandBusiness) {
-        return (
-          <div className="animate-fadeIn">
-            <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-              What's your primary conversion goal?
-            </h2>
-            <p className="mb-6 text-slate-500">What action should your audience take?</p>
-
-            <div className="space-y-3">
-              {CONVERSION_GOAL_OPTIONS.map((option) => {
-                const isSelected = formData.conversion_goal === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, conversion_goal: option.value }))}
-                    className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
-                      isSelected
-                        ? 'border-huttle-primary bg-huttle-50 shadow-md'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
-                    {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      }
-
-      return (
-        <div className="animate-fadeIn">
-          <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-            What's your content persona?
-          </h2>
-          <p className="mb-6 text-slate-500">How does your audience know you?</p>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {CONTENT_PERSONA_OPTIONS.map((option) => {
-              const isSelected = formData.content_persona === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, content_persona: option.value }))}
-                  className={`flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
-                    isSelected
-                      ? 'border-huttle-primary bg-huttle-50 shadow-md'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
-                  <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
-                  {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
+    // Step 10: Posting Frequency
     return (
       <div className="animate-fadeIn">
         <h2 className="mb-2 text-xl font-display font-bold text-slate-900 sm:text-2xl">
-          Where are you based?
+          How often do you want to post?
         </h2>
-        <p className="mb-6 text-slate-500">Adds local hashtags and trends to your dashboard</p>
+        <p className="mb-6 text-slate-500">We'll plan your content calendar around this</p>
 
-        <FieldLabel>Your City (Recommended)</FieldLabel>
-        <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-            <MapPin className="h-5 w-5" />
-          </div>
-          <input
-            type="text"
-            value={formData.city}
-            onChange={(event) => setFormData((prev) => ({ ...prev, city: event.target.value }))}
-            placeholder="e.g., Atlanta, New York, Los Angeles"
-            className="w-full rounded-2xl border-2 border-slate-200 py-3.5 pl-12 pr-4 text-base outline-none transition-all focus:border-huttle-primary focus:ring-2 focus:ring-huttle-primary/20"
-          />
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-huttle-primary/10 bg-huttle-50 px-4 py-3 text-sm text-slate-600">
-          We'll surface local tags like <span className="font-semibold text-slate-900">#AtlantaFitness</span> and trends popular in your area.
+        <div className="space-y-3">
+          {POSTING_FREQUENCY_OPTIONS.map((option) => {
+            const isSelected = formData.posting_frequency === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, posting_frequency: option.value }))
+                }
+                className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                  isSelected
+                    ? 'border-huttle-primary bg-huttle-50 shadow-md'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                    isSelected ? 'bg-huttle-primary text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <Calendar className="h-5 w-5" />
+                </div>
+                <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
+                {isSelected && <Check className="h-5 w-5 text-huttle-primary" />}
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -731,7 +871,7 @@ export default function OnboardingQuiz({ onComplete }) {
             <div className="border-b border-slate-100 px-5 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-8">
               <div className="mb-5 flex items-start gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-huttle-primary text-white">
-                  {formData.creator_type === 'solo_creator' ? (
+                  {isSoloCreator ? (
                     <Sparkles className="h-5 w-5" />
                   ) : (
                     <Briefcase className="h-5 w-5" />
@@ -759,7 +899,7 @@ export default function OnboardingQuiz({ onComplete }) {
                 </span>
               </div>
 
-              <div className="grid grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-10 gap-1">
                 {STEP_LABELS.map((label, index) => {
                   const stepNumber = index + 1;
                   const isActive = stepNumber === step;
@@ -768,7 +908,7 @@ export default function OnboardingQuiz({ onComplete }) {
                   return (
                     <div key={label} className="text-center">
                       <div
-                        className={`mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                        className={`mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ${
                           isActive
                             ? 'bg-huttle-primary text-white'
                             : isComplete
@@ -776,9 +916,9 @@ export default function OnboardingQuiz({ onComplete }) {
                               : 'bg-slate-100 text-slate-400'
                         }`}
                       >
-                        {isComplete ? <Check className="h-4 w-4" /> : stepNumber}
+                        {isComplete ? <Check className="h-3 w-3" /> : stepNumber}
                       </div>
-                      <span className="hidden text-[11px] font-medium text-slate-400 sm:block">
+                      <span className="hidden text-[10px] font-medium text-slate-400 sm:block">
                         {label}
                       </span>
                     </div>
@@ -809,7 +949,12 @@ export default function OnboardingQuiz({ onComplete }) {
                   <button
                     type="button"
                     onClick={handleNext}
-                    disabled={isSaving || (step === 1 && !formData.creator_type)}
+                    disabled={
+                      isSaving ||
+                      (step === 1 && !formData.user_brand_type) ||
+                      (step === 2 && !formData.full_name.trim()) ||
+                      (step === 4 && !formData.niche.trim())
+                    }
                     className="flex-1 rounded-2xl bg-huttle-primary px-6 py-3 font-semibold text-white transition-all hover:bg-huttle-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="flex items-center justify-center gap-2">
@@ -838,18 +983,6 @@ export default function OnboardingQuiz({ onComplete }) {
                 )}
               </div>
 
-              {step === TOTAL_STEPS && (
-                <div className="mt-3 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => handleSubmit({ skipCity: true })}
-                    disabled={isSaving}
-                    className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Skip for now
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -3,7 +3,6 @@ import { AuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
 import {
   getUserPreferences,
-  uploadFileToStorage,
   getSignedUrl,
 } from '../config/supabase';
 import { saveToVault } from '../services/contentService';
@@ -21,7 +20,7 @@ export function ContentProvider({ children }) {
   const authLoading = authContext?.loading ?? true;
   
   const [savedContent, setSavedContent] = useState([]);
-  const [scheduledPosts, setScheduledPosts] = useState([]);
+  const [scheduledPosts, _setScheduledPosts] = useState([]);
   const [draftContent, setDraftContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -59,90 +58,6 @@ export function ContentProvider({ children }) {
 
   // Scheduling stubs — retained for API compatibility with consumers
   const loadScheduledPosts = async () => {};
-
-  /**
-   * Auto-save an uploaded media file to the Content Library (background, non-blocking).
-   * Deduplicates by checking if the same storage_path already exists.
-   * @param {string} storagePath - Supabase Storage path
-   * @param {string} fileType - 'image' or 'video'
-   * @param {string} fileName - Original file name
-   * @param {number} sizeBytes - File size in bytes
-   * @param {Object} metadata - Additional metadata (e.g., post_id, platform)
-   */
-  const autoSaveToLibrary = (storagePath, fileType, fileName, sizeBytes, metadata = {}) => {
-    if (!user?.id || !storagePath) return;
-    
-    // Fire-and-forget — don't block post creation
-    saveToVault(user.id, {
-      name: fileName || 'Uploaded Media',
-      type: fileType === 'video' ? 'video' : 'image',
-      storage_path: storagePath,
-      url: null,
-      size_bytes: sizeBytes || 0,
-      description: 'Auto-saved from post upload',
-      source: 'post_upload',
-      metadata: {
-        ...metadata,
-        originalName: fileName,
-        sizeBytes,
-        autoSaved: true,
-      },
-    }).then(result => {
-      if (!result.success && !result.error?.includes('duplicate') && !result.error?.includes('unique')) {
-        console.warn('[ContentContext] Failed to auto-save media to library:', result.error);
-      }
-    }).catch(err => {
-      console.warn('[ContentContext] Auto-save to library error:', err.message);
-    });
-  };
-
-  /**
-   * Upload media files to Supabase Storage and return storage paths.
-   * Also auto-saves each uploaded file to the Content Library.
-   * @param {Array} mediaItems - Array of { file, name, type, url } objects
-   * @returns {Array} Array of { storagePath, type, name } objects
-   */
-  const uploadMediaFiles = async (mediaItems) => {
-    if (!mediaItems || mediaItems.length === 0) return [];
-    if (!user?.id) return [];
-
-    const uploaded = [];
-    for (const item of mediaItems) {
-      // Skip items that are already storage paths (not blob URLs)
-      if (typeof item === 'string' || !item.file) {
-        uploaded.push(item);
-        continue;
-      }
-
-      try {
-        const result = await uploadFileToStorage(user.id, item.file, item.type || 'image');
-        if (result.success) {
-          const mediaInfo = {
-            storagePath: result.storagePath,
-            type: item.type || 'image',
-            name: item.name || item.file.name,
-            sizeBytes: result.sizeBytes || item.file.size,
-          };
-          uploaded.push(mediaInfo);
-
-          // Auto-save to Content Library in the background (non-blocking)
-          autoSaveToLibrary(
-            result.storagePath,
-            mediaInfo.type,
-            mediaInfo.name,
-            mediaInfo.sizeBytes,
-            { source: 'post_creation' }
-          );
-        } else {
-          console.error('Failed to upload media:', result.error);
-          addToast(`Failed to upload ${item.name}: ${result.error}`, 'error');
-        }
-      } catch (error) {
-        console.error('Error uploading media file:', error);
-      }
-    }
-    return uploaded;
-  };
 
   const schedulePost = async () => null;
   const updateScheduledPost = async () => {};

@@ -291,7 +291,7 @@ This document outlines all the new features implemented for Huttle AI, including
 
 ### Grok API (xAI) Usage
 
-**Model:** `grok-4-fast-reasoning`
+**Model:** see `GROK_MODEL` in `src/config/grokConfig.js`
 
 **New Functions Added:**
 1. `generateHooks(input, niche, brandVoice, theme)` - Hook variations

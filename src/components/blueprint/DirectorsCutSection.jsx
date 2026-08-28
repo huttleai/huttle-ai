@@ -3,11 +3,12 @@ import { ChevronDown } from 'lucide-react';
 import BlueprintSectionWrapper from './BlueprintSectionWrapper';
 
 export default function DirectorsCutSection({ data, sectionNumber }) {
+  const [expandedScenes, setExpandedScenes] = useState({ 0: true });
+
   if (!data) return null;
 
   const scenes = data.scenes || data.breakdown || (Array.isArray(data) ? data : []);
   const estimatedRuntime = data.estimated_runtime || data.runtime || '';
-  const [expandedScenes, setExpandedScenes] = useState({ 0: true });
 
   if (scenes.length === 0) return null;
 

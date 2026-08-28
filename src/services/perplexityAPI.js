@@ -21,46 +21,57 @@ import {
   getPromptBrandProfile,
 } from '../utils/brandContextBuilder';
 import { buildBrandContext as buildCreatorBrandBlock } from '../utils/buildBrandContext'; // HUTTLE AI: brand context injected
-import { supabase } from '../config/supabase';
+import { getBrandStoryContext } from '../utils/getBrandStoryContext'; // HUTTLE AI: userBrandType-based content philosophy
+import { getAuthReadyHeaders } from '../utils/authReady';
 import { normalizeNiche, buildCacheKey, buildNicheIntelCacheKey } from '../utils/normalizeNiche';
 import {
   getHashtagConstraint,
   getHashtagMaxForPlatform,
   getMinAcceptableHashtagCountForPlatform,
 } from '../data/platformContentRules.js';
+import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
+import { getGrokParams } from '../config/grokConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
+/**
+ * Same handler, deployed separately with a longer runtime budget for the slow
+ * sonar-pro research path. See api/ai/perplexity-deep-dive.js.
+ */
+const PERPLEXITY_DEEP_DIVE_PROXY_URL = '/api/ai/perplexity-deep-dive';
 const GROK_PROXY_URL = '/api/ai/grok';
 
 /**
- * Get auth headers for API requests
- * @param {string | null | undefined} accessTokenOverride - When set (e.g. from the caller after getSession), always sent as Bearer
+ * Route long-running deep research to the endpoint with the larger budget, and
+ * everything else to the default one. Mirrors `resolvePerplexityFeatureKey` on
+ * the server, which derives the same feature from `cache.type` /
+ * `perplexityFeature`.
+ * @param {{ perplexityFeature?: string, cache?: { type?: string } }} options
+ * @returns {string}
  */
-async function getAuthHeaders(accessTokenOverride = null) {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
+function resolvePerplexityProxyUrl(options = {}) {
+  const isDeepDive =
+    options.perplexityFeature === 'deep_dive' || options.cache?.type === 'niche_intel';
+  return isDeepDive ? PERPLEXITY_DEEP_DIVE_PROXY_URL : PERPLEXITY_PROXY_URL;
+}
 
+/**
+ * Get auth headers for API requests. Fails closed: getSession → refreshSession
+ * once → typed AUTH_NOT_READY error, so no Perplexity/Grok proxy call ever
+ * fires without a real Bearer token.
+ * @param {string | null | undefined} accessTokenOverride - When set (e.g. from the caller after getSession), always sent as Bearer
+ * @param {{ forceRefresh?: boolean }} [options]
+ */
+async function getAuthHeaders(accessTokenOverride = null, options = {}) {
   if (accessTokenOverride) {
-    headers.Authorization = `Bearer ${accessTokenOverride}`;
-    return headers;
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessTokenOverride}`,
+    };
   }
 
-  try {
-    let { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      const { data: refreshed } = await supabase.auth.refreshSession();
-      session = refreshed?.session ?? null;
-    }
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  } catch (e) {
-    console.warn('Could not get auth session:', e);
-  }
-
-  return headers;
+  return getAuthReadyHeaders(options);
 }
 
 /**
@@ -68,33 +79,58 @@ async function getAuthHeaders(accessTokenOverride = null) {
  */
 async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders(options.accessToken);
-  
-  const response = await fetch(PERPLEXITY_PROXY_URL, {
+  const body = JSON.stringify({
+    messages,
+    temperature,
+    ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
+    ...(options.model ? { model: options.model } : {}),
+    cache: options.cache,
+    requireRealtime: options.requireRealtime,
+    personalized: options.personalized,
+    targetAudience: options.targetAudience,
+    brandContext: options.brandContext,
+    competitorHandles: options.competitorHandles,
+    web_search_options: options.webSearchOptions || {
+      search_context_size: 'low'
+    }
+  });
+
+  const signal = options.signal;
+  const proxyUrl = resolvePerplexityProxyUrl(options);
+
+  let response = await fetch(proxyUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-      ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
-      ...(options.model ? { model: options.model } : {}),
-      cache: options.cache,
-      requireRealtime: options.requireRealtime,
-      personalized: options.personalized,
-      targetAudience: options.targetAudience,
-      brandContext: options.brandContext,
-      competitorHandles: options.competitorHandles,
-      web_search_options: options.webSearchOptions || {
-        search_context_size: 'low'
-      }
-    })
+    body,
+    signal,
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders(null, { forceRefresh: true });
+      response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body,
+        signal,
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function getGrokProxyErrorMessage(errorData, status) {
@@ -105,27 +141,47 @@ function getGrokProxyErrorMessage(errorData, status) {
 
 async function callGrokAPI(messages, temperature = 0.2, options = {}) {
   const headers = await getAuthHeaders();
+  const body = JSON.stringify({
+    messages,
+    temperature,
+    ...getGrokParams(options.featureKey || 'audienceInsights'),
+    cache: options.cache,
+    personalized: options.personalized,
+    targetAudience: options.targetAudience,
+    brandContext: options.brandContext,
+  });
 
-  const response = await fetch(GROK_PROXY_URL, {
+  let response = await fetch(GROK_PROXY_URL, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      messages,
-      temperature,
-      model: options.model || 'grok-4-1-fast-reasoning',
-      cache: options.cache,
-      personalized: options.personalized,
-      targetAudience: options.targetAudience,
-      brandContext: options.brandContext,
-    }),
+    body,
   });
+
+  // One-shot 401 recovery: refresh the session and retry once with a new token.
+  if (response.status === 401) {
+    try {
+      const refreshedHeaders = await getAuthHeaders(null, { forceRefresh: true });
+      response = await fetch(GROK_PROXY_URL, {
+        method: 'POST',
+        headers: refreshedHeaders,
+        body,
+      });
+    } catch {
+      // Refresh failed — surface the original 401 below.
+    }
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(getGrokProxyErrorMessage(errorData, response.status));
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function parseJsonFromText(text) {
@@ -340,7 +396,9 @@ Given a niche and platform, you return concise, factual notes about:
 - Their approximate relative popularity and volume tiers (Popular / Medium / Niche)
 - Any clear signs of momentum (growing, stable, declining)
 You never fabricate precise post counts if the data is unclear.
-Prefer relative comparisons ("A is used far more than B") and rough ranges ("tens of thousands of posts") rather than fake precision.`
+Prefer relative comparisons ("A is used far more than B") and rough ranges ("tens of thousands of posts") rather than fake precision.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -399,7 +457,9 @@ Output:
 
 const PERPLEXITY_RESEARCH_ENGINE_SYSTEM = `You are a research engine collecting up-to-date social media data for strategists.
 Your job is to return concise, factual notes about patterns, not long essays.
-Do not fabricate precise metrics when unclear; prefer relative comparisons and ranges.`;
+Do not fabricate precise metrics when unclear; prefer relative comparisons and ranges.
+
+${HUMAN_WRITING_RULES}`;
 
 async function runToolResearch({
   userContent,
@@ -612,7 +672,9 @@ export async function scanTrendingTopics(brandData, platform = 'all') {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.'
+        content: `You are a real-time social media trend intelligence analyst. Your ONLY job is to identify what is currently trending and explain WHY — you never suggest content ideas, captions, or what to post.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -705,7 +767,9 @@ export async function getKeywordsOfTheDay(brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.'
+        content: `You are a keyword research specialist. Provide actionable, high-engagement keywords tailored to specific brands and audiences.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -751,7 +815,9 @@ export async function analyzeCompetitors(brandData, competitorNames = []) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.'
+        content: `You are a competitive intelligence analyst. Provide actionable insights from competitor analysis that help differentiate and improve brand positioning.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -799,7 +865,9 @@ export async function forecastTrends(brandData, timeframe = '7 days') {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.'
+        content: `You are a trend forecasting expert. Use current data to predict future trends and provide actionable content recommendations.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -855,7 +923,9 @@ export async function getAudienceInsights(brandData, demographics = null, platfo
     const data = await callGrokAPI([
       {
         role: 'system',
-        content: 'You are an audience research expert.'
+        content: `You are an audience research expert.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -922,7 +992,9 @@ export async function getTrendingHashtags(keyword, brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.'
+        content: `You are a social media hashtag expert. Provide trending, high-engagement hashtags with metrics, tailored to specific audiences.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -968,7 +1040,9 @@ export async function getCaptionExamples(topic, brandData) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.'
+        content: `You are a content style analyst. Provide examples of popular caption styles and formats that can be adapted to specific brand voices.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1015,7 +1089,9 @@ export async function getBestCTAPractices(platform, goal, brandData = null) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.'
+        content: `You are a conversion optimization expert. Provide current best practices for CTAs that feel authentic to specific brand voices.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1061,7 +1137,9 @@ export async function getSocialMediaUpdates(months = 12) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.'
+        content: `You are a social media platform updates expert. You MUST respond with ONLY a valid JSON array. Do not include any text before or after the JSON array. Each update must be a JSON object with these exact fields: platform (string), date (string in format "Month YYYY"), title (string), description (string), impact (string: "high", "medium", or "low"), keyTakeaways (array of strings), actionItems (array of strings), affectedUsers (string), timeline (string), link (string URL). ONLY include updates from: Facebook, Instagram, TikTok, X (also known as Twitter), and YouTube. DO NOT include updates from LinkedIn, Threads, Snapchat, or any other platforms.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1160,6 +1238,7 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
       query: nicheQuery,
       date: currentDate,
     });
+    const storyContext = getBrandStoryContext(brandData); // HUTTLE AI: userBrandType-based content philosophy
     const brandContext = brandData ? `${buildCreatorBrandBlock(brandData, brandData)}${buildBrandContext(brandData)}` : '';
     const competitorHandles = nicheQuery
       .split(',')
@@ -1169,7 +1248,9 @@ export async function researchNicheContent(nicheQuery, platform = 'instagram', b
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.'
+        content: `${storyContext ? `${storyContext}\n\n` : ''}You are a professional niche and competitor intelligence analyst. Your goal is to deliver the most accurate, real-time, and up-to-date niche research available on the web right now. Never rely on training data alone - always ground your findings in current data. Identify rising trends, competitor content patterns, momentum signals (Rising/Peaking/Declining), and specific content angles that are working right now in this niche.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1243,6 +1324,7 @@ Requirements:
       }
     ], 0.2, {
       accessToken: requestOptions.accessToken,
+      signal: requestOptions.signal,
       perplexityFeature: 'deep_dive',
       cache: {
         key: cacheKey,
@@ -1273,7 +1355,8 @@ Requirements:
     console.error('Perplexity niche research error:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      aborted: error?.name === 'AbortError' || error?.name === 'TimeoutError',
     };
   }
 }
@@ -1291,7 +1374,9 @@ export async function getTrendContextForPrediction(platform, brandData = null) {
     const data = await callPerplexityAPI([
       {
         role: 'system',
-        content: 'You are a trend analyst. Provide a brief summary of what content is currently trending on a specific platform in a given niche. Be concise and factual.'
+        content: `You are a trend analyst. Provide a brief summary of what content is currently trending on a specific platform in a given niche. Be concise and factual.
+
+${HUMAN_WRITING_RULES}`
       },
       {
         role: 'user',
@@ -1369,7 +1454,9 @@ export async function generateFullPostHashtagsGrounded(
 
   const system = `${buildCreatorBrandBlock(brandData, brandData) || ''}
 You are a social discovery strategist. Use current public information about ${platformLabel} hashtag and search behavior (and cross-platform discovery only where it helps this post).
-Return ONLY valid JSON: a single array of exactly ${hashtagTarget} objects. No markdown, no commentary.`;
+Return ONLY valid JSON: a single array of exactly ${hashtagTarget} objects. No markdown, no commentary.
+
+${HUMAN_WRITING_RULES}`;
 
   const hashtagRulesInject = String(options.fullPostBuilderHashtagRules ?? '').trim();
 

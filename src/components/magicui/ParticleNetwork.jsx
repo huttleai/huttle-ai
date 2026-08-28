@@ -20,7 +20,7 @@ export function ParticleNetwork({
   const mouseRef = useRef({ x: null, y: null });
   const animationRef = useRef(null);
   const dimensionsRef = useRef({ width: 0, height: 0 });
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [_isInitialized, setIsInitialized] = useState(false);
 
   // Initialize particles
   const initParticles = useCallback((width, height) => {

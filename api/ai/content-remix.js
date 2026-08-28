@@ -5,11 +5,15 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
+import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
+import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -20,31 +24,19 @@ import {
   buildContentRemixClaudeSystemCore,
   resolveRemixPromptGoal,
 } from '../../src/data/contentRemixSystemPrompt.js';
+import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL, resolveClaudeModel } from '../../src/config/claudeConfig.js';
 
 const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_KEY =
   typeof _rawAnthropicKey === 'string' && _rawAnthropicKey.trim() ? _rawAnthropicKey.trim() : null;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
-/** Match api/ai/claude.js — snapshot ids may 404 upstream; alias resolves to current Sonnet. */
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
-const CLAUDE_MODEL_ALIASES = {
-  'claude-sonnet-4-6-20250514': DEFAULT_CLAUDE_MODEL,
-  'claude-sonnet-4-6': DEFAULT_CLAUDE_MODEL,
-};
+const MODEL = resolveClaudeModel(CLAUDE_MODEL);
 
-function resolveUpstreamClaudeModel(requested) {
-  const r = typeof requested === 'string' ? requested.trim() : '';
-  if (r && CLAUDE_MODEL_ALIASES[r]) return CLAUDE_MODEL_ALIASES[r];
-  if (r === DEFAULT_CLAUDE_MODEL) return DEFAULT_CLAUDE_MODEL;
-  return DEFAULT_CLAUDE_MODEL;
-}
-
-const MODEL = resolveUpstreamClaudeModel('claude-sonnet-4-6-20250514');
-
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 15;
@@ -420,13 +412,15 @@ function formatSectionsAsContent(sections) {
 }
 
 async function getAuthenticatedUserId(req) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !supabase) {
+  if (!supabase) {
     return null;
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = parseBearerToken(req.headers.authorization);
+  if (!token) {
+    return null;
+  }
+
   const { data: { user }, error } = await supabase.auth.getUser(token);
 
   if (error || !user) {
@@ -449,6 +443,13 @@ export default async function handler(req, res) {
     if (!ANTHROPIC_API_KEY) {
       logError('content_remix.missing_api_key');
       return res.status(503).json({ error: 'This feature is coming soon. Check back shortly.' });
+    }
+
+    if (!supabase) {
+      logError('content_remix.missing_supabase', { detail: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured' });
+      return res.status(503).json({
+        error: 'Authentication service not configured on the server.',
+      });
     }
 
     const authenticatedUserId = await getAuthenticatedUserId(req);
@@ -475,6 +476,15 @@ export default async function handler(req, res) {
       });
     }
 
+    const billingFeature = resolveRouteBillingFeature('content-remix', req);
+    const usageGate = await assertCanGenerate(supabase, {
+      userId: authenticatedUserId,
+      featureKey: billingFeature,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
+    }
+
     const {
       originalContent,
       mode,
@@ -482,8 +492,14 @@ export default async function handler(req, res) {
       platforms,
       brandVoice,
       userId,
-      additionalContext = {},
+      additionalContext: rawAdditionalContext = {},
+      profileType: bodyProfileType,
     } = req.body || {};
+
+    const additionalContext = {
+      ...rawAdditionalContext,
+      profileType: rawAdditionalContext.profileType || bodyProfileType || null,
+    };
 
     if (userId && userId !== authenticatedUserId) {
       return res.status(403).json({ error: 'User mismatch for remix request.' });
@@ -500,15 +516,19 @@ export default async function handler(req, res) {
 
     const { requestedMode, normalizedMode } = normalizeMode(mode);
     const remixPromptGoal = resolveRemixPromptGoal(goalFromBody, normalizedMode);
+    const storyContext = getBrandStoryContext(additionalContext); // HUTTLE AI: userBrandType-based content philosophy
     const brandBlock = buildCreatorBrandBlock({ ...additionalContext, brandVoice }, { ...additionalContext }); // HUTTLE AI: brand context injected
-    const systemPrompt = `${brandBlock}${buildSystemPrompt(
-      buildContentRemixClaudeSystemCore(remixPromptGoal),
+    const profileTypeForRemix = additionalContext?.profileType || req.body?.profileType || 'brand_business';
+    const systemPrompt = `${storyContext ? `${storyContext}\n\n` : ''}${brandBlock}${buildSystemPrompt(
+      buildContentRemixClaudeSystemCore(remixPromptGoal, profileTypeForRemix),
       {
         ...additionalContext,
         brandVoice,
         platforms: normalizedPlatforms,
       }
-    )}`;
+    )}
+
+${HUMAN_WRITING_RULES}`;
     const userPrompt = buildUserPrompt({
       originalContent: originalContent.trim(),
       requestedMode,
@@ -531,8 +551,7 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: MODEL,
-          max_tokens: 2200,
-          temperature: normalizedMode === 'sales_conversion' ? 0.6 : 0.8,
+          max_tokens: CLAUDE_MAX_TOKENS.contentRemix,
           system: systemPrompt,
           messages: [
             {
@@ -582,6 +601,19 @@ export default async function handler(req, res) {
         });
       }
 
+      const usageRecord = await recordGenerationUsage(supabase, {
+        userId: authenticatedUserId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'content-remix' },
+      });
+      if (!usageRecord.ok) {
+        logError('content_remix.usage_record_failed', {
+          userId: authenticatedUserId,
+          error: usageRecord.error,
+        });
+      }
+
       return res.status(200).json({
         success: true,
         content: formatSectionsAsContent(sections),
@@ -592,6 +624,10 @@ export default async function handler(req, res) {
           requestedMode,
           normalizedMode,
           platformCount: normalizedPlatforms.length,
+        },
+        billing: {
+          feature: billingFeature,
+          creditsCharged: usageRecord.creditsLogged,
         },
       });
     } catch (fetchError) {

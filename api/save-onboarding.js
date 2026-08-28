@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseBearerToken } from './_utils/billing.js';
 import { handlePreflight, setCorsHeaders } from './_utils/cors.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -8,19 +9,20 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null;
 
 function normalizeProfileType(profileType, creatorType) {
-  const normalizedProfileType = String(profileType || '').trim().toLowerCase();
-  const normalizedCreatorType = String(creatorType || '').trim().toLowerCase();
+  const p = String(profileType || '').trim().toLowerCase();
+  const ct = String(creatorType || '').trim().toLowerCase();
 
-  if (
-    normalizedProfileType === 'business'
-    || normalizedProfileType === 'brand'
-    || normalizedProfileType === 'brand_business'
-    || normalizedCreatorType === 'brand_business'
-  ) {
-    return 'business';
-  }
+  // Accept the new constrained values directly
+  if (p === 'brand_business' || ct === 'brand_business') return 'brand_business';
+  if (p === 'solo_creator' || ct === 'solo_creator') return 'solo_creator';
 
-  return 'creator';
+  // Map new userBrandType values to DB-compatible profile_type values
+  if (p === 'business_owner') return 'brand_business';
+  if (p === 'hybrid') return 'brand_business';
+
+  // Legacy fallback for any in-flight requests using old values
+  if (p === 'business' || p === 'brand') return 'brand_business';
+  return 'solo_creator';
 }
 
 export default async function handler(req, res) {
@@ -36,13 +38,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase service client is not configured' });
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const accessToken = parseBearerToken(req.headers.authorization);
+  if (!accessToken) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   try {
-    const accessToken = authHeader.replace('Bearer ', '');
     const {
       data: { user },
       error: authError,
@@ -54,8 +55,10 @@ export default async function handler(req, res) {
 
     const {
       firstName,
+      userBrandType,
       profileType,
       brandName,
+      creatorHandle,
       creatorType,
       niche,
       growthStage,
@@ -67,6 +70,14 @@ export default async function handler(req, res) {
       conversionGoal,
       contentPersona,
       city,
+      businessPrimaryGoal,
+      audienceLocationType,
+      isLocalBusiness,
+      creatorMonetizationPath,
+      audienceStage,
+      postingFrequency,
+      brandVibes,
+      contentFocusPillars,
       quizCompletedAt,
       onboardingStep,
     } = req.body || {};
@@ -79,6 +90,7 @@ export default async function handler(req, res) {
       first_name: firstName || null,
       profile_type: normalizedProfileType,
       brand_name: brandName || null,
+      social_handle: creatorHandle || null,
       niche: niche || null,
       target_audience: targetAudience || null,
       audience_pain_point: audiencePainPoint || null,
@@ -87,9 +99,15 @@ export default async function handler(req, res) {
       tone_chips: Array.isArray(toneChips) ? toneChips : [],
       conversion_goal: conversionGoal || null,
       content_persona: contentPersona || null,
+      business_primary_goal: businessPrimaryGoal || null,
+      audience_location_type: audienceLocationType || null,
+      is_local_business: typeof isLocalBusiness === 'boolean' ? isLocalBusiness : false,
+      creator_monetization_path: creatorMonetizationPath || null,
+      audience_stage: audienceStage || null,
+      posting_frequency: postingFrequency || null,
       has_completed_onboarding: true,
       quiz_completed_at: quizCompletedAt || nowIso,
-      onboarding_step: onboardingStep || 8,
+      onboarding_step: onboardingStep || 10,
       updated_at: nowIso,
     };
 
@@ -116,6 +134,9 @@ export default async function handler(req, res) {
           target_audience: targetAudience || null,
           platforms: Array.isArray(platforms) ? platforms : [],
           city: city || null,
+          user_brand_type: userBrandType || null,
+          brand_vibes: Array.isArray(brandVibes) ? brandVibes : [],
+          content_focus_pillars: Array.isArray(contentFocusPillars) ? contentFocusPillars : [],
           updated_at: nowIso,
         },
         {
@@ -125,8 +146,9 @@ export default async function handler(req, res) {
       );
 
     if (preferencesError) {
-      console.error('save-onboarding preferences upsert failed:', preferencesError);
-      return res.status(500).json({ error: preferencesError.message });
+      // Non-fatal: new columns (user_brand_type, brand_vibes, content_focus_pillars) may not
+      // exist yet. Profile was saved successfully. Log and continue.
+      console.warn('save-onboarding preferences upsert warning (non-fatal):', preferencesError.message);
     }
 
     return res.status(200).json({ success: true });

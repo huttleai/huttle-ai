@@ -1,14 +1,16 @@
-import React, { useContext } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useContext, Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
-import LandingPage from './LandingPage';
-import DashboardManager from './dashboard/Dashboard';
-import PaymentSuccess from './pages/PaymentSuccess';
-import FoundersPage from './pages/FoundersPage';
-import TermsOfService from './pages/TermsOfService';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import RefundPolicy from './pages/RefundPolicy';
+import MetaPixelRouteTracker from './components/MetaPixelRouteTracker';
 import { AuthProvider, AuthContext } from './context/AuthContext';
+
+const LandingPage = lazy(() => import('./LandingPage'));
+const DashboardManager = lazy(() => import('./dashboard/Dashboard'));
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
+const FoundersPage = lazy(() => import('./pages/FoundersPage'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
 
 /**
  * Smart login route: redirects authenticated users to /dashboard,
@@ -16,6 +18,7 @@ import { AuthProvider, AuthContext } from './context/AuthContext';
  */
 function LoginRoute() {
   const authContext = useContext(AuthContext);
+  const location = useLocation();
   const { user, loading } = authContext || {};
 
   if (loading) {
@@ -32,7 +35,7 @@ function LoginRoute() {
   }
 
   // Guests are forwarded to the dashboard login page
-  return <Navigate to="/dashboard/login" replace />;
+  return <Navigate to={`/dashboard/login${location.search}${location.hash}`} replace />;
 }
 
 function App() {
@@ -44,6 +47,8 @@ function App() {
       }}
     >
       <ScrollToTop />
+      <MetaPixelRouteTracker />
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-huttle-primary"></div></div>}>
       <Routes>
         {/* Public Landing Page */}
         <Route path="/" element={<LandingPage />} />
@@ -78,6 +83,7 @@ function App() {
         {/* Redirect unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

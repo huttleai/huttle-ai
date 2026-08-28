@@ -3,12 +3,13 @@ import { Hash, Type, Target, BarChart3, Copy, Check, Wand2, MessageSquare, Zap, 
 import { useToast } from '../context/ToastContext';
 import { BrandContext } from '../context/BrandContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { useContent } from '../context/ContentContext';
 import { AuthContext } from '../context/AuthContext';
+import { GenerationAction } from '../components/ReadOnlyGenerateCta';
+import { READ_ONLY_GENERATE_MESSAGE } from '../config/subscriptionAccess';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AIFeatureLock from '../components/AIFeatureLock';
 import PlatformSelector from '../components/PlatformSelector';
-import { getPlatformTips, getPlatform } from '../utils/platformGuidelines';
+import { getPlatform } from '../utils/platformGuidelines';
 import {
   PLATFORM_CONTENT_RULES,
   getPlatformPromptRule,
@@ -22,18 +23,17 @@ import {
   generateHashtags, 
   generateHooks, 
   generateStyledCTAs,
-  generateVisualIdeas,
   generateVisualBrainstorm 
 } from '../services/grokAPI';
 import { useSearchParams, Link } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
-import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { saveToVault } from '../services/contentService';
 import HumanizerScore from '../components/HumanizerScore';
 import PerformancePrediction from '../components/PerformancePrediction';
 import AlgorithmChecker from '../components/AlgorithmChecker';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { sanitizeAIOutput } from '../utils/textHelpers'; // HUTTLE: sanitized
+import { parseVariants } from '../utils/parseAIResponse';
 import AddToKitModal from '../components/AddToKitModal';
 import { getCachedTrends } from '../services/dashboardCacheService';
 import humanizeContent, {
@@ -42,6 +42,8 @@ import humanizeContent, {
 } from '../services/humanizeContent';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 import { fetchVisualBrainstormTrendContext } from '../services/perplexityAPI';
+import useAIUsage from '../hooks/useAIUsage';
+import { syncAiUsageDisplayCacheFromServer } from '../utils/aiUsageDisplayCache';
 
 const _platformRulesImportAnchor =
   Object.keys(PLATFORM_CONTENT_RULES).length +
@@ -232,9 +234,7 @@ export default function AITools() {
   const { addToast: showToast } = useToast();
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { userTier, getFeatureLimit } = useSubscription();
-  const { saveGeneratedContent } = useContent();
-
+  const { isReadOnly } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParamInitial = searchParams.get('tab');
   const initialToolFromUrl = tabParamInitial && TAB_QUERY_TO_TOOL[tabParamInitial]
@@ -274,9 +274,7 @@ export default function AITools() {
   // CTA Suggester State (redesigned)
   const [ctaPromoting, setCtaPromoting] = useState('');
   const [ctaGoalType, setCtaGoalType] = useState('');
-  const [ctaGoal, setCtaGoal] = useState(''); // kept for legacy compat
   const [ctaPlatform, setCtaPlatform] = useState('instagram');
-  const [generatedCTAs, setGeneratedCTAs] = useState([]);
   const [styledCTAs, setStyledCTAs] = useState(null);
   const [isLoadingCTAs, setIsLoadingCTAs] = useState(false);
   const [isPolishingCTAs, setIsPolishingCTAs] = useState(false);
@@ -294,7 +292,6 @@ export default function AITools() {
   const [visualPlatform, setVisualPlatform] = useState('instagram');
   const [visualContentFormat, setVisualContentFormat] = useState('Image');
   const [visualOutputType, setVisualOutputType] = useState('');
-  const [generatedVisualIdeas, setGeneratedVisualIdeas] = useState([]);
   const [isLoadingVisualIdeas, setIsLoadingVisualIdeas] = useState(false);
   const [visualBrainstormResult, setVisualBrainstormResult] = useState(null);
   const [visualBrainstormPhase, setVisualBrainstormPhase] = useState(null);
@@ -308,10 +305,16 @@ export default function AITools() {
   /** Per–visual-concept details (scene beats, motifs) */
   const [visualConceptDetailsOpen, setVisualConceptDetailsOpen] = useState({});
   
-  // AI Usage Tracking
-  const [aiGensUsed, setAiGensUsed] = useState(0);
-  const [aiGensLimit, setAiGensLimit] = useState(Infinity);
-  const [isAILocked, setIsAILocked] = useState(false);
+  const {
+    overallUsed: aiGensUsed,
+    checkCanGenerate,
+    refreshUsage,
+  } = useAIUsage();
+  const [_isAILocked, setIsAILocked] = useState(false);
+
+  useEffect(() => {
+    syncAiUsageDisplayCacheFromServer(aiGensUsed);
+  }, [aiGensUsed]);
 
   // Modal state
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
@@ -321,53 +324,22 @@ export default function AITools() {
   const [kitSourceTool, setKitSourceTool] = useState('Caption Generator');
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
-  // Initialize AI usage limits based on subscription tier
-  useEffect(() => {
-    const aiLimit = getFeatureLimit('aiGenerations');
-    setAiGensLimit(aiLimit === -1 ? Infinity : aiLimit);
-    
-    const savedUsage = localStorage.getItem('aiGensUsed');
-    if (savedUsage) {
-      const used = parseInt(savedUsage, 10);
-      setAiGensUsed(used);
-      
-      if (aiLimit !== -1 && used >= aiLimit) {
-        setIsAILocked(true);
-      }
+  const checkAIUsage = async () => {
+    if (isReadOnly) {
+      showToast(READ_ONLY_GENERATE_MESSAGE, 'info');
+      return false;
     }
-  }, [userTier, getFeatureLimit]);
-
-  // Check if usage should be reset based on subscription anniversary
-  useEffect(() => {
-    const lastResetDate = localStorage.getItem('aiUsageLastReset');
-    const subscriptionStartDate = user?.subscriptionStartDate;
-    
-    if (shouldResetAIUsage(subscriptionStartDate, lastResetDate)) {
-      setAiGensUsed(0);
-      localStorage.setItem('aiGensUsed', '0');
-      localStorage.setItem('aiUsageLastReset', new Date().toISOString());
-      setIsAILocked(false);
-      showToast('Your AI usage limit has been reset! 🎉', 'success');
-    }
-  }, [user, showToast]);
-
-  const checkAIUsage = () => {
-    if (aiGensLimit !== Infinity && aiGensUsed >= aiGensLimit) {
+    const gate = await checkCanGenerate();
+    if (!gate.allowed) {
       setIsAILocked(true);
-      showToast('AI generation limit reached. Please upgrade to continue.', 'error');
+      showToast(gate.message || 'AI generation limit reached. Please upgrade to continue.', 'error');
       return false;
     }
     return true;
   };
 
-  const incrementAIUsage = () => {
-    const newUsage = aiGensUsed + 1;
-    setAiGensUsed(newUsage);
-    localStorage.setItem('aiGensUsed', newUsage.toString());
-    
-    if (aiGensLimit !== Infinity && newUsage >= aiGensLimit) {
-      setIsAILocked(true);
-    }
+  const incrementAIUsage = async () => {
+    await refreshUsage();
   };
 
   const tools = [
@@ -484,7 +456,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingCaptions(true);
     try {
@@ -509,7 +481,17 @@ export default function AITools() {
           );
         }
         if (parsedCaptions.length === 0 && result.caption) {
-          parsedCaptions = parseCaptionFallbackBlocks(result.caption);
+          // Guard: if result.caption is a raw JSON string (service parse failed),
+          // recover caption fields from it rather than displaying the JSON literal.
+          const recovered = parseVariants(result.caption);
+          if (recovered.length > 0 && recovered[0]?.caption) {
+            parsedCaptions = uniqueNonEmpty(
+              recovered.map((v) => String(v?.caption || '').trim()).filter(Boolean)
+            );
+          }
+          if (parsedCaptions.length === 0) {
+            parsedCaptions = parseCaptionFallbackBlocks(result.caption);
+          }
         }
         const fallbackCaptions = buildCaptionFallbacks(captionInput, captionPlatform, captionTone);
         const finalCaptions = uniqueNonEmpty([...parsedCaptions, ...fallbackCaptions])
@@ -518,7 +500,7 @@ export default function AITools() {
 
         if (finalCaptions.length > 0) {
           setGeneratedCaptions(finalCaptions);
-          incrementAIUsage();
+          await incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
           scheduleCaptionPolish(finalCaptions);
         } else {
@@ -580,7 +562,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingHashtags(true);
     try {
@@ -611,7 +593,7 @@ export default function AITools() {
             setGeneratedHashtags(fallbackHashtags);
           }
         }
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Hashtags generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         const errorMessage = result.error || 'Failed to generate hashtags';
@@ -632,7 +614,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingHooks(true);
     try {
@@ -643,7 +625,7 @@ export default function AITools() {
         const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
         const finalHooks = hooks.length > 0 ? hooks : [result.hooks];
         setGeneratedHooks(finalHooks);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
         const polishGen = ++hookPolishGenRef.current;
         setIsPolishingHooks(true);
@@ -686,6 +668,8 @@ export default function AITools() {
       return;
     }
 
+    if (!(await checkAIUsage())) return;
+
     setIsLoadingCTAs(true);
     setStyledCTAs(null);
     try {
@@ -698,7 +682,7 @@ export default function AITools() {
 
       if (result.success) {
         setStyledCTAs(result);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`CTAs generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
         const polishGen = ++ctaPolishGenRef.current;
         setIsPolishingCTAs(true);
@@ -744,8 +728,8 @@ export default function AITools() {
       const overall = overallMatch ? parseInt(overallMatch[1]) : null;
       const hook = hookMatch ? parseInt(hookMatch[1]) : null;
       const cta = ctaMatch ? parseInt(ctaMatch[1]) : null;
-      const hashtags = hashtagMatch ? parseInt(hashtagMatch[1]) : null;
-      const engagement = engagementMatch ? parseInt(engagementMatch[1]) : null;
+      const _hashtags = hashtagMatch ? parseInt(hashtagMatch[1]) : null;
+      const _engagement = engagementMatch ? parseInt(engagementMatch[1]) : null;
       
       // Extract suggestions (lines starting with - or *)
       const suggestionLines = text.match(/[-*•]\s*(.+)/g) || [];
@@ -787,7 +771,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingScore(true);
     try {
@@ -866,7 +850,7 @@ export default function AITools() {
             setScorerInsightOpen(false);
           }
         }
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Content scored! ${getToastDisclaimer('general')}`, 'success');
       } else {
         const errorMessage = result.error || 'Failed to score content';
@@ -890,6 +874,8 @@ export default function AITools() {
       showToast('Please choose an output type', 'warning');
       return;
     }
+
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingVisualIdeas(true);
     setVisualBrainstormResult(null);
@@ -931,7 +917,7 @@ export default function AITools() {
 
       if (result.success) {
         setVisualBrainstormResult(result);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Visual brainstorm generated! ${getToastDisclaimer('general')}`, 'success');
       } else {
         showToast(result.error || 'Failed to generate visual brainstorm', 'error');
@@ -945,19 +931,11 @@ export default function AITools() {
     }
   };
 
-  // Legacy handler kept for backward compat
-  const handleGenerateVisualIdeas = handleGenerateVisualBrainstorm;
-
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
     showToast('Copied to clipboard!', 'success');
     setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  const handleSaveContent = (content, type, metadata = {}) => {
-    saveGeneratedContent({ type, content, metadata, tool: activeTool });
-    showToast('Content saved! Access it from Content Vault.', 'success');
   };
 
   const handleAddToLibrary = async (content, contentType, metadata = {}, itemIndex = null) => {
@@ -968,10 +946,10 @@ export default function AITools() {
 
     try {
       const toolNames = {
-        caption: 'Caption',
-        hashtags: 'Hashtag',
-        hooks: 'Hook',
-        cta: 'CTA',
+        caption: 'Caption Generator',
+        hashtags: 'Hashtag Generator',
+        hooks: 'Hook Builder',
+        cta: 'CTA Suggester',
         'visual-brainstorm': 'Visual Brainstorm',
         scorer: 'Content Scorer',
       };
@@ -1053,7 +1031,7 @@ export default function AITools() {
       
       <div className="relative z-10 max-w-full">
         {/* Header */}
-        <div className="mb-4 md:mb-6 lg:mb-8">
+        <div className="pt-6 md:pt-0 mb-4 md:mb-6 lg:mb-8">
           <div className="flex items-start gap-2 md:gap-3">
             <div className="w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100 flex-shrink-0">
               <Zap className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-huttle-primary" />
@@ -1077,9 +1055,9 @@ export default function AITools() {
 
         {/* Tool Selector */}
         <div className="mb-3 md:mb-4 lg:mb-6">
-          {/* Mobile Horizontal Scroll Tabs */}
-          <div className="md:hidden -mx-4">
-            <div className="flex gap-2 overflow-x-auto pb-2 px-4 snap-x snap-mandatory scrollbar-hide">
+          {/* Mobile Horizontal Scroll Tabs — stay within page padding so first tab aligns with header */}
+          <div className="md:hidden">
+            <div className="flex gap-2 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory scrollbar-hide">
               {tools.map((tool) => (
                 <button
                   key={tool.id}
@@ -1140,20 +1118,20 @@ export default function AITools() {
               {isBrandVoiceComplete && pickCachedTrendTopicChips().length > 0 && (
                 <div
                   data-testid="caption-trending-chips"
-                  className="rounded-xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-3"
+                  className="rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-3"
                 >
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200 mb-2 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5" aria-hidden />
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-amber-950 mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-800" aria-hidden />
                     Trending in your niche
                   </p>
-                  <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2">Click a trend to use it as your caption topic</p>
+                  <p className="text-[11px] text-gray-600 mb-2">Click a trend to use it as your caption topic</p>
                   <div className="flex flex-wrap gap-2">
                     {pickCachedTrendTopicChips().map((t, i) => (
                       <button
                         key={`${t.topic}-${i}`}
                         type="button"
                         onClick={() => setCaptionInput(sanitizeAIOutput(t.topic || t.title) || '')}
-                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-amber-200 text-gray-800 hover:border-huttle-primary transition-colors"
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-900 hover:border-huttle-primary transition-colors shadow-sm"
                       >
                         {sanitizeAIOutput(t.topic || t.title)}
                       </button>
@@ -1241,6 +1219,7 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateCaptions}
                 disabled={isLoadingCaptions}
@@ -1251,6 +1230,7 @@ export default function AITools() {
                 <span>{isLoadingCaptions ? 'Generating (10-15 sec)...' : 'Generate Captions'}</span>
                 {!isLoadingCaptions && <ChevronRight className="w-4 h-4" />}
               </button>
+              </GenerationAction>
               {generatedCaptions.length > 0 && (
                 <div className="pt-4 border-t border-gray-100" data-testid="ai-result-container">
                   <AIDisclaimerFooter phraseIndex={0} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1354,10 +1334,12 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button onClick={handleGenerateHashtags} disabled={isLoadingHashtags} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHashtags ? <LoadingSpinner size="sm" /> : <Hash className="w-4 h-4" />}
                 <span>{isLoadingHashtags ? 'Finding...' : 'Generate Hashtags'}</span>
               </button>
+              </GenerationAction>
               {generatedHashtags.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={1} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1541,10 +1523,12 @@ export default function AITools() {
                 )}
               </div>
 
+              <GenerationAction>
               <button onClick={handleGenerateHooks} disabled={isLoadingHooks} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-huttle-primary text-white rounded-lg hover:bg-huttle-primary-dark transition-all font-medium text-sm disabled:opacity-50">
                 {isLoadingHooks ? <LoadingSpinner size="sm" /> : <Type className="w-4 h-4" />}
                 <span>{isLoadingHooks ? 'Generating (10-15 sec)...' : 'Generate Hooks'}</span>
               </button>
+              </GenerationAction>
               {generatedHooks.length > 0 && (
                 <div className="pt-4 border-t border-gray-100">
                   <AIDisclaimerFooter phraseIndex={2} className="mb-3" onModalOpen={() => setShowHowWePredictModal(true)} />
@@ -1614,11 +1598,12 @@ export default function AITools() {
               {/* Goal Selection */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Goal</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'engagement', icon: MessageCircle, label: 'Drive Engagement', desc: 'Comments, shares, saves' },
                     { id: 'sales', icon: DollarSign, label: 'Drive Sales', desc: 'Purchases, sign-ups, downloads' },
-                    { id: 'dms', icon: Mail, label: 'Drive DMs/Leads', desc: 'Direct messages, inquiries' }
+                    { id: 'dms', icon: Mail, label: 'Drive DMs/Leads', desc: 'Direct messages, inquiries' },
+                    { id: 'book_appointment', icon: Target, label: 'Book Appointment / Consultation', desc: 'Calendar bookings, discovery calls' }
                   ].map((goal) => (
                     <button
                       key={goal.id}
@@ -1669,6 +1654,7 @@ export default function AITools() {
                 </label>
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateCTAs}
                 disabled={isLoadingCTAs || !ctaPromoting.trim() || !ctaGoalType}
@@ -1677,6 +1663,7 @@ export default function AITools() {
                 {isLoadingCTAs ? <LoadingSpinner size="sm" /> : <Target className="w-4 h-4" />}
                 <span>{isLoadingCTAs ? 'Generating (10-15 sec)...' : 'Generate CTAs'}</span>
               </button>
+              </GenerationAction>
               {/* Results — Styled CTAs */}
               {styledCTAs?.ctas && (
                 <div className="pt-4 border-t border-gray-100">
@@ -2114,6 +2101,7 @@ export default function AITools() {
                 </label>
               </div>
 
+              <GenerationAction>
               <button
                 onClick={handleGenerateVisualBrainstorm}
                 disabled={isLoadingVisualIdeas || !visualPrompt.trim() || !visualOutputType}
@@ -2130,6 +2118,7 @@ export default function AITools() {
                         : 'Generate Visuals'}
                 </span>
               </button>
+              </GenerationAction>
               {visualBrainstormResult && visualBrainstormTrendContext && (
                 <p className="sr-only">
                   A live platform trend scan was used as context for this generation.

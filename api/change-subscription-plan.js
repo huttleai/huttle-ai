@@ -14,11 +14,10 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(
-      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    )
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
 const MONTHLY_PLAN_RANK = {
@@ -135,7 +134,7 @@ export default async function handler(req, res) {
 
     const currentPlanId = getStripeSubscriptionPlan(stripeSubscription);
     if (!['essentials', 'pro'].includes(currentPlanId)) {
-      return res.status(403).json({ error: 'Founders Club and Builders Club memberships cannot switch to monthly plans' });
+      return res.status(403).json({ error: 'Legacy annual memberships cannot switch to monthly plans' });
     }
 
     const currentPriceId = stripeSubscription.items.data[0]?.price?.id;

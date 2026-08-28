@@ -47,15 +47,15 @@ export default function Help() {
     },
     {
       question: 'What is Niche Intel?',
-      answer: 'Niche Intel is an AI-powered research engine on Pro, Founders Club, and Builders Club plans. Enter your niche keywords or competitor handles and select a platform — the AI researches what content is actually working and returns Trending Themes (with momentum badges), Top Hook Patterns, Content Gap Opportunities, and tailored Content Ideas. Click "Build Post" on any idea to send it directly to the Full Post Builder.'
+      answer: 'Niche Intel is an AI-powered research engine on Pro and Founders Club plans. Enter your niche keywords or competitor handles and select a platform — the AI researches what content is actually working and returns Trending Themes (with momentum badges), Top Hook Patterns, Content Gap Opportunities, and tailored Content Ideas. Click "Build Post" on any idea to send it directly to the Full Post Builder.'
     },
     {
       question: 'How does the Trend Lab work?',
-      answer: 'Trend Lab is your hub for real-time trend intelligence. It has three sections:\n\n• Quick Scan — a rapid AI scan of rising topics in your niche, showing momentum, opportunity windows, and active platforms.\n• Deep Dive — a full intelligence report on a specific topic with competitor activity, audience sentiment, timing windows, and cited sources (Essentials/Pro).\n• Algorithm Alignment Checker — paste any draft content and select a platform to see how well it matches the platform\'s ranking signals.\n\nClick "Create Content" on any trend to jump to AI Tools, or "Remix" to send it to Content Remix Studio.'
+      answer: 'Trend Lab is your hub for real-time trend intelligence. It has three sections:\n\n• Quick Scan — a rapid AI scan of rising topics in your niche, showing momentum, opportunity windows, and active platforms.\n• Deep Dive — a full intelligence report on a specific topic with competitor activity, audience sentiment, timing windows, and cited sources (Pro).\n• Algorithm Alignment Checker — paste any draft content and select a platform to see how well it matches the platform\'s ranking signals.\n\nClick "Create Content" on any trend to jump to AI Tools, or "Remix" to send it to Content Remix Studio.'
     },
     {
       question: 'How do I save and organize content?',
-      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Essentials 5 GB, Pro / Founders / Builders 25 GB. Track your usage in the storage meter on the Content Vault page.'
+      answer: 'Use the Content Vault to store images, videos, and text content. Create Projects (custom folders) to organize your assets, and switch between Grid and List views. Filter by type (Images / Videos / Text), search by name, or browse by Project. Every AI tool has a "Save to Vault" button so generated content lands here automatically.\n\nStorage limits by plan: Essentials 5 GB, Pro / Founders 25 GB. Track your usage in the storage meter on the Content Vault page.'
     },
     {
       question: 'What is Brand Voice and how do I set it up?',
@@ -64,6 +64,18 @@ export default function Help() {
     {
       question: 'Is my data secure and private?',
       answer: 'Yes, we take data security seriously. Your content and account information are encrypted and stored securely. We never share your data with third parties. Huttle AI never connects to your social media accounts. You can delete your account and all associated data at any time from Settings.'
+    },
+    {
+      question: 'Can Huttle AI guarantee my content will go viral or grow my following?',
+      answer: 'No — and we\'ll always be upfront about that. Huttle AI gives you a data-informed strategy, optimized structure, and platform-specific guidance, but results depend on factors outside anyone\'s control: platform algorithms, your audience, timing, and consistency. What we help you do is show up with the right content for the right audience — which is what builds real, long-term growth.'
+    },
+    {
+      question: 'How accurate is AI-generated content and analysis?',
+      answer: 'AI is a strong starting point, not a finished product. Suggestions, scripts, and analysis are based on current platform patterns and best practices — but algorithms change, niches vary, and AI can occasionally produce incomplete or off-brand output. Always review generated content before publishing. You know your audience better than any AI does.'
+    },
+    {
+      question: 'Why does some AI output not sound like me?',
+      answer: 'The more complete your Brand Voice profile, the more personalized your results will be. If output feels generic, revisit your Brand Voice page and add more detail about your tone, audience, and style. Every AI suggestion is meant to be edited and made your own — think of it as a first draft, not a final one.'
     }
   ];
 
@@ -99,7 +111,7 @@ export default function Help() {
         'Switch between Grid view (visual thumbnails) and List view (metadata-dense rows)',
         'Use the type filter tabs (All / Images / Videos / Text) and search bar to find content quickly',
         'Click any item to preview, edit text inline, copy to clipboard, download, or move between projects',
-        'Storage limits vary by plan: Essentials 5 GB, Pro / Founders / Builders 25 GB — track usage in the sidebar meter'
+        'Storage limits vary by plan: Essentials 5 GB, Pro / Founders 25 GB — track usage in the sidebar meter'
       ]
     },
     { 
@@ -328,7 +340,7 @@ export default function Help() {
 
   return (
     <div className="flex-1 min-h-screen bg-gray-50 ml-0 md:ml-12 lg:ml-64 pt-14 lg:pt-20 px-4 md:px-6 lg:px-8 pb-8">
-      <div className="mb-6 md:mb-8">
+      <div className="pt-6 md:pt-0 mb-6 md:mb-8">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-100">
             <HelpCircle className="w-6 h-6 md:w-7 md:h-7 text-huttle-primary" />

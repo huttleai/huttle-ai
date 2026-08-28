@@ -149,7 +149,7 @@ export function resolveTimeConflicts(posts, minGapMinutes = 60) {
   const groupedByDate = groupPostsByDate(posts);
   const resolvedPosts = [];
   
-  Object.entries(groupedByDate).forEach(([date, datePosts]) => {
+  Object.entries(groupedByDate).forEach(([, datePosts]) => {
     // Sort by time
     const sorted = [...datePosts].sort((a, b) => {
       const [aH, aM] = (a.optimizedTime || a.time || '09:00').split(':').map(Number);
@@ -159,7 +159,7 @@ export function resolveTimeConflicts(posts, minGapMinutes = 60) {
     
     // Space posts apart
     let lastTime = null;
-    sorted.forEach((post, index) => {
+    sorted.forEach((post) => {
       let currentTime = post.optimizedTime || post.time || '09:00';
       
       if (lastTime) {

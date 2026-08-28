@@ -1,4 +1,4 @@
-// Huttle AI — Terms of Service | Last updated: March 17, 2026
+// Huttle AI — Terms of Service | Last updated: April 15, 2026 (AI disclaimer added)
 
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -76,26 +76,69 @@ const sections = [
     ),
   },
   {
+    id: 'ai-generated-content-disclaimer',
+    title: 'AI-Generated Content Disclaimer',
+    content: (
+      <>
+        <p>
+          Huttle AI uses artificial intelligence to generate content suggestions, scripts, captions,
+          post plans, and strategic recommendations. All AI-generated content is provided for
+          informational and creative assistance purposes only. It does not constitute professional
+          marketing, legal, financial, or business advice.
+        </p>
+        <ul className={listClassName}>
+          <li>
+            Huttle AI does not guarantee that any AI-generated content will perform, go viral,
+            increase followers, drive sales, or achieve any specific result. Social media performance
+            depends on many factors outside our control, including platform algorithms, audience
+            behavior, timing, and content execution.
+          </li>
+          <li>
+            AI systems can produce inaccurate, incomplete, outdated, or contextually inappropriate
+            outputs. You are responsible for reviewing all AI-generated content before publishing or
+            acting on it.
+          </li>
+          <li>
+            By using Huttle AI, you acknowledge that you are the final decision-maker on all content
+            you publish, and Huttle AI bears no responsibility for outcomes resulting from content
+            generated or recommended by the platform.
+          </li>
+          <li>
+            Huttle AI&apos;s AI models are provided by third-party providers (including xAI,
+            Anthropic, and Perplexity AI). We do not control the underlying models and are not liable
+            for their outputs.
+          </li>
+        </ul>
+        <LegalCallout tone="yellow" title="No Results Guarantee">
+          <p>
+            Use of Huttle AI does not guarantee any marketing outcome, follower growth, engagement
+            rate, conversion result, or business result. All AI-generated content requires independent
+            human review and judgment before use.
+          </p>
+        </LegalCallout>
+      </>
+    ),
+  },
+  {
     id: 'subscription-plans-and-billing',
     title: 'Subscription Plans and Billing',
     content: (
       <>
         <p>Huttle AI currently offers the following subscription plans:</p>
         <ul className={listClassName}>
-          <li>Essentials: $15/month or $150/year</li>
-          <li>Pro: $39/month or $350/year</li>
-          <li>Founders Club: $199/year</li>
-          <li>Builders Club: $249/year</li>
+          <li>Essentials: $15/month or $153/year</li>
+          <li>Pro: $39/month or $398/year</li>
         </ul>
         <p>
           Unless otherwise stated, subscriptions are billed in advance on a recurring monthly or annual
-          basis. The seven-day free trial carries no charge during the trial period, but your
-          subscription will begin automatically when the trial ends unless you cancel before expiration.
+          basis. A seven-day free trial is available to new subscribers on Essentials and Pro plans. No
+          charge is applied during the trial period, but your subscription will begin automatically when
+          the trial ends unless you cancel before expiration.
         </p>
         <p>
           Monthly plans may be cancelled at any time, and access will continue through the end of the
-          then-current billing period. Annual plans are non-refundable after 30 days from the purchase
-          date, subject to the refund terms below.
+          then-current billing period. Annual subscriptions (Essentials and Pro) are non-refundable after
+          30 days from the purchase date, subject to the refund terms below.
         </p>
         <p>
           Huttle AI may change pricing upon at least 30 days&apos; written notice to existing
@@ -108,9 +151,9 @@ const sections = [
         </p>
         <LegalCallout title="Grandfathered Pricing">
           <p>
-            Founders Club and Builders Club pricing is grandfathered for existing members, which means
-            the price paid by those active subscribers will not increase while their qualifying
-            subscription remains in good standing.
+            The Founders Club plan ($199/year) is no longer available for new purchase. Existing Founders
+            Club members are grandfathered — the price they locked in will not increase while their
+            qualifying subscription remains in good standing.
           </p>
         </LegalCallout>
       </>
@@ -122,8 +165,9 @@ const sections = [
     content: (
       <>
         <p>
-          Huttle AI may offer a seven-day free trial to eligible new users only. A valid payment method
-          is required to start the trial.
+          Huttle AI may offer a seven-day free trial to eligible new users only. A payment method is
+          not required to start the trial. If you do not add a payment method before the trial ends,
+          the trial expires and you are not charged.
         </p>
         <p>
           Trial eligibility is determined by Huttle AI in its sole discretion, and we may limit,
@@ -138,16 +182,10 @@ const sections = [
     content: (
       <>
         <p>
-          Monthly subscriptions are not refundable for partial months or unused time. Cancelling a
-          monthly plan stops future billing only.
-        </p>
-        <p>
-          Annual subscription refund requests submitted within 30 days of purchase will be reviewed on
-          a case-by-case basis. No refunds will be issued after 30 days from the purchase date.
-        </p>
-        <p>
-          Founders Club and Builders Club annual plans are eligible for refund requests only within 14
-          days of purchase.
+          Essentials and Pro plans (monthly and annual): All sales are final after the seven-day free
+          trial period ends. No refunds are available for any Essentials or Pro subscription — monthly
+          or annual — once the trial has expired and a charge has been processed. Cancelling a monthly
+          plan stops future billing only; you retain access through the end of the current paid period.
         </p>
         <p>
           To request a refund, email{' '}
@@ -390,8 +428,8 @@ const sections = [
           retention period is required by law or operational necessity.
         </p>
         <p>
-          Founders Club members who violate these Terms are not entitled to a refund of their annual
-          fee.
+          Subscribers who are terminated for violations of these Terms are not entitled to a refund of
+          any annual fee, regardless of plan type or grandfathered status.
         </p>
       </>
     ),
@@ -500,8 +538,8 @@ export default function TermsOfService() {
   return (
     <LegalPageLayout
       title="Terms of Service"
-      lastUpdated="March 17, 2026"
-      effectiveDate="March 17, 2026"
+      lastUpdated="April 15, 2026"
+      effectiveDate="April 15, 2026"
       intro="These Terms govern your access to and use of huttleai.com and the Huttle AI platform, including any services, content generation features, billing functionality, and related experiences offered by Huttle AI."
       sections={sections}
     >

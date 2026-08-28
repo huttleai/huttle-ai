@@ -75,19 +75,6 @@ export function AIDisclaimerTooltip({ children, phraseIndex = 0, position = 'top
     }
   };
 
-  const getArrowClasses = () => {
-    switch (effectivePosition) {
-      case 'top':
-        return 'top-full left-1/2 -translate-x-1/2 border-t-white';
-      case 'bottom':
-        return 'bottom-full left-1/2 -translate-x-1/2 border-b-white';
-      case 'left':
-        return 'left-full top-1/2 -translate-y-1/2 border-l-white';
-      default:
-        return 'top-full left-1/2 -translate-x-1/2 border-t-white';
-    }
-  };
-
   return (
     <div className={`relative inline-flex items-center ${className}`}>
       {children}

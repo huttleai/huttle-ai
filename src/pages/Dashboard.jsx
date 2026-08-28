@@ -35,6 +35,7 @@ import { useNotifications } from '../context/NotificationContext';
 import GuidedTour from '../components/GuidedTour';
 import confetti from 'canvas-confetti';
 import FloatingActionButton from '../components/FloatingActionButton';
+import { BrandVoiceUpdateBanner } from '../components/BrandVoiceUpdateBanner';
 import { hasProfileContext, isCreatorProfile } from '../utils/brandContextBuilder';
 import { getHashtagPersonalizationContext } from '../utils/hashtagPersonalization';
 import { getPlatformIcon, normalizePlatformLabelForIcon } from '../components/SocialIcons';
@@ -375,7 +376,7 @@ const QUICK_CREATE_TOOLS = [
 ];
 
 export default function Dashboard() {
-  const { user, userProfile, loading: authLoading } = useContext(AuthContext);
+  const { user, userProfile, loading: authLoading, sessionConfirmed } = useContext(AuthContext);
   const { getDashboardSnapshot, loadSessionDashboardSnapshot, setDashboardSnapshot, clearDashboardSnapshot } = useDashboardCache(); // HUTTLE AI: cache fix
   const navigate = useNavigate();
   const { brandProfile, brandFetchComplete } = useBrand();
@@ -388,6 +389,8 @@ export default function Dashboard() {
     isTrialing,
     trialDaysRemaining,
     trialEndsAt,
+    isReadOnly,
+    isPaymentRetry,
     refreshSubscription,
   } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -417,6 +420,20 @@ export default function Dashboard() {
   const [trialWelcomeDate, setTrialWelcomeDate] = useState(null);
   const hasFetchedTodayRef = useRef(false); // HUTTLE AI: cache fix
   const activeDashboardRequestRef = useRef(0); // HUTTLE AI: cache fix
+  /**
+   * Which user's data `activeDashboardRequestRef` currently guards. Only a
+   * hand-off from one known user to a DIFFERENT one (or to logged-out) should
+   * invalidate an in-flight load — see the `[user?.id]` reset effect below.
+   */
+  const dashboardOwnerUserIdRef = useRef(null);
+  /**
+   * The dashboard load currently in flight, as `{ key, requestId, promise }`.
+   * `hasFetchedTodayRef` only flips true after a load finishes, so it cannot
+   * guard the window while one is running — this ref does. `requestId` lets a
+   * new caller tell a live in-flight load apart from one that has already
+   * been invalidated but hasn't unwound yet — see `loadDashboardData`.
+   */
+  const dashboardLoadInFlightRef = useRef(null);
   const brandProfileRef = useRef(brandProfile); // HUTTLE AI: cache fix
   const lastPersonalizationKeyRef = useRef(null);
   dashboardDayKeyRef.current = dashboardDayKey;
@@ -471,12 +488,56 @@ export default function Dashboard() {
     }
   }, [setDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
 
-  const loadDashboardData = useCallback(async ({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
+  const runDashboardLoad = useCallback(async ({ forceRefresh, generatedDate, requestId }) => { // HUTTLE AI: cache fix
     if (!user?.id) return { success: false }; // HUTTLE AI: cache fix
 
-    const generatedDate = getDashboardGeneratedDate(); // HUTTLE AI: cache fix
-    const requestId = activeDashboardRequestRef.current + 1; // HUTTLE AI: cache fix
-    activeDashboardRequestRef.current = requestId; // HUTTLE AI: cache fix
+    if (isReadOnly) {
+      const perspKey = getBrandPersonalizationKey(brandProfileRef.current);
+      const snapshotMatchesBrand = (snap) => snap?.personalizationKey === perspKey;
+
+      const memorySnapshot = getDashboardSnapshot(user.id, generatedDate);
+      if (
+        memorySnapshot?.data
+        && snapshotMatchesBrand(memorySnapshot)
+        && hasPersistableTrendingTopics(memorySnapshot.data.trending_topics)
+      ) {
+        applyDashboardPayload(memorySnapshot.data, generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        setTrendingStatus(computeTrendingStatusFromData(memorySnapshot.data));
+        return { success: true, cacheHit: true, data: memorySnapshot.data };
+      }
+
+      const sessionSnapshot = loadSessionDashboardSnapshot(user.id, generatedDate);
+      if (
+        sessionSnapshot?.data
+        && snapshotMatchesBrand(sessionSnapshot)
+        && hasPersistableTrendingTopics(sessionSnapshot.data.trending_topics)
+      ) {
+        applyDashboardPayload(sessionSnapshot.data, generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        setTrendingStatus(computeTrendingStatusFromData(sessionSnapshot.data));
+        return { success: true, cacheHit: true, data: sessionSnapshot.data };
+      }
+
+      const cachedResult = await getDashboardCache(user.id, brandProfileRef.current, { generatedDate });
+      if (activeDashboardRequestRef.current !== requestId) return { success: false, cancelled: true };
+      if (cachedResult.success && cachedResult.cacheHit && cachedResult.data) {
+        applyDashboardPayload(cachedResult.data, cachedResult.generatedDate || generatedDate);
+        hasFetchedTodayRef.current = true;
+        setIsDashboardLoading(false);
+        setIsAlertsLoading(false);
+        return cachedResult;
+      }
+
+      setIsDashboardLoading(false);
+      setIsAlertsLoading(false);
+      setTrendingStatus('fallback');
+      return { success: true, cacheHit: false, readOnly: true };
+    }
 
     if (forceRefresh) { // HUTTLE AI: cache fix
       setTrendingStatus('retrying');
@@ -569,7 +630,64 @@ export default function Dashboard() {
         setIsAlertsLoading(false); // HUTTLE AI: cache fix
       } // HUTTLE AI: cache fix
     } // HUTTLE AI: cache fix
-  }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id]); // HUTTLE AI: cache fix
+  }, [applyDashboardPayload, clearDashboardSnapshot, getDashboardSnapshot, loadSessionDashboardSnapshot, user?.id, isReadOnly]); // HUTTLE AI: cache fix
+
+  /**
+   * Single entry point for loading the dashboard.
+   *
+   * ROOT CAUSE this guards: the mount effect below re-runs whenever
+   * `brandFetchComplete` toggles (BrandContext sets it false then true again on
+   * every profile refresh/reload), and its only guard was `hasFetchedTodayRef`,
+   * which is not set until a load finishes. A toggle mid-load therefore passed
+   * the guard and started a second full generation, doubling every Perplexity
+   * call, while the effect's cleanup bumped `activeDashboardRequestRef` so the
+   * first, already-paid-for run discarded its own results.
+   *
+   * The in-flight slot is claimed synchronously here, before any await, so a
+   * duplicate caller in the same tick joins the running load instead of starting
+   * another one — but only when that in-flight load is still valid (its
+   * requestId still matches activeDashboardRequestRef). If something has
+   * already invalidated it, a fresh load is started instead of hanging a new
+   * caller off a promise that is only ever going to resolve `cancelled: true`.
+   */
+  const loadDashboardData = useCallback(({ forceRefresh = false } = {}) => { // HUTTLE AI: cache fix
+    if (!user?.id) return Promise.resolve({ success: false });
+
+    const generatedDate = getDashboardGeneratedDate(); // HUTTLE AI: cache fix
+    const inFlightKey = `${user.id}|${generatedDate}`;
+    const inFlight = dashboardLoadInFlightRef.current;
+
+    // forceRefresh is always deliberate (manual retry, brand change, day roll)
+    // and supersedes whatever is running. A same-key in-flight entry is only
+    // safe to join if its requestId still matches activeDashboardRequestRef —
+    // if the ref has already moved past it (e.g. a real user switch
+    // invalidated it), that promise is going to resolve `cancelled: true` and
+    // must never be handed to a new caller as if it were a live, fresh load.
+    // Without this check, a caller could silently receive a doomed result
+    // instead of the fresh data it asked for — exactly how the trend cache
+    // went permanently empty before this fix.
+    const inFlightIsJoinable =
+      Boolean(inFlight)
+      && inFlight.key === inFlightKey
+      && inFlight.requestId === activeDashboardRequestRef.current;
+    if (!forceRefresh && inFlightIsJoinable) {
+      return inFlight.promise;
+    }
+
+    const requestId = activeDashboardRequestRef.current + 1;
+    activeDashboardRequestRef.current = requestId;
+
+    const promise = runDashboardLoad({ forceRefresh, generatedDate, requestId }).finally(() => {
+      // Clears on resolve and on reject. Only the owning promise clears the slot,
+      // so a superseding forceRefresh is never wiped by a late finisher.
+      if (dashboardLoadInFlightRef.current?.promise === promise) {
+        dashboardLoadInFlightRef.current = null;
+      }
+    });
+
+    dashboardLoadInFlightRef.current = { key: inFlightKey, requestId, promise };
+    return promise;
+  }, [runDashboardLoad, user?.id]);
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -616,8 +734,8 @@ export default function Dashboard() {
       updatedAt: Date.now(),
     };
 
-    if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'inactive')) {
-      showToast('Your subscription access has ended. Choose a plan to get back to creating content.', 'info', 6000);
+    if (previousSnapshot.status === 'trialing' && (subscriptionStatus === 'canceled' || subscriptionStatus === 'cancelled' || subscriptionStatus === 'inactive' || subscriptionStatus === 'expired')) {
+      showToast('Your Brand Voice profile is still here. Reactivate to start generating again.', 'info', 6000);
     }
 
     localStorage.setItem(snapshotKey, JSON.stringify(currentSnapshot));
@@ -758,8 +876,23 @@ export default function Dashboard() {
   }, [user?.id, loadRecentVaultItems]);
 
   useEffect(() => {
+    // Only a hand-off from one KNOWN user to a DIFFERENT one (including to
+    // logged-out) has anything to invalidate. Bumping activeDashboardRequestRef
+    // unconditionally here — including on the very first resolution of a user
+    // id — raced with the mount effect below that actually starts the load:
+    // React Strict Mode's dev-only double-invoke re-runs this effect a second
+    // time in the same commit (refs persist across that replay), moving the
+    // ref out from under a load that had just started with nothing new to
+    // replace it. That load then aborted as "superseded" and nothing retried,
+    // so setCachedTrends was never called and the trend cache stayed empty.
+    const previousUserId = dashboardOwnerUserIdRef.current;
+    const isRealUserHandoff = previousUserId != null && previousUserId !== user?.id;
+    dashboardOwnerUserIdRef.current = user?.id ?? null;
+
     hasFetchedTodayRef.current = false; // HUTTLE AI: cache fix
-    activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    if (isRealUserHandoff) {
+      activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
+    }
     setDashboardData(null); // HUTTLE AI: cache fix
     setDashboardAlerts([]); // HUTTLE AI: cache fix
     setDashboardError(''); // HUTTLE AI: cache fix
@@ -775,7 +908,9 @@ export default function Dashboard() {
   }, [brandProfile]); // HUTTLE AI: cache fix
 
   useEffect(() => {
-    if (!user?.id || !brandFetchComplete) return;
+    // Gate on a confirmed session — this path triggers AI proxy calls that
+    // would 401 (and cache writes that would 400) without a Bearer token.
+    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete || isReadOnly) return;
     const key = brandPersonalizationKey;
     const prev = lastPersonalizationKeyRef.current;
     if (prev === key) return;
@@ -793,20 +928,27 @@ export default function Dashboard() {
     setGeneralTrendingReady(false);
     void loadDashboardData({ forceRefresh: true });
   }, [
+    authLoading,
+    sessionConfirmed,
     user?.id,
     brandFetchComplete,
     brandPersonalizationKey,
+    isReadOnly,
     clearDashboardSnapshot,
     loadDashboardData,
   ]);
 
   useEffect(() => {
-    if (authLoading || !user?.id || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
-    loadDashboardData(); // HUTTLE AI: cache fix
-    return () => { // HUTTLE AI: cache fix
-      activeDashboardRequestRef.current += 1; // HUTTLE AI: cache fix
-    }; // HUTTLE AI: cache fix
-  }, [authLoading, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
+    if (authLoading || !sessionConfirmed || !user?.id || !brandFetchComplete || hasFetchedTodayRef.current) return; // HUTTLE AI: cache fix
+    // No cleanup that invalidates activeDashboardRequestRef. This effect re-runs
+    // on ordinary dependency churn (brandFetchComplete toggling), which is not a
+    // stale-result situation — invalidating there is what threw away the first
+    // run's paid Perplexity responses. Genuine invalidation still happens on
+    // user change (effect above) and when a new request starts in
+    // runDashboardLoad; concurrent duplicates are collapsed by
+    // dashboardLoadInFlightRef.
+    void loadDashboardData(); // HUTTLE AI: cache fix
+  }, [authLoading, sessionConfirmed, brandFetchComplete, loadDashboardData, user?.id]); // HUTTLE AI: cache fix
 
   useEffect(() => {
     if (!user?.id || authLoading) return undefined;
@@ -1111,7 +1253,9 @@ export default function Dashboard() {
   }, [useForYouHashtags, widgetHashtagList]);
 
   useEffect(() => {
-    if (!user?.id || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
+    // Gate on a confirmed session — these fetches hit the Grok proxy and must
+    // never fire before a Bearer token exists.
+    if (authLoading || !sessionConfirmed || !user?.id || isReadOnly || !hashtagPersonalization || hashtagMode !== 'for_you' || !forYouPersonalizationExtended) return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1150,10 +1294,12 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
+  }, [authLoading, sessionConfirmed, user?.id, isReadOnly, hashtagPersonalization, hashtagMode, resolvedDashboardPlatformLabels, forYouPersonalizationExtended, dashboardDayKey, forYouRetryCount]);
 
   useEffect(() => {
-    if (!user?.id || hashtagMode !== 'trending') return;
+    // Gate on a confirmed session — these fetches hit the Perplexity proxy and
+    // must never fire before a Bearer token exists.
+    if (authLoading || !sessionConfirmed || !user?.id || isReadOnly || hashtagMode !== 'trending') return;
 
     const generatedDate = getDashboardGeneratedDate();
     const platformKey = [...resolvedDashboardPlatformLabels].sort().join('|');
@@ -1190,7 +1336,7 @@ export default function Dashboard() {
       cancelled = true;
       setGeneralTrendingLoading(false);
     };
-  }, [user?.id, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
+  }, [authLoading, sessionConfirmed, user?.id, isReadOnly, hashtagMode, resolvedDashboardPlatformLabels, dashboardDayKey]);
 
   const dashboardTrendingMode = dashboardData?.trending_mode || 'niche_specific';
   const primaryPlatformLabel = dashboardData?.primary_platform_label
@@ -1222,7 +1368,7 @@ export default function Dashboard() {
       <GuidedTour steps={tourSteps} storageKey="dashboardTour" />
 
       {/* Welcome Header */}
-      <MotionDiv className="relative mb-6 pt-2 sm:pt-3" initial="hidden" animate="visible" custom={0} variants={fadeUp}>
+      <MotionDiv className={`relative mb-6 pt-2 sm:pt-3 ${isPaymentRetry ? 'mt-12' : ''}`} initial="hidden" animate="visible" custom={0} variants={fadeUp}>
         <div>
           {isCreator ? (
             <>
@@ -1253,21 +1399,25 @@ export default function Dashboard() {
               )}
             </>
           )}
-          {isTrialing && (
-            <div className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              trialDaysRemaining !== null && trialDaysRemaining <= 2
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-cyan-100 text-cyan-800'
-            }`}>
-              <span>
-                {trialDaysRemaining === 0
-                  ? "⚠️ Trial ends today - you'll be charged tonight"
-                  : `🎯 Trial · ${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left`}
-              </span>
-            </div>
+          {isTrialing && trialEndsAt && trialDaysRemaining !== null && (
+            trialDaysRemaining <= 2 ? (
+              <div className="mt-3 w-full max-w-xl rounded-xl border-2 border-amber-400 bg-amber-50 p-4 shadow-sm">
+                <p className="text-sm font-semibold text-amber-950">
+                  {trialDaysRemaining === 0
+                    ? "Trial ends today. You'll be charged tonight."
+                    : `${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial. We'll charge your card when it ends.`}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 inline-flex items-center rounded-full bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800">
+                {`${trialDaysRemaining} day${trialDaysRemaining === 1 ? '' : 's'} left in your trial.`}
+              </div>
+            )
           )}
         </div>
       </MotionDiv>
+
+      <BrandVoiceUpdateBanner />
 
       {/* Hero Section - Trending Now (2/3) + Hashtags of the Day (1/3) */}
       <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -1367,17 +1517,17 @@ export default function Dashboard() {
                               {getPlatformIcon(sanitizedTrendPlatform, 'w-4 h-4 text-gray-600')}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm leading-snug text-gray-900 dark:text-gray-100 hyphens-none text-pretty min-w-0">{sanitizedTrendTopic}</p>
+                              <p className="font-bold text-sm leading-snug text-gray-900 hyphens-none text-pretty min-w-0">{sanitizedTrendTopic}</p>
                               {formatBadge && (
                                 <span
                                   data-testid="trend-format-badge"
-                                  className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-300"
+                                  className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700"
                                 >
                                   <Camera className="w-3 h-3" aria-hidden />
                                   {formatBadge}
                                 </span>
                               )}
-                              <span className="block text-[11px] text-gray-500 font-medium mt-0.5">{sanitizedTrendPlatform}</span>
+                              <span className="block text-[11px] text-gray-600 font-medium mt-0.5">{sanitizedTrendPlatform}</span>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
@@ -1395,7 +1545,7 @@ export default function Dashboard() {
 
                         {sanitizedTrendDescription && (
                           <p
-                            className={`text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-3 hyphens-none ${detailsOpen ? '' : 'line-clamp-3'}`}
+                            className={`text-xs text-gray-700 leading-relaxed mb-3 hyphens-none ${detailsOpen ? '' : 'line-clamp-3'}`}
                           >
                             {sanitizedTrendDescription}
                           </p>
@@ -1418,10 +1568,10 @@ export default function Dashboard() {
                         {detailsOpen && nicheAngle && (
                           <div
                             data-testid="trend-niche-section"
-                            className="mb-3 rounded-r-lg border-l-2 border-cyan-300 dark:border-cyan-600 bg-cyan-50/50 dark:bg-cyan-900/15 pl-3 pr-2.5 py-2"
+                            className="mb-3 rounded-r-lg border-l-2 border-cyan-400 bg-cyan-50/80 pl-3 pr-2.5 py-2"
                           >
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-800 dark:text-cyan-200 mb-1">For your niche</p>
-                            <p className="text-xs text-gray-800 dark:text-gray-100 leading-relaxed hyphens-none">{nicheAngle}</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-900 mb-1">For your niche</p>
+                            <p className="text-xs text-gray-800 leading-relaxed hyphens-none">{nicheAngle}</p>
                           </div>
                         )}
 
@@ -1429,7 +1579,7 @@ export default function Dashboard() {
                           <div className="mb-3 flex items-start gap-2 min-w-0">
                             <div className="min-w-0 flex-1">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Your hook</p>
-                              <p data-testid="trend-hook-text" className="text-xs text-gray-900 dark:text-gray-100 leading-relaxed hyphens-none">
+                              <p data-testid="trend-hook-text" className="text-xs text-gray-900 leading-relaxed hyphens-none">
                                 &quot;{hookLine}&quot;
                               </p>
                             </div>
@@ -1437,7 +1587,7 @@ export default function Dashboard() {
                               type="button"
                               data-testid="trend-hook-copy"
                               onClick={() => copyTrendHook(cardKey, hookLine)}
-                              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-600 hover:text-huttle-primary hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors"
+                              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-600 hover:text-huttle-primary hover:bg-gray-50 transition-colors"
                             >
                               {copiedTrendHookKey === cardKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                               {copiedTrendHookKey === cardKey ? <span className="text-[10px] font-semibold text-emerald-600">✓ Copied</span> : <span className="text-[10px] font-semibold">Copy</span>}
@@ -1446,7 +1596,7 @@ export default function Dashboard() {
                         )}
 
                         {detailsOpen && whyLine && (
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex gap-1.5">
+                          <p className="text-[11px] text-gray-500 mb-3 flex gap-1.5">
                             <span aria-hidden>⚡</span>
                             <span className="hyphens-none">{whyLine}</span>
                           </p>
@@ -1477,7 +1627,7 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); navigate('/dashboard/trend-lab', { state: { deepDiveTopic: sanitizedTrendTopic, autoRun: true } }); }}
-                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 bg-white dark:bg-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="inline-flex min-h-11 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors"
                           >
                             <Beaker className="w-3 h-3" /> Deep Dive
                           </button>
@@ -1491,10 +1641,10 @@ export default function Dashboard() {
                           <span
                             className={`rounded-full px-2 py-0.5 font-semibold ${
                               trendType === 'niche'
-                                ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200'
+                                ? 'bg-cyan-100 text-cyan-900'
                                 : trendType === 'hybrid'
-                                  ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                                  ? 'bg-violet-100 text-violet-900'
+                                  : 'bg-gray-100 text-gray-700'
                             }`}
                           >
                             {trendType}
@@ -1961,7 +2111,8 @@ export default function Dashboard() {
                 </span>
                 .
               </p>
-              <p className="text-gray-600 mb-6">You have full Pro access. Let&apos;s create some content.</p>
+              <p className="text-gray-600 mb-4">You have full Pro access. Let&apos;s create some content.</p>
+              <p className="text-xs text-gray-400 mb-6">Huttle AI gives you a strategic starting point — your creativity and consistency drive the results.</p>
               <button
                 onClick={() => setShowTrialWelcomeModal(false)}
                 className="btn-primary"

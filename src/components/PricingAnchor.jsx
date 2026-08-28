@@ -117,7 +117,7 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
                 <p className="text-xs md:text-sm text-slate-500 mt-1">$16/mo billed annually</p>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
                   <Check size={13} className="text-green-600 flex-shrink-0" />
-                  <span>14-day money-back guarantee</span>
+                  <span>7-day free trial available on current plans</span>
                 </div>
               </div>
 
@@ -160,7 +160,7 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
               {/* Refund Guarantee */}
               <div className="flex items-center justify-center gap-1.5 mt-3 md:mt-4">
                 <ShieldCheck size={14} className="text-slate-400" />
-                <span className="text-xs text-slate-400">14-day money-back guarantee</span>
+                <span className="text-xs text-slate-400">7-day free trial available on current plans</span>
               </div>
             </motion.div>
           </div>

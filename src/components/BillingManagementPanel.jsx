@@ -11,6 +11,7 @@ import {
 } from '../services/stripeAPI';
 import UpdateCardModal from './UpdateCardModal';
 import { CardNetworkMark } from './CardNetworkMark';
+import { isPaymentRetryStatus } from '../config/subscriptionAccess';
 
 function formatDate(dateValue) {
   if (!dateValue) return '—';
@@ -43,7 +44,7 @@ export default function BillingManagementPanel({
   userTier = null,
   compact = false,
   showPlanSwitcher = true,
-  showManageAction = true,
+  showManageAction: _showManageAction = true,
   onSubscriptionUpdated = null,
 }) {
   const { addToast } = useToast();
@@ -60,9 +61,10 @@ export default function BillingManagementPanel({
 
   const normalizedTier = normalizeTier(userTier || subscription?.tier || subscription?.plan);
   const isFounderTier = normalizedTier === 'founder' || normalizedTier === 'builder';
-  const currentSubscription = summary?.subscription || subscription;
+  const currentSubscription = summary?.subscription || subscription || null;
   const paymentMethod = paymentMethodOverride || summary?.paymentMethod || null;
-  const visibleInvoices = compact ? invoices.slice(0, 3) : invoices;
+  const safeInvoices = Array.isArray(invoices) ? invoices : [];
+  const visibleInvoices = compact ? safeInvoices.slice(0, 3) : safeInvoices;
 
   const loadBillingData = useCallback(async ({ silent = false } = {}) => {
     if (silent) {
@@ -285,14 +287,14 @@ export default function BillingManagementPanel({
               <span className={`inline-flex items-center gap-1.5 font-semibold capitalize ${
                 currentSubscription?.status === 'active' || currentSubscription?.status === 'trialing'
                   ? 'text-green-600'
-                  : currentSubscription?.status === 'past_due'
+                  : isPaymentRetryStatus(currentSubscription?.status)
                     ? 'text-amber-600'
                     : 'text-gray-500'
               }`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${
                   currentSubscription?.status === 'active' || currentSubscription?.status === 'trialing'
                     ? 'bg-green-500'
-                    : currentSubscription?.status === 'past_due'
+                    : isPaymentRetryStatus(currentSubscription?.status)
                       ? 'bg-amber-500'
                       : 'bg-gray-400'
                 }`} />

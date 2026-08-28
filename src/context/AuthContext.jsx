@@ -1,8 +1,46 @@
 import { createContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../config/supabase';
+import { trackPixelEvent } from '../utils/metaPixel';
+import { refreshSessionWithBackoff } from '../utils/authReady';
 
-export const AuthContext = createContext();
+export const AuthContext = createContext({});
 const AUTH_STATE_CACHE_KEY = 'huttle-auth-state-cache';
+/** Fired when Supabase confirms a session late (token refresh after a degraded init). */
+export const SESSION_REFRESHED_EVENT = 'huttle:session-refreshed';
+
+// Onboarding gate cutoff: only users created on or after this date can be routed to /onboarding.
+// Anyone who signed up before this timestamp is treated as an existing user and never gated,
+// even if their has_completed_onboarding flag is false (legacy accounts predate that flag).
+const ONBOARDING_GATE_CUTOFF_ISO = '2026-04-19T00:00:00.000Z';
+const ONBOARDING_GATE_CUTOFF_MS = Date.parse(ONBOARDING_GATE_CUTOFF_ISO);
+
+function wasCreatedBeforeGateCutoff(currentUser) {
+  const createdAtIso = currentUser?.created_at;
+  if (!createdAtIso) return false;
+  const createdAtMs = Date.parse(createdAtIso);
+  if (Number.isNaN(createdAtMs)) return false;
+  return createdAtMs < ONBOARDING_GATE_CUTOFF_MS;
+}
+
+// Count-only existence check — RLS-scoped and uses `head: true` so no rows are transferred.
+// Any single row in user_activity means the user has used the app and must not be re-gated.
+async function hasAnyUserActivity(userId) {
+  if (!userId) return false;
+  try {
+    const { count, error } = await supabase
+      .from('user_activity')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    if (error) {
+      console.warn('[Auth] user_activity count lookup failed:', error.message);
+      return false;
+    }
+    return (count ?? 0) > 0;
+  } catch (err) {
+    console.warn('[Auth] user_activity count lookup threw:', err?.message);
+    return false;
+  }
+}
 
 function getOnboardingCompletionKey(userId) {
   return `has_completed_onboarding:${userId}`;
@@ -89,6 +127,12 @@ export function AuthProvider({ children }) {
   // Refs to track current state without stale closures in auth listener
   const currentUserIdRef = useRef(null);
   const profileCheckedRef = useRef(false);
+  const sessionConfirmedRef = useRef(false);
+  const sessionRecoveryInFlightRef = useRef(false);
+
+  useEffect(() => {
+    sessionConfirmedRef.current = sessionConfirmed;
+  }, [sessionConfirmed]);
   // Track whether initializeSession has completed to prevent onAuthStateChange
   // from prematurely setting loading = false during the INITIAL_SESSION race
   const initialLoadCompleteRef = useRef(false);
@@ -178,10 +222,15 @@ export function AuthProvider({ children }) {
         setNeedsOnboarding(false);
         writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: false });
       } else {
-        // Missing profile rows or incomplete profiles should always see onboarding.
+        // Only gate users who are brand new (created on/after the cutoff) AND have zero activity.
+        // If the account predates the cutoff OR has any recorded activity, never redirect to /onboarding.
+        const createdBeforeCutoff = wasCreatedBeforeGateCutoff(currentUser);
+        const hasActivity = createdBeforeCutoff ? false : await hasAnyUserActivity(userId);
+        const shouldGate = !createdBeforeCutoff && !hasActivity;
+
         setUserProfile(data || null);
-        setNeedsOnboarding(true);
-        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: true });
+        setNeedsOnboarding(shouldGate);
+        writeCachedAuthState({ user: cachedUser, userProfile: data || null, needsOnboarding: shouldGate });
       }
       setProfileChecked(true);
       profileCheckedRef.current = true;
@@ -244,6 +293,52 @@ export function AuthProvider({ children }) {
     // SECURITY: Removed localStorage-based bypass to prevent client-side manipulation
     const skipAuth = import.meta.env.DEV === true && import.meta.env.VITE_SKIP_AUTH === 'true';
 
+    // When init times out or errors, try to recover a real session instead of
+    // leaving a cached half-session (sessionConfirmed=false) in place forever.
+    const attemptSessionRecovery = async () => {
+      if (sessionRecoveryInFlightRef.current) return;
+      sessionRecoveryInFlightRef.current = true;
+
+      try {
+        const { session, reason } = await refreshSessionWithBackoff();
+        if (!isMounted) return;
+
+        if (session?.user) {
+          setUser(session.user);
+          setSessionConfirmed(true);
+          if (!profileCheckedRef.current || currentUserIdRef.current !== session.user.id) {
+            await checkUserProfile(session.user.id, session.user);
+          }
+          window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT));
+          return;
+        }
+
+        if (reason === 'auth') {
+          // Refresh token is invalid — this account is genuinely signed out.
+          clearCachedAuthState();
+          setUser(null);
+          setUserProfile(null);
+          setNeedsOnboarding(false);
+          setProfileChecked(true);
+          setSessionConfirmed(true);
+          profileCheckedRef.current = true;
+          currentUserIdRef.current = null;
+          return;
+        }
+
+        // Transient network failure — retry once when connectivity returns.
+        // Supabase autoRefreshToken also keeps retrying and will emit
+        // TOKEN_REFRESHED (handled below) on success.
+        window.addEventListener('online', () => {
+          if (isMounted && !sessionConfirmedRef.current) {
+            void attemptSessionRecovery();
+          }
+        }, { once: true });
+      } finally {
+        sessionRecoveryInFlightRef.current = false;
+      }
+    };
+
     const initializeSession = async () => {
       try {
         // If skip auth is enabled (DEV mode only with explicit env var), create a mock user
@@ -280,6 +375,8 @@ export function AuthProvider({ children }) {
               profileCheckedRef.current = true;
               currentUserIdRef.current = null;
             }
+            // Do not leave a half-session in place — try to recover a real one.
+            void attemptSessionRecovery();
           }
         }, 25000);
 
@@ -321,6 +418,7 @@ export function AuthProvider({ children }) {
             profileCheckedRef.current = true;
             currentUserIdRef.current = null;
           }
+          void attemptSessionRecovery();
         }
       } finally {
         if (isMounted && !skipAuth) {
@@ -349,11 +447,30 @@ export function AuthProvider({ children }) {
         // state here would pass a new `user` object reference to every
         // downstream context (BrandContext, SubscriptionContext, etc.),
         // triggering full re-fetch cascades every ~55 minutes or on tab focus.
-        if (
-          event === 'TOKEN_REFRESHED' ||
-          event === 'USER_UPDATED' ||
-          event === 'MFA_CHALLENGE_VERIFIED'
-        ) {
+        if (event === 'USER_UPDATED') {
+          if (session?.user) {
+            setUser(session.user);
+          }
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            // A late successful refresh confirms a session that init could not.
+            // Only touch React state when the session was previously unconfirmed,
+            // so routine ~55-minute refreshes do not trigger re-fetch cascades.
+            if (!sessionConfirmedRef.current) {
+              setUser(session.user);
+              setSessionConfirmed(true);
+            }
+            // Light nudge for SubscriptionContext — it only refetches when its
+            // state is degraded/unknown, so this cannot create refetch loops.
+            window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT));
+          }
+          return;
+        }
+
+        if (event === 'MFA_CHALLENGE_VERIFIED') {
           return;
         }
 
@@ -432,6 +549,7 @@ export function AuthProvider({ children }) {
         },
       });
       if (error) throw error;
+      trackPixelEvent('Lead');
       return { success: true, data };
     } catch (error) {
       console.error('Signup error:', error);
@@ -524,7 +642,11 @@ export function AuthProvider({ children }) {
     // Signal to GuidedTour that onboarding just completed — tour should trigger.
     // Use a user-scoped key so the tour only appears once per account.
     const tourSignalKey = user?.id ? `show_guided_tour:${user.id}` : 'show_guided_tour';
-    localStorage.setItem(tourSignalKey, 'pending');
+    try {
+      localStorage.setItem(tourSignalKey, 'pending');
+    } catch {
+      // Private mode / quota — tour can still rely on profile flags.
+    }
     writeCachedOnboardingCompletion(user.id, true);
     
     // First refresh the profile from database to get the complete data
