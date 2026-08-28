@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { AuthContext } from '../context/AuthContext';
 import { clearSubscriptionCache } from '../context/SubscriptionContext';
 import { trackPixelEvent } from '../utils/metaPixel';
+import { getAuthReadyHeaders, isAuthNotReadyError } from '../utils/authReady';
 
 function AnimatedCheckmark() {
   return (
@@ -72,7 +73,11 @@ export default function PaymentSuccess() {
 
   // Fire Meta Pixel `Purchase` once per Stripe Checkout session. Guarded by
   // sessionStorage so a page reload or re-mount does not duplicate the event.
+  // Requires a logged-in session so /api/stripe-session-details can confirm
+  // the Checkout session belongs to this user.
   useEffect(() => {
+    if (authContext?.loading) return;
+
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session_id');
     if (!sessionId) return;
@@ -87,9 +92,10 @@ export default function PaymentSuccess() {
     let cancelled = false;
     (async () => {
       try {
+        const headers = await getAuthReadyHeaders();
         const response = await fetch(
           `/api/stripe-session-details?session_id=${encodeURIComponent(sessionId)}`,
-          { method: 'GET' }
+          { method: 'GET', headers }
         );
         if (!response.ok) return;
 
@@ -114,8 +120,8 @@ export default function PaymentSuccess() {
           // ignore
         }
       } catch (error) {
+        if (isAuthNotReadyError(error)) return;
         if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
           console.warn('[MetaPixel] Failed to load session details for Purchase event:', error);
         }
       }
@@ -124,7 +130,7 @@ export default function PaymentSuccess() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authContext?.loading]);
 
   useEffect(() => {
     if (authContext?.user?.id) {

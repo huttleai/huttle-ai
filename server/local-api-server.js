@@ -10,6 +10,7 @@ import cors from 'cors';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+import { ALLOWED_ORIGINS } from '../api/_utils/cors.js';
 
 // Load environment variables
 dotenv.config();
@@ -38,10 +39,16 @@ const HOST = typeof process.env.LOCAL_API_HOST === 'string' && process.env.LOCAL
 
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, false);
+      return;
+    }
+    callback(null, ALLOWED_ORIGINS.includes(origin));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization']
+  allowedHeaders: ['X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version', 'Authorization', 'x-grok-debug']
 }));
 
 function isStripeWebhookPath(req) {
@@ -273,6 +280,24 @@ async function setupRoutes() {
     console.warn('⚠️  Change subscription plan route skipped:', error.message);
     app.all('/api/change-subscription-plan', (req, res) => {
       res.status(503).json({ error: 'Stripe not configured', details: 'Change subscription plan route unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/stripe-session-details', await loadHandler('api/stripe-session-details.js'));
+  } catch (error) {
+    console.warn('⚠️  stripe-session-details route skipped:', error.message);
+    app.all('/api/stripe-session-details', (req, res) => {
+      res.status(503).json({ error: 'Stripe not configured', details: 'stripe-session-details unavailable locally' });
+    });
+  }
+
+  try {
+    app.all('/api/submit-cancellation-feedback', await loadHandler('api/submit-cancellation-feedback.js'));
+  } catch (error) {
+    console.warn('⚠️  submit-cancellation-feedback route skipped:', error.message);
+    app.all('/api/submit-cancellation-feedback', (req, res) => {
+      res.status(503).json({ error: 'Route unavailable locally' });
     });
   }
   

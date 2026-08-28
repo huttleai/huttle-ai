@@ -16,7 +16,7 @@ function assert(condition, message) {
 const endpoint = read('api/submit-cancellation-feedback.js');
 
 assert(
-  endpoint.includes("import { authenticateBillingRequest } from './_utils/billing.js';"),
+  /import \{[\s\S]*authenticateBillingRequest[\s\S]*\} from '\.\/_utils\/billing\.js';/.test(endpoint),
   'submit-cancellation-feedback must import authenticateBillingRequest'
 );
 assert(
@@ -27,6 +27,10 @@ assert(
 assert(
   endpoint.includes('const userId = authResult.user.id;'),
   'submit-cancellation-feedback must derive user_id from the authenticated token, not the request body'
+);
+assert(
+  endpoint.includes('getMismatchedBodyUserIdError'),
+  'submit-cancellation-feedback must reject a body-supplied user_id that does not match the caller'
 );
 assert(
   endpoint.includes('user_id: userId'),

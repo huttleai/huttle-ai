@@ -24,6 +24,7 @@
     "test:hooks-parser": "node scripts/verify-full-post-hooks-parser.mjs",
     "test:full-post-resilience": "node scripts/verify-full-post-resilience.mjs",
     "test:cancellation-feedback-auth": "node scripts/verify-cancellation-feedback-auth.mjs",
+    "test:access-control-http": "node scripts/verify-access-control-http.mjs",
     "test:stripe-webhook-user-lookup": "node scripts/verify-stripe-webhook-user-lookup.mjs",
     "test:subscription-status-priority": "node scripts/verify-subscription-status-priority.mjs",
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",

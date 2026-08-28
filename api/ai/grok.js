@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { GROK_MODEL } from '../../src/config/grokConfig.js';
@@ -56,13 +57,6 @@ function normalizeMessagesForUpstream(messages) {
     role: m.role,
     content: typeof m.content === 'string' ? m.content : String(m.content ?? ''),
   }));
-}
-
-/** CORS for this route only (Vercel serverless; no reliance on VITE_ env). */
-function setGrokCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-grok-debug');
 }
 
 // Initialize Supabase for auth verification
@@ -271,11 +265,9 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
 }
 
 export default async function handler(req, res) {
-  setGrokCorsHeaders(res);
+  setCorsHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (handlePreflight(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: true, message: 'Method not allowed' });
