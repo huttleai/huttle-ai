@@ -27,6 +27,7 @@ import {
   DASHBOARD_GENERATION_SOURCE,
   getStartOfMonthISO,
 } from './creditConfig.js';
+import { GENERATING_ACCESS_STATUSES } from './subscriptionAccess.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -603,7 +604,7 @@ export async function getUserTier(userId) {
       .from(TABLES.SUBSCRIPTIONS)
       .select('tier, status')
       .eq('user_id', userId)
-      .in('status', ['active', 'trialing', 'past_due'])
+      .in('status', GENERATING_ACCESS_STATUSES)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();

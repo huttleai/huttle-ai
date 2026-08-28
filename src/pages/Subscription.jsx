@@ -89,6 +89,8 @@ export default function Subscription() {
     trialEndsAt,
     trialDaysRemaining,
     isPastDue,
+    isUnpaid,
+    isPaymentRetry,
     isAnnualFounder,
     isCancelScheduled,
     refreshSubscription,
@@ -147,11 +149,13 @@ export default function Subscription() {
     }
   }, [user?.id, refreshSubscription, subscriptionReady, subscriptionLoading]);
 
+  const showBillingManagement = hasPaidAccess || isPaymentRetry;
+
   useEffect(() => {
-    if (user?.id && hasPaidAccess) {
+    if (user?.id && showBillingManagement) {
       void loadBillingDetails();
     }
-  }, [user?.id, hasPaidAccess, loadBillingDetails]);
+  }, [user?.id, showBillingManagement, loadBillingDetails]);
 
   useEffect(() => () => {
     if (checkoutResetTimeoutRef.current) {
@@ -311,14 +315,16 @@ export default function Subscription() {
           </div>
         )}
 
-        {/* Past due banner */}
-        {isPastDue && (
+        {/* Past due / unpaid banner */}
+        {isPaymentRetry && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold text-amber-900">Your payment needs attention</p>
               <p className="text-sm text-amber-800">
-                Your subscription is past due. Update your payment details to keep uninterrupted access.
+                {isUnpaid
+                  ? 'We could not collect this payment. Update your card to restore generating access.'
+                  : 'Your subscription is past due. Update your payment details to keep uninterrupted access.'}
               </p>
             </div>
           </div>
@@ -368,7 +374,7 @@ export default function Subscription() {
               </div>
             </div>
           </div>
-        ) : hasPaidAccess ? (
+        ) : showBillingManagement ? (
           /* ===== PAID USER VIEW ===== */
           <div className="w-full space-y-6 md:space-y-8">
             {/* Degraded banner */}
@@ -440,12 +446,12 @@ export default function Subscription() {
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         isTrialing
                           ? 'bg-cyan-100 text-cyan-700'
-                          : isPastDue
+                          : isPaymentRetry
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-green-100 text-green-700'
                       }`}>
-                        <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPastDue ? 'bg-amber-500' : 'bg-green-500'}`} />
-                        {isTrialing ? 'Trialing' : isPastDue ? 'Past Due' : 'Active'}
+                        <span className={`w-2 h-2 rounded-full ${isTrialing ? 'bg-cyan-500' : isPaymentRetry ? 'bg-amber-500' : 'bg-green-500'}`} />
+                        {isTrialing ? 'Trialing' : isUnpaid ? 'Unpaid' : isPastDue ? 'Past Due' : 'Active'}
                       </span>
                     </div>
 
@@ -557,7 +563,7 @@ export default function Subscription() {
             </div>
           </div>
         ) : (
-          /* ===== FREE/UNPAID USER VIEW (Plan Selection) ===== */
+          /* ===== FREE / LAPSED USER VIEW (Plan Selection) ===== */
           <div className="w-full space-y-10 md:space-y-12">
             {isSubscriptionDegraded && (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">

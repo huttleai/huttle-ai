@@ -11,6 +11,7 @@ import {
 } from '../services/stripeAPI';
 import UpdateCardModal from './UpdateCardModal';
 import { CardNetworkMark } from './CardNetworkMark';
+import { isPaymentRetryStatus } from '../config/subscriptionAccess';
 
 function formatDate(dateValue) {
   if (!dateValue) return '—';
@@ -286,14 +287,14 @@ export default function BillingManagementPanel({
               <span className={`inline-flex items-center gap-1.5 font-semibold capitalize ${
                 currentSubscription?.status === 'active' || currentSubscription?.status === 'trialing'
                   ? 'text-green-600'
-                  : currentSubscription?.status === 'past_due'
+                  : isPaymentRetryStatus(currentSubscription?.status)
                     ? 'text-amber-600'
                     : 'text-gray-500'
               }`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${
                   currentSubscription?.status === 'active' || currentSubscription?.status === 'trialing'
                     ? 'bg-green-500'
-                    : currentSubscription?.status === 'past_due'
+                    : isPaymentRetryStatus(currentSubscription?.status)
                       ? 'bg-amber-500'
                       : 'bg-gray-400'
                 }`} />

@@ -4,11 +4,16 @@
  * Generating access and read-only are driven by subscriptions.status.
  * Trial vs paid is orthogonal to tier: never write a "_trial" suffix into
  * subscriptions.tier (the CHECK constraint rejects it).
+ *
+ * Dunning: keep generating through past_due while Stripe Smart Retry is still
+ * attempting the card. Cut generating access at unpaid or canceled; unpaid
+ * lands in the same read-only lapse UI as canceled/expired, plus the payment
+ * retry banner so the user can update their card.
  */
 
-export const GENERATING_ACCESS_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
+export const GENERATING_ACCESS_STATUSES = ['active', 'trialing', 'past_due'];
 
-export const READ_ONLY_STATUSES = ['cancelled', 'canceled', 'expired', 'incomplete_expired'];
+export const READ_ONLY_STATUSES = ['cancelled', 'canceled', 'expired', 'incomplete_expired', 'unpaid'];
 
 export const PAYMENT_RETRY_STATUSES = ['past_due', 'unpaid'];
 
