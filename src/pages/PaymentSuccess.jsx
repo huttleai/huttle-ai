@@ -122,7 +122,6 @@ export default function PaymentSuccess() {
       } catch (error) {
         if (isAuthNotReadyError(error)) return;
         if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
           console.warn('[MetaPixel] Failed to load session details for Purchase event:', error);
         }
       }

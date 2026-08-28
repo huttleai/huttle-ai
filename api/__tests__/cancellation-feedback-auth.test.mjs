@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import cancellationFeedbackHandler from '../submit-cancellation-feedback.js';
-import { getMismatchedBodyUserIdError } from '../_utils/billing.js';
+import {
+  authenticateBillingRequest,
+  getMismatchedBodyUserIdError,
+} from '../_utils/billing.js';
 
 function createMockRes() {
   const headers = {};
@@ -67,4 +70,23 @@ test('POST /api/submit-cancellation-feedback with empty Authorization returns 40
   const res = createMockRes();
   await cancellationFeedbackHandler(req, res);
   assert.equal(res.statusCode, 401);
+});
+
+test('spoofed body user_id is 403 after a successful token auth', async () => {
+  const supabase = {
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'caller-1' } }, error: null }),
+    },
+  };
+  const auth = await authenticateBillingRequest(
+    { headers: { authorization: 'Bearer valid-token' } },
+    supabase
+  );
+  assert.equal(auth.user.id, 'caller-1');
+  const mismatch = getMismatchedBodyUserIdError(
+    { user_id: 'victim-uuid', reason: 'too_expensive' },
+    auth.user.id
+  );
+  assert.equal(mismatch.statusCode, 403);
+  assert.match(mismatch.error, /does not match/);
 });
