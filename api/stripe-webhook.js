@@ -351,7 +351,7 @@ async function dispatchStripeEvent(event) {
           const subscriptionId = session.subscription;
           const customerEmail = session.customer_email || session.customer_details?.email;
 
-          console.log('[checkout.session.completed] received', {
+          logInfo('stripe_webhook.checkout_session_completed_received', {
             eventId: event.id,
             sessionId: session.id,
             mode: session.mode,
@@ -405,7 +405,7 @@ async function dispatchStripeEvent(event) {
           let userId = session.client_reference_id || session.metadata?.supabase_user_id || null;
           let customerName = session.customer_details?.name || '';
 
-          console.log('[checkout.session.completed] user resolution', {
+          logInfo('stripe_webhook.checkout_session_completed_user_resolution', {
             eventId: event.id,
             sessionId: session.id,
             customerId,
@@ -419,7 +419,7 @@ async function dispatchStripeEvent(event) {
           });
 
           if (!userId && customerEmail) {
-            console.log('[checkout.session.completed] falling back to email lookup', { eventId: event.id, customerEmail });
+            logInfo('stripe_webhook.checkout_session_completed_email_fallback', { eventId: event.id, customerEmail });
             const { userId: matchedUserId, error: userLookupError, exhausted } = await findAuthUserByEmail({
               supabase,
               email: customerEmail,
@@ -432,7 +432,7 @@ async function dispatchStripeEvent(event) {
               logWarn('stripe_webhook.checkout_user_lookup_exhausted', { eventId: event.id, customerId, customerEmail });
             }
             userId = matchedUserId;
-            console.log('[checkout.session.completed] email lookup result', { eventId: event.id, found: Boolean(userId), userId });
+            logInfo('stripe_webhook.checkout_session_completed_email_lookup_result', { eventId: event.id, found: Boolean(userId), userId });
           }
 
           if (!userId) {
@@ -445,7 +445,7 @@ async function dispatchStripeEvent(event) {
           const lastName = nameParts.slice(1).join(' ') || '';
 
           // Backfill the stripe_customer_id on user_profile for future lookups.
-          console.log('[checkout.session.completed] backfilling user_profile', { eventId: event.id, userId, customerId });
+          logInfo('stripe_webhook.checkout_session_completed_profile_backfill', { eventId: event.id, userId, customerId });
           const { error: profileErr } = await supabase.from('user_profile').upsert({
             user_id: userId,
             stripe_customer_id: customerId,
@@ -454,10 +454,10 @@ async function dispatchStripeEvent(event) {
           throwIfError(profileErr, 'user_profile upsert failed');
 
           if (subscriptionId) {
-            console.log('[checkout.session.completed] syncing subscription record', { eventId: event.id, userId, subscriptionId });
+            logInfo('stripe_webhook.checkout_session_completed_subscription_sync_start', { eventId: event.id, userId, subscriptionId });
             const subscription = await stripe.subscriptions.retrieve(subscriptionId);
             const plan = await updateSubscriptionRecord({ userId, customerId, subscription, customerName });
-            console.log('[checkout.session.completed] subscription synced successfully', { eventId: event.id, userId, plan });
+            logInfo('stripe_webhook.checkout_session_completed_subscription_synced', { eventId: event.id, userId, plan });
 
             const { data: userRow, error: userFetchErr } = await supabase
               .from('users')
@@ -505,7 +505,7 @@ async function dispatchStripeEvent(event) {
                     });
 
                     if (emailRes.ok) {
-                      console.log('[checkout.session.completed] secure_account_email sent, setting flag to true', { eventId: event.id, userId });
+                      logInfo('stripe_webhook.secure_account_email_sent', { eventId: event.id, userId });
                       const { error: flagError } = await supabase
                         .from('users')
                         .update({ secure_account_email_sent: true, updated_at: new Date().toISOString() })
@@ -532,7 +532,7 @@ async function dispatchStripeEvent(event) {
               await addToMailchimpByTier(customerEmail, firstName, lastName, plan);
             }
           } else {
-            console.log('[checkout.session.completed] no subscriptionId on session — skipping subscription sync', { eventId: event.id, userId });
+            logInfo('stripe_webhook.checkout_session_completed_no_subscription', { eventId: event.id, userId });
           }
         } catch (err) {
           logError('stripe_webhook.checkout_session_completed_error', { eventId: event.id, error: err.message });

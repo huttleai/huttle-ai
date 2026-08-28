@@ -60,7 +60,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "What platforms does Huttle AI support?",
-    answer: "Huttle AI helps you plan and create content for Instagram, TikTok, X (Twitter), Facebook, and YouTube (LinkedIn coming soon). You choose your active platforms when you set up your personalized Brand Profile."
+    answer: "Huttle AI helps you plan and create content for Instagram, TikTok, X (Twitter), Facebook, and YouTube. You choose your active platforms when you set up your personalized Brand Profile."
   },
   {
     question: "Is my payment secure?",

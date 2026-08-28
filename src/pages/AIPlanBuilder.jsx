@@ -950,8 +950,6 @@ export default function AIPlanBuilder() {
     if (!currentJobId) return;
     const jobId = currentJobId;
 
-    console.log('[PlanBuilder] Creating Realtime channel with jobId:', jobId, typeof jobId);
-
     if (!jobId || typeof jobId !== 'string' || !jobId.includes('-')) {
       console.error('[PlanBuilder] Invalid jobId, skipping Realtime:', jobId);
       return;
@@ -995,7 +993,6 @@ export default function AIPlanBuilder() {
         },
         (payload) => {
           const job = payload.new;
-          console.log('[PlanBuilder] Realtime UPDATE:', job.status, 'progress:', job.progress, JSON.stringify(job));
 
           setJobStatus(job.status);
           latestStatus = job.status;
@@ -1010,11 +1007,7 @@ export default function AIPlanBuilder() {
           }
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[PlanBuilder] Realtime subscribed for job', jobId);
-        }
-      });
+      .subscribe();
 
     // Bounded, capped-exponential polling fallback. Realtime
     // (postgres_changes above) remains the primary path; this only
