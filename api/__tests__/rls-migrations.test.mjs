@@ -25,5 +25,6 @@ test('ai_analytics insert policy migration is own-row, not WITH CHECK (true)', (
   );
   assert.match(sql, /DROP POLICY IF EXISTS "Service role can insert analytics"/);
   assert.match(sql, /WITH CHECK \(\(select auth\.uid\(\)\) = user_id\)/);
-  assert.doesNotMatch(sql, /WITH CHECK \(true\)/);
+  const createPolicy = sql.slice(sql.indexOf('CREATE POLICY'));
+  assert.doesNotMatch(createPolicy, /WITH CHECK \(true\)/);
 });

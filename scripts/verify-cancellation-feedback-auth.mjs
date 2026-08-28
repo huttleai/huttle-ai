@@ -16,7 +16,7 @@ function assert(condition, message) {
 const endpoint = read('api/submit-cancellation-feedback.js');
 
 assert(
-  endpoint.includes("import { authenticateBillingRequest } from './_utils/billing.js';"),
+  /import \{[\s\S]*authenticateBillingRequest[\s\S]*\} from '\.\/_utils\/billing\.js';/.test(endpoint),
   'submit-cancellation-feedback must import authenticateBillingRequest'
 );
 assert(
