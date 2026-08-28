@@ -73,6 +73,36 @@ export function getPriceIdForPlan({ planId, billingCycle = 'monthly' }) {
   return priceMap[normalizedPlanId]?.[billingCycle] || null;
 }
 
+/**
+ * Price IDs that may be purchased through Checkout. Founders/Builders annual
+ * prices stay in getPlanFromPriceId / getPriceIdForPlan so existing members
+ * still resolve, but they must not be sold as new Checkout sessions.
+ */
+const PURCHASABLE_CHECKOUT_PRICE_ENV_KEYS = [
+  ['STRIPE_PRICE_ESSENTIALS_MONTHLY', 'VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY'],
+  ['STRIPE_PRICE_ESSENTIALS_ANNUAL', 'VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL'],
+  ['STRIPE_PRICE_PRO_MONTHLY', 'VITE_STRIPE_PRICE_PRO_MONTHLY'],
+  ['STRIPE_PRICE_PRO_ANNUAL', 'VITE_STRIPE_PRICE_PRO_ANNUAL'],
+];
+
+export function getPurchasableCheckoutPriceIds() {
+  const ids = new Set();
+  for (const keys of PURCHASABLE_CHECKOUT_PRICE_ENV_KEYS) {
+    for (const key of keys) {
+      const value = process.env[key];
+      if (typeof value === 'string' && value.trim()) {
+        ids.add(value.trim());
+      }
+    }
+  }
+  return ids;
+}
+
+export function isPurchasableCheckoutPriceId(priceId) {
+  if (!priceId || typeof priceId !== 'string') return false;
+  return getPurchasableCheckoutPriceIds().has(priceId.trim());
+}
+
 export function resolvePlanId({ planId, metadataPlanId, priceId }) {
   const normalizedPlanId = normalizePlanId(planId || metadataPlanId);
   if (normalizedPlanId) {

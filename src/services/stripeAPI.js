@@ -128,6 +128,16 @@ export function openStripeCheckoutTab() {
   return w;
 }
 
+export function closeCheckoutTab(targetWindow) {
+  if (targetWindow && !targetWindow.closed) {
+    try {
+      targetWindow.close();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export const SUBSCRIPTION_PLANS = {
   ESSENTIALS: {
     id: 'essentials',
@@ -151,7 +161,7 @@ export const SUBSCRIPTION_PLANS = {
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 39,
-    annualPrice: 397.8,
+    annualPrice: 398,
     priceId: import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY || '',
     annualPriceId: import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || '',
     features: {
@@ -211,6 +221,10 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       throw new Error('Invalid plan selected');
     }
 
+    if (plan.id === 'founder' || plan.id === 'builder') {
+      throw new Error('This plan is not available for new purchases. Choose Essentials or Pro.');
+    }
+
     // Price IDs: Essentials/Pro use VITE_STRIPE_PRICE_*_MONTHLY + _ANNUAL; Founders Club is annual-only
     // (priceId null, annualPriceId from VITE_STRIPE_PRICE_FOUNDER_ANNUAL). Never send monthly for those.
     const monthlyPriceMissing =
@@ -222,9 +236,11 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
     // Demo mode: Simulate checkout when this plan has no price ID, or when
     // Essentials/Pro are unset (app-wide demo). Founders Club only needs its own annual price.
     if (!priceId) {
+      closeCheckoutTab(targetWindow);
       return simulateDemoCheckout(planId);
     }
-    if (planId !== 'founder' && isDemoMode()) {
+    if (isDemoMode()) {
+      closeCheckoutTab(targetWindow);
       return simulateDemoCheckout(planId);
     }
 
@@ -301,10 +317,16 @@ export async function createCheckoutSession(planId, billingCycle = 'monthly', op
       openedInNewTab: Boolean(targetWindow),
     };
   } catch (error) {
+    closeCheckoutTab(targetWindow);
+    const needsAuth = isAuthNotReadyError(error);
+    const message = needsAuth
+      ? 'Sign in to start your trial.'
+      : (error.message || 'Could not start checkout. Please try again.');
     console.error('Stripe Checkout Error:', error.message);
     return {
       success: false,
-      error: error.message
+      needsAuth,
+      error: message,
     };
   }
 }

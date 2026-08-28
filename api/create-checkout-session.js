@@ -12,7 +12,10 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { isLaunchPlan } from './_utils/stripePlans.js';
+import {
+  getPurchasableCheckoutPriceIds,
+  isPurchasableCheckoutPriceId,
+} from './_utils/stripePlans.js';
 import { authenticateBillingRequest } from './_utils/billing.js';
 
 // Validate Stripe key exists
@@ -54,6 +57,20 @@ export default async function handler(req, res) {
 
     if (!priceId) {
       return res.status(400).json({ error: 'Price ID is required' });
+    }
+
+    const purchasablePriceIds = getPurchasableCheckoutPriceIds();
+    if (purchasablePriceIds.size === 0) {
+      console.error('[create-checkout-session] No purchasable Essentials/Pro Stripe price IDs configured');
+      return res.status(500).json({
+        error: 'Payment service not configured',
+      });
+    }
+
+    if (!isPurchasableCheckoutPriceId(priceId)) {
+      return res.status(400).json({
+        error: 'This plan is not available for new purchases. Choose Essentials or Pro.',
+      });
     }
 
     // Get the app URL for redirects - REQUIRED in production
@@ -137,15 +154,11 @@ export default async function handler(req, res) {
       console.warn('[create-checkout-session] customer resolve error:', lookupErr.message);
     }
 
-    const isLaunchPricingPlan = isLaunchPlan({ planId, priceId });
-    const isAnnualBilling = billingCycle === 'annual';
-
     const tierMetadataMap = {
       [process.env.STRIPE_PRICE_ESSENTIALS_MONTHLY || process.env.VITE_STRIPE_PRICE_ESSENTIALS_MONTHLY]: { tier: 'Essentials',    billingCycle: 'Monthly' },
       [process.env.STRIPE_PRICE_ESSENTIALS_ANNUAL  || process.env.VITE_STRIPE_PRICE_ESSENTIALS_ANNUAL]:  { tier: 'Essentials',    billingCycle: 'Annual'  },
       [process.env.STRIPE_PRICE_PRO_MONTHLY        || process.env.VITE_STRIPE_PRICE_PRO_MONTHLY]:        { tier: 'Pro',           billingCycle: 'Monthly' },
       [process.env.STRIPE_PRICE_PRO_ANNUAL         || process.env.VITE_STRIPE_PRICE_PRO_ANNUAL]:         { tier: 'Pro',           billingCycle: 'Annual'  },
-      [process.env.STRIPE_PRICE_FOUNDER_ANNUAL     || process.env.VITE_STRIPE_PRICE_FOUNDER_ANNUAL]:     { tier: 'Founders Club',  billingCycle: 'Annual'  },
     };
     const tierInfo = tierMetadataMap[priceId] ?? { tier: 'Unknown', billingCycle: 'Unknown' };
 
@@ -153,22 +166,18 @@ export default async function handler(req, res) {
       planId,
       billingCycle,
       ...tierInfo,
-      source: planId === 'founder' ? 'founders_club' : 'app_checkout',
+      source: 'app_checkout',
       ...(userId && { supabase_user_id: userId }),
     };
 
     const subscriptionData = {
       metadata: baseMetadata,
-      ...(!isLaunchPricingPlan && !isAnnualBilling
-        ? {
-            trial_period_days: 7,
-            trial_settings: {
-              end_behavior: {
-                missing_payment_method: 'cancel',
-              },
-            },
-          }
-        : {}),
+      trial_period_days: 7,
+      trial_settings: {
+        end_behavior: {
+          missing_payment_method: 'cancel',
+        },
+      },
     };
 
     // Create checkout session options
@@ -177,8 +186,9 @@ export default async function handler(req, res) {
       // Binds the authenticated Supabase user UUID to the Stripe session at
       // the platform level — more reliable than metadata for webhook user resolution.
       client_reference_id: userId,
-      payment_method_types: ['card'],
-      payment_method_collection: 'always',
+      // Omit payment_method_types so Stripe can use Dashboard-configured methods.
+      // if_required + a trial lets Checkout skip the card form.
+      payment_method_collection: 'if_required',
       line_items: [
         {
           price: priceId,
@@ -200,13 +210,7 @@ export default async function handler(req, res) {
       // Custom text for the checkout page
       custom_text: {
         submit: {
-          message: isLaunchPricingPlan
-            ? planId === 'founder'
-              ? 'Welcome to Founders Club. Your membership will be activated immediately after payment.'
-              : 'Your legacy annual membership will be activated immediately after payment.'
-            : isAnnualBilling
-              ? 'Your annual subscription will begin immediately after payment.'
-              : 'Start your 7-day free trial today. Your card is required to begin, but you will not be charged until your trial ends.',
+          message: 'Start your 7-day free trial. No credit card required. You will not be charged unless you add a payment method and stay after the trial.',
         },
       },
     };
