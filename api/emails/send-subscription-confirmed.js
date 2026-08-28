@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -7,9 +8,9 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  * Each tier has its own Resend template with plan-specific copy.
  */
 const TEMPLATE_BY_TIER = {
-  essentials: 'subscription-confirmed-essentials',
-  pro: 'subscription-confirmed-pro',
-  builder: 'subscription-confirmed-builders',
+  essentials: EMAIL_TEMPLATE_IDS.subscriptionConfirmedEssentials,
+  pro: EMAIL_TEMPLATE_IDS.subscriptionConfirmedPro,
+  builder: EMAIL_TEMPLATE_IDS.subscriptionConfirmedBuilders,
 };
 
 const SUBJECT_BY_TIER = {

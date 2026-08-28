@@ -301,6 +301,19 @@ async function setupRoutes() {
     });
   }
   
+  try {
+    app.all('/api/emails/send-usage-alert-trigger', await loadHandler('api/emails/send-usage-alert-trigger.js'));
+    app.all('/api/emails/send-welcome-trigger', await loadHandler('api/emails/send-welcome-trigger.js'));
+  } catch (error) {
+    console.warn('⚠️  Transactional email trigger routes skipped:', error.message);
+    app.all('/api/emails/send-usage-alert-trigger', (req, res) => {
+      res.status(503).json({ error: 'Email trigger unavailable locally', details: error.message });
+    });
+    app.all('/api/emails/send-welcome-trigger', (req, res) => {
+      res.status(503).json({ error: 'Email trigger unavailable locally', details: error.message });
+    });
+  }
+
   // Health check
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Local API server is running' });

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -20,7 +21,7 @@ export async function sendTrialStartedEmail({ email, firstName, planName, trialE
     from: 'Huttle AI <hello@huttleai.com>',
     to: email,
     subject: 'Your 7-day trial is live',
-    template_id: 'trial-started',
+    template_id: EMAIL_TEMPLATE_IDS.trialStarted,
     variables: [
       {
         email,
