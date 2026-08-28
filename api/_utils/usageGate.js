@@ -188,6 +188,84 @@ export async function assertCanGenerate(supabase, { userId, featureKey = null, s
   return { ok: true, subscription, isTrialing: trialing };
 }
 
+/**
+ * Build the user_activity rows for a reserved feature run.
+ * One run-counter row plus one aiGenerations row per credit, matching
+ * plan-builder-proxy and useAIUsage.trackFeatureUsage.
+ */
+export function buildFeatureUsageReservationRows({
+  userId,
+  featureKey,
+  metadata = {},
+  reservationSource,
+  reservationKey,
+}) {
+  const creditCost = getFeatureCreditCost(featureKey);
+  const timestamp = new Date().toISOString();
+  const commonMetadata = {
+    ...metadata,
+    reservation_key: reservationKey,
+    reservation_source: reservationSource,
+  };
+
+  return [
+    {
+      user_id: userId,
+      feature: featureKey,
+      metadata: {
+        ...commonMetadata,
+        type: 'run_counter',
+        reservation_index: 'run',
+      },
+      created_at: timestamp,
+    },
+    ...Array.from({ length: creditCost }, (_, creditIndex) => ({
+      user_id: userId,
+      feature: 'aiGenerations',
+      metadata: {
+        ...commonMetadata,
+        sourceFeature: featureKey,
+        creditIndex,
+        overallCredits: creditCost,
+        reservation_index: `credit:${creditIndex}`,
+      },
+      created_at: timestamp,
+    })),
+  ];
+}
+
+/**
+ * Reserve a feature run + credit-pool rows before expensive work starts.
+ * PostgreSQL commits every row in this insert together or rolls them all back.
+ *
+ * @returns {Promise<{ creditCost: number, rowsWritten: number }>}
+ */
+export async function reserveFeatureUsage(supabase, options) {
+  const { userId, featureKey } = options || {};
+  if (!userId || !featureKey) {
+    throw new Error('userId and featureKey are required to reserve usage');
+  }
+
+  const rows = buildFeatureUsageReservationRows(options);
+  const { error } = await supabase.from('user_activity').insert(rows);
+  if (error) throw error;
+
+  return {
+    creditCost: getFeatureCreditCost(featureKey),
+    rowsWritten: rows.length,
+  };
+}
+
+/** Client-visible usage-gate codes that must not fall back to a second AI path. */
+export const USAGE_GATE_NO_FALLBACK_CODES = new Set([
+  'unauthenticated',
+  'read_only',
+  'subscription_required',
+  'tier_restricted',
+  'run_cap',
+  'pool_exhausted',
+]);
+
 export function sendUsageGateRejection(res, gateResult, { grokStyle = false } = {}) {
   if (grokStyle) {
     return res.status(gateResult.statusCode).json({

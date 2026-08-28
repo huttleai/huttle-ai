@@ -82,6 +82,41 @@ const BRIEF_REQUEST_TIMEOUT_MS = 130000;
 
 const BRIEF_TIMEOUT_MESSAGE = 'Generation timed out. Please try again.';
 
+const USAGE_GATE_NO_FALLBACK_CODES = new Set([
+  'unauthenticated',
+  'read_only',
+  'subscription_required',
+  'tier_restricted',
+  'run_cap',
+  'pool_exhausted',
+]);
+
+function parseIgniteProxyError(status, errorText) {
+  let parsed = null;
+  if (errorText) {
+    try {
+      parsed = JSON.parse(errorText);
+    } catch {
+      parsed = null;
+    }
+  }
+  const errorCode = typeof parsed?.error === 'string' ? parsed.error : null;
+  const isUsageGate =
+    status === 401 ||
+    status === 403 ||
+    status === 429 ||
+    USAGE_GATE_NO_FALLBACK_CODES.has(errorCode);
+
+  return {
+    creditsReserved: Boolean(parsed?.creditsReserved),
+    message:
+      typeof parsed?.message === 'string' && parsed.message.trim()
+        ? parsed.message
+        : null,
+    isUsageGate,
+  };
+}
+
 const PLATFORMS = [
   {
     id: 'TikTok',
@@ -328,9 +363,16 @@ export default function IgniteEngine() {
     setBriefGenerationError('');
     briefChargedRef.current = false;
 
-    // Credits are only charged once a usable brief is confirmed (primary n8n
-    // path or Grok fallback) — a failed run must never cost the user usage.
-    // overallCredits auto-derived from FEATURE_CREDIT_COSTS.igniteEngine (3).
+    // The proxy reserves the run + credit pool before forwarding to n8n.
+    // Refresh the meter from those server rows; do not write a second set.
+    // Grok fallback only writes client-side rows when the proxy never reserved
+    // (e.g. the proxy was unreachable).
+    const markChargedFromServer = async () => {
+      if (briefChargedRef.current) return;
+      briefChargedRef.current = true;
+      await blueprintUsage.refreshUsage();
+    };
+
     const chargeOnceIfNeeded = async () => {
       if (briefChargedRef.current) return true;
       const usage = await blueprintUsage.trackFeatureUsage({
@@ -436,8 +478,21 @@ export default function IgniteEngine() {
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.error('[IgniteEngine] HTTP Error:', response.status, errorText);
+        const parsedErr = parseIgniteProxyError(response.status, errorText);
+        if (parsedErr.creditsReserved) {
+          await markChargedFromServer();
+        }
+        if (parsedErr.isUsageGate) {
+          const gateError = new Error(
+            parsedErr.message || "You've reached your monthly brief limit."
+          );
+          gateError.code = 'USAGE_GATE';
+          throw gateError;
+        }
         throw new Error(`HTTP_ERROR: ${response.status}`);
       }
+
+      await markChargedFromServer();
 
       const rawText = await response.text();
       let responseData = parseJsonLenient(rawText);
@@ -472,12 +527,6 @@ export default function IgniteEngine() {
         throw new Error('INVALID_BRIEF_STRUCTURE');
       }
 
-      const charged = await chargeOnceIfNeeded();
-      if (!charged) {
-        setBriefGenerationError("You've reached your monthly brief limit.");
-        return;
-      }
-
       setGeneratedBrief(normalized);
       setGeneratedForPlatform(selectedPlatform);
       setGeneratedForPostType(selectedPostType);
@@ -495,28 +544,33 @@ export default function IgniteEngine() {
       console.error('[IgniteEngine] Generation error:', error);
 
       const isParseFailure = error.message === 'INVALID_JSON' || error.message === 'INVALID_BRIEF_STRUCTURE';
+      const isUsageGate = error.code === 'USAGE_GATE';
       if (isParseFailure) {
         setParseError(true);
         setCurrentView('results');
+      } else if (isUsageGate) {
+        setBriefGenerationError(error.message);
       } else {
         setBriefGenerationError('Generation failed. Please try again.');
       }
 
       let msg = "We're having trouble generating your brief. Please try again in a moment.";
-      if (error.message === BRIEF_TIMEOUT_MESSAGE) {
+      if (isUsageGate) {
+        msg = error.message;
+      } else if (error.message === BRIEF_TIMEOUT_MESSAGE) {
         msg = BRIEF_TIMEOUT_MESSAGE;
         setBriefGenerationError(msg);
       } else if (error.message.startsWith('HTTP_ERROR')) {
         msg = 'We received an unexpected response. Please try again.';
       }
 
-      const canAttemptFallback = Boolean(topic.trim()) && !isParseFailure;
+      const canAttemptFallback = Boolean(topic.trim()) && !isParseFailure && !isUsageGate;
 
       // Hold the failure toast until the fallback has had its turn. Firing it
       // first showed an error followed seconds later by a success toast for the
       // same run, which reads as though something broke when it recovered.
       if (!canAttemptFallback) {
-        showToast(msg, 'error');
+        showToast(msg, isUsageGate ? 'warning' : 'error');
         return;
       }
 

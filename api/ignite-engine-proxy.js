@@ -2,21 +2,26 @@
  * Ignite Engine Webhook Proxy
  *
  * Serverless function that proxies Ignite Engine requests to n8n webhook.
+ * Auth, then credit/tier gate + reservation, then forward. Provider API keys
+ * stay in n8n credentials — this proxy never forwards GROK_API_KEY.
  *
  * Environment Variables Required:
  * - N8N_IGNITE_ENGINE_WEBHOOK: n8n webhook endpoint for Ignite Engine
- * - GROK_API_KEY: server-side Grok key forwarded to the workflow when needed
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
 import { logInfo, logError } from './_utils/observability.js';
+import { assertCanGenerate, sendUsageGateRejection, reserveFeatureUsage } from './_utils/usageGate.js';
 import { buildIgniteN8nPayload } from '../src/utils/igniteEngineN8nPayload.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_IGNITE_ENGINE_WEBHOOK ||
   process.env.VITE_N8N_IGNITE_ENGINE_WEBHOOK;
-const GROK_API_KEY = process.env.GROK_API_KEY;
+
+const IGNITE_FEATURE_KEY = 'igniteEngine';
+const RESERVATION_SOURCE = 'ignite-engine-proxy';
+const PROVIDER_SECRET_KEYS = ['grokApiKey', 'GROK_API_KEY', 'grok_api_key'];
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -43,6 +48,19 @@ function normalizeWebhookPlatform(raw) {
   if (ALLOWED_PLATFORMS.has(s)) return s;
   const alias = PLATFORM_ALIASES[String(s).toLowerCase()];
   return alias && ALLOWED_PLATFORMS.has(alias) ? alias : null;
+}
+
+/**
+ * Drop provider secrets the client (or a scripted caller) might have stuffed
+ * into the webhook body. n8n must use its own credential store.
+ */
+export function stripIgniteProviderSecrets(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const next = { ...payload };
+  for (const key of PROVIDER_SECRET_KEYS) {
+    delete next[key];
+  }
+  return next;
 }
 
 function parseRequestBody(req) {
@@ -117,6 +135,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Service not configured. Please try again later.', requestId });
   }
 
+  let creditsReserved = false;
+
   try {
     const rawBody = parseRequestBody(req);
     const { topic, platform } = rawBody;
@@ -129,10 +149,39 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported platform value', requestId });
     }
 
-    const mergedIn = { ...rawBody, platform: canonicalPlatform };
+    const usageGate = await assertCanGenerate(supabase, {
+      userId: user.id,
+      featureKey: IGNITE_FEATURE_KEY,
+    });
+    if (!usageGate.ok) {
+      return sendUsageGateRejection(res, usageGate);
+    }
+
+    try {
+      await reserveFeatureUsage(supabase, {
+        userId: user.id,
+        featureKey: IGNITE_FEATURE_KEY,
+        reservationSource: RESERVATION_SOURCE,
+        reservationKey: requestId,
+        metadata: {
+          platform: canonicalPlatform,
+          topic: String(topic).slice(0, 200),
+        },
+      });
+      creditsReserved = true;
+    } catch (reservationError) {
+      logError('ignite_proxy.usage_reservation_failed', {
+        requestId,
+        userId: user.id,
+        message: reservationError.message,
+        code: reservationError.code,
+      });
+      return res.status(500).json({ error: 'Failed to reserve usage', requestId });
+    }
+
+    const mergedIn = stripIgniteProviderSecrets({ ...rawBody, platform: canonicalPlatform });
     const canonical = buildIgniteN8nPayload(mergedIn);
-    const n8nPayload = { ...mergedIn, ...canonical };
-    if (GROK_API_KEY) n8nPayload.grokApiKey = GROK_API_KEY;
+    const n8nPayload = stripIgniteProviderSecrets({ ...mergedIn, ...canonical });
 
     logInfo('ignite_proxy.n8n_outbound', {
       requestId,
@@ -185,6 +234,7 @@ export default async function handler(req, res) {
       return res.status(response.status).json({
         error: `n8n webhook error: ${response.status} ${response.statusText}`,
         details: errorText.substring(0, 200),
+        creditsReserved: true,
         requestId,
       });
     }
@@ -197,15 +247,16 @@ export default async function handler(req, res) {
       logError('ignite_proxy.n8n_empty_blueprint', { requestId });
       return res.status(502).json({
         error: 'n8n response missing blueprint content.',
+        creditsReserved: true,
         requestId,
       });
     }
 
     if (data && typeof data === 'object') {
-      return res.status(200).json({ ...data, requestId });
+      return res.status(200).json({ ...data, creditsReserved: true, requestId });
     }
 
-    return res.status(200).json({ content: rawResponse, requestId });
+    return res.status(200).json({ content: rawResponse, creditsReserved: true, requestId });
   } catch (error) {
     logError('ignite_proxy.handler_error', {
       requestId,
@@ -215,15 +266,25 @@ export default async function handler(req, res) {
     });
 
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      return res
-        .status(504)
-        .json({ error: 'Request timeout: n8n workflow took longer than 120 seconds', requestId });
+      return res.status(504).json({
+        error: 'Request timeout: n8n workflow took longer than 120 seconds',
+        ...(creditsReserved ? { creditsReserved: true } : {}),
+        requestId,
+      });
     }
 
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
-      return res.status(502).json({ error: 'Unable to reach n8n webhook.', requestId });
+      return res.status(502).json({
+        error: 'Unable to reach n8n webhook.',
+        ...(creditsReserved ? { creditsReserved: true } : {}),
+        requestId,
+      });
     }
 
-    return res.status(500).json({ error: 'An unexpected error occurred. Please try again.', requestId });
+    return res.status(500).json({
+      error: 'An unexpected error occurred. Please try again.',
+      ...(creditsReserved ? { creditsReserved: true } : {}),
+      requestId,
+    });
   }
 }
