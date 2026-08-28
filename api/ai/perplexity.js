@@ -377,7 +377,6 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
       return;
     }
 
-    console.log('[Cache Write SUCCESS]', cacheConfig.key);
     return;
   }
 
@@ -402,15 +401,12 @@ async function setCachedPerplexityResult(cacheConfig, cachePayload, cacheAccess)
         return;
       }
 
-      console.log('[Cache Write SUCCESS]', cacheConfig.key);
       return;
     }
 
     console.error('[Cache Write FAILED]', error.message, cacheConfig.key);
     return;
   }
-
-  console.log('[Cache Write SUCCESS]', cacheConfig.key);
 }
 
 function toTitleCase(value) {
@@ -773,20 +769,11 @@ export default async function handler(req, res) {
       });
     }
 
-    if (cache?.key) {
-      console.log(`[Cache MISS] Fresh Perplexity fetch:
-  niche: ${cache.niche || 'small business'}
-  platform: ${cache.platform || 'instagram'}
-  city: ${cache.city || 'global'}
-  type: ${cache.type || 'trending'}`);
-    }
-
     // Forward request to Perplexity API
-    devAiProxyLog('perplexity → Perplexity request', { model: safeModel, messageCount: normalizedMessages.length });
-
-    console.log('[Perplexity] Request', {
-      feature: featureKey,
+    devAiProxyLog('perplexity → Perplexity request', {
       model: safeModel,
+      messageCount: normalizedMessages.length,
+      feature: featureKey,
       niche: cache?.niche,
       platform: cache?.platform,
     });
@@ -818,7 +805,6 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[PERPLEXITY UPSTREAM RAW]', response.status, errorText); // TODO: remove after QA
       logError('perplexity.upstream_error', { status: response.status, errorText });
 
       if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')) {
@@ -835,8 +821,10 @@ export default async function handler(req, res) {
     try {
       data = rawSuccessBody ? JSON.parse(rawSuccessBody) : {};
     } catch (parseErr) {
-      console.error('[PERPLEXITY UPSTREAM RAW]', 'non-json-200', rawSuccessBody?.slice?.(0, 800)); // TODO: remove after QA
-      logError('perplexity.upstream_non_json', { message: parseErr?.message });
+      logError('perplexity.upstream_non_json', {
+        message: parseErr?.message,
+        rawBodySnippet: rawSuccessBody?.slice?.(0, 800),
+      });
       if (!requireRealtime && cache?.key && (cache?.type === 'trending' || cache?.type === 'hashtags' || cache?.type === 'trending_hashtags_widget')) {
         return respondWithDashboardFallback(res, cache, 'non-json');
       }
@@ -844,10 +832,7 @@ export default async function handler(req, res) {
     }
 
     const content = data.choices?.[0]?.message?.content || '';
-    console.log('[Perplexity] Response status', {
-      status: response.status,
-      contentLength: content.length,
-    });
+    devAiProxyLog('perplexity ← Perplexity content', { status: response.status, contentLength: content.length });
 
     let structuredData = null;
     if (cache?.key && isDashboardTrendingWidgetCache(req.body)) {

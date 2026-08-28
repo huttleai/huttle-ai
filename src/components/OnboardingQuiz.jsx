@@ -320,8 +320,6 @@ export default function OnboardingQuiz({ onComplete }) {
           .eq('id', user.id);
         if (onboardingFlagError) {
           console.error('[Onboarding] Failed to set onboarding_completed on users table:', onboardingFlagError);
-        } else {
-          console.log('[Onboarding] onboarding_completed = true written to users for:', user.id);
         }
       } catch (flagErr) {
         console.error('[Onboarding] Error writing onboarding_completed flag:', flagErr);

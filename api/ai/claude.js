@@ -163,7 +163,6 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[CLAUDE UPSTREAM RAW]', response.status, errorText); // TODO: remove after QA
       logError('claude.upstream_error', { status: response.status, errorText });
       return res.status(response.status).json({ 
         error: 'AI service error. Please try again.' 

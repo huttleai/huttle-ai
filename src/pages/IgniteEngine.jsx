@@ -418,14 +418,6 @@ export default function IgniteEngine() {
           'Return hashtags ONLY in the `hashtags` field. Do NOT include any hashtags (words beginning with #) anywhere in the caption, body, script, hook, or any other text field. All hashtags must be separated into the dedicated hashtags array/field exclusively.',
       });
 
-      console.log('[IgniteEngine] n8n outbound', {
-        platform: briefContext.platform,
-        user_type: briefContext.user_type,
-        profile_type: briefContext.profile_type,
-        topicLen: String(briefContext.topic || '').length,
-        keys: Object.keys(briefContext).sort(),
-      });
-
       // Fail closed: never POST to the n8n webhook without a real Bearer token.
       const postBriefRequest = async (accessToken) => {
         const controller = new AbortController();
@@ -511,11 +503,6 @@ export default function IgniteEngine() {
       }
 
       const normalized = normalizeN8nResponse(responseData);
-      console.log('[IgniteEngine] n8n inbound', {
-        hasHook: Boolean(normalized?.hook?.trim?.()),
-        hasScript: Boolean(normalized?.script?.trim?.()),
-        hasCaption: Boolean(normalized?.caption?.trim?.()),
-      });
       const hasBriefBody = normalized && (
         (normalized.hook && normalized.hook.trim())
         || (normalized.script && normalized.script.trim())

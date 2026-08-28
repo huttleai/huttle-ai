@@ -230,7 +230,6 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
       return;
     }
 
-    console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
     return;
   }
 
@@ -253,15 +252,12 @@ async function setCachedGrokResult(cacheConfig, cachePayload, cacheAccess) {
         return;
       }
 
-      console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
       return;
     }
 
     console.error('[Grok Cache Write FAILED]', error.message, cacheConfig.key);
     return;
   }
-
-  console.log('[Grok Cache Write SUCCESS]', cacheConfig.key);
 }
 
 export default async function handler(req, res) {
@@ -473,7 +469,6 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const lastErrorText = await response.text();
-      console.error('[GROK UPSTREAM RAW]', response.status, lastErrorText); // TODO: remove after QA
 
       if (fpbGrokHookDevLogEnabled && isFpbGrokHookRequest && response.status >= 400) {
         console.error(

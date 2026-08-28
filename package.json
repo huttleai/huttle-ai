@@ -33,25 +33,20 @@
     "qa:reliability": "node scripts/reliability-qa.mjs"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
-    "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@stripe/react-stripe-js": "^6.0.0",
     "@stripe/stripe-js": "^9.0.0",
     "@supabase/supabase-js": "^2.78.0",
     "browser-image-compression": "^2.0.2",
     "canvas-confetti": "^1.9.4",
-    "clsx": "^2.1.1",
     "framer-motion": "^12.24.0",
     "lucide-react": "^0.548.0",
-    "qrcode.react": "^4.2.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.2",
     "remark-gfm": "^4.0.1",
     "resend": "^6.9.3",
-    "stripe": "^20.1.2",
-    "tailwind-merge": "^3.4.0"
+    "stripe": "^20.1.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
