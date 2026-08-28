@@ -32,6 +32,7 @@ import {
   isTrialingStatus,
   READ_ONLY_GENERATE_MESSAGE,
 } from '../src/config/subscriptionAccess.js';
+import { maybeSendUsageThresholdEmails } from './emails/usageThresholdAlerts.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -213,6 +214,10 @@ async function reservePlanBuilderUsage({
   // every reservation row together or rolls the entire statement back.
   const { error } = await supabase.from('user_activity').insert(rows);
   if (error) throw error;
+
+  await maybeSendUsageThresholdEmails(supabase, { userId }).catch((alertError) => {
+    console.error('Usage threshold email failed after Plan Builder reservation:', alertError);
+  });
 }
 
 /**

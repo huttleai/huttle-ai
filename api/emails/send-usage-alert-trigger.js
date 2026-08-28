@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { authenticateBillingRequest } from '../_utils/billing.js';
-import { sendUsageAlert100Email } from './send-usage-alert.js';
+import { sendUsageAlertForThreshold } from './usageThresholdAlerts.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,85 +39,20 @@ export default async function handler(req, res) {
   const userId = authResult.user.id;
 
   try {
-    // ── Idempotency check ──────────────────────────────────────────────────
-    // Only send once per billing cycle (calendar month).
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const result = await sendUsageAlertForThreshold(supabase, {
+      userId,
+      threshold: 100,
+    });
 
-    const { count: alreadySent } = await supabase
-      .from('user_activity')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('feature', 'usageAlert100')
-      .gte('created_at', startOfMonth.toISOString());
-
-    if (alreadySent > 0) {
-      return res.status(200).json({ skipped: true, reason: 'already_sent_this_cycle' });
-    }
-
-    // ── Fetch user data for the email ──────────────────────────────────────
-    const { data: profile } = await supabase
-      .from('user_profile')
-      .select('first_name, stripe_customer_id')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const email = authUser?.user?.email;
-
-    if (!email) {
+    if (result.skipped && result.reason === 'missing_email') {
       return res.status(404).json({ error: 'User email not found' });
     }
 
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('tier, current_period_end')
-      .eq('user_id', userId)
-      .maybeSingle();
+    if (result.sent) {
+      return res.status(200).json({ sent: true });
+    }
 
-    // ── Build template variables ───────────────────────────────────────────
-    const TIER_LABELS = {
-      pro: 'Pro',
-      essentials: 'Essentials',
-      builder: 'Legacy Annual',
-      founder: 'Founders Club',
-      free: 'Free',
-    };
-
-    const planName = TIER_LABELS[subscription?.tier] || 'Pro';
-
-    // Credit reset date = start of next calendar month
-    const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const creditResetDate = nextMonth.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-
-    const daysUntilReset = Math.ceil(
-      (nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    // ── Send the email ─────────────────────────────────────────────────────
-    await sendUsageAlert100Email({
-      email,
-      firstName: profile?.first_name || '',
-      planName,
-      creditResetDate,
-      daysUntilReset,
-    });
-
-    // ── Mark as sent so we don't fire again this cycle ────────────────────
-    await supabase.from('user_activity').insert({
-      user_id: userId,
-      feature: 'usageAlert100',
-      metadata: { planName, creditResetDate, daysUntilReset },
-      created_at: new Date().toISOString(),
-    });
-
-    return res.status(200).json({ sent: true });
+    return res.status(200).json({ skipped: true, reason: result.reason || 'skipped' });
   } catch (err) {
     console.error('Usage alert trigger failed:', err);
     return res.status(500).json({ error: err.message });

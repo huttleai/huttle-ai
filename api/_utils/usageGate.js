@@ -17,6 +17,7 @@ import {
   isTrialingStatus,
   READ_ONLY_GENERATE_MESSAGE,
 } from '../../src/config/subscriptionAccess.js';
+import { maybeSendUsageThresholdEmails } from '../emails/usageThresholdAlerts.js';
 
 function getStartOfMonthISO() {
   const date = new Date();
@@ -302,6 +303,10 @@ export async function reserveFeatureUsage(supabase, options) {
   const { error } = await supabase.from('user_activity').insert(rows);
   if (error) throw error;
 
+  await maybeSendUsageThresholdEmails(supabase, { userId }).catch((alertError) => {
+    console.error('Usage threshold email failed after reservation:', alertError);
+  });
+
   return {
     creditCost: getFeatureCreditCost(featureKey),
     rowsWritten: rows.length,
@@ -393,5 +398,10 @@ export async function recordGenerationUsage(supabase, {
   if (error) {
     return { ok: false, creditsLogged: 0, error: error.message };
   }
+
+  await maybeSendUsageThresholdEmails(supabase, { userId, subscription }).catch((alertError) => {
+    console.error('Usage threshold email failed after usage record:', alertError);
+  });
+
   return { ok: true, creditsLogged: creditsRequired };
 }
