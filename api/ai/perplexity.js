@@ -20,7 +20,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { getGrokParams } from '../../src/config/grokConfig.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
   typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
@@ -616,41 +616,9 @@ export default async function handler(req, res) {
     const requestedCache = req.body?.cache;
     const requireRealtime = Boolean(req.body?.requireRealtime);
 
-    // If Perplexity key is missing, try Grok as a last resort (no Supabase auth on that path)
-    if (!PERPLEXITY_API_KEY) {
-      if (requestedCache?.key || requireRealtime) {
-        logError('perplexity.missing_api_key_for_cached_dashboard_request');
-        return res.status(500).json({ error: 'Perplexity is required for live research requests.' });
-      }
-
-      logError('perplexity.missing_api_key_using_grok_fallback');
-      const grokKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
-      if (!grokKey) {
-        return res.status(500).json({ error: 'AI service not configured' });
-      }
-      const { messages: fallbackMessages, temperature: fallbackTemp = 0.2 } = req.body;
-      if (!fallbackMessages || !Array.isArray(fallbackMessages)) {
-        return res.status(400).json({ error: 'Messages array is required' });
-      }
-      const grokFallbackParams = getGrokParams('perplexityGrokFallback');
-      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: grokFallbackParams.model });
-      const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
-        body: JSON.stringify({
-          ...grokFallbackParams,
-          messages: normalizeMessagesForUpstream(fallbackMessages),
-          temperature: Math.min(Math.max(Number(fallbackTemp) || 0.2, 0), 2),
-        }),
-      });
-      devAiProxyLog('perplexity (no key) ← xAI Grok fallback response', { status: grokRes.status, ok: grokRes.ok });
-      if (!grokRes.ok) {
-        const grokErrText = await grokRes.text();
-        console.error('[PERPLEXITY GROK-FALLBACK RAW]', grokRes.status, grokErrText); // TODO: remove after QA
-        return res.status(502).json({ error: 'AI service error. Please try again.' });
-      }
-      const grokData = await grokRes.json();
-      return res.status(200).json({ success: true, content: grokData.choices?.[0]?.message?.content || '', citations: [], usage: grokData.usage });
+    if (!PERPLEXITY_API_KEY && (requestedCache?.key || requireRealtime)) {
+      logError('perplexity.missing_api_key_for_cached_dashboard_request');
+      return res.status(500).json({ error: 'Perplexity is required for live research requests.' });
     }
 
     if (!supabase) {
@@ -698,11 +666,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const billingFeature = typeof req.body?.billingFeature === 'string' ? req.body.billingFeature : null;
+    const billingFeature = resolveRouteBillingFeature('perplexity', req);
     const usageGate = await assertCanGenerate(supabase, {
       userId,
       featureKey: billingFeature,
-      skipPool: !billingFeature,
     });
     if (!usageGate.ok) {
       return sendUsageGateRejection(res, usageGate);
@@ -729,6 +696,7 @@ export default async function handler(req, res) {
           usage: { cached: true },
           cached: true,
           generatedAt: cachedResult.generatedAt,
+          billing: { feature: billingFeature, creditsCharged: 0 },
         });
       }
     }
@@ -758,6 +726,53 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Too many messages in request (max 20)' });
     }
 
+    const normalizedMessages = normalizeMessagesForUpstream(messages);
+
+    if (!PERPLEXITY_API_KEY) {
+      logError('perplexity.missing_api_key_using_grok_fallback');
+      const grokKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
+      if (!grokKey) {
+        return res.status(500).json({ error: 'AI service not configured' });
+      }
+      const grokFallbackParams = getGrokParams('perplexityGrokFallback');
+      devAiProxyLog('perplexity (no key) → xAI Grok fallback request', { model: grokFallbackParams.model });
+      const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${grokKey}` },
+        body: JSON.stringify({
+          ...grokFallbackParams,
+          messages: normalizedMessages,
+          temperature: safeTemperature,
+        }),
+      });
+      devAiProxyLog('perplexity (no key) ← xAI Grok fallback response', { status: grokRes.status, ok: grokRes.ok });
+      if (!grokRes.ok) {
+        const grokErrText = await grokRes.text();
+        console.error('[PERPLEXITY GROK-FALLBACK RAW]', grokRes.status, grokErrText);
+        return res.status(502).json({ error: 'AI service error. Please try again.' });
+      }
+      const grokData = await grokRes.json();
+      const fallbackUsage = await recordGenerationUsage(supabase, {
+        userId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'perplexity', fallback: 'grok' },
+      });
+      if (!fallbackUsage.ok) {
+        logError('perplexity.usage_record_failed', { userId, error: fallbackUsage.error });
+      }
+      return res.status(200).json({
+        success: true,
+        content: grokData.choices?.[0]?.message?.content || '',
+        citations: [],
+        usage: grokData.usage,
+        billing: {
+          feature: billingFeature,
+          creditsCharged: fallbackUsage.creditsLogged,
+        },
+      });
+    }
+
     if (cache?.key) {
       console.log(`[Cache MISS] Fresh Perplexity fetch:
   niche: ${cache.niche || 'small business'}
@@ -767,7 +782,6 @@ export default async function handler(req, res) {
     }
 
     // Forward request to Perplexity API
-    const normalizedMessages = normalizeMessagesForUpstream(messages);
     devAiProxyLog('perplexity → Perplexity request', { model: safeModel, messageCount: normalizedMessages.length });
 
     console.log('[Perplexity] Request', {
@@ -920,6 +934,16 @@ export default async function handler(req, res) {
     if (shouldPersistCache) {
       await setCachedPerplexityResult(cache, cachePayload, cacheAccess);
     }
+
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'perplexity' },
+    });
+    if (!usageRecord.ok) {
+      logError('perplexity.usage_record_failed', { userId, error: usageRecord.error });
+    }
     
     return res.status(200).json({
       success: true,
@@ -929,6 +953,10 @@ export default async function handler(req, res) {
       usage: data.usage,
       cached: false,
       generatedAt: new Date().toISOString(),
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

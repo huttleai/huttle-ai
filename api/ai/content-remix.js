@@ -9,7 +9,7 @@ import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 import { buildSystemPrompt, buildPromptBrandSection } from '../../src/utils/brandContextBuilder.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
@@ -476,9 +476,10 @@ export default async function handler(req, res) {
       });
     }
 
+    const billingFeature = resolveRouteBillingFeature('content-remix', req);
     const usageGate = await assertCanGenerate(supabase, {
       userId: authenticatedUserId,
-      featureKey: 'contentRemix',
+      featureKey: billingFeature,
     });
     if (!usageGate.ok) {
       return sendUsageGateRejection(res, usageGate);
@@ -600,6 +601,19 @@ ${HUMAN_WRITING_RULES}`;
         });
       }
 
+      const usageRecord = await recordGenerationUsage(supabase, {
+        userId: authenticatedUserId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'content-remix' },
+      });
+      if (!usageRecord.ok) {
+        logError('content_remix.usage_record_failed', {
+          userId: authenticatedUserId,
+          error: usageRecord.error,
+        });
+      }
+
       return res.status(200).json({
         success: true,
         content: formatSectionsAsContent(sections),
@@ -610,6 +624,10 @@ ${HUMAN_WRITING_RULES}`;
           requestedMode,
           normalizedMode,
           platformCount: normalizedPlatforms.length,
+        },
+        billing: {
+          feature: billingFeature,
+          creditsCharged: usageRecord.creditsLogged,
         },
       });
     } catch (fetchError) {

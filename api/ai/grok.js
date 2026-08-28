@@ -20,8 +20,8 @@ import { GROK_MODEL } from '../../src/config/grokConfig.js';
 import {
   assertCanGenerate,
   sendUsageGateRejection,
-  GROK_FEATURE_TO_BILLING,
-  GROK_SKIP_POOL_FEATURES,
+  resolveRouteBillingFeature,
+  recordGenerationUsage,
 } from '../_utils/usageGate.js';
 
 // Serverless and local-api-server load .env via dotenv; Vercel uses GROK_API_KEY.
@@ -345,13 +345,10 @@ export default async function handler(req, res) {
     }
 
     const rawBody = req.body && typeof req.body === 'object' ? req.body : {};
-    const grokFeatureKey = typeof rawBody.grokFeatureKey === 'string' ? rawBody.grokFeatureKey : null;
-    const skipPool = !grokFeatureKey || GROK_SKIP_POOL_FEATURES.has(grokFeatureKey);
-    const billingFeature = GROK_FEATURE_TO_BILLING[grokFeatureKey] || null;
+    const billingFeature = resolveRouteBillingFeature('grok', req);
     const usageGate = await assertCanGenerate(supabase, {
       userId,
-      featureKey: skipPool ? null : billingFeature,
-      skipPool,
+      featureKey: billingFeature,
     });
     if (!usageGate.ok) {
       return sendUsageGateRejection(res, usageGate, { grokStyle: true });
@@ -441,6 +438,7 @@ export default async function handler(req, res) {
           ...formatCachedResponse(cachedResult.resultData),
           cached: true,
           generatedAt: cachedResult.generatedAt,
+          billing: { feature: billingFeature, creditsCharged: 0 },
         });
       }
     }
@@ -550,10 +548,24 @@ export default async function handler(req, res) {
       await setCachedGrokResult(cache, payload, cacheAccess);
     }
 
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'grok' },
+    });
+    if (!usageRecord.ok) {
+      logError('grok.usage_record_failed', { userId, error: usageRecord.error });
+    }
+
     return res.status(200).json({
       ...payload,
       cached: false,
       generatedAt: new Date().toISOString(),
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

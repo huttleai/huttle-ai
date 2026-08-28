@@ -65,9 +65,9 @@ export default function NicheIntel() {
   const { addToast } = useToast();
   const navigate = useNavigate();
   const {
-    trackFeatureUsage,
     checkCanGenerate,
     canGenerate,
+    refreshUsage,
   } = useAIUsage('nicheIntel');
 
   const [nicheQuery, setNicheQuery] = useState('');
@@ -223,9 +223,8 @@ export default function NicheIntel() {
         signal: controller.signal,
       });
       if (analysisRes.success && analysisRes.analysis) {
-        // Show the already-successful analysis regardless of usage-tracking
-        // outcome — a failed/rejected trackFeatureUsage call must never
-        // discard research + analysis the user already paid credits for.
+        // Show the already-successful analysis regardless of usage refresh
+        // outcome. Credits are recorded on the server for this route.
         setAnalysis(analysisRes.analysis);
         if (analysisStorageKey) {
           try {
@@ -243,15 +242,7 @@ export default function NicheIntel() {
           }
         }
 
-        const usage = await trackFeatureUsage({
-          query: resolvedQuery,
-          platform,
-          cachedResearch: Boolean(researchRes.cached),
-        });
-
-        if (!usage.allowed) {
-          addToast('Your results are ready. Note: this run may not count toward this month\'s Niche Intel usage — resets on the 1st.', 'warning');
-        }
+        await refreshUsage();
       } else if (timedOut || analysisRes.aborted) {
         failRun(
           'This run took too long',

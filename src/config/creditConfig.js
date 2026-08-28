@@ -35,6 +35,8 @@ export const FEATURE_CREDIT_COSTS = {
   algorithmChecker: 0,
 
   // 1 credit — pool only, no run cap
+  /** Shared Grok/Claude proxy billing unit. The route owns this key; clients cannot pick it. */
+  aiProxyCall: 1,
   captions: 1,
   hashtags: 1,
   hooks: 1,
@@ -121,6 +123,7 @@ export const COMING_SOON_FEATURES = ['trendForecaster'];
 
 /** Human-readable labels used in usage-gate error messages and meter rows. */
 export const FEATURE_LABELS = {
+  aiProxyCall: 'AI generation',
   igniteEngine: 'Ignite Engine',
   contentRemix: 'Content Remix',
   nicheIntel: 'Niche Intel',

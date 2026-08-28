@@ -10,7 +10,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL_GENERATOR;
 
@@ -59,9 +59,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication failed' });
   }
 
+  const billingFeature = resolveRouteBillingFeature('n8n-generator', req);
   const usageGate = await assertCanGenerate(supabase, {
     userId: verifiedUserId,
-    skipPool: true,
+    featureKey: billingFeature,
   });
   if (!usageGate.ok) {
     return sendUsageGateRejection(res, usageGate);
@@ -146,6 +147,16 @@ export default async function handler(req, res) {
 
       const n8nData = await n8nResponse.json();
 
+      const usageRecord = await recordGenerationUsage(supabase, {
+        userId: authenticatedUserId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'n8n-generator', contentType },
+      });
+      if (!usageRecord.ok) {
+        console.error('[n8n-generator] Failed to record usage:', usageRecord.error);
+      }
+
       // Return structured response
       return res.status(200).json({
         success: true,
@@ -155,7 +166,11 @@ export default async function handler(req, res) {
           model: n8nData.metadata?.model || 'unknown',
           processingTime: n8nData.metadata?.processingTime || 0,
           ...n8nData.metadata
-        }
+        },
+        billing: {
+          feature: billingFeature,
+          creditsCharged: usageRecord.creditsLogged,
+        },
       });
 
     } catch (fetchError) {

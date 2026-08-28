@@ -31,6 +31,7 @@ import {
 } from '../data/platformContentRules.js';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getGrokParams } from '../config/grokConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const PERPLEXITY_PROXY_URL = '/api/ai/perplexity';
@@ -83,11 +84,6 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     temperature,
     ...(options.perplexityFeature ? { perplexityFeature: options.perplexityFeature } : {}),
     ...(options.model ? { model: options.model } : {}),
-    ...(options.perplexityFeature === 'deep_dive'
-      ? { billingFeature: 'trendDeepDive' }
-      : options.cache?.type === 'niche_intel'
-        ? { billingFeature: 'nicheIntel' }
-        : {}),
     cache: options.cache,
     requireRealtime: options.requireRealtime,
     personalized: options.personalized,
@@ -129,7 +125,12 @@ async function callPerplexityAPI(messages, temperature = 0.2, options = {}) {
     throw new Error(errorData.error || `API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function getGrokProxyErrorMessage(errorData, status) {
@@ -175,7 +176,12 @@ async function callGrokAPI(messages, temperature = 0.2, options = {}) {
     throw new Error(getGrokProxyErrorMessage(errorData, response.status));
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function parseJsonFromText(text) {
