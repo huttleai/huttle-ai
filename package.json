@@ -22,6 +22,7 @@
     "test:e2e:mobile": "playwright test --project=mobile",
     "test:hooks-parser": "node scripts/verify-full-post-hooks-parser.mjs",
     "test:full-post-resilience": "node scripts/verify-full-post-resilience.mjs",
+    "test:stripe-webhook-user-lookup": "node scripts/verify-stripe-webhook-user-lookup.mjs",
     "dev:grok-smoke": "node scripts/dev-grok-fullpost-smoke.mjs",
     "dev:grok-models": "node scripts/dev-grok-models-verify.mjs",
     "qa:ai-tools": "node scripts/ai-tools-qa.mjs",
