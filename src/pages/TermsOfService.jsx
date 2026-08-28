@@ -127,7 +127,7 @@ const sections = [
         <p>Huttle AI currently offers the following subscription plans:</p>
         <ul className={listClassName}>
           <li>Essentials: $15/month or $153/year</li>
-          <li>Pro: $39/month or $397/year</li>
+          <li>Pro: $39/month or $398/year</li>
         </ul>
         <p>
           Unless otherwise stated, subscriptions are billed in advance on a recurring monthly or annual
@@ -165,8 +165,9 @@ const sections = [
     content: (
       <>
         <p>
-          Huttle AI may offer a seven-day free trial to eligible new users only. A valid payment method
-          is required to start the trial.
+          Huttle AI may offer a seven-day free trial to eligible new users only. A payment method is
+          not required to start the trial. If you do not add a payment method before the trial ends,
+          the trial expires and you are not charged.
         </p>
         <p>
           Trial eligibility is determined by Huttle AI in its sole discretion, and we may limit,

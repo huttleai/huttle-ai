@@ -1,5 +1,5 @@
 import React, { useContext, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
 import MetaPixelRouteTracker from './components/MetaPixelRouteTracker';
 import { AuthProvider, AuthContext } from './context/AuthContext';
@@ -18,6 +18,7 @@ const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
  */
 function LoginRoute() {
   const authContext = useContext(AuthContext);
+  const location = useLocation();
   const { user, loading } = authContext || {};
 
   if (loading) {
@@ -34,7 +35,7 @@ function LoginRoute() {
   }
 
   // Guests are forwarded to the dashboard login page
-  return <Navigate to="/dashboard/login" replace />;
+  return <Navigate to={`/dashboard/login${location.search}${location.hash}`} replace />;
 }
 
 function App() {

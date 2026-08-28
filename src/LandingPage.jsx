@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { 
   ArrowRight, Check, Sparkles, TrendingUp, 
@@ -10,6 +10,7 @@ import {
   Shuffle, FolderOpen, BarChart2, CalendarDays, LockKeyhole, ShieldCheck, Undo2
 } from "lucide-react";
 import { createCheckoutSession, openStripeCheckoutTab } from './services/stripeAPI';
+import { startPublicCheckout } from './utils/publicCheckout';
 import { FEATURE_RUN_CAPS } from './config/creditConfig';
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
@@ -40,11 +41,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "Do I need a credit card to start the 7-day trial?",
-    answer: "Yes. A credit card is required to start the Essentials or Pro trial. You will not be charged anything if you cancel before the 7-day trial ends."
+    answer: "No. You can start Essentials or Pro without a credit card. If you add a payment method and stay after the 7-day trial, billing begins at the monthly or annual rate you chose. If you never add a card, the trial ends and you are not charged."
   },
   {
     question: "When will I be charged?",
-    answer: "If you continue after your 7-day trial, your plan automatically begins billing at your selected monthly rate. We show the billing date clearly at checkout before you start."
+    answer: "Nothing is billed during the 7-day trial. If you add a payment method and continue after day 7, your plan starts billing at the monthly or annual rate you selected. We show the billing date clearly at checkout before you start."
   },
   {
     question: "Can I cancel anytime?",
@@ -1185,11 +1186,15 @@ const FAQSectionComponent = () => {
 // ============================================
 
 const PricingSection = () => {
+  const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
+  const [checkoutError, setCheckoutError] = useState(null);
 
   const essentialsMonthly = 15;
   const proMonthly = 39;
+  const essentialsAnnual = 153;
+  const proAnnual = 398;
   const discount = 0.85;
 
   const essentialsPrice = isAnnual
@@ -1201,10 +1206,16 @@ const PricingSection = () => {
 
   const handleCheckout = async (planId) => {
     const billingCycle = isAnnual ? 'annual' : 'monthly';
-    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutError(null);
     setCheckoutLoading(planId);
     try {
-      await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
+      const result = await startPublicCheckout(planId, billingCycle, { navigate });
+      if (result.redirectedToSignup) return;
+      if (!result.success) {
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+      }
+    } catch (error) {
+      setCheckoutError(error?.message || 'Could not start checkout. Please try again.');
     } finally {
       setCheckoutLoading(null);
     }
@@ -1282,7 +1293,7 @@ const PricingSection = () => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${Math.floor(essentialsMonthly * discount * 12)}/yr
+                    Billed as ${essentialsAnnual}/yr
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
@@ -1312,11 +1323,12 @@ const PricingSection = () => {
               <button
                 onClick={() => handleCheckout('essentials')}
                 disabled={!!checkoutLoading}
+                data-testid="landing-pricing-essentials-cta"
                 className="w-full h-12 rounded-xl border-2 border-slate-200 text-slate-700 bg-transparent hover:border-slate-400 hover:text-slate-900 font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {checkoutLoading === 'essentials' ? 'Loading…' : 'Start 7-Day Trial'}
               </button>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel anytime</p>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">No credit card needed · Cancel anytime</p>
             </div>
           </motion.div>
 
@@ -1345,7 +1357,7 @@ const PricingSection = () => {
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${Math.floor(proMonthly * discount * 12)}/yr
+                    Billed as ${proAnnual}/yr
                   </p>
                 )}
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
@@ -1375,6 +1387,7 @@ const PricingSection = () => {
               <BorderBeamButton
                 onClick={() => handleCheckout('pro')}
                 disabled={!!checkoutLoading}
+                data-testid="landing-pricing-pro-cta"
                 className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 beamDuration={6}
               >
@@ -1382,15 +1395,25 @@ const PricingSection = () => {
                   <>Start 7-Day Trial<ArrowRight size={16} className="ml-2" /></>
                 )}
               </BorderBeamButton>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">Card required · Cancel anytime</p>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">No credit card needed · Cancel anytime</p>
             </div>
           </motion.div>
 
         </div>
 
+        {checkoutError && (
+          <p
+            role="alert"
+            data-testid="landing-pricing-checkout-error"
+            className="text-center text-sm text-red-600 mt-6 max-w-xl mx-auto"
+          >
+            {checkoutError}
+          </p>
+        )}
+
         {/* Section footnote */}
         <p className="text-center text-[11px] text-slate-400 mt-10 max-w-xl mx-auto">
-          All plans require a credit card. You will not be charged during your 7-day free trial.
+          No credit card needed to start. You will not be charged during your 7-day free trial.
         </p>
       </div>
     </section>
@@ -1402,13 +1425,21 @@ const PricingSection = () => {
 // ============================================
 
 const FinalCTASection = () => {
+  const navigate = useNavigate();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
 
   const handleProCheckout = async () => {
-    const checkoutTab = openStripeCheckoutTab();
+    setCheckoutError(null);
     setCheckoutLoading(true);
     try {
-      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
+      const result = await startPublicCheckout('pro', 'monthly', { navigate });
+      if (result.redirectedToSignup) return;
+      if (!result.success) {
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+      }
+    } catch (error) {
+      setCheckoutError(error?.message || 'Could not start checkout. Please try again.');
     } finally {
       setCheckoutLoading(false);
     }
@@ -1451,8 +1482,12 @@ const FinalCTASection = () => {
           
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-6 md:mt-8 text-xs md:text-sm text-slate-500 font-medium">
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 7-day free trial</span>
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> No credit card needed</span>
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Cancel anytime</span>
           </div>
+          {checkoutError && (
+            <p role="alert" className="text-sm text-red-600 mt-4">{checkoutError}</p>
+          )}
         </motion.div>
       </div>
     </section>
@@ -1464,15 +1499,23 @@ const FinalCTASection = () => {
 // ============================================
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
   const [navCheckoutLoading, setNavCheckoutLoading] = useState(false);
+  const [navCheckoutError, setNavCheckoutError] = useState(null);
 
   const handleNavProCheckout = async () => {
-    const checkoutTab = openStripeCheckoutTab();
+    setNavCheckoutError(null);
     setNavCheckoutLoading(true);
     try {
-      await createCheckoutSession('pro', 'monthly', { targetWindow: checkoutTab });
+      const result = await startPublicCheckout('pro', 'monthly', { navigate });
+      if (result.redirectedToSignup) return;
+      if (!result.success) {
+        setNavCheckoutError(result.error || 'Could not start checkout. Please try again.');
+      }
+    } catch (error) {
+      setNavCheckoutError(error?.message || 'Could not start checkout. Please try again.');
     } finally {
       setNavCheckoutLoading(false);
     }
@@ -1542,6 +1585,14 @@ export default function LandingPage() {
           </Link>
         </div>
       </nav>
+      {navCheckoutError && (
+        <div
+          role="alert"
+          className="fixed left-1/2 top-20 z-[60] w-[min(92vw,28rem)] -translate-x-1/2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700 shadow-lg"
+        >
+          {navCheckoutError}
+        </div>
+      )}
 
       {/* HERO SECTION */}
       <section

@@ -1,9 +1,16 @@
-import { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useContext, useEffect, useMemo } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../config/supabase';
 import { LogIn, Mail, Lock, Loader, Sparkles, Shuffle, TrendingUp, Zap } from 'lucide-react';
+import {
+  captureCheckoutIntentFromLocation,
+  getCheckoutSignupPath,
+  getPendingPlanLabel,
+  normalizeCheckoutIntent,
+  resumePendingCheckoutAfterAuth,
+} from '../utils/publicCheckout';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,6 +20,16 @@ export default function Login() {
   const { login } = useContext(AuthContext);
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const pendingCheckout = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return normalizeCheckoutIntent(params.get('plan'), params.get('billing'));
+  }, [location.search]);
+  const pendingPlanLabel = getPendingPlanLabel(pendingCheckout?.planId);
+
+  useEffect(() => {
+    captureCheckoutIntentFromLocation();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,12 +40,25 @@ export default function Login() {
 
     setLoading(true);
     const result = await login(email, password);
-    setLoading(false);
 
     if (result.success) {
-      addToast('Welcome back!', 'success');
+      const checkoutResult = await resumePendingCheckoutAfterAuth();
+      if (checkoutResult.resumed && checkoutResult.success) {
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+      if (checkoutResult.resumed && !checkoutResult.success) {
+        addToast(
+          checkoutResult.error || 'Signed in, but checkout could not start. You can start your trial from Pricing.',
+          'error'
+        );
+      } else {
+        addToast('Welcome back!', 'success');
+      }
       navigate('/dashboard');
     } else {
+      setLoading(false);
       addToast(result.error || 'Failed to log in', 'error');
     }
   };
@@ -123,7 +153,11 @@ export default function Login() {
           {/* Welcome Text */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome back</h2>
-            <p className="text-gray-500 text-sm">Sign in to continue to your dashboard</p>
+            <p className="text-gray-500 text-sm">
+              {pendingPlanLabel
+                ? `Sign in to start your 7-day ${pendingPlanLabel} trial.`
+                : 'Sign in to continue to your dashboard'}
+            </p>
           </div>
 
           {/* Login Form */}
@@ -199,6 +233,16 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Need an account?{' '}
+            <Link
+              to={getCheckoutSignupPath(pendingCheckout?.planId, pendingCheckout?.billingCycle)}
+              className="text-huttle-blue hover:underline font-medium"
+            >
+              Create one
+            </Link>
+          </p>
 
           {/* Footer */}
           <p className="text-center text-gray-400 text-xs mt-6">

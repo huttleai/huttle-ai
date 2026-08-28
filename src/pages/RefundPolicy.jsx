@@ -36,8 +36,9 @@ export default function RefundPolicy() {
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
-                Annual plan refund requests for Essentials and Pro submitted within 30 days of
-                purchase will be reviewed on a case-by-case basis. To request a refund, email{' '}
+                Annual Essentials and Pro plans include the same 7-day free trial as monthly plans.
+                Annual plan refund requests submitted within 30 days of the first paid charge will be
+                reviewed on a case-by-case basis. To request a refund, email{' '}
                 <a href="mailto:support@huttleai.com" className="text-huttle-primary hover:underline">
                   support@huttleai.com
                 </a>{' '}
@@ -53,13 +54,14 @@ export default function RefundPolicy() {
           {/* ── Essentials & Pro Monthly ── */}
           <section>
             <h2 className="mb-4 text-xl font-bold text-slate-900">
-              Essentials &amp; Pro (Monthly Plans) — 7-Day Free Trial
+              Essentials &amp; Pro (Monthly Plans)
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
                 Essentials and Pro monthly plans include a 7-day free trial. No charge is applied
-                during the trial period. If you do not cancel before the trial ends, your subscription
-                will begin automatically and you will be charged for the first billing period.
+                during the trial period. If you add a payment method and do not cancel before the
+                trial ends, your subscription will begin automatically and you will be billed for
+                the first period.
               </p>
               <p>
                 You can cancel at any time from your account settings. Cancellation stops future
@@ -78,8 +80,8 @@ export default function RefundPolicy() {
               <p>
                 New subscribers on Essentials and Pro plans start with a 7-day free trial. You will
                 not be charged during the trial. If you cancel before the 7 days are up, you will not
-                be billed. If you do not cancel, your paid subscription begins automatically at the end
-                of the trial period and your card will be charged.
+                be billed. If you add a payment method and do not cancel, your paid subscription begins
+                automatically at the end of the trial period.
               </p>
               <p>
                 Trial eligibility is determined by Huttle AI in its sole discretion and may be limited

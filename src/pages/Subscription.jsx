@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Award, BadgeCheck, Check, CreditCard, Crown, AlertCircle, Loader2, Shield, Sparkles, Users, Zap } from 'lucide-react';
-import { cancelSubscription, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode, openStripeCheckoutTab } from '../services/stripeAPI';
+import { cancelSubscription, closeCheckoutTab, createCheckoutSession, getBillingInvoices, getBillingSummary, isDemoMode, openStripeCheckoutTab } from '../services/stripeAPI';
 import { useSubscription, clearSubscriptionCache } from '../context/SubscriptionContext';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -23,7 +23,7 @@ const CURRENT_PLANS = [
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 39,
-    annualPrice: 397.8,
+    annualPrice: 398,
     description: 'Higher limits and the complete toolkit for serious creators.',
     features: ['7-day free trial', '600 AI generations/month', '25GB storage', 'Full Pro feature set'],
   },
@@ -57,7 +57,7 @@ const PLAN_DETAILS = {
   pro: {
     title: 'Pro',
     subtitle: 'Paid plan',
-    annualLabel: '$39/month or $397.80/year',
+    annualLabel: '$39/month or $398/year',
     summary: '600 AI generations per month, 25GB storage, and the full Pro feature suite.',
     iconGradient: 'from-purple-500 to-pink-500',
     accentClasses: 'border-purple-200 bg-purple-50 text-purple-700',
@@ -215,12 +215,10 @@ export default function Subscription() {
         // Stripe or retry — show a sticky inline banner so the user can reach
         // support. stripeAPI.createCheckoutSession surfaces the backend body
         // verbatim as `result.error`, so we match on its stable prefix.
+        closeCheckoutTab(checkoutTab);
         const errorMessage = result.error || '';
         if (/billing account conflict/i.test(errorMessage)) {
           setHasCheckoutConflict(true);
-          if (checkoutTab && !checkoutTab.closed) {
-            try { checkoutTab.close(); } catch { /* ignore */ }
-          }
         } else {
           addToast(errorMessage || 'Failed to start checkout. Please try again.', 'error');
         }
@@ -234,11 +232,13 @@ export default function Subscription() {
           checkoutResetTimeoutRef.current = null;
         }, 5000);
       } else {
+        closeCheckoutTab(checkoutTab);
         addToast('Checkout session created but no redirect URL was returned.', 'error');
         setLoading(null);
       }
     } catch (error) {
       console.error('Checkout error:', error);
+      closeCheckoutTab(checkoutTab);
       addToast('Something went wrong. Please try again.', 'error');
       setLoading(null);
     }
