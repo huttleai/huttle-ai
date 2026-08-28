@@ -170,13 +170,12 @@ export default async function handler(req, res) {
       console.error('[subscription-status] Stripe lookup failed:', stripeErr?.message ?? stripeErr);
     }
 
-    const subStatus = stripeSubscription?.status;
-    if (
-      !stripeSubscription ||
-      subStatus === 'incomplete_expired' ||
-      subStatus === 'unpaid'
-    ) {
-      // If Stripe has no active subscription, return what Supabase knows.
+    if (!stripeSubscription) {
+      // Stripe has no subscription for this customer (deleted, or the lookup
+      // failed above) -- return what Supabase knows. A live Stripe status,
+      // including terminal ones like 'unpaid'/'incomplete_expired', is always
+      // authoritative and falls through to buildSubscriptionPayload below
+      // instead of this branch, so a webhook-lagged DB row can never mask it.
       // This keeps the billing UI functional even when Stripe data is unavailable.
       if (subscriptionRecord) {
         const normalizedFromRecord = buildSubscriptionPayload({

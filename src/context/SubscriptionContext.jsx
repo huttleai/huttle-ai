@@ -409,11 +409,19 @@ export function SubscriptionProvider({ children }) {
 
       const stripeSubscription = stripeResult.success ? stripeResult.subscription : null;
       const databaseTier = databaseSubscription ? normalizeTier(databaseSubscription.tier) : null;
-      const nextStatus = databaseSubscription?.status || stripeSubscription?.status || stripeResult.status || 'inactive';
+      // A successful Stripe call is authoritative -- even a webhook-lagged DB row
+      // must not override a live status (e.g. Stripe says 'unpaid'/'canceled' but
+      // the DB hasn't caught up yet). Only fall back to the DB when the Stripe
+      // call itself failed or was skipped.
+      const nextStatus = stripeResult.success
+        ? (stripeSubscription?.status || stripeResult.status || 'inactive')
+        : (databaseSubscription?.status || 'inactive');
       const hasGeneratingAccess = isGeneratingAccessStatus(nextStatus);
       const resolvedStripeTier = normalizeTier(stripeSubscription?.plan || stripeResult.plan);
       const nextTier = hasGeneratingAccess || isReadOnlyStatus(nextStatus)
-        ? (databaseTier || resolvedStripeTier || null)
+        ? (stripeResult.success
+          ? (resolvedStripeTier || databaseTier || null)
+          : (databaseTier || null))
         : null;
       // Build the public subscription object. Sensitive Stripe IDs are stripped:
       // the server-side API endpoints resolve them from the authenticated user_id.
@@ -429,9 +437,11 @@ export function SubscriptionProvider({ children }) {
             billingCycle: stripeSubscription.billingCycle ?? null,
             upcomingPlanChange: stripeSubscription.upcomingPlanChange ?? null,
             user_id: databaseSubscription?.user_id ?? userId,
-            plan: databaseTier || stripeSubscription.plan || null,
-            tier: databaseTier || stripeSubscription.tier || stripeSubscription.plan || null,
-            status: databaseSubscription?.status || stripeSubscription.status,
+            // stripeSubscription is only set from a successful live call (see
+            // above) -- it is authoritative over a possibly webhook-lagged DB row.
+            plan: normalizeTier(stripeSubscription.plan) || databaseTier || null,
+            tier: normalizeTier(stripeSubscription.tier || stripeSubscription.plan) || databaseTier || null,
+            status: stripeSubscription.status || databaseSubscription?.status,
           }
         : (databaseSubscription
           ? {
