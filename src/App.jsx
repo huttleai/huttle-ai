@@ -7,7 +7,7 @@ import { AuthProvider, AuthContext } from './context/AuthContext';
 const LandingPage = lazy(() => import('./LandingPage'));
 const DashboardManager = lazy(() => import('./dashboard/Dashboard'));
 const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'));
-const FoundersPage = lazy(() => import('./pages/FoundersPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const RefundPolicy = lazy(() => import('./pages/RefundPolicy'));
@@ -53,8 +53,10 @@ function App() {
         {/* Public Landing Page */}
         <Route path="/" element={<LandingPage />} />
         
-        {/* Founders Club Landing Page */}
-        <Route path="/founders" element={<FoundersPage />} />
+        {/* Current plans. Retired Founders/Builders marketing URLs redirect here. */}
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/founders" element={<Navigate to="/pricing" replace />} />
+        <Route path="/builders" element={<Navigate to="/pricing" replace />} />
         
         {/* Legal Pages (public, no auth) */}
         <Route path="/terms" element={<TermsOfService />} />

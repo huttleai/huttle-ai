@@ -173,11 +173,6 @@ export default async function handler(req, res) {
     const subscriptionData = {
       metadata: baseMetadata,
       trial_period_days: 7,
-      trial_settings: {
-        end_behavior: {
-          missing_payment_method: 'cancel',
-        },
-      },
     };
 
     // Create checkout session options
@@ -187,8 +182,8 @@ export default async function handler(req, res) {
       // the platform level — more reliable than metadata for webhook user resolution.
       client_reference_id: userId,
       // Omit payment_method_types so Stripe can use Dashboard-configured methods.
-      // if_required + a trial lets Checkout skip the card form.
-      payment_method_collection: 'if_required',
+      // always (Stripe's default) collects a card before the 7-day trial starts.
+      payment_method_collection: 'always',
       line_items: [
         {
           price: priceId,
@@ -210,7 +205,7 @@ export default async function handler(req, res) {
       // Custom text for the checkout page
       custom_text: {
         submit: {
-          message: 'Start your 7-day free trial. No credit card required. You will not be charged unless you add a payment method and stay after the trial.',
+          message: 'Start your 7-day free trial. A credit card is required. You will not be charged during the trial. Billing begins automatically when the trial ends unless you cancel.',
         },
       },
     };

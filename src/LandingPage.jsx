@@ -5,13 +5,12 @@ import {
   ArrowRight, Check, Sparkles, TrendingUp, 
   Zap, Play, Search, Instagram,
   Activity, Users, BarChart3, Facebook, Youtube,
-  Repeat, MessageSquare, Film, Music, Hash, Gauge, Crown, Clock, X,
+  Repeat, MessageSquare, Film, Music, Hash, Gauge, Clock, X,
   Star, Building2, Rocket, Shield, HeartHandshake, ChevronDown, AlertCircle, LogIn,
   Shuffle, FolderOpen, BarChart2, CalendarDays, LockKeyhole, ShieldCheck, Undo2
 } from "lucide-react";
-import { createCheckoutSession, openStripeCheckoutTab } from './services/stripeAPI';
 import { startPublicCheckout } from './utils/publicCheckout';
-import { FEATURE_RUN_CAPS } from './config/creditConfig';
+import { PricingSection } from './components/landing/Pricing';
 import { InteractiveHoverButton } from "./components/InteractiveHoverButton";
 import { TypingAnimation } from "./components/TypingAnimation";
 import { OrbitingCircles, SocialIcons } from "./components/OrbitingCircles";
@@ -41,11 +40,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "Do I need a credit card to start the 7-day trial?",
-    answer: "No. You can start Essentials or Pro without a credit card. If you add a payment method and stay after the 7-day trial, billing begins at the monthly or annual rate you chose. If you never add a card, the trial ends and you are not charged."
+    answer: "Yes. A credit card is required to start the 7-day trial on Essentials and Pro, monthly or annual. You will not be charged during the trial. Billing begins automatically when the trial ends unless you cancel."
   },
   {
     question: "When will I be charged?",
-    answer: "Nothing is billed during the 7-day trial. If you add a payment method and continue after day 7, your plan starts billing at the monthly or annual rate you selected. We show the billing date clearly at checkout before you start."
+    answer: "Nothing is billed during the 7-day trial. Billing begins automatically at the monthly or annual rate you selected when the trial ends, unless you cancel first. We show the billing date clearly at checkout before you start."
   },
   {
     question: "Can I cancel anytime?",
@@ -93,11 +92,12 @@ const STRUCTURED_DATA = [
     description:
       "Huttle AI is an AI-powered content planning and creation platform that tells creators, solopreneurs, and small businesses what to post before they create it.",
     offers: {
-      "@type": "Offer",
-      price: "199.00",
+      "@type": "AggregateOffer",
+      lowPrice: "15.00",
+      highPrice: "39.00",
       priceCurrency: "USD",
-      availability: "https://schema.org/LimitedAvailability",
-      url: `${SITE_URL}/#pricing`,
+      availability: "https://schema.org/InStock",
+      url: `${SITE_URL}/pricing`,
     },
   },
   {
@@ -400,162 +400,6 @@ const WaitlistModal = ({ isOpen, onClose }) => {
 
             <p className="text-center text-xs text-slate-400 mt-4">
               We respect your privacy. Unsubscribe anytime.
-            </p>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-// ============================================
-// FOUNDERS CLUB MODAL
-// ============================================
-
-const FoundersClubModal = ({ isOpen, onClose }) => {
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setCheckoutLoading(false);
-      setCheckoutError(null);
-    }
-  }, [isOpen]);
-
-  const handleProceedToCheckout = async (e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    const checkoutTab = openStripeCheckoutTab();
-    setCheckoutError(null);
-    setCheckoutLoading(true);
-    try {
-      const result = await createCheckoutSession('founder', 'annual', {
-        targetWindow: checkoutTab,
-      });
-      if (result.demo) {
-        checkoutTab?.close();
-        setCheckoutError(
-          'Checkout is not available yet (Stripe founder price not configured). Add VITE_STRIPE_PRICE_FOUNDER_ANNUAL to your environment.'
-        );
-        setCheckoutLoading(false);
-        return;
-      }
-      if (!result.success) {
-        checkoutTab?.close();
-        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
-        setCheckoutLoading(false);
-        return;
-      }
-      if (result.openedInNewTab) {
-        setCheckoutLoading(false);
-      }
-    } catch (err) {
-      checkoutTab?.close();
-      setCheckoutError(err?.message || 'Could not start checkout. Please try again.');
-      setCheckoutLoading(false);
-    }
-  };
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          
-          <motion.div 
-            className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 md:p-8 overflow-hidden"
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: "spring", damping: 20 }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#2B8FC7] to-[#01bad2]" />
-            
-            <button 
-              onClick={onClose}
-              className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors"
-            >
-              <X size={20} className="text-slate-400" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#2B8FC7] to-[#01bad2] flex items-center justify-center shadow-md">
-                <Crown className="text-white" size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Founders Club</h3>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              {[
-                { title: "Lifetime Price Lock", desc: "$199/year forever, even when prices increase" },
-                { title: "Highest AI Limits", desc: "Founders get the most generous generation limits" },
-                { title: "All Pro Features", desc: "Ignite Engine, Content Remix Studio, Trend Deep Dive, and more" },
-                { title: "Priority Support", desc: "Direct access to our founding team" },
-                { title: "7-Day Free Trial", desc: "Start Essentials or Pro and cancel before day 7 to avoid being charged" },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <Check className="text-[#01bad2] mt-0.5 flex-shrink-0" size={18} />
-                  <div>
-                    <p className="font-bold text-slate-900 text-sm">{item.title}</p>
-                    {item.desc && <p className="text-xs text-slate-500 font-medium">{item.desc}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between mb-6 p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm">
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Founders Price</p>
-                <p className="text-3xl font-black text-slate-900">$199<span className="text-sm font-medium text-slate-500">/year</span></p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-slate-400 line-through font-medium mb-1">$397.80/year</p>
-                <p className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-200 inline-block">Save 50%</p>
-              </div>
-            </div>
-
-            {checkoutError && (
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-left text-xs text-red-800">
-                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                <span>{checkoutError}</span>
-              </div>
-            )}
-            <div className="flex flex-col gap-3">
-              <button 
-                type="button"
-                onClick={(e) => handleProceedToCheckout(e)}
-                disabled={checkoutLoading}
-                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold shadow-lg shadow-[#01bad2]/20 hover:shadow-[#01bad2]/30 transition-shadow flex items-center justify-center gap-2 text-base disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {checkoutLoading ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Redirecting to checkout…
-                  </>
-                ) : (
-                  <>
-                    Join the Founders Club Today
-                    <ArrowRight size={18} />
-                  </>
-                )}
-              </button>
-            </div>
-
-            <p className="text-center text-xs text-slate-400 mt-4">
-              Secure checkout powered by Stripe
             </p>
           </motion.div>
         </motion.div>
@@ -1182,245 +1026,6 @@ const FAQSectionComponent = () => {
 };
 
 // ============================================
-// PRICING SECTION - 3-TIER PRICING LADDER
-// ============================================
-
-const PricingSection = () => {
-  const navigate = useNavigate();
-  const [isAnnual, setIsAnnual] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(null);
-  const [checkoutError, setCheckoutError] = useState(null);
-
-  const essentialsMonthly = 15;
-  const proMonthly = 39;
-  const essentialsAnnual = 153;
-  const proAnnual = 398;
-  const discount = 0.85;
-
-  const essentialsPrice = isAnnual
-    ? (essentialsMonthly * discount).toFixed(2)
-    : essentialsMonthly;
-  const proPrice = isAnnual
-    ? (proMonthly * discount).toFixed(2)
-    : proMonthly;
-
-  const handleCheckout = async (planId) => {
-    const billingCycle = isAnnual ? 'annual' : 'monthly';
-    setCheckoutError(null);
-    setCheckoutLoading(planId);
-    try {
-      const result = await startPublicCheckout(planId, billingCycle, { navigate });
-      if (result.redirectedToSignup) return;
-      if (!result.success) {
-        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
-      }
-    } catch (error) {
-      setCheckoutError(error?.message || 'Could not start checkout. Please try again.');
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
-
-  return (
-    <section id="pricing" className="py-16 md:py-32 px-4 bg-slate-50 relative overflow-hidden">
-      <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/5 blur-[150px] rounded-full pointer-events-none" />
-      <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/5 blur-[150px] rounded-full pointer-events-none" />
-
-      <div className="container mx-auto max-w-6xl relative z-10">
-        <motion.div
-          className="text-center mb-10 md:mb-12"
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.5 }}
-        >
-          <span className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20">
-            Simple Pricing
-          </span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
-            Start creating. Pick your path.
-          </h2>
-          <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto mb-8">
-            Essentials gives you the full content creation toolkit. Pro adds our trend intelligence
-            suite and 14-day planning.
-          </p>
-
-          {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 bg-white border border-slate-200 rounded-full px-2 py-1.5 shadow-sm">
-            <button
-              onClick={() => setIsAnnual(false)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                !isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setIsAnnual(true)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Annually
-              <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-                Save 15%
-              </span>
-            </button>
-          </div>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-center max-w-4xl mx-auto">
-
-          {/* CARD 1: ESSENTIALS */}
-          <motion.div
-            className="order-2 md:order-1 h-full"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
-              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
-                START HERE
-              </div>
-
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Essentials</h3>
-
-              <div className="mb-1">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl md:text-4xl font-black text-slate-900">${essentialsPrice}</span>
-                  <span className="text-sm text-slate-500">/month</span>
-                </div>
-                {isAnnual && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${essentialsAnnual}/yr
-                  </p>
-                )}
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={12} className="text-green-600 flex-shrink-0" />
-                  <span>7-day trial</span>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">Everything you need to hit the ground running.</p>
-
-              <ul className="space-y-2.5 mb-6 flex-1">
-                {[
-                  '200 AI generations/month',
-                  'All AI Power Tools',
-                  '7-Day AI Plan Builder',
-                  'Content Remix Studio',
-                  `Ignite Engine (${FEATURE_RUN_CAPS.igniteEngine.essentials} briefs/month)`,
-                  '5GB Content Vault',
-                ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
-                    <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCheckout('essentials')}
-                disabled={!!checkoutLoading}
-                data-testid="landing-pricing-essentials-cta"
-                className="w-full h-12 rounded-xl border-2 border-slate-200 text-slate-700 bg-transparent hover:border-slate-400 hover:text-slate-900 font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {checkoutLoading === 'essentials' ? 'Loading…' : 'Start 7-Day Trial'}
-              </button>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">No credit card needed · Cancel anytime</p>
-            </div>
-          </motion.div>
-
-          {/* CARD 2: PRO (HIGHLIGHTED - center) */}
-          <motion.div
-            className="relative md:scale-105 md:z-10 order-1 md:order-2 h-full"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border-2 border-[#01bad2] shadow-2xl overflow-hidden h-full flex flex-col">
-              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 opacity-50 -z-10" />
-
-              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-[#01bad2]/20">
-                <Zap size={11} className="fill-[#01bad2]" />
-                MOST POPULAR
-              </div>
-
-              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
-
-              <div className="mb-1">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl md:text-5xl font-black text-slate-900">${proPrice}</span>
-                  <span className="text-sm md:text-base text-slate-500">/month</span>
-                </div>
-                {isAnnual && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${proAnnual}/yr
-                  </p>
-                )}
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <Check size={12} className="text-green-600 flex-shrink-0" />
-                  <span>7-day trial</span>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">The complete toolkit for serious creators.</p>
-
-              <ul className="space-y-2.5 mb-6 flex-1">
-                {[
-                  '600 AI generations/month',
-                  'Everything in Essentials',
-                  '14-Day AI Plan Builder',
-                  'Full Trend Lab access',
-                  'Niche Intel',
-                  '25GB Content Vault',
-                ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600 font-medium">
-                    <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-
-              <BorderBeamButton
-                onClick={() => handleCheckout('pro')}
-                disabled={!!checkoutLoading}
-                data-testid="landing-pricing-pro-cta"
-                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
-                beamDuration={6}
-              >
-                {checkoutLoading === 'pro' ? 'Loading…' : (
-                  <>Start 7-Day Trial<ArrowRight size={16} className="ml-2" /></>
-                )}
-              </BorderBeamButton>
-              <p className="text-center text-[10px] text-slate-400 mt-2.5">No credit card needed · Cancel anytime</p>
-            </div>
-          </motion.div>
-
-        </div>
-
-        {checkoutError && (
-          <p
-            role="alert"
-            data-testid="landing-pricing-checkout-error"
-            className="text-center text-sm text-red-600 mt-6 max-w-xl mx-auto"
-          >
-            {checkoutError}
-          </p>
-        )}
-
-        {/* Section footnote */}
-        <p className="text-center text-[11px] text-slate-400 mt-10 max-w-xl mx-auto">
-          No credit card needed to start. You will not be charged during your 7-day free trial.
-        </p>
-      </div>
-    </section>
-  );
-};
-
-// ============================================
 // FINAL CTA SECTION
 // ============================================
 
@@ -1482,7 +1087,7 @@ const FinalCTASection = () => {
           
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-6 md:mt-8 text-xs md:text-sm text-slate-500 font-medium">
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> 7-day free trial</span>
-            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> No credit card needed</span>
+            <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Card required to start</span>
             <span className="flex items-center gap-1.5"><Check size={16} className="text-green-500" /> Cancel anytime</span>
           </div>
           {checkoutError && (
@@ -1501,7 +1106,6 @@ const FinalCTASection = () => {
 export default function LandingPage() {
   const navigate = useNavigate();
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
-  const [isFoundersModalOpen, setIsFoundersModalOpen] = useState(false);
   const [navCheckoutLoading, setNavCheckoutLoading] = useState(false);
   const [navCheckoutError, setNavCheckoutError] = useState(null);
 
@@ -1542,10 +1146,6 @@ export default function LandingPage() {
       ))}
       <ScrollProgress />
       <WaitlistModal isOpen={isWaitlistModalOpen} onClose={() => setIsWaitlistModalOpen(false)} />
-      <FoundersClubModal 
-        isOpen={isFoundersModalOpen} 
-        onClose={() => setIsFoundersModalOpen(false)} 
-      />
 
       {/* NAVBAR */}
       <nav
@@ -1900,7 +1500,7 @@ export default function LandingPage() {
           
           <div className="flex-1 text-center space-y-3">
             <p className="text-sm text-slate-500">
-              © 2026 Huttle AI · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link> · <Link to="/refund-policy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Refund Policy</Link>
+              © 2026 Huttle AI · <Link to="/pricing" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Pricing</Link> · <Link to="/privacy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Privacy Policy</Link> · <Link to="/terms" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Terms of Service</Link> · <Link to="/refund-policy" className="hover:text-slate-700 transition-colors underline-offset-2 hover:underline">Refund Policy</Link>
             </p>
             <p className="text-sm text-slate-500" data-testid="landing-footer-support">
               Questions?{' '}

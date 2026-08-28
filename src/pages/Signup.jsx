@@ -355,8 +355,8 @@ export default function Signup() {
             </p>
             <p className="text-gray-400 text-xs mt-2">
               {pendingPlanLabel
-                ? 'No credit card needed. You can cancel anytime during the trial.'
-                : 'Start with a 7-day free trial, then keep the plan that fits you.'}
+                ? 'A credit card is required to start the trial. Billing begins automatically when the trial ends unless you cancel.'
+                : 'Start with a 7-day free trial. A credit card is required, and billing begins automatically when the trial ends unless you cancel.'}
             </p>
           </div>
 

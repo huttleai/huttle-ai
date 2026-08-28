@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Crown, ArrowRight, Check, Sparkles, ShieldCheck } from 'lucide-react';
 
@@ -7,7 +8,7 @@ import { Crown, ArrowRight, Check, Sparkles, ShieldCheck } from 'lucide-react';
  * Displays two pricing cards side-by-side to create a psychological anchor effect
  * The left card (public launch) appears unappealing, while the right card (Founders Club) is the obvious choice
  */
-const PricingAnchor = ({ onOpenFoundersModal }) => {
+const PricingAnchor = () => {
   return (
     <section className="py-10 md:py-24 px-4 bg-gradient-to-b from-slate-50 to-white">
       <div className="container mx-auto max-w-5xl">
@@ -147,15 +148,13 @@ const PricingAnchor = ({ onOpenFoundersModal }) => {
               </ul>
 
               {/* CTA Button */}
-              <motion.button 
-                onClick={onOpenFoundersModal}
+              <Link
+                to="/pricing"
                 className="w-full h-11 md:h-12 rounded-xl bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold text-sm shadow-lg shadow-[#01bad2]/25 hover:shadow-[#01bad2]/40 transition-shadow flex items-center justify-center gap-2"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
               >
-                Lock in $199/yr
+                See current plans
                 <ArrowRight size={16} />
-              </motion.button>
+              </Link>
 
               {/* Refund Guarantee */}
               <div className="flex items-center justify-center gap-1.5 mt-3 md:mt-4">
