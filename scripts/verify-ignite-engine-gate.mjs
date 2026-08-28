@@ -3,6 +3,7 @@
  * Run: node scripts/verify-ignite-engine-gate.mjs
  */
 
+import { readFileSync } from 'node:fs';
 import {
   FEATURE_CREDIT_COSTS,
   FEATURE_RUN_CAPS,
@@ -200,5 +201,14 @@ assert(
   mock.inserted.filter((row) => row.feature === 'aiGenerations').length === 3,
   'reservation deducts 3 pool credits'
 );
+
+const proxySrc = readFileSync(new URL('../api/ignite-engine-proxy.js', import.meta.url), 'utf8');
+assert(!/n8nPayload\.grokApiKey\s*=/.test(proxySrc), 'proxy must not assign grokApiKey onto the n8n payload');
+assert(!/process\.env\.GROK_API_KEY/.test(proxySrc), 'proxy must not read GROK_API_KEY');
+assert(/assertCanGenerate\(/.test(proxySrc), 'proxy must call assertCanGenerate');
+assert(/reserveFeatureUsage\(/.test(proxySrc), 'proxy must reserve credits before n8n');
+const reserveIdx = proxySrc.indexOf('await reserveFeatureUsage');
+const fetchIdx = proxySrc.indexOf('await fetch(N8N_WEBHOOK_URL');
+assert(reserveIdx !== -1 && fetchIdx !== -1 && reserveIdx < fetchIdx, 'reservation happens before the n8n fetch');
 
 console.log('verify-ignite-engine-gate: OK');
