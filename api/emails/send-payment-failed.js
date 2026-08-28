@@ -1,7 +1,5 @@
-import { Resend } from 'resend';
+import { sendEmail } from './sendEmail.js';
 import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Send the payment-failed transactional email via the Resend template.
@@ -13,23 +11,13 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  *   {{{plan_name}}}   – e.g. "Essentials", "Pro", "Builders Club"
  */
 export async function sendPaymentFailedEmail({ email, firstName, planName }) {
-  if (!resend) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
-  return resend.emails.send({
-    from: 'Huttle AI <hello@huttleai.com>',
+  return sendEmail({
     to: email,
     subject: "Your payment didn't go through",
-    template_id: EMAIL_TEMPLATE_IDS.paymentFailed,
-    variables: [
-      {
-        email,
-        data: {
-          first_name: firstName || 'there',
-          plan_name: planName || 'Pro',
-        },
-      },
-    ],
+    templateId: EMAIL_TEMPLATE_IDS.paymentFailed,
+    variables: {
+      first_name: firstName || 'there',
+      plan_name: planName || 'Pro',
+    },
   });
 }
