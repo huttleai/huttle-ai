@@ -127,6 +127,28 @@ export function parseBearerToken(authHeader) {
   return bearerMatch ? bearerMatch[1] : null;
 }
 
+/**
+ * If the client supplied a user_id (or userId) in the JSON body that does not
+ * match the authenticated caller, return a 403 error object. Matching or
+ * omitted values are ignored so the server-derived id remains the source of truth.
+ *
+ * @param {object|null|undefined} body
+ * @param {string} authenticatedUserId
+ * @returns {{ statusCode: number, error: string } | null}
+ */
+export function getMismatchedBodyUserIdError(body, authenticatedUserId) {
+  if (!body || typeof body !== 'object' || !authenticatedUserId) return null;
+  const supplied = body.user_id ?? body.userId;
+  if (supplied == null || supplied === '') return null;
+  if (String(supplied) !== String(authenticatedUserId)) {
+    return {
+      statusCode: 403,
+      error: 'user_id does not match the authenticated user',
+    };
+  }
+  return null;
+}
+
 export async function authenticateBillingRequest(req, supabase) {
   const token = parseBearerToken(req.headers.authorization);
   if (!token) {

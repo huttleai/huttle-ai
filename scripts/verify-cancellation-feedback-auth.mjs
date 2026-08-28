@@ -29,6 +29,10 @@ assert(
   'submit-cancellation-feedback must derive user_id from the authenticated token, not the request body'
 );
 assert(
+  endpoint.includes('getMismatchedBodyUserIdError'),
+  'submit-cancellation-feedback must reject a body-supplied user_id that does not match the caller'
+);
+assert(
   endpoint.includes('user_id: userId'),
   'submit-cancellation-feedback insert must bind user_id to the authenticated user'
 );

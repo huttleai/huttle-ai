@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { setCorsHeaders, handlePreflight } from './_utils/cors.js';
-import { authenticateBillingRequest } from './_utils/billing.js';
+import {
+  authenticateBillingRequest,
+  getMismatchedBodyUserIdError,
+  parseBearerToken,
+} from './_utils/billing.js';
 
 const REASON_LABELS = {
   too_expensive: "It's too expensive",
@@ -21,6 +25,10 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!parseBearerToken(req.headers.authorization)) {
+    return res.status(401).json({ error: 'Authentication required' });
   }
 
   const {
@@ -54,6 +62,11 @@ export default async function handler(req, res) {
   }
 
   const userId = authResult.user.id;
+
+  const mismatch = getMismatchedBodyUserIdError(req.body, userId);
+  if (mismatch) {
+    return res.status(mismatch.statusCode).json({ error: mismatch.error });
+  }
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: existingFeedback } = await supabase
