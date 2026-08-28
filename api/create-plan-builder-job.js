@@ -12,9 +12,12 @@ import {
   resolvePlanBuilderCap,
 } from './_utils/planBuilderLimits.js';
 import { logInfo, logWarn, logError } from './_utils/observability.js';
-import { isTrialingStatus } from '../src/config/subscriptionAccess.js';
-
-const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
+import {
+  isGeneratingAccessStatus,
+  isReadOnlyStatus,
+  isTrialingStatus,
+  READ_ONLY_GENERATE_MESSAGE,
+} from '../src/config/subscriptionAccess.js';
 
 // SECURITY: Use non-VITE_ prefixed URL for server-side code, with fallback for backwards compatibility
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -69,7 +72,6 @@ export default async function handler(req, res) {
       .from('subscriptions')
       .select('tier, status')
       .eq('user_id', userId)
-      .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -83,9 +85,17 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to verify subscription', requestId });
     }
 
+    if (isReadOnlyStatus(subscription?.status)) {
+      return res.status(403).json({
+        error: 'read_only',
+        message: READ_ONLY_GENERATE_MESSAGE,
+        requestId,
+      });
+    }
+
     const userTier = subscription?.tier || null;
 
-    if (!userTier) {
+    if (!subscription || !isGeneratingAccessStatus(subscription.status) || !userTier) {
       return res.status(403).json({
         error: 'Active subscription required',
         message: 'Choose a plan to use AI Plan Builder.',

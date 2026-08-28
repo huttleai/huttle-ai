@@ -26,7 +26,12 @@ import {
   resolvePlanBuilderCap,
 } from './_utils/planBuilderLimits.js';
 import { getCreditPool } from '../src/config/creditConfig.js';
-import { isTrialingStatus } from '../src/config/subscriptionAccess.js';
+import {
+  isGeneratingAccessStatus,
+  isReadOnlyStatus,
+  isTrialingStatus,
+  READ_ONLY_GENERATE_MESSAGE,
+} from '../src/config/subscriptionAccess.js';
 
 const N8N_WEBHOOK_URL =
   process.env.N8N_PLAN_BUILDER_WEBHOOK_URL ||
@@ -39,7 +44,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase =
   supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due', 'unpaid'];
 const DASHBOARD_GENERATION_SOURCE = 'dashboard_daily_generation';
 const PLAN_BUILDER_CREDITS_BY_FEATURE = {
   planBuilder7Day: 3,
@@ -70,12 +74,11 @@ function getStartOfMonthISO() {
   return date.toISOString();
 }
 
-async function getActiveSubscription(userId) {
+async function getLatestSubscription(userId) {
   const { data, error } = await supabase
     .from('subscriptions')
     .select('tier, status')
     .eq('user_id', userId)
-    .in('status', ACTIVE_SUBSCRIPTION_STATUSES)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -392,7 +395,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { subscription, error: subscriptionError } = await getActiveSubscription(user.id);
+    const { subscription, error: subscriptionError } = await getLatestSubscription(user.id);
     if (subscriptionError) {
       logError('plan_builder_proxy.subscription_lookup_failed', {
         requestId,
@@ -402,8 +405,16 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to verify subscription', requestId });
     }
 
+    if (isReadOnlyStatus(subscription?.status)) {
+      return res.status(403).json({
+        error: 'read_only',
+        message: READ_ONLY_GENERATE_MESSAGE,
+        requestId,
+      });
+    }
+
     const userTier = subscription?.tier || null;
-    if (!userTier) {
+    if (!subscription || !isGeneratingAccessStatus(subscription.status) || !userTier) {
       return res.status(403).json({
         error: 'Active subscription required',
         message: 'Choose a plan to use AI Plan Builder.',
