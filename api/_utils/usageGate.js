@@ -64,22 +64,40 @@ async function getMonthlyCreditUsage(supabase, userId) {
 }
 
 /**
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {{
- *   userId: string,
- *   featureKey?: string | null,
- *   skipPool?: boolean,
- * }} options
- * @returns {Promise<{
- *   ok: boolean,
- *   statusCode?: number,
- *   error?: string,
- *   message?: string,
- *   subscription?: object | null,
- *   isTrialing?: boolean,
- * }>}
+ * Server-owned billing key for each AI proxy route.
+ * Never derived from client `grokFeatureKey` / `billingFeature` fields.
  */
-export async function assertCanGenerate(supabase, { userId, featureKey = null, skipPool = false } = {}) {
+export const ROUTE_BILLING_FEATURES = Object.freeze({
+  grok: 'aiProxyCall',
+  claude: 'aiProxyCall',
+  perplexity: 'trendPulse',
+  'perplexity-deep-dive': 'nicheIntel',
+  'n8n-generator': 'contentRemix',
+  'content-remix': 'contentRemix',
+  'deep-dive': 'trendDeepDive',
+});
+
+/**
+ * Resolve the billed feature from the server route. Request body is ignored.
+ * @param {string} routeId
+ * @param {{ originalUrl?: string, url?: string, huttleBillingRoute?: string }} [req]
+ * @returns {string | null}
+ */
+export function resolveRouteBillingFeature(routeId, req = {}) {
+  const explicit = typeof req.huttleBillingRoute === 'string' ? req.huttleBillingRoute : routeId;
+  const path = String(req.originalUrl || req.url || '');
+  if (explicit === 'perplexity-deep-dive' || path.includes('perplexity-deep-dive')) {
+    return ROUTE_BILLING_FEATURES['perplexity-deep-dive'];
+  }
+  return ROUTE_BILLING_FEATURES[explicit] || ROUTE_BILLING_FEATURES[routeId] || null;
+}
+
+/**
+ * Subscription / read-only access only. Used by polish routes that do not
+ * deduct from the credit pool (e.g. silent humanize). Does not skip a pool
+ * check based on client input — callers that bill must use assertCanGenerate.
+ */
+export async function assertGeneratingAccess(supabase, { userId } = {}) {
   if (!userId) {
     return {
       ok: false,
@@ -121,12 +139,46 @@ export async function assertCanGenerate(supabase, { userId, featureKey = null, s
     };
   }
 
-  const userTier = subscription.tier;
-  const trialing = isTrialingStatus(status);
+  return {
+    ok: true,
+    subscription,
+    isTrialing: isTrialingStatus(status),
+  };
+}
 
-  if (skipPool || !featureKey) {
-    return { ok: true, subscription, isTrialing: trialing };
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {{
+ *   userId: string,
+ *   featureKey?: string | null,
+ * }} options
+ * @returns {Promise<{
+ *   ok: boolean,
+ *   statusCode?: number,
+ *   error?: string,
+ *   message?: string,
+ *   subscription?: object | null,
+ *   isTrialing?: boolean,
+ * }>}
+ */
+export async function assertCanGenerate(supabase, { userId, featureKey = null } = {}) {
+  const access = await assertGeneratingAccess(supabase, { userId });
+  if (!access.ok) return access;
+
+  const { subscription, isTrialing: trialing } = access;
+
+  if (!featureKey) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'feature_required',
+      message: 'This generation could not be billed. Please try again.',
+      subscription,
+      isTrialing: trialing,
+    };
   }
+
+  const userTier = subscription.tier;
 
   const cap = getFeatureRunCap(featureKey, userTier, trialing);
   if (cap === 0) {
@@ -203,34 +255,65 @@ export function sendUsageGateRejection(res, gateResult, { grokStyle = false } = 
   });
 }
 
-/** Map grokConfig featureKey values onto creditConfig billing keys. */
-export const GROK_FEATURE_TO_BILLING = {
-  caption: 'captions',
-  captionVariations: 'captions',
-  hashtag: 'hashtags',
-  hookBuilder: 'hooks',
-  cta: 'ctas',
-  contentQualityScorer: 'scorer',
-  visualBrainstorm: 'visuals',
-  visualIdeas: 'visuals',
-  contentRemix: 'contentRemix',
-  platformRemixes: 'contentRemix',
-  nicheIntel: 'nicheIntel',
-  fullPostBuilder: 'fullPostBuilderRuns',
-  igniteEngine: 'igniteEngine',
-  humanizerScore: 'aiHumanizerScore',
-  audienceInsights: 'audienceInsights',
-  trendIdeas: 'trendPulse',
-  improveContent: 'captions',
-  autoImprovePhrase: 'captions',
-  voiceTranscriptPolish: 'aiHumanizerRewrite',
-  contentRepurposer: 'contentRemix',
-};
+/**
+ * Write the run-counter row (when the feature has a numeric run cap) plus one
+ * `aiGenerations` row per credit. Call after a successful upstream generation,
+ * never before, and never from the client as the system of record.
+ *
+ * @returns {Promise<{ ok: boolean, creditsLogged: number, error?: string }>}
+ */
+export async function recordGenerationUsage(supabase, {
+  userId,
+  featureKey,
+  subscription = null,
+  metadata = {},
+} = {}) {
+  if (!supabase || !userId || !featureKey) {
+    return { ok: false, creditsLogged: 0, error: 'missing_params' };
+  }
 
-export const GROK_SKIP_POOL_FEATURES = new Set([
-  'dashboardWidget',
-  'optimizeTimes',
-  'performancePrediction',
-  'perplexityGrokFallback',
-  'contentPlan',
-]);
+  const creditsRequired = getFeatureCreditCost(featureKey);
+  const userTier = subscription?.tier || null;
+  const trialing = isTrialingStatus(subscription?.status);
+  const cap = userTier ? getFeatureRunCap(featureKey, userTier, trialing) : undefined;
+  const timestamp = new Date().toISOString();
+  const rows = [];
+
+  if (typeof cap === 'number') {
+    rows.push({
+      user_id: userId,
+      feature: featureKey,
+      metadata: {
+        ...metadata,
+        type: 'run_counter',
+        billedBy: 'ai_proxy',
+      },
+      created_at: timestamp,
+    });
+  }
+
+  for (let i = 0; i < creditsRequired; i += 1) {
+    rows.push({
+      user_id: userId,
+      feature: 'aiGenerations',
+      metadata: {
+        ...metadata,
+        sourceFeature: featureKey,
+        creditIndex: i,
+        overallCredits: creditsRequired,
+        billedBy: 'ai_proxy',
+      },
+      created_at: timestamp,
+    });
+  }
+
+  if (rows.length === 0) {
+    return { ok: true, creditsLogged: 0 };
+  }
+
+  const { error } = await supabase.from('user_activity').insert(rows);
+  if (error) {
+    return { ok: false, creditsLogged: 0, error: error.message };
+  }
+  return { ok: true, creditsLogged: creditsRequired };
+}

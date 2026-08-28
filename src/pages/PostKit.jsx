@@ -37,6 +37,7 @@ import { AuthContext } from '../context/AuthContext';
 import { BrandContext } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { READ_ONLY_GENERATE_MESSAGE } from '../config/subscriptionAccess';
 import PlatformSelector from '../components/PlatformSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -46,7 +47,6 @@ import { parseVariants } from '../utils/parseAIResponse';
 import { getPlatform } from '../utils/platformGuidelines';
 import { buildContentVaultPayload } from '../utils/contentVault';
 import { saveToVault } from '../services/contentService';
-import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import {
   generateCaption,
   generateHashtags,
@@ -60,6 +60,8 @@ import humanizeContent, {
   normalizeHumanizePlatform,
 } from '../services/humanizeContent';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
+import useAIUsage from '../hooks/useAIUsage';
+import { syncAiUsageDisplayCacheFromServer } from '../utils/aiUsageDisplayCache';
 import {
   PLATFORM_CONTENT_RULES,
   getHashtagMaxForPlatform,
@@ -377,7 +379,7 @@ export default function PostKitPage() {
   const { user } = useContext(AuthContext);
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { addToast: showToast } = useToast();
-  const { getFeatureLimit } = useSubscription();
+  const { isReadOnly } = useSubscription();
   const [loading, setLoading] = useState(true);
   const [kit, setKit] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -395,38 +397,31 @@ export default function PostKitPage() {
   const platform = kit?.platform || 'instagram';
   const PlatformIcon = PLATFORM_ICONS[platform] || Instagram;
 
-  const [aiGensUsed, setAiGensUsed] = useState(0);
-  const [aiGensLimit, setAiGensLimit] = useState(Infinity);
+  const {
+    overallUsed: aiGensUsed,
+    checkCanGenerate,
+    refreshUsage,
+  } = useAIUsage();
 
   useEffect(() => {
-    const aiLimit = getFeatureLimit('aiGenerations');
-    setAiGensLimit(aiLimit === -1 ? Infinity : aiLimit);
-    const savedUsage = localStorage.getItem('aiGensUsed');
-    if (savedUsage) setAiGensUsed(parseInt(savedUsage, 10) || 0);
-  }, [getFeatureLimit]);
+    syncAiUsageDisplayCacheFromServer(aiGensUsed);
+  }, [aiGensUsed]);
 
-  useEffect(() => {
-    const lastResetDate = localStorage.getItem('aiUsageLastReset');
-    const subscriptionStartDate = user?.subscriptionStartDate;
-    if (shouldResetAIUsage(subscriptionStartDate, lastResetDate)) {
-      setAiGensUsed(0);
-      localStorage.setItem('aiGensUsed', '0');
-      localStorage.setItem('aiUsageLastReset', new Date().toISOString());
+  const checkAIUsage = async () => {
+    if (isReadOnly) {
+      showToast(READ_ONLY_GENERATE_MESSAGE, 'info');
+      return false;
     }
-  }, [user]);
-
-  const checkAIUsage = () => {
-    if (aiGensLimit !== Infinity && aiGensUsed >= aiGensLimit) {
-      showToast('AI generation limit reached. Please upgrade to continue.', 'error');
+    const gate = await checkCanGenerate();
+    if (!gate.allowed) {
+      showToast(gate.message || 'AI generation limit reached. Please upgrade to continue.', 'error');
       return false;
     }
     return true;
   };
 
-  const incrementAIUsage = () => {
-    const next = aiGensUsed + 1;
-    setAiGensUsed(next);
-    localStorage.setItem('aiGensUsed', String(next));
+  const incrementAIUsage = async () => {
+    await refreshUsage();
   };
 
   const applyBrandVoice = true;
@@ -931,7 +926,7 @@ function KitCaptionPanel({
       showToast('Enter a topic or idea', 'warning');
       return;
     }
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
     setLoading(true);
     try {
       const contentData = {
@@ -968,7 +963,7 @@ function KitCaptionPanel({
         .map((c) => normalizeAIPowerToolsCaptionText(c))
         .slice(0, 4);
       setVariants(finalList);
-      incrementAIUsage();
+      await incrementAIUsage();
       showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
       schedulePolish(finalList);
     } catch (e) {
@@ -1086,7 +1081,7 @@ function KitHashtagsPanel({ topic, platform, brandData, checkAIUsage, incrementA
       showToast('Enter keywords or topic', 'warning');
       return;
     }
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
     setLoading(true);
     try {
       const result = await generateHashtags(input, brandData, platform);
@@ -1104,7 +1099,7 @@ function KitHashtagsPanel({ topic, platform, brandData, checkAIUsage, incrementA
           }))
         );
       }
-      incrementAIUsage();
+      await incrementAIUsage();
       showToast(`Hashtags ready. ${getToastDisclaimer('general')}`, 'success');
     } catch (e) {
       console.error(e);
@@ -1186,14 +1181,14 @@ function KitHooksPanel({
       showToast('Enter an idea', 'warning');
       return;
     }
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
     setLoading(true);
     try {
       const result = await generateHooks(input, brandData, theme, platform);
       if (result.success && result.hooks) {
         const parts = result.hooks.split(/\d+\./).filter((h) => h.trim()) || [result.hooks];
         setHooks(parts.length ? parts : [result.hooks]);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Hooks ready. ${getToastDisclaimer('general')}`, 'success');
         const g = ++polishRef.current;
         setPolishing(true);
@@ -1311,14 +1306,14 @@ function KitCtaPanel({
       showToast('Describe what you are promoting', 'warning');
       return;
     }
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
     setLoading(true);
     setStyled(null);
     try {
       const result = await generateStyledCTAs({ promoting, goalType }, brandData, platform);
       if (result.success) {
         setStyled(result);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`CTAs ready. ${getToastDisclaimer('general')}`, 'success');
         const g = ++ctaPolishRef.current;
         setPolishing(true);
@@ -1451,7 +1446,7 @@ function KitVisualsPanel({ topic, platform, brandData, checkAIUsage, incrementAI
       showToast('Pick an output type', 'warning');
       return;
     }
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
     setLoading(true);
     setResult(null);
     setPhase('trends');
@@ -1484,7 +1479,7 @@ function KitVisualsPanel({ topic, platform, brandData, checkAIUsage, incrementAI
       );
       if (res.success) {
         setResult(res);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Visuals ready. ${getToastDisclaimer('general')}`, 'success');
       } else showToast(res.error || 'Failed', 'error');
     } catch (e) {

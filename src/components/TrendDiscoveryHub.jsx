@@ -381,12 +381,10 @@ export default function TrendDiscoveryHub() {
 
     setIsScanning(true);
     try {
-      // Track this usage
-      await quickScanUsage.trackFeatureUsage({ niche: brandData.niche });
-
       const result = await scanTrendingTopics(brandData, 'all');
       
       if (result.success && result.scan) {
+        await quickScanUsage.refreshUsage();
         setScanResults({
           ...result.scan,
           citations: result.citations || []
@@ -461,7 +459,7 @@ export default function TrendDiscoveryHub() {
         if (deepDiveCancelledRef.current) {
           return;
         }
-        await deepDiveUsage.trackFeatureUsage({ topic: deepDiveTopic.trim() });
+        await deepDiveUsage.refreshUsage();
         setDeepDiveResults({
           topic: deepDiveTopic.trim(),
           report: result.report,

@@ -65,6 +65,7 @@ import {
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getGrokParams } from '../config/grokConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 // SECURITY: Use server-side proxy instead of exposing API key in client
 const GROK_PROXY_URL = '/api/ai/grok';
@@ -512,6 +513,8 @@ function isTransientGrokError(err) {
  * Make a request to the Grok API via the secure proxy (API key server-only;
  * model + reasoning_effort come from src/config/grokConfig.js via featureKey).
  * Proxy body is only: model, reasoning_effort, messages, temperature, optional max_tokens (number).
+ * grokFeatureKey is sent for model routing only — the server ignores it for billing
+ * and always charges the Grok route's own credit bucket.
  * @param {object[]} messages
  * @param {number} [temperature]
  * @param {{ featureKey?: string, max_tokens?: number, grok_debug_fullpost?: boolean, grok_debug_fullpost_step?: string, forceCacheRefresh?: boolean }} [requestOptions]
@@ -607,7 +610,12 @@ async function callGrokAPI(messages, temperature = 0.7, requestOptions = {}) {
     throw err;
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.cached !== true) {
+    const charged = Number(data?.billing?.creditsCharged);
+    bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  }
+  return data;
 }
 
 function normalizeMomentumLabel(value, fallback = 'Rising') {

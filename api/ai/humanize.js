@@ -9,7 +9,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertGeneratingAccess, sendUsageGateRejection } from '../_utils/usageGate.js';
 import { CLAUDE_MAX_TOKENS, CLAUDE_MODEL } from '../../src/config/claudeConfig.js';
 
 const _rawKey = process.env.ANTHROPIC_API_KEY;
@@ -188,9 +188,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const usageGate = await assertCanGenerate(supabase, {
+    const usageGate = await assertGeneratingAccess(supabase, {
       userId,
-      skipPool: true,
     });
     if (!usageGate.ok) {
       return sendUsageGateRejection(res, usageGate);

@@ -389,16 +389,13 @@ export default function ContentRemix() {
       .join('\n\n');
 
     const applyRemixSuccess = async (raw, sections, fromFallback) => {
-      const usage = await remixUsage.trackFeatureUsage({ mode: remixGoal });
+      await remixUsage.refreshUsage();
       const polishGen = ++remixPolishGenRef.current;
       setRemixResults({ raw, sections });
       setUsedAiFallback(Boolean(fromFallback));
       const goalLabel = REMIX_GOALS.find(g => g.id === remixGoal)?.label || 'Remixed';
       showToast(`Content remixed for ${goalLabel}! ${getToastDisclaimer('remix')}`, 'success');
       setCurrentStep(4);
-      if (!usage.allowed) {
-        showToast('Your remix is ready, but we could not record this run against your plan limits. Refresh usage if the meter looks off.', 'warning');
-      }
 
       setIsPolishingRemix(true);
       (async () => {

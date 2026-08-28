@@ -27,7 +27,6 @@ import {
 } from '../services/grokAPI';
 import { useSearchParams, Link } from 'react-router-dom';
 import { AIDisclaimerFooter, HowWePredictModal, getToastDisclaimer } from '../components/AIDisclaimer';
-import { shouldResetAIUsage } from '../utils/aiUsageHelpers';
 import { saveToVault } from '../services/contentService';
 import HumanizerScore from '../components/HumanizerScore';
 import PerformancePrediction from '../components/PerformancePrediction';
@@ -43,6 +42,8 @@ import humanizeContent, {
 } from '../services/humanizeContent';
 import { normalizeAIPowerToolsCaptionText } from '../utils/aiPowerToolCaptionNormalize';
 import { fetchVisualBrainstormTrendContext } from '../services/perplexityAPI';
+import useAIUsage from '../hooks/useAIUsage';
+import { syncAiUsageDisplayCacheFromServer } from '../utils/aiUsageDisplayCache';
 
 const _platformRulesImportAnchor =
   Object.keys(PLATFORM_CONTENT_RULES).length +
@@ -233,7 +234,7 @@ export default function AITools() {
   const { addToast: showToast } = useToast();
   const { brandData, loading: isBrandLoading } = useContext(BrandContext);
   const { user } = useContext(AuthContext);
-  const { userTier, getFeatureLimit, isReadOnly } = useSubscription();
+  const { isReadOnly } = useSubscription();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParamInitial = searchParams.get('tab');
   const initialToolFromUrl = tabParamInitial && TAB_QUERY_TO_TOOL[tabParamInitial]
@@ -304,10 +305,16 @@ export default function AITools() {
   /** Per–visual-concept details (scene beats, motifs) */
   const [visualConceptDetailsOpen, setVisualConceptDetailsOpen] = useState({});
   
-  // AI Usage Tracking
-  const [aiGensUsed, setAiGensUsed] = useState(0);
-  const [aiGensLimit, setAiGensLimit] = useState(Infinity);
+  const {
+    overallUsed: aiGensUsed,
+    checkCanGenerate,
+    refreshUsage,
+  } = useAIUsage();
   const [_isAILocked, setIsAILocked] = useState(false);
+
+  useEffect(() => {
+    syncAiUsageDisplayCacheFromServer(aiGensUsed);
+  }, [aiGensUsed]);
 
   // Modal state
   const [showHowWePredictModal, setShowHowWePredictModal] = useState(false);
@@ -317,57 +324,22 @@ export default function AITools() {
   const [kitSourceTool, setKitSourceTool] = useState('Caption Generator');
   const isBrandVoiceComplete = hasConfiguredNiche(brandData);
 
-  // Initialize AI usage limits based on subscription tier
-  useEffect(() => {
-    const aiLimit = getFeatureLimit('aiGenerations');
-    setAiGensLimit(aiLimit === -1 ? Infinity : aiLimit);
-    
-    const savedUsage = localStorage.getItem('aiGensUsed');
-    if (savedUsage) {
-      const used = parseInt(savedUsage, 10);
-      setAiGensUsed(used);
-      
-      if (aiLimit !== -1 && used >= aiLimit) {
-        setIsAILocked(true);
-      }
-    }
-  }, [userTier, getFeatureLimit]);
-
-  // Check if usage should be reset based on subscription anniversary
-  useEffect(() => {
-    const lastResetDate = localStorage.getItem('aiUsageLastReset');
-    const subscriptionStartDate = user?.subscriptionStartDate;
-    
-    if (shouldResetAIUsage(subscriptionStartDate, lastResetDate)) {
-      setAiGensUsed(0);
-      localStorage.setItem('aiGensUsed', '0');
-      localStorage.setItem('aiUsageLastReset', new Date().toISOString());
-      setIsAILocked(false);
-      showToast('Your AI usage limit has been reset! 🎉', 'success');
-    }
-  }, [user, showToast]);
-
-  const checkAIUsage = () => {
+  const checkAIUsage = async () => {
     if (isReadOnly) {
       showToast(READ_ONLY_GENERATE_MESSAGE, 'info');
       return false;
     }
-    if (aiGensLimit !== Infinity && aiGensUsed >= aiGensLimit) {
+    const gate = await checkCanGenerate();
+    if (!gate.allowed) {
       setIsAILocked(true);
-      showToast('AI generation limit reached. Please upgrade to continue.', 'error');
+      showToast(gate.message || 'AI generation limit reached. Please upgrade to continue.', 'error');
       return false;
     }
     return true;
   };
 
-  const incrementAIUsage = () => {
-    const newUsage = aiGensUsed + 1;
-    setAiGensUsed(newUsage);
-    localStorage.setItem('aiGensUsed', newUsage.toString());
-    
-    if (aiGensLimit !== Infinity && newUsage >= aiGensLimit) {
-      setIsAILocked(true);
-    }
+  const incrementAIUsage = async () => {
+    await refreshUsage();
   };
 
   const tools = [
@@ -484,7 +456,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingCaptions(true);
     try {
@@ -528,7 +500,7 @@ export default function AITools() {
 
         if (finalCaptions.length > 0) {
           setGeneratedCaptions(finalCaptions);
-          incrementAIUsage();
+          await incrementAIUsage();
           showToast(`Captions generated! ${getToastDisclaimer('general')}`, 'success');
           scheduleCaptionPolish(finalCaptions);
         } else {
@@ -590,7 +562,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingHashtags(true);
     try {
@@ -621,7 +593,7 @@ export default function AITools() {
             setGeneratedHashtags(fallbackHashtags);
           }
         }
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Hashtags generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
       } else {
         const errorMessage = result.error || 'Failed to generate hashtags';
@@ -642,7 +614,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingHooks(true);
     try {
@@ -653,7 +625,7 @@ export default function AITools() {
         const hooks = result.hooks.split(/\d+\./).filter(h => h.trim());
         const finalHooks = hooks.length > 0 ? hooks : [result.hooks];
         setGeneratedHooks(finalHooks);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Hooks generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
         const polishGen = ++hookPolishGenRef.current;
         setIsPolishingHooks(true);
@@ -696,6 +668,8 @@ export default function AITools() {
       return;
     }
 
+    if (!(await checkAIUsage())) return;
+
     setIsLoadingCTAs(true);
     setStyledCTAs(null);
     try {
@@ -708,7 +682,7 @@ export default function AITools() {
 
       if (result.success) {
         setStyledCTAs(result);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`CTAs generated for ${platformData?.name || 'social media'}! ${getToastDisclaimer('general')}`, 'success');
         const polishGen = ++ctaPolishGenRef.current;
         setIsPolishingCTAs(true);
@@ -797,7 +771,7 @@ export default function AITools() {
       return;
     }
 
-    if (!checkAIUsage()) return;
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingScore(true);
     try {
@@ -876,7 +850,7 @@ export default function AITools() {
             setScorerInsightOpen(false);
           }
         }
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Content scored! ${getToastDisclaimer('general')}`, 'success');
       } else {
         const errorMessage = result.error || 'Failed to score content';
@@ -900,6 +874,8 @@ export default function AITools() {
       showToast('Please choose an output type', 'warning');
       return;
     }
+
+    if (!(await checkAIUsage())) return;
 
     setIsLoadingVisualIdeas(true);
     setVisualBrainstormResult(null);
@@ -941,7 +917,7 @@ export default function AITools() {
 
       if (result.success) {
         setVisualBrainstormResult(result);
-        incrementAIUsage();
+        await incrementAIUsage();
         showToast(`Visual brainstorm generated! ${getToastDisclaimer('general')}`, 'success');
       } else {
         showToast(result.error || 'Failed to generate visual brainstorm', 'error');

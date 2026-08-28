@@ -260,6 +260,7 @@ export default function FullPostBuilder() {
     creditsPerRun,
     trackFeatureUsage,
     checkCanGenerate,
+    refreshUsage,
   } = useAIUsage('fullPostBuilderRuns');
   const navigate = useNavigate();
   const location = useLocation();
@@ -619,13 +620,14 @@ export default function FullPostBuilder() {
         }
         const usage = await trackFeatureUsage({
           step: 'hooks',
-          overallCredits: FULL_POST_BUILDER_CREDITS_PER_RUN,
+          overallCredits: 0,
         });
         if (!usage.allowed) {
           addToast('AI limit reached', 'warning');
           return false;
         }
         hooksRunPaidRef.current = true;
+        await refreshUsage();
         return true;
       };
 

@@ -18,7 +18,7 @@ import { parseBearerToken } from '../_utils/billing.js';
 import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { checkPersistentRateLimit } from '../_utils/persistent-rate-limit.js';
 import { logError, logInfo } from '../_utils/observability.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 import { CLAUDE_MAX_TOKENS, resolveClaudeModel } from '../../src/config/claudeConfig.js';
 
 const _rawAnthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -100,11 +100,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const billingFeature = typeof req.body?.billingFeature === 'string' ? req.body.billingFeature : null;
+    const billingFeature = resolveRouteBillingFeature('claude', req);
     const usageGate = await assertCanGenerate(supabase, {
       userId,
       featureKey: billingFeature,
-      skipPool: !billingFeature,
     });
     if (!usageGate.ok) {
       return sendUsageGateRejection(res, usageGate);
@@ -172,6 +171,16 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+
+    const usageRecord = await recordGenerationUsage(supabase, {
+      userId,
+      featureKey: billingFeature,
+      subscription: usageGate.subscription,
+      metadata: { route: 'claude' },
+    });
+    if (!usageRecord.ok) {
+      logError('claude.usage_record_failed', { userId, error: usageRecord.error });
+    }
     
     return res.status(200).json({
       success: true,
@@ -179,7 +188,11 @@ export default async function handler(req, res) {
       content: (Array.isArray(data.content)
         ? data.content.filter((block) => block?.type === 'text').map((block) => block.text || '').join('')
         : '') || '',
-      usage: data.usage
+      usage: data.usage,
+      billing: {
+        feature: billingFeature,
+        creditsCharged: usageRecord.creditsLogged,
+      },
     });
 
   } catch (error) {

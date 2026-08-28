@@ -4,7 +4,7 @@ import { setCorsHeaders, handlePreflight } from '../_utils/cors.js';
 import { buildBrandContext as buildCreatorBrandBlock } from '../../src/utils/buildBrandContext.js'; // HUTTLE AI: brand context injected
 import { getBrandStoryContext } from '../../src/utils/getBrandStoryContext.js'; // HUTTLE AI: userBrandType-based content philosophy
 import { HUMAN_WRITING_RULES } from '../../src/utils/humanWritingRules.js';
-import { assertCanGenerate, sendUsageGateRejection } from '../_utils/usageGate.js';
+import { assertCanGenerate, sendUsageGateRejection, resolveRouteBillingFeature, recordGenerationUsage } from '../_utils/usageGate.js';
 
 const PERPLEXITY_API_KEY =
   typeof process.env.PERPLEXITY_API_KEY === 'string' && process.env.PERPLEXITY_API_KEY.trim()
@@ -252,9 +252,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
+  const billingFeature = resolveRouteBillingFeature('deep-dive', req);
   const usageGate = await assertCanGenerate(supabase, {
     userId: authenticatedUserId,
-    featureKey: 'trendDeepDive',
+    featureKey: billingFeature,
   });
   if (!usageGate.ok) {
     return sendUsageGateRejection(res, usageGate);
@@ -348,11 +349,25 @@ export default async function handler(req, res) {
         }
       );
 
+      const usageRecord = await recordGenerationUsage(supabase, {
+        userId: authenticatedUserId,
+        featureKey: billingFeature,
+        subscription: usageGate.subscription,
+        metadata: { route: 'deep-dive' },
+      });
+      if (!usageRecord.ok) {
+        console.error('[deep-dive] Failed to record usage:', usageRecord.error);
+      }
+
       return res.status(200).json({
         success: true,
         report,
         citations,
         metadata,
+        billing: {
+          feature: billingFeature,
+          creditsCharged: usageRecord.creditsLogged,
+        },
       });
     } catch (error) {
       clearTimeout(timeoutId);

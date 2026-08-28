@@ -6,6 +6,7 @@ import { parseFullPostHookList } from '../utils/fullPostHooksParser';
 import { HUMAN_WRITING_RULES } from '../utils/humanWritingRules';
 import { getAuthReadyHeaders } from '../utils/authReady';
 import { CLAUDE_MODEL } from '../config/claudeConfig';
+import { bumpAiUsageDisplayCache } from '../utils/aiUsageDisplayCache';
 
 const CLAUDE_PROXY_URL = '/api/ai/claude';
 
@@ -29,9 +30,6 @@ export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
   if (options && Number.isFinite(Number(options.max_tokens))) {
     payload.max_tokens = Number(options.max_tokens);
   }
-  if (options?.billingFeature) {
-    payload.billingFeature = options.billingFeature;
-  }
 
   const response = await fetch(CLAUDE_PROXY_URL, {
     method: 'POST',
@@ -47,7 +45,10 @@ export async function callClaudeAPI(messages, temperature = 0.7, options = {}) {
     throw new Error(errorData.error || `API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  const charged = Number(data?.billing?.creditsCharged);
+  bumpAiUsageDisplayCache(Number.isFinite(charged) && charged >= 0 ? charged : 1);
+  return data;
 }
 
 export async function enhanceCaptionWithClaude(
@@ -219,7 +220,6 @@ ${trendBlock ? `Extra context:\n${trendBlock}\n` : ''}${hookRequirementInject ? 
         { role: 'user', content: user },
       ],
       0.65,
-      { billingFeature: 'fullPostBuilderRuns' },
     );
     const raw = String(data.content || '').trim();
     if (!raw) {

@@ -15,5 +15,11 @@
  * Behaviour, auth, caching, rate limiting and model resolution are all inherited
  * — this file intentionally holds no logic of its own so the two routes cannot
  * drift apart. The runtime budget lives in `vercel.json` under `functions`.
+ * Billing is stamped here so credit-pool deduction cannot depend on client body.
  */
-export { default } from './perplexity.js';
+import perplexityHandler from './perplexity.js';
+
+export default async function handler(req, res) {
+  req.huttleBillingRoute = 'perplexity-deep-dive';
+  return perplexityHandler(req, res);
+}
