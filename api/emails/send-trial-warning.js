@@ -1,7 +1,5 @@
-import { Resend } from 'resend';
+import { sendEmail } from './sendEmail.js';
 import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Send trial warning emails via the Resend `trial-ending-soon` template.
@@ -51,10 +49,6 @@ export async function sendTrialWarningEmail({
   manageUrl,
   contentCount,
 }) {
-  if (!resend) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
   if (!shouldSendTrialWarning(daysRemaining)) {
     return { skipped: true, reason: 'days_remaining_not_supported' };
   }
@@ -67,25 +61,19 @@ export async function sendTrialWarningEmail({
     ? '3 days left on your trial'
     : "Last day of your Huttle AI trial — you'll be charged tomorrow";
 
-  return resend.emails.send({
-    from: 'Huttle AI <hello@huttleai.com>',
+  return sendEmail({
     to: email,
     subject,
-    template_id: EMAIL_TEMPLATE_IDS.trialEndingSoon,
-    variables: [
-      {
-        email,
-        data: {
-          first_name: safeFirstName,
-          plan_name: planLabel,
-          trial_end_date: formattedDate,
-          amount: formattedAmount,
-          credit_limit: creditLimit,
-          days_remaining: String(daysRemaining),
-          manage_url: manageUrl || 'https://huttleai.com/dashboard/subscription',
-          content_count: typeof contentCount === 'number' ? String(contentCount) : '',
-        },
-      },
-    ],
+    templateId: EMAIL_TEMPLATE_IDS.trialEndingSoon,
+    variables: {
+      first_name: safeFirstName,
+      plan_name: planLabel,
+      trial_end_date: formattedDate,
+      amount: formattedAmount,
+      credit_limit: creditLimit,
+      days_remaining: String(daysRemaining),
+      manage_url: manageUrl || 'https://huttleai.com/dashboard/subscription',
+      content_count: typeof contentCount === 'number' ? String(contentCount) : '',
+    },
   });
 }

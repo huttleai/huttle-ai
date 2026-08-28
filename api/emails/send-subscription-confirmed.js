@@ -1,7 +1,5 @@
-import { Resend } from 'resend';
+import { sendEmail } from './sendEmail.js';
 import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Template IDs per plan tier.
@@ -38,10 +36,6 @@ export async function sendSubscriptionConfirmedEmail({
   amount,
   billingInterval,
 }) {
-  if (!resend) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
   const normalizedTier = (tier || '').toLowerCase();
   const templateId = TEMPLATE_BY_TIER[normalizedTier];
   const subject = SUBJECT_BY_TIER[normalizedTier];
@@ -50,21 +44,15 @@ export async function sendSubscriptionConfirmedEmail({
     throw new Error(`No subscription-confirmed template configured for tier: "${tier}"`);
   }
 
-  return resend.emails.send({
-    from: 'Huttle AI <hello@huttleai.com>',
+  return sendEmail({
     to: email,
     subject,
-    template_id: templateId,
-    variables: [
-      {
-        email,
-        data: {
-          first_name: firstName || 'there',
-          next_billing_date: nextBillingDate || '',
-          amount: amount || '',
-          billing_interval: billingInterval || 'month',
-        },
-      },
-    ],
+    templateId,
+    variables: {
+      first_name: firstName || 'there',
+      next_billing_date: nextBillingDate || '',
+      amount: amount || '',
+      billing_interval: billingInterval || 'month',
+    },
   });
 }

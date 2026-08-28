@@ -1,7 +1,5 @@
-import { Resend } from 'resend';
+import { sendEmail } from './sendEmail.js';
 import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Send the trial-started transactional email via the Resend template.
@@ -13,24 +11,14 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  *   {{{trial_end_date}}}  – human-readable date, e.g. "April 27, 2026"
  */
 export async function sendTrialStartedEmail({ email, firstName, planName, trialEndDate }) {
-  if (!resend) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
-  return resend.emails.send({
-    from: 'Huttle AI <hello@huttleai.com>',
+  return sendEmail({
     to: email,
     subject: 'Your 7-day trial is live',
-    template_id: EMAIL_TEMPLATE_IDS.trialStarted,
-    variables: [
-      {
-        email,
-        data: {
-          first_name: firstName || 'there',
-          plan_name: planName || 'Pro',
-          trial_end_date: trialEndDate || '',
-        },
-      },
-    ],
+    templateId: EMAIL_TEMPLATE_IDS.trialStarted,
+    variables: {
+      first_name: firstName || 'there',
+      plan_name: planName || 'Pro',
+      trial_end_date: trialEndDate || '',
+    },
   });
 }

@@ -1,7 +1,5 @@
-import { Resend } from 'resend';
+import { sendEmail } from './sendEmail.js';
 import { EMAIL_TEMPLATE_IDS } from './templateIds.js';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 /**
  * Send the voluntary cancellation confirmation email via the Resend template.
@@ -14,24 +12,14 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  *   {{{access_end_date}}}  – human-readable date access ends, e.g. "May 15, 2026"
  */
 export async function sendCancellationVoluntaryEmail({ email, firstName, planName, accessEndDate }) {
-  if (!resend) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
-  return resend.emails.send({
-    from: 'Huttle AI <hello@huttleai.com>',
+  return sendEmail({
     to: email,
     subject: "You're all set",
-    template_id: EMAIL_TEMPLATE_IDS.cancellationConfirmed,
-    variables: [
-      {
-        email,
-        data: {
-          first_name: firstName || 'there',
-          plan_name: planName || 'Pro',
-          access_end_date: accessEndDate || '',
-        },
-      },
-    ],
+    templateId: EMAIL_TEMPLATE_IDS.cancellationConfirmed,
+    variables: {
+      first_name: firstName || 'there',
+      plan_name: planName || 'Pro',
+      access_end_date: accessEndDate || '',
+    },
   });
 }
