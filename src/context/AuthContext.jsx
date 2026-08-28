@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useCallback, useRef, useMemo } from
 import { supabase } from '../config/supabase';
 import { trackPixelEvent } from '../utils/metaPixel';
 import { refreshSessionWithBackoff } from '../utils/authReady';
+import { triggerWelcomeEmail } from '../utils/triggerWelcomeEmail';
 
 export const AuthContext = createContext({});
 const AUTH_STATE_CACHE_KEY = 'huttle-auth-state-cache';
@@ -477,6 +478,7 @@ export function AuthProvider({ children }) {
         // Only reset profile state for actual auth changes (SIGNED_IN, SIGNED_OUT, etc.)
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           if (session?.user) {
+            triggerWelcomeEmail(session);
             setUser(session.user);
             setSessionConfirmed(true);
             // Use refs for current values to avoid stale closure issues on tab switch
@@ -550,6 +552,9 @@ export function AuthProvider({ children }) {
       });
       if (error) throw error;
       trackPixelEvent('Lead');
+      if (data?.session) {
+        triggerWelcomeEmail(data.session);
+      }
       return { success: true, data };
     } catch (error) {
       console.error('Signup error:', error);
