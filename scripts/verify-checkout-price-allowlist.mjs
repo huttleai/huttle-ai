@@ -61,9 +61,10 @@ const checkoutHandler = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../api/create-checkout-session.js'),
   'utf8',
 );
-assert(checkoutHandler.includes("payment_method_collection: 'if_required'"), 'no-card trials use if_required');
+assert(checkoutHandler.includes("payment_method_collection: 'always'"), 'card is required up front');
 assert(checkoutHandler.includes('trial_period_days: 7'), '7-day trial is attached');
-assert(!checkoutHandler.includes("payment_method_collection: 'always'"), 'card is not forced');
+assert(!checkoutHandler.includes("payment_method_collection: 'if_required'"), 'checkout does not skip the card form');
+assert(!checkoutHandler.includes('missing_payment_method'), 'no-card trial end behavior is unused when a card is always collected');
 assert(!checkoutHandler.includes('payment_method_types:'), 'payment_method_types is omitted');
 assert(!checkoutHandler.includes('!isAnnualBilling'), 'annual plans are not excluded from trial');
 assert(checkoutHandler.includes('isPurchasableCheckoutPriceId'), 'server allowlist is enforced');

@@ -14,7 +14,7 @@ export default function RefundPolicy() {
         </Link>
 
         <h1 className="mb-2 text-3xl font-bold text-slate-900 sm:text-4xl">Refund Policy</h1>
-        <p className="mb-10 text-sm italic text-slate-500">Last updated: April 2026</p>
+        <p className="mb-10 text-sm italic text-slate-500">Last updated: August 28, 2026</p>
 
         <div className="space-y-10">
 
@@ -58,10 +58,10 @@ export default function RefundPolicy() {
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
-                Essentials and Pro monthly plans include a 7-day free trial. No charge is applied
-                during the trial period. If you add a payment method and do not cancel before the
-                trial ends, your subscription will begin automatically and you will be billed for
-                the first period.
+                Essentials and Pro monthly plans include a 7-day free trial. A credit card is
+                required to start. No charge is applied during the trial period. If you do not
+                cancel before the trial ends, your subscription will begin automatically and you
+                will be billed for the first period.
               </p>
               <p>
                 You can cancel at any time from your account settings. Cancellation stops future
@@ -78,10 +78,10 @@ export default function RefundPolicy() {
             </h2>
             <div className="space-y-4 text-sm leading-relaxed text-slate-600">
               <p>
-                New subscribers on Essentials and Pro plans start with a 7-day free trial. You will
-                not be charged during the trial. If you cancel before the 7 days are up, you will not
-                be billed. If you add a payment method and do not cancel, your paid subscription begins
-                automatically at the end of the trial period.
+                New subscribers on Essentials and Pro plans start with a 7-day free trial. A credit
+                card is required to start. You will not be charged during the trial. If you cancel
+                before the 7 days are up, you will not be billed. If you do not cancel, your paid
+                subscription begins automatically at the end of the trial period.
               </p>
               <p>
                 Trial eligibility is determined by Huttle AI in its sole discretion and may be limited

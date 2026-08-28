@@ -1,39 +1,25 @@
-/* eslint-disable no-unused-vars */
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ArrowRight, Check, Zap } from 'lucide-react';
+import { FEATURE_RUN_CAPS } from '../../config/creditConfig';
+import { startPublicCheckout } from '../../utils/publicCheckout';
+import { BorderBeamButton } from '../magicui/BorderBeam';
 
-import React, { useRef, useState } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Check, Zap } from 'lucide-react';
-import { createCheckoutSession, openStripeCheckoutTab } from '../../services/stripeAPI';
+const CARD_REQUIRED_NOTE = 'Card required · Cancel anytime';
+const TRIAL_FOOTNOTE =
+  'A credit card is required to start the trial. You will not be charged during the 7-day trial. Billing begins automatically when the trial ends unless you cancel.';
 
-export const PricingSection = ({ onOpenFoundersModal }) => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
+export function PricingSection() {
+  const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
-
-  const handleCheckout = async (planId) => {
-    const billingCycle = isAnnual ? 'annual' : 'monthly';
-    const checkoutTab = openStripeCheckoutTab();
-    setCheckoutLoading(planId);
-    try {
-      await createCheckoutSession(planId, billingCycle, { targetWindow: checkoutTab });
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
-
-  const containerVariants = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.1 } }
-  };
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 30 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
-  };
+  const [checkoutError, setCheckoutError] = useState(null);
 
   const essentialsMonthly = 15;
   const proMonthly = 39;
+  const essentialsAnnual = 153;
+  const proAnnual = 398;
   const discount = 0.85;
 
   const essentialsPrice = isAnnual
@@ -43,37 +29,52 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
     ? (proMonthly * discount).toFixed(2)
     : proMonthly;
 
+  const handleCheckout = async (planId) => {
+    const billingCycle = isAnnual ? 'annual' : 'monthly';
+    setCheckoutError(null);
+    setCheckoutLoading(planId);
+    try {
+      const result = await startPublicCheckout(planId, billingCycle, { navigate });
+      if (result.redirectedToSignup) return;
+      if (!result.success) {
+        setCheckoutError(result.error || 'Could not start checkout. Please try again.');
+      }
+    } catch (error) {
+      setCheckoutError(error?.message || 'Could not start checkout. Please try again.');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
   return (
-    <section id="pricing" className="py-24 px-6 md:px-8 lg:px-12 bg-slate-50 relative overflow-hidden">
-      {/* Decorative Glows */}
-      <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[#01BAD2]/10 blur-[150px] rounded-full pointer-events-none" />
+    <section id="pricing" className="py-16 md:py-32 px-4 bg-slate-50 relative overflow-hidden">
+      <div className="absolute -top-1/2 -left-1/4 w-full h-full bg-[#01bad2]/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute -bottom-1/2 -right-1/4 w-full h-full bg-[#2B8FC7]/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="container mx-auto max-w-6xl relative z-10">
         <motion.div
-          ref={ref}
+          className="text-center mb-10 md:mb-12"
           initial={{ opacity: 0, y: 24 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
         >
-          <span className="inline-block px-3 py-1.5 rounded-full bg-[#01BAD2]/10 text-[#01BAD2] text-xs font-bold uppercase tracking-widest mb-4 border border-[#01BAD2]/20">
+          <span className="inline-block px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-widest mb-3 md:mb-4 border border-[#01bad2]/20">
             Simple Pricing
           </span>
-          <h2 className="text-4xl md:text-5xl font-extrabold text-zinc-900 tracking-tight mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tighter mb-3 md:mb-4">
             Start creating. Pick your path.
           </h2>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-8">
-            Every plan includes full access to all AI tools. The only question is when you join.
+          <p className="text-sm md:text-lg text-slate-500 max-w-2xl mx-auto mb-8">
+            Essentials gives you the full content creation toolkit. Pro adds our trend intelligence
+            suite and 14-day planning.
           </p>
 
-          {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 bg-white border border-zinc-200 rounded-full px-2 py-1.5 shadow-sm">
+          <div className="inline-flex items-center gap-3 bg-white border border-slate-200 rounded-full px-2 py-1.5 shadow-sm">
             <button
               onClick={() => setIsAnnual(false)}
               className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                !isAnnual
-                  ? 'bg-zinc-900 text-white shadow'
-                  : 'text-slate-500 hover:text-zinc-900'
+                !isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               Monthly
@@ -81,62 +82,61 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
             <button
               onClick={() => setIsAnnual(true)}
               className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                isAnnual
-                  ? 'bg-zinc-900 text-white shadow'
-                  : 'text-slate-500 hover:text-zinc-900'
+                isAnnual ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               Annually
-              <span className="text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
                 Save 15%
               </span>
             </button>
           </div>
         </motion.div>
 
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate={isInView ? "show" : "hidden"}
-          className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center max-w-4xl mx-auto"
-        >
-          {/* COLUMN 1: ESSENTIALS */}
-          <motion.div variants={cardVariants} className="h-full">
-            <div className="relative rounded-3xl bg-white p-8 border border-zinc-200 shadow-xl h-full flex flex-col">
-              <div className="h-7 mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-center max-w-4xl mx-auto">
+          <motion.div
+            className="order-2 md:order-1 h-full"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <div className="relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
+              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-slate-200">
+                START HERE
+              </div>
 
-              <h3 className="text-xl font-bold text-zinc-900 mb-2">Essentials</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Essentials</h3>
 
-              <div className="mb-2">
+              <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-zinc-900">${essentialsPrice}</span>
-                  <span className="text-slate-500 font-medium">/month</span>
+                  <span className="text-3xl md:text-4xl font-black text-slate-900">${essentialsPrice}</span>
+                  <span className="text-sm text-slate-500">/month</span>
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${Math.floor(essentialsMonthly * discount * 12)}/yr
+                    Billed as ${essentialsAnnual}/yr
                   </p>
                 )}
-                {!isAnnual && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                    <Check size={13} className="text-green-600 flex-shrink-0" />
-                    <span>7-day free trial</span>
-                  </div>
-                )}
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={12} className="text-green-600 flex-shrink-0" />
+                  <span>7-day trial</span>
+                </div>
               </div>
 
-              <p className="text-sm text-zinc-600 mb-6 font-medium mt-3">
-                Everything you need to hit the ground running.
-              </p>
+              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">Everything you need to hit the ground running.</p>
 
-              <ul className="space-y-3 mb-8 flex-1">
+              <ul className="space-y-2.5 mb-6 flex-1">
                 {[
                   '200 AI generations/month',
                   'All AI Power Tools',
-                  'Content Vault',
+                  '7-Day AI Plan Builder',
+                  'Content Remix Studio',
+                  `Ignite Engine (${FEATURE_RUN_CAPS.igniteEngine.essentials} briefs/month)`,
+                  '5GB Content Vault',
                 ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-3 text-sm text-zinc-600">
-                    <Check size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600">
+                    <Check size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
                     {feat}
                   </li>
                 ))}
@@ -145,74 +145,96 @@ export const PricingSection = ({ onOpenFoundersModal }) => {
               <button
                 onClick={() => handleCheckout('essentials')}
                 disabled={!!checkoutLoading}
-                className="w-full h-12 rounded-xl border-2 border-zinc-200 text-zinc-700 bg-transparent hover:border-zinc-400 hover:text-zinc-900 font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                data-testid="landing-pricing-essentials-cta"
+                className="w-full h-12 rounded-xl border-2 border-slate-200 text-slate-700 bg-transparent hover:border-slate-400 hover:text-slate-900 font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {checkoutLoading === 'essentials' ? 'Loading…' : 'Start 7-Day Trial'}
               </button>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">{CARD_REQUIRED_NOTE}</p>
             </div>
           </motion.div>
 
-          {/* COLUMN 2: PRO (HIGHLIGHTED) */}
-          <motion.div variants={cardVariants} className="relative md:scale-105 md:z-10 h-full">
-            <div className="relative rounded-3xl bg-white p-8 border-2 border-[#01BAD2]/60 shadow-2xl overflow-hidden flex flex-col h-full">
-              {/* Subtle background tint */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#01BAD2]/5 to-[#0284c7]/5 opacity-50 -z-10" />
+          <motion.div
+            className="relative md:scale-105 md:z-10 order-1 md:order-2 h-full"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <div className="pricing-card-glow relative rounded-2xl md:rounded-3xl bg-white p-6 md:p-8 border-2 border-[#01bad2] shadow-2xl overflow-hidden h-full flex flex-col">
+              <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-br from-[#01bad2]/5 to-[#2B8FC7]/5 opacity-50 -z-10" />
 
-              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-[#01BAD2]/10 text-[#01BAD2] text-xs font-bold uppercase tracking-wide mb-6 border border-[#01BAD2]/20">
-                <Zap size={11} className="fill-[#01BAD2]" />
+              <div className="inline-flex items-center self-start gap-1.5 px-3 py-1 rounded-full bg-[#01bad2]/10 text-[#01bad2] text-[10px] md:text-xs font-bold uppercase tracking-wide mb-4 border border-[#01bad2]/20">
+                <Zap size={11} className="fill-[#01bad2]" />
                 MOST POPULAR
               </div>
 
-              <h3 className="text-2xl font-bold text-zinc-900 mb-2">Pro</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-1">Pro</h3>
 
-              <div className="mb-2">
+              <div className="mb-1">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-black text-zinc-900">${proPrice}</span>
-                  <span className="text-slate-500 font-medium">/month</span>
+                  <span className="text-4xl md:text-5xl font-black text-slate-900">${proPrice}</span>
+                  <span className="text-sm md:text-base text-slate-500">/month</span>
                 </div>
                 {isAnnual && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Billed as ${Math.floor(proMonthly * discount * 12)}/yr
+                    Billed as ${proAnnual}/yr
                   </p>
                 )}
-                {!isAnnual && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                    <Check size={13} className="text-green-600 flex-shrink-0" />
-                    <span>7-day free trial</span>
-                  </div>
-                )}
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <Check size={12} className="text-green-600 flex-shrink-0" />
+                  <span>7-day trial</span>
+                </div>
               </div>
 
-              <p className="text-sm text-zinc-600 mb-6 font-medium mt-3">
-                The complete toolkit for serious creators.
-              </p>
+              <p className="text-sm text-slate-600 mt-3 mb-5 font-medium">The complete toolkit for serious creators.</p>
 
-              <ul className="space-y-3 mb-8 flex-1">
+              <ul className="space-y-2.5 mb-6 flex-1">
                 {[
                   '600 AI generations/month',
+                  'Everything in Essentials',
+                  '14-Day AI Plan Builder',
                   'Full Trend Lab access',
                   'Niche Intel',
-                  'Content Vault',
+                  '25GB Content Vault',
                 ].map((feat, j) => (
-                  <li key={j} className="flex items-start gap-3 text-sm text-zinc-600 font-medium">
-                    <Check size={16} className="text-[#01BAD2] mt-0.5 flex-shrink-0" />
+                  <li key={j} className="flex items-start gap-2 text-xs md:text-sm text-slate-600 font-medium">
+                    <Check size={14} className="text-[#01bad2] mt-0.5 flex-shrink-0" />
                     {feat}
                   </li>
                 ))}
               </ul>
 
-              <button
+              <BorderBeamButton
                 onClick={() => handleCheckout('pro')}
                 disabled={!!checkoutLoading}
-                className="w-full h-14 rounded-xl bg-[#01BAD2] hover:bg-[#019db3] text-white font-bold text-base shadow-[0_0_24px_#01BAD220] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                data-testid="landing-pricing-pro-cta"
+                className="w-full h-12 md:h-14 rounded-xl text-white font-bold text-sm shadow-lg shadow-[#01bad2]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                beamDuration={6}
               >
-                {checkoutLoading === 'pro' ? 'Loading…' : 'Start 7-Day Trial'}
-              </button>
+                {checkoutLoading === 'pro' ? 'Loading…' : (
+                  <>Start 7-Day Trial<ArrowRight size={16} className="ml-2" /></>
+                )}
+              </BorderBeamButton>
+              <p className="text-center text-[10px] text-slate-400 mt-2.5">{CARD_REQUIRED_NOTE}</p>
             </div>
           </motion.div>
+        </div>
 
-        </motion.div>
+        {checkoutError && (
+          <p
+            role="alert"
+            data-testid="landing-pricing-checkout-error"
+            className="text-center text-sm text-red-600 mt-6 max-w-xl mx-auto"
+          >
+            {checkoutError}
+          </p>
+        )}
+
+        <p className="text-center text-[11px] text-slate-400 mt-10 max-w-xl mx-auto">
+          {TRIAL_FOOTNOTE}
+        </p>
       </div>
     </section>
   );
-};
+}

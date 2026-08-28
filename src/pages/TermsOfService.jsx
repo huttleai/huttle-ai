@@ -165,9 +165,9 @@ const sections = [
     content: (
       <>
         <p>
-          Huttle AI may offer a seven-day free trial to eligible new users only. A payment method is
-          not required to start the trial. If you do not add a payment method before the trial ends,
-          the trial expires and you are not charged.
+          Huttle AI may offer a seven-day free trial to eligible new users only. A credit card is
+          required to start the trial. You will not be charged during the trial period. Billing
+          begins automatically when the trial ends unless you cancel before expiration.
         </p>
         <p>
           Trial eligibility is determined by Huttle AI in its sole discretion, and we may limit,
@@ -538,7 +538,7 @@ export default function TermsOfService() {
   return (
     <LegalPageLayout
       title="Terms of Service"
-      lastUpdated="April 15, 2026"
+      lastUpdated="August 28, 2026"
       effectiveDate="April 15, 2026"
       intro="These Terms govern your access to and use of huttleai.com and the Huttle AI platform, including any services, content generation features, billing functionality, and related experiences offered by Huttle AI."
       sections={sections}
