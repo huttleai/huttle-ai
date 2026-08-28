@@ -50,11 +50,33 @@ rawTest.describe('Landing checkout (logged out)', () => {
     rawExpect(stillOpen, 'guest checkout must not leave a Stripe loading tab open').toHaveLength(0);
   });
 
-  rawTest('pricing copy no longer says a card is required', async ({ page }) => {
+  rawTest('pricing copy says a card is required for the trial', async ({ page }) => {
     await page.goto('/');
     await page.locator('#pricing').scrollIntoViewIfNeeded();
-    await rawExpect(page.getByText(/No credit card needed · Cancel anytime/i).first()).toBeVisible();
-    await rawExpect(page.getByText(/Card required · Cancel anytime/i)).toHaveCount(0);
-    await rawExpect(page.getByText(/All plans require a credit card/i)).toHaveCount(0);
+    await rawExpect(page.getByText(/Card required · Cancel anytime/i).first()).toBeVisible();
+    await rawExpect(page.getByText(/A credit card is required to start the trial/i).first()).toBeVisible();
+    await rawExpect(page.getByText(/No credit card needed/i)).toHaveCount(0);
+  });
+});
+
+rawTest.describe('Public plan routes', () => {
+  rawTest('/pricing shows Essentials and Pro', async ({ page }) => {
+    await page.goto('/pricing');
+    await rawExpect(page.getByTestId('pricing-page')).toBeVisible();
+    await rawExpect(page.getByTestId('landing-pricing-essentials-cta')).toBeVisible();
+    await rawExpect(page.getByTestId('landing-pricing-pro-cta')).toBeVisible();
+    await rawExpect(page.getByText(/Card required · Cancel anytime/i).first()).toBeVisible();
+  });
+
+  rawTest('/founders redirects to /pricing', async ({ page }) => {
+    await page.goto('/founders');
+    await rawExpect(page).toHaveURL(/\/pricing$/);
+    await rawExpect(page.getByTestId('pricing-page')).toBeVisible();
+  });
+
+  rawTest('/builders redirects to /pricing', async ({ page }) => {
+    await page.goto('/builders');
+    await rawExpect(page).toHaveURL(/\/pricing$/);
+    await rawExpect(page.getByTestId('pricing-page')).toBeVisible();
   });
 });

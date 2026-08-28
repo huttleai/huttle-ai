@@ -57,7 +57,7 @@ export default function FoundersPage() {
           {/* Primary CTA */}
           <div className="flex flex-col items-center gap-3">
             <Link
-              to="/#pricing"
+              to="/pricing"
               className="inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-full bg-gradient-to-r from-[#2B8FC7] to-[#01bad2] text-white font-bold text-lg shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] transition-all duration-200 active:scale-[0.98]"
             >
               See Current Plans
