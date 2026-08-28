@@ -1,14 +1,14 @@
 /**
  * CORS Utility for Serverless Functions
- * 
- * SECURITY: Restricts CORS to allowed origins only
- * Prevents cross-origin attacks from malicious websites
+ *
+ * SECURITY: Restricts CORS to allowed origins only.
+ * Prevents cross-origin attacks from malicious websites.
  */
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
 // Allowed origins - production-safe list with localhost only in development
-const ALLOWED_ORIGINS = [
+export const ALLOWED_ORIGINS = [
   process.env.APP_URL,
   process.env.VITE_APP_URL,
   process.env.NEXT_PUBLIC_APP_URL,
@@ -21,30 +21,66 @@ const ALLOWED_ORIGINS = [
 ].filter(Boolean);
 
 /**
+ * Named server-to-server callers that send no Origin header.
+ * These are not browser CORS requests. Do not treat missing Origin as an
+ * allowed browser origin; identify them by an explicit signal instead.
+ */
+export const TRUSTED_NO_ORIGIN_CALLERS = {
+  STRIPE_WEBHOOK: 'stripe-webhook',
+  VERCEL_CRON: 'vercel-cron',
+};
+
+/**
+ * Identify a named no-Origin server-to-server caller, or null.
+ * Used so missing Origin is never a blanket allow for browser CORS.
+ *
+ * @param {Object} req
+ * @returns {string|null}
+ */
+export function identifyTrustedNoOriginCaller(req) {
+  const headers = req?.headers || {};
+  if (headers.origin) return null;
+
+  if (typeof headers['stripe-signature'] === 'string' && headers['stripe-signature']) {
+    return TRUSTED_NO_ORIGIN_CALLERS.STRIPE_WEBHOOK;
+  }
+
+  const cron = headers['x-vercel-cron'];
+  if (cron === '1' || cron === 'true') {
+    return TRUSTED_NO_ORIGIN_CALLERS.VERCEL_CRON;
+  }
+
+  return null;
+}
+
+/**
  * Set secure CORS headers on the response
  * @param {Object} req - Request object
  * @param {Object} res - Response object
- * @returns {boolean} - True if origin is allowed, false otherwise
+ * @returns {boolean} - True if the browser Origin is on the allowlist
  */
 export function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
-  
-  // Check if origin is in allowed list
+
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
-    // but don't set the header - browser will handle it
   }
-  // If origin is not allowed, don't set Access-Control-Allow-Origin
-  // This will cause the browser to block the request
-  
+  // Missing Origin is not a browser CORS request. Do not echo '*' and do not
+  // treat it as allowed. Named server-to-server callers (Stripe webhooks via
+  // stripe-signature, Vercel Cron via x-vercel-cron) skip this allowlist.
+  // Disallowed origins get no Access-Control-Allow-Origin header so the
+  // browser blocks the response.
+
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, x-grok-debug'
+  );
   res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
-  
-  return true;
+  res.setHeader('Vary', 'Origin');
+
+  return Boolean(origin && ALLOWED_ORIGINS.includes(origin));
 }
 
 /**
@@ -63,25 +99,17 @@ export function handlePreflight(req, res) {
 }
 
 /**
- * Verify the request origin is allowed
+ * Verify the request Origin is on the browser allowlist.
+ * Missing Origin is not allowed here — use identifyTrustedNoOriginCaller()
+ * for named server-to-server exceptions.
+ *
  * @param {Object} req - Request object
  * @returns {boolean} - True if origin is allowed
  */
 export function isOriginAllowed(req) {
   const origin = req.headers.origin;
-  // Allow requests with no origin (server-to-server, mobile apps)
-  if (!origin) return true;
+  if (!origin) return false;
   return ALLOWED_ORIGINS.includes(origin);
 }
 
-export default { setCorsHeaders, handlePreflight, isOriginAllowed, ALLOWED_ORIGINS };
-
-
-
-
-
-
-
-
-
-
+export default { setCorsHeaders, handlePreflight, isOriginAllowed, ALLOWED_ORIGINS, identifyTrustedNoOriginCaller, TRUSTED_NO_ORIGIN_CALLERS };
